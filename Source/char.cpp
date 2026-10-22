@@ -4600,7 +4600,7 @@ static inline s32 IsOnSlopeBlock(gmp_block_info* pBlock)
 
 // MaxAbsDistance_42A6B0 as state_1_5504F0 inlines it: past the nested inline budget, Max is the named
 // out-of-line copy Max_44E540 (as in Weapon's MaxAbsDistance_5DF270)
-static inline Fix16 MaxAbsDistance_5504F0(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
+static inline Fix16 MaxAbsDistance_5504F0(const Fix16& x1, const Fix16& y1, const Fix16& x2, const Fix16& y2)
 {
     Fix16 diff_x;
     diff_x = x2 - x1;

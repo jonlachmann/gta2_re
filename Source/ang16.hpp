@@ -10,27 +10,27 @@ class Ang16
   public:
     //   Ang16  and  Ang16
     // 9.6f 0x40E670/0x41E0F0/0x40F4C0/0x40E690: setcc into a 32-bit register, so these return int, not bool
-    s32 operator>(const Ang16& other)
+    s32 operator>(const Ang16& other) const
     {
         return rValue > other.rValue;
     }
 
-    s32 operator<(const Ang16& other)
+    s32 operator<(const Ang16& other) const
     {
         return rValue < other.rValue;
     }
 
-    s32 operator>=(const Ang16& other)
+    s32 operator>=(const Ang16& other) const
     {
         return rValue >= other.rValue;
     }
 
-    s32 operator<=(const Ang16& other)
+    s32 operator<=(const Ang16& other) const
     {
         return rValue <= other.rValue;
     }
 
-    s32 operator!=(const Ang16& other)
+    s32 operator!=(const Ang16& other) const
     {
         return rValue != other.rValue;
     }
@@ -58,19 +58,19 @@ class Ang16
     }
     */
 
-    s32 operator==(const Ang16& other)
+    s32 operator==(const Ang16& other) const
     {
         return rValue == other.rValue;
     }
 
-    Ang16 operator*(const Ang16& other)
+    Ang16 operator*(const Ang16& other) const
     {
         return Ang16((Fix16(rValue) * Fix16(other.rValue)).ToInt());
     }
 
     // 9.6f 0x40E5A0
     // https://decomp.me/scratch/Rc5ql
-    Ang16 operator+(const Ang16& rhs)
+    Ang16 operator+(const Ang16& rhs) const
     {
         s16 value = rValue + rhs.rValue;
         return Ang16(value, 0);
@@ -78,7 +78,7 @@ class Ang16
 
     // operator+ with the normalizing constructor called out of line (AssignNormalized_409300), for
     // functions that ran out of inline expansions (Explosion::EmitBuildingDebris_22_23_24_25_542E30)
-    Ang16 Add_ool(const Ang16& rhs)
+    Ang16 Add_ool(const Ang16& rhs) const
     {
         s16 value = rValue + rhs.rValue;
         return Ang16(&value, 0);
@@ -94,29 +94,29 @@ class Ang16
     // 9.6f 0x49E240, defined in CarPhysics.cpp
     inline wchar_t* ThetaText_49E240();
 
-    Ang16 operator-()
+    Ang16 operator-() const
     {
         return Ang16(-rValue, 0);
     }
 
     //   Ang16  and  const int
 
-    bool operator>(const s32 other)
+    bool operator>(const s32 other) const
     {
         return rValue > other;
     }
 
-    bool operator<(const s32 other)
+    bool operator<(const s32 other) const
     {
         return rValue < other;
     }
 
-    bool operator>=(const s32 other)
+    bool operator>=(const s32 other) const
     {
         return rValue >= other;
     }
 
-    bool operator<=(const s32 other)
+    bool operator<=(const s32 other) const
     {
         return rValue <= other;
     }
@@ -250,12 +250,12 @@ class Ang16
     }
 
     // 9.6f 0x41FC20: the table value is the left operand (this) of the multiply
-    inline static void __stdcall PolarToCartesian_41FC20(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2);
+    inline static void __stdcall PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
 
     // Non-inlined version of above function
-    EXPORT static void __stdcall PolarToCartesian_451730(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2);
+    EXPORT static void __stdcall PolarToCartesian_451730(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
 
-    EXPORT static s32 __stdcall Ang16::GetAngleFace_4F78F0(Ang16& angle);
+    EXPORT static s32 __stdcall Ang16::GetAngleFace_4F78F0(const Ang16& angle);
 
     // inlined from 0x40f580 on v9.6f
     // I was tempted to put this on the Fix16 header, but that will create a circular dependency...
@@ -325,7 +325,7 @@ class Ang16
     }
 
     // 9.6f func: 0x401C40
-    Ang16(Fix16& value, u8 zero)
+    Ang16(const Fix16& value, u8 zero)
     {
         rValue = value.ToInt();
         Normalize();
@@ -375,7 +375,7 @@ class Ang16
 
 #pragma warning(push)
 #pragma warning(disable : 4101)
-inline void __stdcall Ang16::PolarToCartesian_41FC20(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
+inline void __stdcall Ang16::PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
 {
     // Never read: its optimizer entry is needed by CarAI::UpdateStateMachine_44E560 (docs/match_attempts.md)
     s32 unused;
@@ -401,11 +401,11 @@ class Ang8
     u8 rValue;
 };
 
-inline void __stdcall RotateAndTranslatePoint_42A720(Fix16& pInX,
-                                                         Fix16& pInY,
-                                                         Ang16& pRotAng,
-                                                         Fix16& pTransX,
-                                                         Fix16& pTransY,
+inline void __stdcall RotateAndTranslatePoint_42A720(const Fix16& pInX,
+                                                         const Fix16& pInY,
+                                                         const Ang16& pRotAng,
+                                                         const Fix16& pTransX,
+                                                         const Fix16& pTransY,
                                                          Fix16& pRotTransX,
                                                          Fix16& pRotTransY)
 {

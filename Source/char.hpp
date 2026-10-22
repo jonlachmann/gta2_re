@@ -209,7 +209,7 @@ class Char
     }
 
     // strange, the same 9.6f func but Ped::ChaseTargetStateMachine_46B170 only matches if it pass by ref
-    inline void RegulateVelocityByRef_433970(Fix16& threshold)
+    inline void RegulateVelocityByRef_433970(const Fix16& threshold)
     {
         if (field_38_velocity < threshold)
         {

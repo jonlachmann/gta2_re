@@ -92,7 +92,7 @@ Ang16::Ang16(Fix16* value, s32 not_used)
 
 // TODO: move
 MATCH_FUNC(0x451730)
-void __stdcall Ang16::PolarToCartesian_451730(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
+void __stdcall Ang16::PolarToCartesian_451730(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
 {
     ret1 = radius * Ang16::sine_40F500(angle);
     ret2 = radius * Ang16::cosine_40F520(angle);
@@ -105,7 +105,7 @@ Ang16 Ang16::Fix16_To_Ang16_482740(Fix16& value)
 }
 
 MATCH_FUNC(0x4F78F0)
-s32 __stdcall Ang16::GetAngleFace_4F78F0(Ang16& angle)
+s32 __stdcall Ang16::GetAngleFace_4F78F0(const Ang16& angle)
 {
     if (angle <= kAng45_6F677C || angle > kAng315_6F680C) //  45° and 315°
     {

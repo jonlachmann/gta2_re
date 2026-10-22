@@ -10,7 +10,7 @@ Fix16_Point Fix16_Point::Add_40AC50(const Fix16_Point& in)
 
 // The out-of-line copy of the inline operator-
 MATCH_FUNC(0x40AC80)
-Fix16_Point Fix16_Point::Sub_40AC80(const Fix16_Point& rhs)
+Fix16_Point Fix16_Point::Sub_40AC80(const Fix16_Point& rhs) const
 {
     return Fix16_Point(x - rhs.x, y - rhs.y);
 }
@@ -29,13 +29,13 @@ Ang16 Fix16_Point::atan2_40ACD0()
 
 // https://decomp.me/scratch/qQwG3
 MATCH_FUNC(0x438FE0)
-Fix16_Point Fix16_Point::Multiply_438FE0(Fix16& in)
+Fix16_Point Fix16_Point::Multiply_438FE0(const Fix16& in) const
 {
     return Fix16_Point(x * in, y * in);
 }
 
 MATCH_FUNC(0x442AD0)
-Fix16_Point Fix16_Point::NormalizeSafe_442AD0()
+Fix16_Point Fix16_Point::NormalizeSafe_442AD0() const
 {
     Fix16 length = GetLength_inline_442AD0();
     if (length == gFix16_6777CC)
@@ -50,20 +50,20 @@ Fix16_Point Fix16_Point::NormalizeSafe_442AD0()
     }
 }
 
-Fix16_Point Fix16_Point::operator/(Fix16& in)
+Fix16_Point Fix16_Point::operator/(const Fix16& in) const
 {
     return Fix16_Point(x / in, y / in);
 }
 
 MATCH_FUNC(0x442C80)
-Fix16_Point Fix16_Point::MultBy_442C80(const s32& factor)
+Fix16_Point Fix16_Point::MultBy_442C80(const s32& factor) const
 {
     return Fix16_Point(x * factor, y * factor);
 }
 
 // https://decomp.me/scratch/nFSYS
 MATCH_FUNC(0x442CB0)
-Fix16_Point Fix16_Point::Divide_442CB0(Fix16& in)
+Fix16_Point Fix16_Point::Divide_442CB0(const Fix16& in) const
 {
     return Fix16_Point(x / in, y / in);
 }

@@ -30,7 +30,7 @@
 #include "block_face.hpp"
 
 // Forward declarations: the functions below are in address order
-EXPORT void __stdcall ProjectOntoAxis_5A5AA0(Fix16& xpos1, Fix16& ypos1, Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY);
+EXPORT void __stdcall ProjectOntoAxis_5A5AA0(const Fix16& xpos1, const Fix16& ypos1, const Ang16& angle, const Fix16& xpos2, const Fix16& ypos2, Fix16& outX, Fix16& outY);
 static inline void ProjectToScreen_5A5690(Fix16 x, Fix16 y, Fix16 z, Fix16* pOut1, Fix16* pOut2);
 EXTERN_GLOBAL(u16, gDebugColour_626260);
 
@@ -421,7 +421,7 @@ s16 DamageAreaFlags::Delta_48F8B0(u16& sprite_idx, u8& bRet, const u16& palette,
 }
 
 MATCH_FUNC(0x4F76A0)
-EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(Fix16& minX, Fix16& minY, Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1)
+EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(const Fix16& minX, const Fix16& minY, const Fix16& scanLineY, const Fix16_Point& p0, const Fix16_Point& p1)
 {
 
     // Raw compares: with Fix16 operators VC6 runs out of inline budget and calls the Fix16_Point ctor
@@ -458,7 +458,7 @@ EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(Fix16& minX, Fix1
 }
 
 MATCH_FUNC(0x4F77D0)
-EXPORT bool __stdcall ComputeScanlineIntersectionX_4F77D0(Fix16& minX, Fix16& minY, Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1)
+EXPORT bool __stdcall ComputeScanlineIntersectionX_4F77D0(const Fix16& minX, const Fix16& minY, const Fix16& scanLineX, const Fix16_Point& p0, const Fix16_Point& p1)
 {
 
     // Same shape as ComputeScanlineIntersectionY_4F76A0, same leftover diff.
@@ -875,11 +875,11 @@ void Sprite::SetDefaultDrawLayerBySpriteType_59E960()
 }
 
 // RotateAndTranslatePoint_42A720 with the out-of-line Fix16 operator copies
-static inline void __stdcall RotateAndTranslatePoint_ool_42A720(Fix16& pInX,
-                                                                Fix16& pInY,
-                                                                Ang16& pRotAng,
-                                                                Fix16& pTransX,
-                                                                Fix16& pTransY,
+static inline void __stdcall RotateAndTranslatePoint_ool_42A720(const Fix16& pInX,
+                                                                const Fix16& pInY,
+                                                                const Ang16& pRotAng,
+                                                                const Fix16& pTransX,
+                                                                const Fix16& pTransY,
                                                                 Fix16& pRotTransX,
                                                                 Fix16& pRotTransY)
 {
@@ -955,11 +955,11 @@ s16 Sprite::GetTruePalette_59EAA0()
 // https://decomp.me/scratch/5emc4
 // RotateAndTranslatePoint_42A720 as RotatedRectCollisionSAT_5A0380 gets it once it has run out of
 // inline expansions: the unary minus is the out-of-line copy (Negate_4086A0)
-static inline void __stdcall RotateAndTranslatePoint_NegOOL_42A720(Fix16& pInX,
-                                                                  Fix16& pInY,
-                                                                  Ang16& pRotAng,
-                                                                  Fix16& pTransX,
-                                                                  Fix16& pTransY,
+static inline void __stdcall RotateAndTranslatePoint_NegOOL_42A720(const Fix16& pInX,
+                                                                  const Fix16& pInY,
+                                                                  const Ang16& pRotAng,
+                                                                  const Fix16& pTransX,
+                                                                  const Fix16& pTransY,
                                                                   Fix16& pRotTransX,
                                                                   Fix16& pRotTransY)
 {
@@ -2668,7 +2668,7 @@ SpriteManager_8::SpriteManager_8()
 }
 
 MATCH_FUNC(0x5A5AA0)
-EXPORT void __stdcall ProjectOntoAxis_5A5AA0(Fix16& xpos1, Fix16& ypos1, Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY)
+EXPORT void __stdcall ProjectOntoAxis_5A5AA0(const Fix16& xpos1, const Fix16& ypos1, const Ang16& angle, const Fix16& xpos2, const Fix16& ypos2, Fix16& outX, Fix16& outY)
 {
     outX = (Ang16::cosine_40F520(angle) * (xpos1 - xpos2)) + (Ang16::sine_40F500(angle) * (ypos1 - ypos2));
     outY = (Ang16::sine_40F500(angle) * (xpos2 - xpos1)) + (Ang16::cosine_40F520(angle) * (ypos1 - ypos2));

@@ -38,19 +38,19 @@ struct Fix16_Point_POD
     {
     }
 
-    Fix16_Point_POD(Fix16& new_x, Fix16& new_y)
+    Fix16_Point_POD(const Fix16& new_x, const Fix16& new_y)
     {
         x = new_x;
         y = new_y;
     }
 
-    void SetXY_432860(Fix16& new_x, Fix16& new_y)
+    void SetXY_432860(const Fix16& new_x, const Fix16& new_y)
     {
         this->x = new_x;
         this->y = new_y;
     }
 
-    inline void SetFromPolar_41E210(Fix16& radius, Ang16& angle)
+    inline void SetFromPolar_41E210(const Fix16& radius, const Ang16& angle)
     {
         x = Ang16::sine_40F500(angle) * radius;
         y = Ang16::cosine_40F520(angle) * radius;
@@ -83,7 +83,7 @@ struct Fix16_Point_POD
 class Fix16_Point
 {
   public:
-    void SetXY_432860(Fix16& new_x, Fix16& new_y)
+    void SetXY_432860(const Fix16& new_x, const Fix16& new_y)
     {
         this->x = new_x;
         this->y = new_y;
@@ -118,7 +118,7 @@ class Fix16_Point
     }
 
     // But also 0x40ACD0 non inlined in 10.5
-    Ang16 atan2_40F790()
+    Ang16 atan2_40F790() const
     {
         return Fix16::atan2_fixed_405320(y, x);
     }
@@ -128,7 +128,7 @@ class Fix16_Point
     // 9.6f 0x41E260; the out-of-line copy is GetLength_453590. The nested if/else (front-end size 162, the
     // else-if chain is 160) gives the original's cut-offs in Crane::ComputeHookPolar_47F6C0 with
     // SquareRoot at 48; matched functions allow 159..162.
-    inline Fix16 GetLength_41E260()
+    inline Fix16 GetLength_41E260() const
     {
         if (x == FIX16_POINT_ZERO)
         {
@@ -166,7 +166,7 @@ class Fix16_Point
         }
     }
 
-    inline void SetFromPolar_41E210(Fix16& radius, Ang16& angle)
+    inline void SetFromPolar_41E210(const Fix16& radius, const Ang16& angle)
     {
         x = Ang16::sine_40F500(angle) * radius;
         y = Ang16::cosine_40F520(angle) * radius;
@@ -253,7 +253,7 @@ class Fix16_Point
     }
 
 
-    Fix16_Point& operator+=(Fix16_Point& other)
+    Fix16_Point& operator+=(const Fix16_Point& other)
     {
         x += other.x;
         y += other.y;
@@ -261,7 +261,7 @@ class Fix16_Point
     }
 
     // FUNCTION: 96f 0x4828c0
-    Fix16_Point& operator-=(Fix16_Point& other)
+    Fix16_Point& operator-=(const Fix16_Point& other)
     {
         x -= other.x;
         y -= other.y;
@@ -279,8 +279,8 @@ class Fix16_Point
     // Out-of-line copy of RotateByAngle_40F6B0, emitted in CarPhysics.cpp
     EXPORT void RotateVelocity_562C20(const Ang16& angle);
 
-    EXPORT Fix16_Point Multiply_438FE0(Fix16& in);
-    EXPORT Fix16_Point Divide_442CB0(Fix16& in);
+    EXPORT Fix16_Point Multiply_438FE0(const Fix16& in) const;
+    EXPORT Fix16_Point Divide_442CB0(const Fix16& in) const;
 
     // Divide_442CB0 as a nothrow inline (see DivideInl_55F9E0; CarPhysics::HandleObjectCollision_5606C0,
     // Car::ApplyExplosionImpulse_443710)
@@ -374,7 +374,7 @@ class Fix16_Point
     }
 
     // MATCH_FUNC(0x40AC50)
-    Fix16_Point operator+(const Fix16_Point& in)
+    Fix16_Point operator+(const Fix16_Point& in) const
     {
         return Fix16_Point(x + in.x, y + in.y);
     }
@@ -388,7 +388,7 @@ class Fix16_Point
     // The out-of-line copy of the inline operator-. Called by name where the original keeps an EH state
     // for temporaries around the call (Crane::HookPickupCar_47EF80, ComputeHookPolar_47F6C0); the
     // inline operator- called out of line gets none (CarPhysics::HandleCarCollision_55FF20)
-    EXPORT Fix16_Point Sub_40AC80(const Fix16_Point& rhs);
+    EXPORT Fix16_Point Sub_40AC80(const Fix16_Point& rhs) const;
 
     // operator+/operator- with their bodies defined at the end of Car.cpp (HandleCarHitByObject_43F130)
     inline Fix16_Point AddLate_40AC50(const Fix16_Point& in);
@@ -513,7 +513,7 @@ class Fix16_Point
         }
     }
 
-    Fix16_Point operator*(Fix16& in)
+    Fix16_Point operator*(const Fix16& in) const
     {
         return Fix16_Point(x * in, y * in);
     }
@@ -523,10 +523,10 @@ class Fix16_Point
         return Fix16_Point(-x, -y);
     }
 
-    EXPORT Fix16_Point MultBy_442C80(const s32& factor);
+    EXPORT Fix16_Point MultBy_442C80(const s32& factor) const;
 
     // 10.0 0x442CB0
-    EXPORT Fix16_Point operator/(Fix16& in);
+    EXPORT Fix16_Point operator/(const Fix16& in) const;
 
     // Unused (ApplyExplosionImpulse_443710 calls GetLength_41E260 now), kept for the same reason as
     // GetLength_no_sqrt_inline
@@ -547,7 +547,7 @@ class Fix16_Point
     }
 
     // GetLength_41E260 as inlined into NormalizeSafe_442AD0 (out of line helpers where the inline budget ran out)
-    inline Fix16 GetLength_inline_442AD0()
+    inline Fix16 GetLength_inline_442AD0() const
     {
         if (x == gFix16_6777CC)
         {
@@ -606,7 +606,7 @@ class Fix16_Point
         }
     }
 
-    EXPORT Fix16_Point NormalizeSafe_442AD0();
+    EXPORT Fix16_Point NormalizeSafe_442AD0() const;
 
     EXPORT Ang16 atan2_40ACD0();
 

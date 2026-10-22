@@ -828,7 +828,7 @@ DEFINE_GLOBAL_INIT(Fix16, kFpPoint02_6FECB8, Fix16(0x147, 0), 0x6FECB8);
 
 // MaxAbsDistance_42A6B0 as State5_PursueOrChase_572920 inlines it: past the nested inline budget, Max is the named
 // out-of-line copy Max_44E540 (as in Weapon's MaxAbsDistance_5DF270)
-static inline Fix16 MaxAbsDistance_572920(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
+static inline Fix16 MaxAbsDistance_572920(const Fix16& x1, const Fix16& y1, const Fix16& x2, const Fix16& y2)
 {
     Fix16 diff_x;
     diff_x = x2 - x1;

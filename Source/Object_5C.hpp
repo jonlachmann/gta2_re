@@ -65,8 +65,8 @@ class Object
     EXPORT bool ShouldStopAtTrafficLight_525290(Sprite* pSprite);
     EXPORT bool ShouldCollideWithSprite_522430(Sprite* pSprite);
     EXPORT bool SelectCollisionSprite_522460(Sprite* pProbe);
-    EXPORT void SetMovementVector_5224E0(Fix16_Point& speed);
-    EXPORT void SetMovementVectorWithRandomState_522640(Fix16_Point& point);
+    EXPORT void SetMovementVector_5224E0(const Fix16_Point& speed);
+    EXPORT void SetMovementVectorWithRandomState_522640(const Fix16_Point& point);
     EXPORT void SetConveyorPush_5226A0(char_type conveyor_speed);
     EXPORT void ResolveCollisionWithObject_522710(Object* pObj, Fix16_Point* pPoint);
     EXPORT void ResolveCollisionWithPed_5229B0(Char* pB4, Fix16_Point* pPoint, u8 not_used);
@@ -101,7 +101,7 @@ class Object
     EXPORT void AssignToBucket_527AE0();
     EXPORT void RemoveFromCollisionBuckets_527D00();
     EXPORT void ReleaseSubObjects_527F10();
-    EXPORT void NewObj3C_528130(Fix16_Point& speed);
+    EXPORT void NewObj3C_528130(const Fix16_Point& speed);
     EXPORT bool ChangeInstanceLimitKind_528240(s32 current, s32 desired);
     EXPORT void TickObject_5283C0(s32 obj_type);
     EXPORT char_type OnObjectTouched_5288B0(Sprite* pSprite);

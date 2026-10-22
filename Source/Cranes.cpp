@@ -14,7 +14,7 @@
 #include "sprite.hpp"
 
 // TODO: Move
-EXPORT void __stdcall SmoothApproachAngle_405CE0(Fix16& target_angle, Fix16& angle_speed, Fix16& angle, Fix16& accel, Fix16& max_speed);
+EXPORT void __stdcall SmoothApproachAngle_405CE0(const Fix16& target_angle, Fix16& angle_speed, Fix16& angle, const Fix16& accel, const Fix16& max_speed);
 EXPORT void __stdcall SmoothApproach_4F7540(Fix16& Coord_1, Fix16& Velocity_1, Fix16& Coord_2, Fix16& Velocity_2, Fix16& Velocity_3);
 
 DEFINE_GLOBAL_INIT(Fix16, kHomeHookRadius_679E58, Fix16(0x2000, 0), 0x679E58);
@@ -509,7 +509,7 @@ void Crane::UpdateCraneTargets_47F4C0()
 
 // 9.6f 0x448900
 MATCH_FUNC(0x47f6c0)
-bool Crane::ComputeHookPolar_47F6C0(Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng)
+bool Crane::ComputeHookPolar_47F6C0(const Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng)
 {
     Fix16_Point to_hook = (pPoint.Sub_40AC80(field_2C_rotor_obj->field_4_sprite->get_x_y()));
     *pOutF16 = to_hook.GetLength_41E260();
