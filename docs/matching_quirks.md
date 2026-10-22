@@ -1652,6 +1652,14 @@ stores (`Player::~Player`).
 **An EH frame missing from a destructor:** `<new>` declares `operator delete` as `throw()`,
 so don't include C++ std headers from widely used headers.
 
+**`const` on parameters and on member functions is free.** Turning about 50 `Fix16&`/`Ang16&`/
+`Fix16_Point&` parameters into `const&`, and making the read-only `Fix16`/`Ang16`/`Fix16_Point`
+operators and getters `const`, changed no function (2026-10-22, `compare_builds.py`, 3423/3423), including
+the inline-budget-sensitive `SquareRoot`, `Max_41E130` and `GetLength_*`. The budget counts `const`
+*locals* (see `Fix16::SquareRoot`), not `const` parameters or `this`. The one trap is overload
+resolution: a const member `Ang16::operator-(const Ang16&)` ties with the free `operator-` in
+`ang16.hpp` (C2593), so it stays non-const. Details in `docs/port.md`.
+
 ### Per-file compiler flags are real
 
 Checked 2026-10-01: dropping either per-file flag in `cmake/vc6.cmake` breaks every matched

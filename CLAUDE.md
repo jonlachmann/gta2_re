@@ -211,3 +211,6 @@ with `/TP /O2 /GX /EHsc`.
   original function addresses, offsets and sizes.
 - `reccmp/`: config for the reccmp tool (used in CI, `python3 build.py --reccmp`).
 - `3rdParty/gta2_re_compile_tools`: VC6 compiler, cmake and jom (submodule).
+- `docs/port.md`, `Scripts/port/`: the cross-platform port (issue #840): progress, the clang build
+  check (`Scripts/port/clang_check.sh`), findings, and how to redo it on a later decomp. Keep new code
+  clang-clean where that costs no match (for example `const&` for input parameters).
