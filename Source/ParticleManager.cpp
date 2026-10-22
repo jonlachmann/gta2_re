@@ -489,7 +489,7 @@ void ParticleManager::EmitFireTruckSprayParticle_53FAE0(Sprite* pSprite)
 
 // Ang16::PolarToCartesian_41FC20 with the cosine multiply written as the out-of-line Multiply_408680
 // the original calls (past the inline budget VC6 would call a COMDAT copy of operator* instead).
-static inline void PolarToCartesian_OutOfLineCos(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
+static inline void PolarToCartesian_OutOfLineCos(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
 {
     ret1 = Ang16::sine_40F500(angle) * radius;
     ret2 = Ang16::cosine_40F520(angle).Multiply_408680(radius);

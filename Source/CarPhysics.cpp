@@ -24,7 +24,7 @@
 
 // Forward declarations: the functions below are in address order
 EXPORT s32 __stdcall get_skid_obj_type_55D490(s32 surface, Fix16 skid_len);
-static inline Fix16 __stdcall DotProductOOL_49E500(Fix16_Point& Vector1, Fix16_Point& Vector2);
+static inline Fix16 __stdcall DotProductOOL_49E500(const Fix16_Point& Vector1, const Fix16_Point& Vector2);
 static inline Fix16 __stdcall Square_49E0E0(const Fix16& value);
 EXPORT Fix16 __stdcall DotProduct_560680(const Fix16_Point& Vector1, const Fix16_Point& Vector2);
 
@@ -2029,7 +2029,7 @@ void CarPhysics::ApplyVerticalEdgeNudge_55EC30()
 // https://decomp.me/scratch/foNCl
 // The largest of the three values
 MATCH_FUNC(0x55EEE0)
-Fix16 __stdcall Fix16::Max3_ool_55EEE0(Fix16& first, Fix16& second, Fix16& third)
+Fix16 __stdcall Fix16::Max3_ool_55EEE0(const Fix16& first, const Fix16& second, const Fix16& third)
 {
     return Max3_55EEE0(first, second, third);
 }
@@ -2217,11 +2217,11 @@ char_type CarPhysics::CheckPendingCollision_55F360()
 MATCH_FUNC(0x55F3B0)
 EXPORT Fix16_Point __stdcall ComputeCollisionImpulse_55F3B0(Fix16 OwnerMass,
                                                                 Fix16 TargetMass,
-                                                                Fix16_Point& RelativeVelocity,
-                                                                Fix16_Point& DistToCollision_ByRef,
-                                                                Fix16_Point& CollisionIntersectPoint,
-                                                                Fix16_Point& CoM_related,
-                                                                Fix16_Point& TargetCoM,
+                                                                const Fix16_Point& RelativeVelocity,
+                                                                const Fix16_Point& DistToCollision_ByRef,
+                                                                const Fix16_Point& CollisionIntersectPoint,
+                                                                const Fix16_Point& CoM_related,
+                                                                const Fix16_Point& TargetCoM,
                                                                 Fix16 OwnerMomOfInertia,
                                                                 Fix16 TargetMomOfInertia,
                                                                 Fix16 offset)
@@ -2272,7 +2272,7 @@ EXPORT Fix16_Point __stdcall ComputeCollisionImpulse_55F3B0(Fix16 OwnerMass,
 }
 
 MATCH_FUNC(0x55f740)
-void CarPhysics::ApplyForceWithTrailerRedirect_55F740(Fix16_Point* pPoint, Fix16_Point* pForce)
+void CarPhysics::ApplyForceWithTrailerRedirect_55F740(const Fix16_Point* pPoint, const Fix16_Point* pForce)
 {
 
     if (field_5C_pCar->IsTrailerCar_421720())
@@ -2289,7 +2289,7 @@ void CarPhysics::ApplyForceWithTrailerRedirect_55F740(Fix16_Point* pPoint, Fix16
 }
 
 MATCH_FUNC(0x55f7a0)
-void CarPhysics::ApplyForceAndIntegrate_55F7A0(Fix16_Point* pPoint, Fix16_Point force)
+void CarPhysics::ApplyForceAndIntegrate_55F7A0(const Fix16_Point* pPoint, Fix16_Point force)
 {
     ApplyForceAtPoint_55F800(pPoint, &force, 0);
     UpdateLinearAndAngularAccel_560EB0();
@@ -2299,7 +2299,7 @@ void CarPhysics::ApplyForceAndIntegrate_55F7A0(Fix16_Point* pPoint, Fix16_Point 
 // GetLength_41E260 as inlined into ApplyImpactForcesAndDamage_55FA60: both Abs are called out of line
 // (Abs_436A50) although the first multiply is inlined, which the plain inline can't give (Abs and operator*
 // have the same front-end size, 57).
-static inline Fix16 GetLength_AbsOutOfLine_41E260(Fix16_Point& p)
+static inline Fix16 GetLength_AbsOutOfLine_41E260(const Fix16_Point& p)
 {
     if (p.x == FIX16_POINT_ZERO)
     {
@@ -2320,7 +2320,7 @@ static inline Fix16 GetLength_AbsOutOfLine_41E260(Fix16_Point& p)
 
 // 9.6f 0x4A0850
 MATCH_FUNC(0x55f800)
-void CarPhysics::ApplyForceAtPoint_55F800(Fix16_Point* pPoint, Fix16_Point* pForce, s32 bRotate)
+void CarPhysics::ApplyForceAtPoint_55F800(const Fix16_Point* pPoint, Fix16_Point* pForce, s32 bRotate)
 {
     Fix16_Point_POD point(pPoint->x, pPoint->y);
 
@@ -2361,7 +2361,7 @@ void CarPhysics::ApplyAngularImpulse_55F970(Fix16 impulse)
 }
 
 MATCH_FUNC(0x55f9a0)
-void CarPhysics::ApplyForceScaledByMass_55F9A0(Fix16_Point& force)
+void CarPhysics::ApplyForceScaledByMass_55F9A0(const Fix16_Point& force)
 {
     field_48_force_accum += force.Multiply_438FE0(CarPhysics::CalculateMass_559FF0());
 }
@@ -2385,7 +2385,7 @@ void CarPhysics::ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* pPoint)
 
 // https://decomp.me/scratch/TSKLx
 MATCH_FUNC(0x55fa60)
-Fix16 CarPhysics::ApplyImpactForcesAndDamage_55FA60(Fix16_Point& PointOfForce, Fix16_Point& Impulse, s32 base_dmg)
+Fix16 CarPhysics::ApplyImpactForcesAndDamage_55FA60(const Fix16_Point& PointOfForce, const Fix16_Point& Impulse, s32 base_dmg)
 {
     Fix16_Point NewImpulse;
     Fix16 ImpulseIntensity = GetLength_AbsOutOfLine_41E260(Impulse);
@@ -2428,7 +2428,7 @@ static inline Fix16 __stdcall DotProductInlined_49E500(Fix16_Point& Vector1, Fix
 }
 
 // DotProductInlined_49E500 with the out-of-line Fix16 operator copies
-static inline Fix16 __stdcall DotProductOOL_49E500(Fix16_Point& Vector1, Fix16_Point& Vector2)
+static inline Fix16 __stdcall DotProductOOL_49E500(const Fix16_Point& Vector1, const Fix16_Point& Vector2)
 {
     return Vector1.x.Multiply_408680(Vector2.x).Add_408660(Vector1.y.Multiply_408680(Vector2.y));
 }
@@ -2440,7 +2440,7 @@ static inline Fix16 __stdcall Square_49E0E0(const Fix16& value)
 }
 
 MATCH_FUNC(0x55fc30)
-void CarPhysics::AccumulateImpulse_55FC30(Fix16_Point& point, s32 base_dmg)
+void CarPhysics::AccumulateImpulse_55FC30(const Fix16_Point& point, s32 base_dmg)
 {
 
     Fix16_Point impulse;

@@ -29,11 +29,11 @@ EXTERN_GLOBAL(Fix16_Point, CollisionIntersectionPoint_6FE1A0);
 
 EXPORT Fix16_Point __stdcall ComputeCollisionImpulse_55F3B0(Fix16 OwnerMass,
                                                                 Fix16 TargetMass,
-                                                                Fix16_Point& RelativeVelocity,
-                                                                Fix16_Point& DistToCollision_ByRef,
-                                                                Fix16_Point& CollisionIntersectPoint,
-                                                                Fix16_Point& CoM_related,
-                                                                Fix16_Point& TargetCoM,
+                                                                const Fix16_Point& RelativeVelocity,
+                                                                const Fix16_Point& DistToCollision_ByRef,
+                                                                const Fix16_Point& CollisionIntersectPoint,
+                                                                const Fix16_Point& CoM_related,
+                                                                const Fix16_Point& TargetCoM,
                                                                 Fix16 OwnerMomOfInertia,
                                                                 Fix16 TargetMomOfInertia,
                                                                 Fix16 offset);
@@ -195,15 +195,15 @@ class CarPhysics
     EXPORT char_type ProcessCollisionAndClampVelocity_55F280();
     EXPORT void StepPhysics_55F330();
     EXPORT char_type CheckPendingCollision_55F360();
-    EXPORT void ApplyForceWithTrailerRedirect_55F740(Fix16_Point* pPoint, Fix16_Point* pForce);
-    EXPORT void ApplyForceAndIntegrate_55F7A0(Fix16_Point* pPoint, Fix16_Point force);
-    EXPORT void ApplyForceAtPoint_55F800(Fix16_Point* pPoint, Fix16_Point* pForce, s32 bRotate);
+    EXPORT void ApplyForceWithTrailerRedirect_55F740(const Fix16_Point* pPoint, const Fix16_Point* pForce);
+    EXPORT void ApplyForceAndIntegrate_55F7A0(const Fix16_Point* pPoint, Fix16_Point force);
+    EXPORT void ApplyForceAtPoint_55F800(const Fix16_Point* pPoint, Fix16_Point* pForce, s32 bRotate);
     EXPORT void AccumulateImpulse_55F930(Fix16_Point* pPoint);
     EXPORT void ApplyAngularImpulse_55F970(Fix16 impulse);
-    EXPORT void ApplyForceScaledByMass_55F9A0(Fix16_Point& force);
+    EXPORT void ApplyForceScaledByMass_55F9A0(const Fix16_Point& force);
     EXPORT void ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* pPoint);
-    EXPORT Fix16 ApplyImpactForcesAndDamage_55FA60(Fix16_Point& PointOfForce, Fix16_Point& Impulse, s32 base_dmg);
-    EXPORT void AccumulateImpulse_55FC30(Fix16_Point& point, s32 base_dmg);
+    EXPORT Fix16 ApplyImpactForcesAndDamage_55FA60(const Fix16_Point& PointOfForce, const Fix16_Point& Impulse, s32 base_dmg);
+    EXPORT void AccumulateImpulse_55FC30(const Fix16_Point& point, s32 base_dmg);
     EXPORT void HandleWorldCollision_55FD00(Fix16_Point& relative_velocity);
     EXPORT void HandleCarCollision_55FF20(Car* pOtherCar);
     EXPORT void HandleObjectCollision_5606C0(Object* pObject, char_type damage_area);

@@ -118,7 +118,7 @@ Fix16 __stdcall Fix16::Abs_436A50(const Fix16& input)
 }
 
 MATCH_FUNC(0x436A70)
-Fix16 __stdcall Fix16::SquareRoot_436A70(const Fix16& input)
+Fix16 __stdcall Fix16::SquareRoot_436A70(const Fix16& input) throw()
 {
     return Fix16(sqrt(input.AsDouble()));
 }
@@ -126,7 +126,7 @@ Fix16 __stdcall Fix16::SquareRoot_436A70(const Fix16& input)
 // 10.5 https://decomp.me/scratch/7a41K
 // 9.6f https://decomp.me/scratch/ZkUbq
 MATCH_FUNC(0x405320)
-Ang16 __stdcall Fix16::atan2_fixed_405320(Fix16& y, Fix16& x)
+Ang16 __stdcall Fix16::atan2_fixed_405320(const Fix16& y, const Fix16& x)
 {
     Ang16 table_angle;
     if (x == kFPZero_6691B0)

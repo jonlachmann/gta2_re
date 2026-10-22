@@ -242,10 +242,10 @@ class Ang16
     }
 
     // 9.6f 0x41FC20: the table value is the left operand (this) of the multiply
-    inline static void __stdcall PolarToCartesian_41FC20(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2);
+    inline static void __stdcall PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
 
     // Non-inlined version of above function
-    EXPORT static void __stdcall PolarToCartesian_451730(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2);
+    EXPORT static void __stdcall PolarToCartesian_451730(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
 
     EXPORT static s32 __stdcall GetAngleFace_4F78F0(const Ang16& angle);
 
@@ -317,7 +317,7 @@ class Ang16
     }
 
     // 9.6f func: 0x401C40
-    Ang16(Fix16& value, u8 zero)
+    Ang16(const Fix16& value, u8 zero)
     {
         rValue = value.ToInt();
         Normalize();
@@ -367,7 +367,7 @@ class Ang16
 
 #pragma warning(push)
 #pragma warning(disable : 4101)
-inline void __stdcall Ang16::PolarToCartesian_41FC20(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
+inline void __stdcall Ang16::PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
 {
     // Never read: its optimizer entry is needed by CarAI::UpdateStateMachine_44E560 (docs/match_attempts.md)
     s32 unused;
@@ -393,11 +393,11 @@ class Ang8
     u8 rValue;
 };
 
-inline void __stdcall RotateAndTranslatePoint_42A720(Fix16& inX,
-                                                         Fix16& inY,
-                                                         Ang16& rotation,
-                                                         Fix16& transX,
-                                                         Fix16& transY,
+inline void __stdcall RotateAndTranslatePoint_42A720(const Fix16& inX,
+                                                         const Fix16& inY,
+                                                         const Ang16& rotation,
+                                                         const Fix16& transX,
+                                                         const Fix16& transY,
                                                          Fix16& outX,
                                                          Fix16& outY)
 {
