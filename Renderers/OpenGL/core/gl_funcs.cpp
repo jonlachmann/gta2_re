@@ -3,7 +3,7 @@
 const char* GLFuncs::Load(Loader loader)
 {
 #define GTA2GL_LOAD(type, name) \
-    name = (type)loader(#name); \
+    name = (GTA2GL_FN_TYPE(type, name))loader(#name); \
     if (!name)                  \
     {                           \
         return #name;           \

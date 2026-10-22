@@ -13,13 +13,17 @@ differences are rasteriser rounding (see Fidelity). Optional enhancements are of
 
 ## Build
 
-Needs MinGW-w64 (i686). `make test` needs a host g++ and the SDL2 development headers.
+Needs MinGW-w64 (i686). `make test` needs a host g++ and the SDL3 development headers.
 
 ```bash
 make                  # build/glvideo.dll build/glrender.dll build/capvideo.dll
 make test             # native tests of the portable core
 make OUT=/path/to/gta2
 ```
+
+`make demo` builds `build/sdl_demo`, a native SDL3 window that draws through the GL core (no game
+needed; F12 toggles the enhancements). On macOS: `brew install sdl3` and
+`PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig make demo`.
 
 The DLLs link the MinGW runtime statically and only need system DLLs.
 
@@ -99,7 +103,7 @@ debug keys (`skip_frontend`, `mapname`...), so the two runs can be compared fram
 - `core/` portable C++ and OpenGL, no Windows headers. `gbh_api.cpp` is the gbh_* layer,
   `gl_renderer.*` the faithful renderer, `gl_enhanced.cpp` the optional enhancements,
   `vid_system.*` the Vid_* logic, `renderer.hpp` the interface between the two DLLs.
-- `platform/` the GL context: WGL on the game's window for the DLLs, SDL2 for a future native port.
+- `platform/` the GL context: WGL on the game's window for the DLLs, SDL3 for a future native port.
 - `dll/` Windows glue: Vid_* exports, window handling, the DirectInput hook.
 - `tools/` development tools, `tests/` native tests.
 

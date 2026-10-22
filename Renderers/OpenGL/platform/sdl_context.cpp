@@ -1,13 +1,12 @@
 #include "gl_context.hpp"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <stdio.h>
 
 namespace
 {
-// The game owns the message loop; events SDL sees through its window hook are dropped.
-int SDLCALL DropAllEvents(void*, SDL_Event*)
+bool SDLCALL DropAllEvents(void*, SDL_Event*)
 {
-    return 0;
+    return false;
 }
 
 class SDLGLContext : public IGLContext
@@ -21,18 +20,18 @@ class SDLGLContext : public IGLContext
     ~SDLGLContext()
     {
         SDL_GL_MakeCurrent(mWindow, NULL);
-        SDL_GL_DeleteContext(mContext);
+        SDL_GL_DestroyContext(mContext);
         SDL_DestroyWindow(mWindow);
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
     }
 
     void* GetProcAddress(const char* name)
     {
-        return SDL_GL_GetProcAddress(name);
+        return (void*)SDL_GL_GetProcAddress(name);
     }
     void GetDrawableSize(int* pW, int* pH)
     {
-        SDL_GL_GetDrawableSize(mWindow, pW, pH);
+        SDL_GetWindowSizeInPixels(mWindow, pW, pH);
     }
     void SwapBuffers()
     {
@@ -56,19 +55,18 @@ class SDLGLContext : public IGLContext
 
 bool InitVideo(const char** ppError)
 {
-    SDL_SetHint(SDL_HINT_VIDEO_FOREIGN_WINDOW_OPENGL, "1");
-    SDL_SetHint(SDL_HINT_WINDOWS_DISABLE_THREAD_NAMING, "1");
     // The game owns process termination; SDL must not install SIGINT/SIGTERM handlers.
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0)
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
     {
         *ppError = SDL_GetError();
         return false;
     }
-    SDL_SetEventFilter(DropAllEvents, NULL);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    // macOS only gives a core context above 2.1 when it is forward compatible.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
@@ -104,7 +102,14 @@ IGLContext* CreateGLContextFromNativeWindow(void* pNativeWindow, const char** pp
     {
         return NULL;
     }
-    return Finish(SDL_CreateWindowFrom(pNativeWindow), pNativeWindow, false, ppError);
+    // The game owns the message loop on its own window; events SDL sees through its window hook are dropped.
+    SDL_SetEventFilter(DropAllEvents, NULL);
+    SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, pNativeWindow);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+    SDL_Window* pWindow = SDL_CreateWindowWithProperties(props);
+    SDL_DestroyProperties(props);
+    return Finish(pWindow, pNativeWindow, false, ppError);
 }
 
 IGLContext* CreateGLContextWindow(const char* title, int w, int h, const char** ppError)
@@ -114,6 +119,6 @@ IGLContext* CreateGLContextWindow(const char* title, int w, int h, const char** 
         return NULL;
     }
     SDL_Window* pWindow =
-        SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+        SDL_CreateWindow(title, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     return Finish(pWindow, NULL, true, ppError);
 }
