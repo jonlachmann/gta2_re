@@ -5,6 +5,8 @@
 # the differing fields are printed by name.
 # usage: state_check.py [until game frame, default 600]
 #   env GTA2_DIR (the install), SPEED (default 10), ATTRACT_MS (default 3000), DUMP (GTA2_STATELOG_DUMP for all runs)
+#   TRACE=<a>-<b>:<name>,..  instead: both exes with a call trace of those functions (names or address parts as in
+#       og_function_data_v105.csv) at game frames a..b, then the first call or return that differs
 # Needs build_port/gta2_port.exe (Scripts/port/build.sh) and build_port/gl_clang (build_gl_dlls_clang.sh).
 import os, re, subprocess, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -36,7 +38,7 @@ def last_frame(log):
 def run(exe, log, extra, until=None):
     until = UNTIL if until is None else until
     path = os.path.join(GAME, log)
-    for suffix in ('', '.dump'):
+    for suffix in ('', '.dump', '.trace'):
         if os.path.exists(path + suffix):
             os.remove(path + suffix)
     subprocess.run(['wineserver', '-k'], env=BASE)
@@ -59,11 +61,57 @@ if not os.path.exists(TABLE) or os.path.getmtime(TABLE) < os.path.getmtime(EXE):
 layout.write_mask(EXE, TABLE, MASK)
 BASE['GTA2_STATELOG_MASK'] = 'state.mask'
 PORT = {'GTA2_HEADLESS': '1'}
-port = run(EXE, 'state_port.log', PORT)
-subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'patch_attract.py'),
-                os.path.join(ROOT, 'Scripts', 'bin_comp', '10.5.exe'), os.path.join(GAME, 'gta2_105_attract.exe'), ATTRACT_MS], check=True)
+
+def trace():
+    frames, names = os.environ['TRACE'].split(':')
+    csv = [l.split(',') for l in open(os.path.join(ROOT, 'Scripts', 'bin_comp', 'og_function_data_v105.csv'))]
+    nm = subprocess.run(['i686-w64-mingw32-nm', EXE], capture_output=True, text=True).stdout.split('\n')
+    og, port = [], []
+    for n in names.split(','):
+        row = next(r for r in csv if len(r) > 1 and (r[0].endswith(n) or r[1].lower() == '0x' + n.lower()))
+        tag = row[1][2:].upper()  # the port's symbol carries the address
+        sym = next(l.split()[0] for l in nm if len(l.split()) == 3 and tag in l.split()[2].upper() and l.split()[1] in 'Tt')
+        og.append('%s=%s' % (row[0].split('::')[-1], row[1][2:]))
+        port.append('%s=%s' % (row[0].split('::')[-1], sym))
+    until = int(frames.split('-')[1])
+    p = run(EXE, 'state_port.log', dict(PORT, GTA2_STATELOG_TRACE=frames + ':' + ','.join(port)), until + 1)
+    o = run(os.path.join(GAME, 'gta2_105_attract.exe'), 'state_og.log',
+            dict(og_extra, GTA2_STATELOG_TRACE=frames + ':' + ','.join(og)), until + 1)
+    # Compare what the signatures say: the stack arguments by size, the return value by size, pointers masked
+    lay = layout.Layout(EXE)
+    sigs = {o.split('=')[0]: lay.signature(o.split('=')[0]) for o in og}
+    def mask(line):
+        f = line.split()
+        if len(f) < 4:
+            return line
+        sig = sigs.get(f[2]) or ([4] * 4, 4)
+        def val(v, n):
+            v = int(v, 16) & ((1 << (8 * min(n, 4))) - 1)
+            return 'ptr' if 0x00400000 <= v <= 0x7FFEFFFF else '%x' % v
+        if f[0] == 'R':
+            return ' '.join(f[:3] + ([val(f[3], sig[1])] if sig[1] else []))
+        args, words = [], f[4:]
+        for n in sig[0]:
+            args.append(val(words[0], n) if words else '?')
+            words = words[(n + 3) // 4:]
+        return ' '.join(f[:3] + [val(f[3], 4)] + args)
+    a, b = open(o + '.trace').read().split('\n'), open(p + '.trace').read().split('\n')
+    for i, (x, y) in enumerate(zip(a, b)):
+        if mask(x) != mask(y):
+            print('call trace: %d lines the same, then (10.5 / port):' % i)
+            for k in range(max(0, i - 8), min(i + 6, len(a), len(b))):
+                print('%s %-50s %s' % ('>' if k == i else ' ', mask(a[k]), mask(b[k])))
+            sys.exit(1)
+    print('call trace: the same for %d lines (10.5 %d, port %d)' % (min(len(a), len(b)), len(a), len(b)))
+    sys.exit(0)
+
 og_extra = {'RENDERER': os.path.join(ROOT, 'build_port', 'gl_clang'), 'GTA2_VIDEO_DLL': 'nullvideo.dll',
             'GTA2_STATELOG_TABLE': 'state_port.log.globals'}
+subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'patch_attract.py'),
+                os.path.join(ROOT, 'Scripts', 'bin_comp', '10.5.exe'), os.path.join(GAME, 'gta2_105_attract.exe'), ATTRACT_MS], check=True)
+if os.environ.get('TRACE'):
+    trace()
+port = run(EXE, 'state_port.log', PORT)
 og = run(os.path.join(GAME, 'gta2_105_attract.exe'), 'state_og.log', og_extra)
 og2 = run(os.path.join(GAME, 'gta2_105_attract.exe'), 'state_og2.log', og_extra)
 diff = subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'state_diff.py'), og, port, TABLE],

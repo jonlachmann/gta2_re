@@ -10,7 +10,7 @@ import bisect, json, os, re, subprocess, sys
 
 DWARFDUMP = os.environ.get('LLVM_DWARFDUMP', '/opt/homebrew/opt/llvm/bin/llvm-dwarfdump')
 KEEP = ('DW_AT_name', 'DW_AT_type', 'DW_AT_byte_size', 'DW_AT_data_member_location', 'DW_AT_data_bit_offset',
-        'DW_AT_bit_size', 'DW_AT_upper_bound', 'DW_AT_count', 'DW_AT_declaration')
+        'DW_AT_bit_size', 'DW_AT_upper_bound', 'DW_AT_count', 'DW_AT_declaration', 'DW_AT_artificial')
 DIE = re.compile(r'^0x([0-9a-f]+):( +)(DW_TAG_\w+|NULL)')
 ATTR = re.compile(r'^ +(DW_AT_\w+)\t\((.*)\)$')
 
@@ -127,6 +127,16 @@ class Layout:
                 return None
             var = num(self.dies[var][1]['DW_AT_type'])
         return sorted(self.fields(var))
+
+    def signature(self, name):
+        """(sizes of the stack arguments, size of the return value) of a function, for the call trace."""
+        for off, (tag, attrs, children) in self.dies.items():
+            if tag == 'DW_TAG_subprogram' and attrs.get('DW_AT_name') == '"%s"' % name:
+                ret = self.size(num(attrs['DW_AT_type'])) if 'DW_AT_type' in attrs else 0
+                args = [self.size(num(self.dies[c][1]['DW_AT_type'])) for c in children
+                        if self.dies[c][0] == 'DW_TAG_formal_parameter' and 'DW_AT_artificial' not in self.dies[c][1]]
+                return args, ret
+        return None
 
 def padding(fields, size):
     """[(offset, length)] of the bytes no field covers."""
