@@ -5,7 +5,7 @@
 # game never initialised, or where the decomp's layout differs from 10.5.exe's) are only listed.
 # usage: state_diff.py <log A> <log B> [<table>]     table: the port run's <log>.globals (default <log B>.globals)
 #   env NOISE=<log C>: a second run of A's exe; chunks that differ between A and C are ignored
-#   env IGNORE=<regex> on chunk names to leave out (default: render scratch, gTileVerts_7036D0, and sound,
+#   env IGNORE=<regex> on chunk names to leave out (default: render scratch, gTileVerts_*, and sound,
 #       whose state follows the real audio playback, not the game clock)
 import os, re, sys
 
@@ -61,7 +61,7 @@ noise = set()
 if os.environ.get('NOISE'):
     for f, sa, sc in lockstep(sys.argv[1], os.environ['NOISE']):
         noise |= {k for k in set(sa) | set(sc) if sa.get(k) != sc.get(k)}
-ignore = re.compile(os.environ.get('IGNORE', r'gTileVerts_7036D0|gSound_obj_66F680|gSampManager_6FFF00'))
+ignore = re.compile(os.environ.get('IGNORE', r'gTileVerts_|gSound_obj_66F680|gSampManager_6FFF00'))
 noise |= {k for k, n in enumerate(names) if ignore.search(n)}
 equal_once, never, count, first = set(), None, 0, None
 for f, sa, sb in lockstep(sys.argv[1], sys.argv[2]):

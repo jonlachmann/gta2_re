@@ -11,6 +11,11 @@
 //   GTA2_STATELOG_MASK=<file>         lines <name> <hex offset> <hex length>: padding bytes, left out of the hashes
 //                                     (Scripts/port/layout.py writes it from the port's DWARF)
 //   GTA2_STATELOG_DUMP=<a>-<b>:<n>,.. full bytes of those entries (names, *name for pointees) at game frames a..b
+//   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
+//                                     a..b, to <log>.trace:
+//                                     C <game frame> <label> <ecx> <4 stack dwords> at the entry and
+//                                     R <game frame> <label> <eax> at the return. int3 breakpoints, so the
+//                                     same in 10.5.exe and in the port (Scripts/port/state_check.py, TRACE=)
 //
 // Hashes skip values that look like pointers (0x00400000..0x7FFEFFFF, per aligned dword): they always differ
 // between two processes. Positions (Fix16 up to 0x3FC000), counters and flags are below that.
@@ -172,6 +177,160 @@ void ParseDump()
         start = comma + 1;
     }
 }
+#if defined(_WIN32)
+// The call trace: an int3 at each function entry; on a hit, log, put an int3 at the return address, put the
+// original byte back and single-step over it, then arm the int3 again.
+struct Breakpoint
+{
+    unsigned char* addr;
+    unsigned char orig;
+    std::string label; // empty: a return breakpoint
+    int returns; // return breakpoints: calls still to return here
+    std::vector<std::string> pending; // return breakpoints: their labels, innermost last
+};
+std::vector<Breakpoint> gBreakpoints;
+FILE* gTrace;
+unsigned char* gRearm; // the breakpoint to arm again after the single step
+int gTraceFrom, gTraceTo;
+
+int Frame()
+{
+    const unsigned char* rng = 0;
+    int frame = -1;
+    if (gFrameGlobal)
+    {
+        memcpy(&rng, gFrameGlobal, sizeof(rng));
+    }
+    if (rng)
+    {
+        memcpy(&frame, rng, sizeof(frame));
+    }
+    return frame;
+}
+
+void Poke(unsigned char* p, unsigned char v)
+{
+    DWORD old;
+    VirtualProtect(p, 1, PAGE_EXECUTE_READWRITE, &old);
+    *p = v;
+    VirtualProtect(p, 1, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), p, 1);
+}
+
+Breakpoint* Find(unsigned char* p, bool ret)
+{
+    for (size_t i = 0; i < gBreakpoints.size(); i++)
+    {
+        if (gBreakpoints[i].addr == p && gBreakpoints[i].label.empty() == ret)
+        {
+            return &gBreakpoints[i];
+        }
+    }
+    return 0;
+}
+
+LONG CALLBACK OnException(EXCEPTION_POINTERS* ep)
+{
+    CONTEXT* c = ep->ContextRecord;
+    const DWORD code = ep->ExceptionRecord->ExceptionCode;
+    if (code == EXCEPTION_SINGLE_STEP && gRearm)
+    {
+        Poke(gRearm, 0xCC);
+        gRearm = 0;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    if (code != EXCEPTION_BREAKPOINT)
+    {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    unsigned char* at = (unsigned char*)ep->ExceptionRecord->ExceptionAddress;
+    Breakpoint* ret = Find(at, true);
+    if (ret && ret->returns > 0)
+    {
+        const int frame = Frame();
+        if (frame >= gTraceFrom && frame <= gTraceTo)
+        {
+            fprintf(gTrace, "R %d %s %08lx\n", frame, ret->pending.back().c_str(), (unsigned long)c->Eax);
+        }
+        ret->pending.pop_back();
+        ret->returns--;
+    }
+    Breakpoint* entry = Find(at, false);
+    if (!entry && !ret)
+    {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    if (entry)
+    {
+        const unsigned* sp = (const unsigned*)c->Esp;
+        const int frame = Frame();
+        if (frame >= gTraceFrom && frame <= gTraceTo)
+        {
+            fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x\n", frame, entry->label.c_str(), (unsigned long)c->Ecx, sp[1],
+                    sp[2], sp[3], sp[4]);
+        }
+        unsigned char* back = (unsigned char*)(size_t)sp[0];
+        Breakpoint* b = Find(back, true);
+        if (!b)
+        {
+            Breakpoint nb = {back, *back, std::string(), 0, std::vector<std::string>()};
+            gBreakpoints.push_back(nb);
+            b = &gBreakpoints.back();
+            entry = Find(at, false); // push_back may have moved it
+            ret = Find(at, true);
+        }
+        if (b->returns++ == 0)
+        {
+            Poke(back, 0xCC);
+        }
+        b->pending.push_back(entry->label);
+    }
+    // Run the original instruction once, then arm this address again if anything still wants it
+    const bool keep = entry || (ret && ret->returns > 0);
+    Poke(at, entry ? entry->orig : ret->orig);
+    c->Eip = (DWORD)(size_t)at;
+    if (keep)
+    {
+        gRearm = at;
+        c->EFlags |= 0x100; // trap flag
+    }
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+void ParseTrace(const std::string& path)
+{
+    const char* t = getenv("GTA2_STATELOG_TRACE");
+    const char* colon = t ? strchr(t, ':') : 0;
+    if (!colon || sscanf(t, "%d-%d", &gTraceFrom, &gTraceTo) != 2)
+    {
+        return;
+    }
+    t = colon + 1;
+    gTrace = fopen((path + ".trace").c_str(), "w");
+    std::string list = t;
+    size_t start = 0;
+    while (start < list.size())
+    {
+        size_t comma = list.find(',', start);
+        std::string item = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+        size_t eq = item.find('=');
+        if (eq != std::string::npos)
+        {
+            unsigned char* p = (unsigned char*)(size_t)strtoul(item.c_str() + eq + 1, 0, 16);
+            Breakpoint b = {p, *p, item.substr(0, eq), 0, std::vector<std::string>()};
+            gBreakpoints.push_back(b);
+            Poke(p, 0xCC);
+        }
+        if (comma == std::string::npos)
+        {
+            break;
+        }
+        start = comma + 1;
+    }
+    gBreakpoints.reserve(gBreakpoints.size() + 4096); // ponytail: return breakpoints beyond that move the entries, Find() copes
+    AddVectoredExceptionHandler(1, OnException);
+}
+#endif
 } // namespace
 
 void StateLog_Init()
@@ -222,6 +381,9 @@ void StateLog_Init()
     gLog = fopen(path, "w");
     ParseMask();
     ParseDump();
+#if defined(_WIN32)
+    ParseTrace(path);
+#endif
     if (!gDumpNames.empty())
     {
         gDump = fopen((std::string(path) + ".dump").c_str(), "w");
@@ -268,6 +430,12 @@ void StateLog_Frame(unsigned flip)
     }
     fputc('\n', gLog);
     fflush(gLog);
+#if defined(_WIN32)
+    if (gTrace)
+    {
+        fflush(gTrace);
+    }
+#endif
 
     if (gDump && frame >= gDumpFrom && frame <= gDumpTo)
     {
