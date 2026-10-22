@@ -37,6 +37,7 @@ fi
 # gta2_port.exe keeps its settings in gta2.ini (Port/registry_ini.cpp): the same few, rewritten every run
 { printf '[screen]\nstart_mode=dword:0\nwindow_width=dword:960\nwindow_height=dword:720\ndo_play_movie=dword:0\n\n[debug]\n'
   [ -n "$MAP" ] && printf 'skip_frontend=dword:1\nmapname=str:%s.gmp\nstylename=str:%s.sty\nscriptname=str:%s.scr\n' "$MAP" "$MAP" "$MAP"
+  [ -n "$GTA2_INI_EXTRA" ] && printf '%b\n' "$GTA2_INI_EXTRA" # more sections, e.g. '[control]\n0=dword:32994'
 } > "$GAME/gta2.ini"
 [ -n "$GTA2GL_CAPTURE" ] && mkdir -p "$GAME/${GTA2GL_CAPTURE%%,*}"
 cd "$GAME" && exec wine "$(basename "$EXE")"
