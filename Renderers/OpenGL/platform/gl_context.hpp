@@ -20,3 +20,7 @@ IGLContext* CreateGLContextFromNativeWindow(void* pNativeWindow, const char** pp
 
 // Creates its own window (native port). Not used by the DLLs.
 IGLContext* CreateGLContextWindow(const char* title, int w, int h, const char** ppError);
+
+// Creates the context on an SDL_Window the caller owns (the native port's window); the context doesn't
+// destroy it.
+IGLContext* CreateGLContextForSDLWindow(void* pSDLWindow, const char** ppError);

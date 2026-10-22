@@ -7,14 +7,20 @@ cd "$(dirname "$0")/../.."
 OUT=build_port
 mkdir -p $OUT/obj
 INC=$(echo | i686-w64-mingw32-g++ -xc++ -E -v - 2>&1 | sed -n '/#include <...> search starts here:/,/End of search list./p' | grep '^ ' | grep -Ev '/lib/gcc/[^/]+/[^/]+/include(-fixed)?$' | sed 's/^ */-isystem /')
-CXXFLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 ${OPT:--O2} -g -w -Wno-address-of-temporary -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fsjlj-exceptions -nostdinc++ -nostdlibinc $INC -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_CRT_NON_CONFORMING_SWPRINTFS -D_USE_32BIT_TIME_T -DGTA2_PORT $*"
-RENFLAGS="--target=i686-w64-mingw32 -std=c++11 ${OPT:--O2} -g -w -nostdinc++ -nostdlibinc $INC -fsjlj-exceptions -DGTA2GL_BUILD_DLL"
+# SDL3 from the official MinGW package (SDL3_DIR, default build_port/sdl3 = its i686-w64-mingw32 folder)
+SDL3_DIR=${SDL3_DIR:-$OUT/sdl3}
+# ponytail: SDL's headers pull in MinGW's intrin.h, whose __cpuidex clashes with Apple clang's cpuid.h; nothing here
+# uses cpuid.h, so its include guard is preset. Drop it with a clang/MinGW pair that agree.
+SDLINC="-I$SDL3_DIR/include -D__CPUID_H"
+CXXFLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 ${OPT:--O2} -g -w -Wno-address-of-temporary -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fsjlj-exceptions -nostdinc++ -nostdlibinc $INC -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_CRT_NON_CONFORMING_SWPRINTFS -D_USE_32BIT_TIME_T -DGTA2_PORT $SDLINC $*"
+RENFLAGS="--target=i686-w64-mingw32 -std=c++11 ${OPT:--O2} -g -w -nostdinc++ -nostdlibinc $INC -fsjlj-exceptions -DGTA2GL_BUILD_DLL $SDLINC"
 # gta2_lib_src without the ImGui overlay, plus StdAfx.cpp and Port/ (main.cpp replaces test.cpp)
 SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v ImGuiDebug.cpp) StdAfx.cpp Port/*.cpp)
-# The OpenGL renderer (PR #837), linked in: its gbh_*/Vid_* exports are found in the exe itself
+# The OpenGL renderer (PR #837), linked in: its gbh_* exports and Port/sdl_video.cpp's Vid_* ones are found in the
+# exe itself.
 REN=Renderers/OpenGL
 RENSRC=($REN/core/gl_funcs.cpp $REN/core/gl_renderer.cpp $REN/core/gl_enhanced.cpp $REN/core/vid_system.cpp $REN/core/capture.cpp
-        $REN/core/options.cpp $REN/core/gbh_api.cpp $REN/core/cmdlog.cpp $REN/dll/glvideo.cpp $REN/dll/dinput_hook.cpp $REN/platform/wgl_context.cpp)
+        $REN/core/options.cpp $REN/core/gbh_api.cpp $REN/core/cmdlog.cpp $REN/platform/sdl_context.cpp)
 OBJS=()
 fail=0
 for f in "${SRC[@]}" "${RENSRC[@]}"; do
@@ -39,6 +45,7 @@ for dll in mss32 binkw32; do
   i686-w64-mingw32-dlltool -d $OUT/$dll.def -l $OUT/lib$dll.a
 done
 i686-w64-mingw32-g++ -mwindows -static -Wl,--kill-at -o $OUT/gta2_port.exe "${OBJS[@]}" $OUT/obj/resources.o \
-  -L$OUT -lmss32 -lbinkw32 -lversion \
+  -L$OUT $SDL3_DIR/lib/libSDL3.dll.a -lmss32 -lbinkw32 -lversion \
   -ldplayx -ldinput -ldxguid -lddraw -lwinmm -lole32 -luuid -lgdi32 -lcomctl32 -lopengl32 2>&1 | tee $OUT/link.log | head -60
-echo "built $OUT/gta2_port.exe"
+cp $SDL3_DIR/bin/SDL3.dll $OUT/
+echo "built $OUT/gta2_port.exe (needs SDL3.dll next to it)"
