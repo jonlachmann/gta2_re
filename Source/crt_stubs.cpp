@@ -7,7 +7,13 @@ namespace crt
 STUB_FUNC(0x5ED3BB)
 void* __cdecl malloc(size_t Size)
 {
+#if defined(GTA2_PORT)
+    // Port (docs/port.md): zeroed like 10.5.exe's fresh heap pages, so unset fields and padding are
+    // the same in both and the state log (Port/headless/state_log.cpp) can compare pools
+    return ::calloc(1, Size);
+#else
     return ::malloc(Size);
+#endif
 }
 
 STUB_FUNC(0x5ED478)
