@@ -6,6 +6,9 @@
 #include "TextTable.hpp"
 #include <COMMCTRL.H>
 #include <direct.h>
+#if defined(GTA2_PORT)
+#include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
+#endif
 
 DEFINE_GLOBAL(UINT_PTR, gTimerId_6F8A18, 0x6F8A18);
 DEFINE_GLOBAL_ARRAY(char_type, Dest_6F88A4, 256, 0x6F88A4);

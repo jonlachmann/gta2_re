@@ -16,6 +16,7 @@ CXXFLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 ${OPT:--O2} -g -w -
 RENFLAGS="--target=i686-w64-mingw32 -std=c++11 ${OPT:--O2} -g -w -nostdinc++ -nostdlibinc $INC -fsjlj-exceptions -DGTA2GL_BUILD_DLL $SDLINC"
 # gta2_lib_src without the ImGui overlay, plus StdAfx.cpp and Port/ (main.cpp replaces test.cpp)
 SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v ImGuiDebug.cpp) StdAfx.cpp Port/*.cpp)
+TESTS=(Port/tests/*.cpp)
 # The OpenGL renderer (PR #837), linked in: its gbh_* exports and Port/sdl_video.cpp's Vid_* ones are found in the
 # exe itself.
 REN=Renderers/OpenGL
@@ -47,5 +48,10 @@ done
 i686-w64-mingw32-g++ -mwindows -static -Wl,--kill-at -o $OUT/gta2_port.exe "${OBJS[@]}" $OUT/obj/resources.o \
   -L$OUT $SDL3_DIR/lib/libSDL3.dll.a -lmss32 -lbinkw32 -lversion \
   -ldplayx -ldinput -ldxguid -lddraw -lwinmm -lole32 -luuid -lgdi32 -lcomctl32 -lopengl32 2>&1 | tee $OUT/link.log | head -60
+# Port/tests: one exe per test, linked with the Port/ file of the same name
+for t in "${TESTS[@]}"; do
+  n=$(basename "$t" .cpp); u=${n%_test}
+  clang++ $CXXFLAGS -c "$t" -o $OUT/obj/test_$n.o && i686-w64-mingw32-g++ -static -o $OUT/$n.exe $OUT/obj/test_$n.o $OUT/obj/Port_$u.cpp.o
+done
 cp $SDL3_DIR/bin/SDL3.dll $OUT/
 echo "built $OUT/gta2_port.exe (needs SDL3.dll next to it)"

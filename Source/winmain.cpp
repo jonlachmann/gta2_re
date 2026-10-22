@@ -65,6 +65,9 @@
 #if defined(GTA2_PORT)
 #include "Port/sdl_win32.hpp" // the window and its messages on SDL3 (docs/port.md)
 #endif
+#if defined(GTA2_PORT)
+#include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
+#endif
 
 DEFINE_GLOBAL(u8, gNetDisconnectPlayersBits_6F56B8, 0x6F56B8); // TODO: move
 DEFINE_GLOBAL(u32, gNetworkPlayerIdx_6F56C8, 0x6F56C8); // TODO: move
