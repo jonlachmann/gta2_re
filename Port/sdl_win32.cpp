@@ -78,6 +78,12 @@ ATOM Port_RegisterClassA(const WNDCLASSA* pClass)
 
 HWND Port_CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD, int, int, int w, int h, HWND, HMENU, HINSTANCE, LPVOID)
 {
+    const bool headless = SDL_getenv("GTA2_HEADLESS") != NULL; // no window content, no sound (docs/port.md, M2)
+    if (headless)
+    {
+        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+    }
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
     {
         return NULL;
@@ -88,16 +94,18 @@ HWND Port_CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD, int, int, int w, i
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    gWindow = SDL_CreateWindow(title, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+    gWindow = SDL_CreateWindow(title, w, h, headless ? SDL_WINDOW_HIDDEN : SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     if (!gWindow)
     {
         return NULL;
     }
 #if defined(_WIN32)
     gHwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(gWindow), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
-#else
-    gHwnd = (HWND)gWindow;
 #endif
+    if (!gHwnd)
+    {
+        gHwnd = (HWND)gWindow; // no native window (headless, other platforms): only these functions use it
+    }
     return gHwnd;
 }
 
