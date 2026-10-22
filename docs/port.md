@@ -10,7 +10,7 @@ status snapshot.
 
 | Milestone (issue #840) | State |
 |---|---|
-| M0. Compiles with clang | Partly done. The changes that keep VC6's output identical are done: **104 of 109** game sources compile. The rest needs the fork (see Remaining). |
+| M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
 | M1. Plays on Linux, Windows | Not started. The renderer's SDL3 platform layer exists (see Renderer). |
 | M2-M6 | Not started. |
 
@@ -19,8 +19,10 @@ Branches (local, not pushed yet):
 - `m0-clang` (from `master`): the M0 fixes below. Every commit keeps `[3423/3423] funcs OK`, and
   `compare_builds.py` reports no changed function. None of them needs to wait for the freeze; they can go
   to `master` as they are.
-- `sdl3-mac` (from PR #837, `parigi-n/claude/opengl-renderer`): the renderer's SDL3 port and a macOS
-  build, see Renderer.
+- `port` (from `m0-clang`): what can't go to `master`. So far only additions: `Scripts/port/build.sh`,
+  `Scripts/port/run_wine.sh`, `Port/stubs.cpp`. See "The clang-built game under wine".
+- `sdl3-mac` (from PR #837, `parigi-n/claude/opengl-renderer`): the renderer's SDL3 port, a macOS
+  build, and the WGL fix wine on macOS needs. See Renderer.
 - Submodule `3rdParty/GTA2Hax`, branch `portable-includes`: forward slashes in two `#include`s. It has to
   be merged in GTA2Hax before `m0-clang` can be pushed, since the submodule pointer refers to it.
 
@@ -150,19 +152,86 @@ here" notes, run `constref.py`, repeat until clean.
 | inline asm | `sprite_delta::Delta_5ABA00`, `Delta_5ABA40` (`gtx_0x106C.cpp`), `get_rdtsc_5BEE90` (`SpriteRenderer_1C.cpp`) | plain C++ under `#else`, asm kept for MSVC. The delta loops are line-by-line translations but **untested** (32-bit x86 can't run on the Apple Silicon machine used). The M2 replay test, or a quick test under wine against the asm, should check them. `get_rdtsc` uses `__builtin_readcyclecounter` (clang only; the profiler display is its only user). |
 | dynamic exception specification `throw(std::bad_alloc)` | `crt_stubs.cpp` (`operator new`, `new[]`) | VC6 only, through a `THROW_BAD_ALLOC` macro |
 
+### 7. The last five files
+
+`NetPlay.cpp`, `Network_20324.cpp`, `Player.cpp`, `winmain.cpp` stopped at `NetPlay.hpp`'s
+`<VC98/Include/DPLAY.H>`, `input.cpp` at an undeclared `Fn_DirectInputCreateA` (its `#if _MSC_VER > 1200`
+excluded clang). MinGW-w64 still ships `dplay.h`, `dplobby.h` and `dinput.h` with import libraries, so
+non-MSVC compilers now take those, and the declaration's guard became `!defined(_MSC_VER) || _MSC_VER >
+1200`. Nothing was hiding behind them: all 109 files compile.
+
 ## Remaining for M0 (fork only, breaks matching)
 
-The 5 files that still fail, all reasons the issue already plans for:
+The plan removes these in M0. Since the clang build is a Windows exe for now, they still work there, and
+removing them fits better with M1, when the platform code moves to SDL3:
 
-- `NetPlay.cpp`, `Network_20324.cpp`, `Player.cpp`, `winmain.cpp`: `NetPlay.hpp` includes
-  `<VC98/Include/DPLAY.H>`. The plan removes DirectPlay and the lobby. Being stuck on that include, these
-  files may hide more errors (most likely in `Player.cpp` and `winmain.cpp`, which aren't network code).
-- `input.cpp`: the non-VC6 branch of `DirectInputCreate_4986D0` uses an undeclared
-  `Fn_DirectInputCreateA`. The plan rewrites keyboard and gamepad input on SDL3 in M1, so it isn't worth
-  fixing here.
-- Removing the matching tools (`build.py`, `Scripts/bin_comp`, reccmp, permuter, HookLoader, the
-  `MATCH_FUNC` markers' naked asm).
-- Then a real link, which hasn't been tried.
+- DirectPlay and the lobby (`NetPlay.*`, `Network_20324.*`, the network paths in `winmain.cpp`). Single
+  player still asks `gNetPlay_7071E8` for the player index, the player count and names, so removing it
+  means a small single-player replacement for those few methods, not just deleting files.
+- The matching tools (`build.py`, `Scripts/bin_comp`, reccmp, permuter, HookLoader, the `MATCH_FUNC`
+  markers' naked asm). The port build simply doesn't compile them.
+
+## The clang-built game under wine (branch `port`)
+
+```bash
+Scripts/port/build.sh          # -> build_port/gta2_port.exe; incremental, FORCE=1 rebuilds everything
+GTA2_DIR=~/Documents/GTA2 RENDERER=<renderer>/Renderers/OpenGL/build \
+  GTA2GL_CAPTURE=cap,100,300 Scripts/port/run_wine.sh "" wil    # "" = gta2_port.exe; wil = boot into city 1
+```
+
+`build.sh` compiles the same sources as `decomp_main` (`gta2_lib_src`, `test.cpp`, `StdAfx.cpp`,
+`resources.rc`) plus `Port/*.cpp` with clang for `i686-w64-mingw32`, and links with the MinGW-w64 g++
+(Homebrew's LLVM has no `lld`). It needs the GTA2 install's `mss32.dll` and `binkw32.dll` in
+`build_port/dlls/` (or `GTA2_DLL_DIR`). `run_wine.sh` copies the install to `build_port/game/` and runs
+there, in its own wine prefix (`build_port/wineprefix`), so neither the install nor the VC6 prefix changes.
+
+What it took, in the order the problems appeared:
+
+| Problem | Fix |
+|---|---|
+| GTA2Hax's ImGui copy defines its own `vsnprintf` under `#if _MSC_VER <= 1200` (true without MSVC). ImGui is a submodule *inside* the GTA2Hax submodule. | The port build leaves ImGui and `ImGuiDebug.cpp` out (the overlay draws through GTA2Hax's D3D9 renderer, which the port doesn't use); `Port/stubs.cpp` has an empty `ImGuiDebugDraw`. |
+| `test.cpp`, `decomp_main`'s entry point, calls `EnableBoot2MapDebugOptions()` (in `ImGuiDebug.cpp`), which **turns off traffic lights and trains** for the standalone decomp build. | Empty in `Port/stubs.cpp`: the port plays the full game. Worth knowing when testing `decomp_main` itself. |
+| GNU `windres`: syntax error at `VALUE "Translation", 0x0000 0x04B0`. | A comma, on `m0-clang` (VC6 output unchanged). |
+| `_Unwind_Resume`, `__gxx_personality_v0` undefined. | Homebrew's i686 MinGW uses SJLJ exceptions (`__USING_SJLJ_EXCEPTIONS__`); clang needs `-fsjlj-exceptions`. |
+| `_imp__AIL_startup@0` undefined. The real `mss32.dll`/`binkw32.dll` export decorated names (`_AIL_startup@0`). | `build.sh` generates a `.def` from each DLL's exports with `AIL_startup@0 == _AIL_startup@0` lines and builds import libraries with `dlltool`. The repo's `Source/3rdParty/mss.cpp`/`bink.cpp` stubs aren't used. |
+| `GetFileVersionInfoA` undefined. | `-lversion`. |
+| "Couldn't open .seq file in the data directory": `fopen("data\\")`, the name from `_findfirst` was empty. MinGW maps `_findfirst` to `_findfirst64` (64-bit `time_t`), whose struct layout differs from the `_finddata_t` the code declares. | `-D_USE_32BIT_TIME_T`, which also matches VC6's 32-bit `time_t` everywhere else. |
+| Crash entering a city: read of address 0x14 in `Hud_Brief_704::FormatCurrentBrief_5D3470`. Its `num_chars` is returned uninitialised when there's no brief (VC6 returned garbage, and the decomp keeps it to match), so clang treated the null case as impossible and **deleted the `if (field_6F8_curr_briefs)` check**. | `-ftrivial-auto-var-init=zero`, plus `-fwrapv` (signed overflow wraps as on VC6; the fixed-point and angle code relies on it) and `-fno-delete-null-pointer-checks`. Fix the build flags, not the functions: the decomp is full of VC6-era undefined behaviour that matches the original. |
+
+Results on macOS 26, Apple Silicon, wine 9.0 (Homebrew `wine-stable`):
+
+- **Frontend: bit-identical** to `10.5.exe` with the same renderer, at frames 30, 100, 200 and 400
+  (`cmp` of the captured BMPs).
+- **City 1 (`wil`)**: plays at 30 fps, renders correctly. Not comparable frame by frame: two runs of
+  `10.5.exe` itself differ there (time-seeded randomness, timing). That needs M2's replays.
+- Untested so far: input (nobody pressed a key), sound output, cities 2 and 3, saving, the network game.
+
+### Wine on macOS: running GTA2 at all
+
+These are about the environment, not the port; `10.5.exe` behaves the same.
+
+- Wine 9 on macOS runs 32-bit programs in "experimental wow64 mode", in a 64-bit prefix. **A 32-bit
+  program reads the 32-bit registry view**: set GTA2's keys with `wine reg add ... /reg:32`, or the game
+  doesn't see them.
+- The game reads `HKLM\SOFTWARE\DMA Design Ltd\GTA2` (`registry.cpp`). The install's
+  `gta2_install.reg` writes `HKEY_CURRENT_USER`; `run_wine.sh` imports nothing from it, it sets the few
+  values that matter.
+- **DMA's own video DLL can't run here**: windowed mode needs a 16-bit desktop and full screen a 16-bit
+  display mode, and wine's mac driver offers neither. `test/error.log` then says `Fatal Error 3003 in
+  video.cpp(1359)` (`VideomodeNotAvailable`). Use the OpenGL renderer (or capvideo + d3ddll, which fails
+  the same way).
+- After that failure the game saves `start_mode` = 1 (full screen) and fails the same way on every later
+  run. `run_wine.sh` resets it.
+- PR #837's `glvideo.dll` needed `WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB`: the mac driver only creates
+  3.2+ contexts that are forward compatible (the same rule as SDL3 on macOS). Fixed on `sdl3-mac`.
+- The `gta2.exe` in a typical install isn't the 10.5 exe the decomp targets (different hash, other
+  registry handling). Compare against `Scripts/bin_comp/10.5.exe`.
+- Finding out why it stopped without seeing the screen: the game's fatal errors go to `test/error.log` in
+  the game folder; message box texts show up with `WINEDEBUG=+relay` and
+  `HKCU\Software\Wine\Debug\RelayInclude` = `user32.MessageBoxA`; CRT calls the same way with
+  `ucrtbase.fopen` and so on (the MinGW build uses the UCRT, not `msvcrt`); crash addresses resolve with
+  `i686-w64-mingw32-addr2line -f -C -e build_port/gta2_port.exe <addr>`. To look at the game, use
+  `GTA2GL_CAPTURE` rather than screen captures.
 
 ## Renderer on SDL3 and macOS (branch `sdl3-mac`)
 
@@ -216,3 +285,7 @@ went wrong:
    `master`. Expect "changed: 0"; a change means the edit was not neutral (so far only overload
    resolution did that).
 5. Commit per kind of fix, so a regression can be bisected.
+6. On a branch for the fork: `Scripts/port/build.sh`, then `Scripts/port/run_wine.sh` (once with no map
+   for the frontend, once with `wil`). Compare frontend captures with `10.5.exe`'s; they should be
+   identical. Any new crash: `addr2line`, and suspect undefined behaviour that VC6 tolerated before
+   suspecting the decomp.
