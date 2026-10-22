@@ -21,7 +21,10 @@ class SDLGLContext : public IGLContext
     {
         SDL_GL_MakeCurrent(mWindow, NULL);
         SDL_GL_DestroyContext(mContext);
-        SDL_DestroyWindow(mWindow);
+        if (mOwned)
+        {
+            SDL_DestroyWindow(mWindow);
+        }
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
     }
 
@@ -85,7 +88,10 @@ IGLContext* Finish(SDL_Window* pWindow, void* pNative, bool owned, const char** 
     if (!ctx)
     {
         *ppError = SDL_GetError();
-        SDL_DestroyWindow(pWindow);
+        if (owned)
+        {
+            SDL_DestroyWindow(pWindow);
+        }
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
         return NULL;
     }
@@ -121,4 +127,13 @@ IGLContext* CreateGLContextWindow(const char* title, int w, int h, const char** 
     SDL_Window* pWindow =
         SDL_CreateWindow(title, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     return Finish(pWindow, NULL, true, ppError);
+}
+
+IGLContext* CreateGLContextForSDLWindow(void* pSDLWindow, const char** ppError)
+{
+    if (!InitVideo(ppError))
+    {
+        return NULL;
+    }
+    return Finish((SDL_Window*)pSDLWindow, NULL, false, ppError);
 }

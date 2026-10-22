@@ -19,6 +19,7 @@ if [ ! -d "$GAME/data" ]; then
 fi
 [ -n "$RENDERER" ] && cp "$RENDERER"/glvideo.dll "$RENDERER"/glrender.dll "$GAME"/
 cp "$EXE" "$GAME"/
+[ -f "$(dirname "$EXE")/SDL3.dll" ] && cp "$(dirname "$EXE")/SDL3.dll" "$GAME"/
 # 32-bit programs in a 64-bit prefix read the 32-bit registry view: always /reg:32.
 S='HKLM\SOFTWARE\DMA Design Ltd\GTA2\Screen'; D='HKLM\SOFTWARE\DMA Design Ltd\GTA2\Debug'
 wine reg add "$S" /reg:32 /f /v rendername /d glrender.dll > /dev/null
