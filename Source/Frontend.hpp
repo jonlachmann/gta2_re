@@ -11,7 +11,7 @@
     #define DIRECTINPUT_VERSION 0x0500
 #endif
 
-#include <Dinput.h>
+#include <dinput.h>
 
 class Player;
 class Ang16;
