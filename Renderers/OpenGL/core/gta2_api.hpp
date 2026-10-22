@@ -15,7 +15,9 @@ typedef float f32;
 
 #define GTA2_STATIC_ASSERT(x) static_assert((x), #x)
 
-#if defined(_WIN32)
+// The game calls the gbh_* functions as __stdcall on every 32-bit x86 build (Windows or the native port);
+// a mismatch corrupts the stack, as the callee pops the arguments.
+#if defined(_WIN32) || defined(__i386__)
     #define GTA2_CC __stdcall
 #else
     #define GTA2_CC
