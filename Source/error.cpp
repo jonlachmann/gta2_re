@@ -46,7 +46,7 @@ void ErrorLog::Open_4D9470(const char_type* path, s32 truncate_mode)
             break;
     }
 
-#if !defined(__clang__) && (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     static_cast<ofstream&>(field_0_ofstr).open(path, mode, filebuf::openprot);
 #endif
 
@@ -65,7 +65,7 @@ ErrorLog::ErrorLog(const char_type* FileName, s32 truncate_mode)
 MATCH_FUNC(0x4D9690)
 EXPORT void __cdecl log_on_line_written_cb_4D9690(void* pStream)
 {
-#if !defined(__clang__) && (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     static_cast<ostream_type*>(pStream)->flush();
 #endif
 }
@@ -73,7 +73,7 @@ EXPORT void __cdecl log_on_line_written_cb_4D9690(void* pStream)
 MATCH_FUNC(0x4D9620)
 void ErrorLog::Write_4D9620(const char_type* pMsg)
 {
-#if !defined(__clang__) && (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     static_cast<ostream_type&>(this->field_0_ofstr) << pMsg << endl << flush;
 #endif
 }
@@ -81,7 +81,7 @@ void ErrorLog::Write_4D9620(const char_type* pMsg)
 MATCH_FUNC(0x4D9650)
 void ErrorLog::Write_Log_4D9650(const char_type* buffer)
 {
-#if !defined(__clang__) && (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     static_cast<ostream_type&>(this->field_0_ofstr) << buffer << flush;
 #endif
 }
@@ -108,7 +108,7 @@ MATCH_FUNC(0x4A3610)
 ErrorLog::~ErrorLog()
 {
     log_intro_4D95A0();
-#if !defined(__clang__) && (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     field_0_ofstr.close();
 #endif
     delete field_3C_pLen;
