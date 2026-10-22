@@ -10,6 +10,8 @@ typedef BOOL(WINAPI* TSwapInterval)(int);
 const int kContextMajor = 0x2091;
 const int kContextMinor = 0x2092;
 const int kProfileMask = 0x9126;
+const int kContextFlags = 0x2094;
+const int kForwardCompatible = 0x0002; // macOS (wine) only creates 3.2+ contexts that are forward compatible
 const int kCoreProfile = 0x1;
 
 class WGLContext : public IGLContext
@@ -108,7 +110,7 @@ IGLContext* CreateGLContextFromNativeWindow(void* pNativeWindow, const char** pp
     HGLRC hRc = NULL;
     if (pCreate)
     {
-        const int attribs[] = {kContextMajor, 3, kContextMinor, 3, kProfileMask, kCoreProfile, 0};
+        const int attribs[] = {kContextMajor, 3, kContextMinor, 3, kProfileMask, kCoreProfile, kContextFlags, kForwardCompatible, 0};
         hRc = pCreate(hDc, NULL, attribs);
     }
     wglMakeCurrent(NULL, NULL);
