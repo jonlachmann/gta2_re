@@ -4,12 +4,20 @@
 #include "Renderers/OpenGL/core/vid_system.hpp"
 #include "Renderers/OpenGL/platform/gl_context.hpp"
 #include "sdl_win32.hpp"
+#include "headless/state_log.hpp"
 #include <SDL3/SDL.h>
 #include <stdio.h>
 
 #define EXPORT extern "C" __declspec(dllexport)
 
 static void* gVidFuncs;
+static unsigned gFlips;
+
+// GTA2_HEADLESS=1: no GL context and no drawing; the gbh_* layer still runs (docs/port.md, M2)
+static bool Headless()
+{
+    return SDL_getenv("GTA2_HEADLESS") != NULL;
+}
 
 static VidSystem* Sys(SVideo* pVideo)
 {
@@ -32,6 +40,7 @@ EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
 {
     VidSystem* pSys = new VidSystem();
     pSys->Init(hInstance, flags, gVidFuncs, "gta2gl.ini");
+    StateLog_Init();
     return pSys->Video();
 }
 
@@ -106,7 +115,7 @@ EXPORT s32 __stdcall Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
         return 1;
     }
     pVideo->field_4C0_hwnd = hWnd;
-    if (!pSys->HasContext())
+    if (!pSys->HasContext() && !Headless())
     {
         const char* pError = "";
         IGLContext* pCtx = CreateGLContextForSDLWindow(pWindow, &pError);
@@ -125,8 +134,9 @@ EXPORT void __stdcall Vid_FlipBuffers(SVideo* pVideo)
     VidSystem* pSys = Sys(pVideo);
     if (pSys)
     {
-        pSys->Flip();
+        pSys->Flip(); // returns at once without a GL context (headless)
     }
+    StateLog_Frame(++gFlips);
 }
 
 EXPORT void __stdcall Vid_ReleaseSurface(SVideo*)

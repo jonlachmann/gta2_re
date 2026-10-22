@@ -2,10 +2,14 @@
 // no boot-to-map debug switches; straight into the game's WinMain, whose window is SDL's.
 #include "Source/winmain.hpp"
 #include <SDL3/SDL_main.h>
+#include "headless/fast_clock.hpp"
 #include <string>
 
 int main(int argc, char** argv)
 {
+#if defined(_WIN32)
+    FastClock_Install(); // GTA2_SPEED (docs/port.md, M2)
+#endif
     std::string cmdLine;
     for (int i = 1; i < argc; i++)
     {
