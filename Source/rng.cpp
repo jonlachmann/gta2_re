@@ -7,6 +7,9 @@
 #include "InputRecorder_67F8B0.hpp"
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(GTA2_PORT)
+#include "Port/port_rand.h" // VC6's rand (docs/port.md)
+#endif
 
 DEFINE_GLOBAL(rng*, gpRng_67AB34, 0x67AB34);
 DEFINE_GLOBAL(rng, gRng_6F6784, 0x6F6784);

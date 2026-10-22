@@ -29,6 +29,9 @@
 #include "voice_line.hpp"
 #include "car_shop_event.hpp"
 #include <math.h>
+#if defined(GTA2_PORT)
+#include "Port/port_rand.h" // VC6's rand (docs/port.md)
+#endif
 
 // Forward declarations: the functions below are in address order
 EXTERN_GLOBAL(u16, gObjSoundDelayKind17_6751D0);
