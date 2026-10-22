@@ -1551,6 +1551,7 @@ GUID IID_DirectMusic = {1667997456u, 3197u, 4561u, {149u, 178u, 0u, 32u, 175u, 2
 GUID IDD_IDirectMusic = {1698042202u, 31533u, 4562u, {186u, 24u, 0u, 0u, 248u, 117u, 172u, 18u}};
 
 // todo move to another file for ordering
+#if !defined(GTA2_PORT) || defined(_WIN32) // Windows only; non-Windows builds: Port/port_winmain.cpp
 MATCH_FUNC(0x4A0650)
 EXPORT void __stdcall GetDirectMusicVer_4A0650()
 {
@@ -1570,10 +1571,12 @@ EXPORT void __stdcall GetDirectMusicVer_4A0650()
         FreeLibrary(hDMusic);
     }
 }
+#endif
 
 GUID IID_IDirectDrawSurface4_ = {0x0B2B8630, 0xAD35, 0x11D0, 0x8E, 0xA6, 0x00, 0x60, 0x97, 0x97, 0xEA, 0x5B};
 
 // todo move to another file for ordering
+#if !defined(GTA2_PORT) || defined(_WIN32) // Windows only; non-Windows builds: Port/port_winmain.cpp
 MATCH_FUNC(0x4C4EC0)
 EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
 {
@@ -1746,6 +1749,7 @@ EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
         *pDXVer = 0x601;
     }
 }
+#endif
 
 const char_type* kDefaultDllNames_626A00[2] = {"d3ddll.dll", "dmavideo.dll"};
 
@@ -1937,6 +1941,7 @@ EXPORT void __stdcall ParseCommandLine_4DA320(char_type* pCommandLine)
 // The original passes an uninitialised lParam to PostMessageA, keep it for matching
 #pragma warning(push)
 #pragma warning(disable : 4700)
+#if !defined(GTA2_PORT) || defined(_WIN32) // Windows only; non-Windows builds: Port/port_winmain.cpp
 MATCH_FUNC(0x5E4DE0)
 EXPORT void Start_GTA2Manager_5E4DE0()
 {
@@ -1969,6 +1974,7 @@ EXPORT void Start_GTA2Manager_5E4DE0()
         }
     }
 }
+#endif
 #pragma warning(pop)
 
 MATCH_FUNC(0x5E4EC0)
@@ -2643,6 +2649,7 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
 
 #pragma comment(lib, "Version.lib")
 
+#if !defined(GTA2_PORT) || defined(_WIN32) // Windows only; non-Windows builds: Port/port_winmain.cpp
 MATCH_FUNC(0x5E5D60)
 EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
 {
@@ -2660,3 +2667,4 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
     }
     delete[] pAlloc;
 }
+#endif

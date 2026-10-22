@@ -18,6 +18,8 @@ int __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
 EXPORT char __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance);
 
 EXPORT void __stdcall GetGTA2Version_5E5D60(int* pVerMinor, int* pVerMajor);
+EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind);
+EXPORT void __stdcall GetDirectMusicVer_4A0650();
 
 EXPORT void __stdcall ResetFrameTimer_4DA830();
 

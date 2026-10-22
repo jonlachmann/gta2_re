@@ -71,7 +71,7 @@
   #define IS_DOS
   #define IS_32
 #else
-  #ifdef _WIN32
+  #if defined(_WIN32) || defined(GTA2_PORT) // GTA2_PORT: the port's Miles is Port/miles_sdl.cpp
     #define IS_WINDOWS
     #define IS_WIN32
     #define IS_32
