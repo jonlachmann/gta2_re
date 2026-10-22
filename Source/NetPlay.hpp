@@ -1,9 +1,15 @@
 #pragma once
 
 #include "Function.hpp"
+#if defined(_MSC_VER)
 // Included this way as a hack so > msvc6 can use these headers too as they've been removed in later versions.
 #include <VC98/Include/DPLAY.H>
 #include <VC98/Include/DPLOBBY.H>
+#else
+// MinGW-w64 still ships them
+#include <dplay.h>
+#include <dplobby.h>
+#endif
 #include <windows.h>
 
 struct naughty_sinoussi_0x800;
