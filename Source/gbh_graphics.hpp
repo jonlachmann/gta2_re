@@ -5,8 +5,8 @@
 // game code uses. Through them every TU that includes sprite.hpp got <new> and its throw() operator delete,
 // and with it VC6 drops the EH frame of destructors that delete through an inline destructor
 // (DoorPool::~DoorPool). The original TUs had no STL there, so unless a TU already has <set>/<vector>, their
-// include guards are set and the two members get placeholder types.
-#if !defined(_SET_) && !defined(_VECTOR_)
+// include guards are set and the two members get placeholder types. VC6 only: other compilers get the real STL.
+#if defined(_MSC_VER) && _MSC_VER <= 1200 && !defined(_SET_) && !defined(_VECTOR_)
 #define _SET_
 #define _VECTOR_
 namespace std
