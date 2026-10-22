@@ -386,6 +386,19 @@ EXPORT void __stdcall arc_tan_table_init_4052D0()
     Fix16* pTan = gTanTable_6663C8;
     for (s32 i = 1440; i != 0; i--)
     {
+#if defined(GTA2_PORT)
+        // tan(90 deg) and tan(270 deg) are far out of s32 range: VC6's conversion keeps the low 32 bits of a
+        // 64-bit integer, of a value that depends on x87 rounding. Converting it is undefined in C++ (and
+        // traps on some targets), so the port uses the values 10.5.exe computes (dumped from it, see
+        // docs/port.md). Every other entry is at least 1e-6 from a rounding boundary: any correct tan() gives it.
+        if (arg == 360 || arg == 1080)
+        {
+            pTan->mValue = arg == 360 ? 0x1AB64E80 : 0x5E3CC4D6;
+            arg++;
+            pTan++;
+            continue;
+        }
+#endif
         f64 radians = arg * 3.141592654;
         *pTan = Fix16(tan(radians * 0.001388888888888889));
         arg++;
