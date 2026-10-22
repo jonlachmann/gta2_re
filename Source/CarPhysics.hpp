@@ -272,7 +272,7 @@ class CarPhysics
         }
     }
 
-    Fix16 CarPhysics::ComputeUndamagedThrottleTorque_49E8E0()
+    Fix16 ComputeUndamagedThrottleTorque_49E8E0()
     {
         if (IsTurboActive_561940())
         {
@@ -284,7 +284,7 @@ class CarPhysics
         }
     }
 
-    bool CarPhysics::IsDrowning_421100()
+    bool IsDrowning_421100()
     {
         if (field_98_surface_type == car_surface_type::water_surface_8)
         {
