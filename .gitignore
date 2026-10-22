@@ -47,3 +47,4 @@ Scripts/bin_comp/dump_96f_addrs.txt
 Source/_tu_harness_tmp*.cpp
 build.log
 build_clang/
+build_port/
