@@ -2967,8 +2967,13 @@ void sound_obj::HandleCarTireScrubSound_418720(Sound_Params* pParams)
                     // speed is read through the returned pointer after the divisor's load, like the original.
                     // speed has to be declared before pSpeed.
                     Fix16 speed;
+#if defined(_MSC_VER) && _MSC_VER <= 1200
+                    // Reads the temporary after its full expression ended: only safe with VC6's codegen.
                     Fix16* pSpeed = &pCar->GetCarLinearSpeed_43A240();
                     speed = *pSpeed;
+#else
+                    speed = pCar->GetCarLinearSpeed_43A240();
+#endif
                     speed /= gCarInfo_48_6FE258->field_28_max_speed;
                     emitVol = Fix16::Round_To_Int_410BF0(Fix16(60) * speed) + 10;
                 }
