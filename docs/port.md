@@ -12,7 +12,7 @@ status snapshot.
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
 | M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. Left: running on Linux. See "M1 so far" and "The Linux build". |
-| M2. Replay test | Started: `Scripts/port/replay_check.py` compares the attract replay frame by frame with `10.5.exe` under wine. The port matches for the first 187 game frames of `attr1.rep` (of about 4300), then diverges; the cause is traced to a walking-cop spawn flag but not yet found. See "M2: the replay test". |
+| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field, headless, in under a minute. It found a false match (`Ped::Deallocate_45EB60`); the port now matches to game frame 186 of `attr1.rep`, where a pedestrian's movement differs. See "M2: the replay test". |
 | M3-M6 | Not started. |
 
 Branches (local, not pushed yet):
@@ -327,25 +327,67 @@ Fixes it found in the port:
   `warning.log`; and the decomp's `gFile_67C530` was a separate, never-opened object, while in `10.5.exe`
   it is `gErrorLog_67C530` (0x67C530). Both fixed under `GTA2_PORT`, so `log_random` works.
 
-**The open divergence.** With `GTA2_DEBUG=log_random` both exes log every random draw: the first 10,106
-are identical, the first difference is at game frame 187. Traced back with `snapshot.py` and winedbg
-breakpoints (comparing memory at the same moment):
+**The first divergence: a false match.** With `GTA2_DEBUG=log_random` both exes log every random draw;
+the first 10,106 were identical, the first difference at game frame 187: one pedestrian (pool slot 13)
+spawned in `10.5.exe` and was freed right away in the port, through `SpawnPedestrianAt_46E380`'s exit for
+walking cops, because `gNumberWalkingCopsSpawned_6787CD` was still 1. A day of winedbg breakpoints got that
+far. The state check below then found the cause in one run: `Ped::Deallocate_45EB60` decremented the
+counter for `guard` (28), while 10.5.exe's byte index table sends `walking_guard_29` to that block. The
+function was `MATCH_FUNC`, since the verifier doesn't compare jump table data (`docs/matching_quirks.md`).
 
-1. Frame 187: pedestrian 38 makes an extra draw in the port. Its position and offscreen counter are
-   identical; the draws are in a different order because...
-2. ...the original updates one more pedestrian (pool slot 13), spawned at the end of frame 186, whose
-   AI runs first. In the port that pedestrian is freed right after spawning (`dead_9`, inactive), through
-   `SpawnPedestrianAt_46E380`'s `delloc_ret_2` exit for walking cops, because...
-3. ...`gNumberWalkingCopsSpawned_6787CD` is 1 in the port and 0 in `10.5.exe` at frame 186. Both
-   deallocated the same walking cop at frame 173 (`Deallocate_45EB60` only decrements for `guard`, 28, not
-   `walking_guard_29`, so not there), and the flag is otherwise only reset when `PedManager` is
-   constructed. Next step: a write watchpoint on 0x6787CD in both (`watch *0x6787cd` in winedbg) to find
-   what clears it in the original.
+### The state check: field-level diffs in under a minute
 
-Not ruled out yet: decomp code whose meaning differs between VC6 and clang (a matching function can
-still rely on VC6 behaviour, such as an evaluation order or undefined behaviour), and uninitialised heap
-memory (the pools are allocated with `new`; tried and ruled out: uninitialised stack variables, with
-`-ftrivial-auto-var-init=pattern` the divergence stays at the same draw).
+Frames and debuggers are slow and indirect. `Scripts/port/state_check.py` runs the attract replay headless
+in both exes and compares the whole game state after every frame:
+
+```bash
+Scripts/port/build.sh && Scripts/port/build_gl_dlls_clang.sh    # gta2_port.exe and nullvideo.dll
+GTA2_DIR=~/Documents/GTA2 python3 Scripts/port/state_check.py 1100   # up to game frame 1100
+```
+
+```
+compared game frames 1-174 (174 frames, 52679 chunks, 508 noisy)
+game frame 174: 1 chunks became different: gNumberWalkingCopsSpawned_6787CD+0x0
+...
+game frame 186 *gChar_B4_Pool_6FDB44: field_0_pool.field_4_pool[13].field_98_velocity_vector.x.mValue (+0x9c0 10.5 000001ec port 00000400); ...
+```
+
+How it works, and what each part is for:
+
+- **The state.** Every `DEFINE_GLOBAL` of a `GTA2_PORT` build registers its name, original address and size
+  (`Port/port_globals.hpp`), and for a pointer to a complete type the size of what it points to (so a pool
+  global covers the whole pool). That is about 1,800 entries and 3.3 MB, cut into 64-byte chunks.
+- **The log.** `Port/headless/state_log.cpp`, after every flip: `F <flip> <game frame>`, then a hash for
+  each chunk that changed. The port takes the list from its registry and writes it out (`.globals`);
+  `nullvideo.dll`, a video DLL that draws nothing, reads the list inside `10.5.exe` and hashes the same
+  entries at the original addresses. Values that look like pointers are masked (they differ per process).
+- **Headless and fast.** `GTA2_HEADLESS` skips the GL context and uses SDL's dummy video and audio drivers.
+  `GTA2_SPEED` (`fast_clock.cpp`) speeds up the clock through the exe's import table, for the start menu's
+  attract wait. One run to frame 1000 takes about 12 s, and the whole check, with a second `10.5.exe` run
+  as a noise reference and the field dump below, takes under a minute.
+- **Lockstep frames.** `RunGameFrame_4DA850` skips draws when it runs late, and drawing fills caches
+  (sprite shapes, the map's, `Mike_A80`), so two runs of `10.5.exe` differed. `max_frame_rate = 0` and
+  `min_frame_rate = 0` (`GTA2_LOCKSTEP`, in `run_wine.sh`) make it alternate one logic frame and one draw
+  whatever the clock says; then `10.5.exe` matches itself in everything but sound.
+- **No junk bytes.** The port's allocations are zeroed like `10.5.exe`'s fresh heap (`crt::malloc`), and
+  padding is left out of the hashes: clang writes junk into padding (a byte field stored as a dword), VC6
+  doesn't. `layout.py` reads the port's DWARF (`llvm-dwarfdump`) for the padding and for field names.
+- **Onset, not difference.** `state_diff.py` reports the first chunk that was identical and became
+  different, leaving out chunks that never matched (memory the decomp lays out differently, slots the game
+  never filled) and chunks that differ between two `10.5.exe` runs. Sound (`gSound_obj_66F680`,
+  `gSampManager_6FFF00`) follows the real audio device, and `gTileVerts_7036D0` is render scratch whose
+  floats differ in the last bits; both are ignored by default (`IGNORE=<regex>`).
+- **Fields.** For the onset chunks `state_check.py` reruns both with `GTA2_STATELOG_DUMP` (full bytes of
+  those entries at the frame before and at the onset) and prints each differing field by name. To dump
+  other entries: `DUMP='170-175:*gPedPool_6787B8,gGame_0x40_67E008' NO_FIELDS=1 state_check.py 176`; the
+  dumps are `build_port/game/state_{port,og}.log.dump`.
+
+The renderer's command log (`GTA2GL_CMDLOG`) would be the other clean interface to compare, but the game
+state is upstream of it, and a state diff names the field and frame where a render diff only shows the
+symptom.
+
+**Open: frame 186.** With the counter fixed, the next onset is pedestrian slot 13's char (`Char_B4`): its
+velocity, `field_54_jump_scale_counter` and flags differ from frame 186.
 
 Tools for this, all in `Scripts/port/`: `replay_check.py` (frames), `snapshot.py` (memory at a frame),
 `trig_check.py` (the tables). winedbg notes: attaching to a running 32-bit process faults under macOS
