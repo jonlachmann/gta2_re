@@ -2,7 +2,7 @@
 
 #include "BitSet32.hpp"
 #include "car_ai_flags.hpp"
-#include "Fix16.hpp"
+#include "fix16.hpp"
 #include "Function.hpp"
 #include "Pool.hpp"
 #include "ang16.hpp"
