@@ -3,6 +3,8 @@
 #include <SDL3/SDL.h>
 #include <deque>
 
+void Port_DInputOnEvent(const SDL_Event& e); // sdl_dinput.cpp
+
 namespace
 {
 SDL_Window* gWindow;
@@ -26,6 +28,7 @@ void Post(UINT message, WPARAM wParam = 0, LPARAM lParam = 0)
 // The window messages WindowProc_5E4EE0 acts on, from an SDL event.
 void Translate(const SDL_Event& e)
 {
+    Port_DInputOnEvent(e);
     switch (e.type)
     {
         case SDL_EVENT_QUIT:
