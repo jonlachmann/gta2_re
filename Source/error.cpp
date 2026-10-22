@@ -47,6 +47,8 @@ void ErrorLog::Open_4D9470(const char_type* path, s32 truncate_mode)
 
 #if defined(_MSC_VER) && _MSC_VER <= 1200
     ((ofstream&)field_0_ofstr).open(path, mode, filebuf::openprot);
+#elif defined(GTA2_PORT)
+    field_0_ofstr.file = fopen(path, mode == 16 ? "w" : "a");
 #endif
 
     log_timestamp_4D9540();
@@ -66,6 +68,11 @@ EXPORT void __cdecl log_on_line_written_cb_4D9690(void* pStream)
 {
 #if defined(_MSC_VER) && _MSC_VER <= 1200
     ((ostream_type*)pStream)->flush();
+#elif defined(GTA2_PORT)
+    if (((ErrorLog*)pStream)->field_0_ofstr.file)
+    {
+        fflush(((ErrorLog*)pStream)->field_0_ofstr.file);
+    }
 #endif
 }
 
@@ -74,6 +81,12 @@ void ErrorLog::Write_4D9620(const char_type* pMsg)
 {
 #if defined(_MSC_VER) && _MSC_VER <= 1200
     ((ostream_type&)this->field_0_ofstr) << pMsg << endl << flush;
+#elif defined(GTA2_PORT)
+    if (field_0_ofstr.file)
+    {
+        fprintf(field_0_ofstr.file, "%s\n", pMsg);
+        fflush(field_0_ofstr.file);
+    }
 #endif
 }
 
@@ -82,6 +95,12 @@ void ErrorLog::Write_Log_4D9650(const char_type* buffer)
 {
 #if defined(_MSC_VER) && _MSC_VER <= 1200
     ((ostream_type&)this->field_0_ofstr) << buffer << flush;
+#elif defined(GTA2_PORT)
+    if (field_0_ofstr.file)
+    {
+        fputs(buffer, field_0_ofstr.file);
+        fflush(field_0_ofstr.file);
+    }
 #endif
 }
 
@@ -109,6 +128,12 @@ ErrorLog::~ErrorLog()
     log_intro_4D95A0();
 #if defined(_MSC_VER) && _MSC_VER <= 1200
     field_0_ofstr.close();
+#elif defined(GTA2_PORT)
+    if (field_0_ofstr.file)
+    {
+        fclose(field_0_ofstr.file);
+        field_0_ofstr.file = 0;
+    }
 #endif
     delete field_3C_pLen;
 }
@@ -129,7 +154,9 @@ void ErrorLog::log_intro_4D95A0()
 DEFINE_GLOBAL_INIT(ErrorLog, gErrorLog_67CF58, ErrorLog("test\\error.log", 1), 0x67CF58);
 DEFINE_GLOBAL_INIT(ErrorLog, gErrorLog_67C530, ErrorLog("test\\warning.log", 1), 0x67C530);
 DEFINE_GLOBAL(ErrorLog, gMiss2Log_6F7698, 0x6F7698);
+#if !defined(GTA2_PORT) // the port: gErrorLog_67C530 (error.hpp)
 ErrorLog gFile_67C530; //DEFINE_GLOBAL(ErrorLog, gFile_67C530, 0x67C530);
+#endif
 
 DEFINE_GLOBAL_ARRAY(char_type, gTmpBuffer_67C598, 256, 0x67C598); // TODO: Check
 DEFINE_GLOBAL_ARRAY(char_type, gErrStr_67C29C, 256, 0x67C29C);

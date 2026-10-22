@@ -41,10 +41,11 @@ class ErrorLog
     // the original's ??0ofstream@@QAE@XZ call and EH frame (ErrorLog::ErrorLog 0x4D94E0)
     ofstream field_0_ofstr;
 #else
-    // Only keeps the 0x3C bytes (the globals registry checks sizes); never used as a stream
+    // Keeps the 0x3C bytes (the globals registry checks sizes); the port writes through a FILE* in it
     struct fake_ofstream
     {
-      char buffer[0x3C];
+      FILE* file;
+      char buffer[0x3C - sizeof(FILE*)];
     };
     fake_ofstream field_0_ofstr;
 #endif
@@ -67,4 +68,11 @@ EXTERN_GLOBAL(char_type, gErrStr2_67C3A8[256]);
 
 EXTERN_GLOBAL(ErrorLog, gErrorLog_67C530);
 EXTERN_GLOBAL(ErrorLog, gMiss2Log_6F7698);
+#if defined(GTA2_PORT)
+// In 10.5.exe gFile_67C530 and gErrorLog_67C530 are the same object (0x67C530, test\warning.log); the port
+// needs them to be, or what's logged through gFile_67C530 (log_random, ...) goes nowhere.
+EXTERN_GLOBAL(ErrorLog, gErrorLog_67C530);
+#define gFile_67C530 gErrorLog_67C530
+#else
 extern ErrorLog gFile_67C530; //EXTERN_GLOBAL(ErrorLog, gFile_67C530);
+#endif
