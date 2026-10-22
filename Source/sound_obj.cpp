@@ -27,6 +27,9 @@
 #include "sprite.hpp"
 #include "CrimeReportQueue.hpp"
 #include <math.h>
+#if defined(GTA2_PORT)
+#include "Port/port_rand.h" // VC6's rand (docs/port.md)
+#endif
 
 // Forward declarations: the functions below are in address order
 EXTERN_GLOBAL(u16, word_6751D0);
