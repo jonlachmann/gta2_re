@@ -487,7 +487,7 @@ struct Frontend
 
     EXPORT void DrawTextFixedWidth_4B78B0(wchar_t* pString, u16 text_xpos, u16 text_ypos, u16 font_type, u16 palette, u16 scale, u16 char_width, u8 pStr);
 
-    EXPORT void Frontend::DrawScoreTable_4B5430(ScoreTableLine* pStrings,
+    EXPORT void DrawScoreTable_4B5430(ScoreTableLine* pStrings,
                            u16 text_xpos,
                            u16 text_ypos,
                            u16 num_entries,
