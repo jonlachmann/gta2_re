@@ -2,6 +2,9 @@
 #include "Function.hpp"
 #include "Globals.hpp"
 #include <stdio.h>
+#if defined(GTA2_PORT)
+#include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
+#endif
 
 DEFINE_GLOBAL(cSampleManager, gSampManager_6FFF00, 0x6FFF00);
 

@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <windows.h>
 #include "enums.hpp"
+#if defined(GTA2_PORT)
+#include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
+#endif
 
 HKEY kRegistryRootKey_625018 = HKEY_LOCAL_MACHINE; // Note: should be const, but can't be
 

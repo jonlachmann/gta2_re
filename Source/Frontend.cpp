@@ -33,6 +33,9 @@
 #include <io.h>
 #include <stdio.h>
 #include <wchar.h>
+#if defined(GTA2_PORT)
+#include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
+#endif
 
 #pragma comment(lib, "dxguid.lib")
 
