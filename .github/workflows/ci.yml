@@ -234,10 +234,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install MinGW and SDL2 headers
+    - name: Install MinGW and GL headers
       run: |
         sudo apt-get update
-        sudo apt-get install -y g++-mingw-w64-i686 libsdl2-dev libgl-dev
+        sudo apt-get install -y g++-mingw-w64-i686 libgl-dev
 
     - name: Build and test
       run: |

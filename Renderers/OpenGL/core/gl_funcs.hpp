@@ -1,8 +1,16 @@
 // OpenGL 3.3 core entry points, all loaded at runtime through a platform supplied loader.
 #pragma once
 
+#ifdef __APPLE__
+// macOS has no glcorearb.h; gl3.h declares the same 3.3 core API, so the pointer types come from its prototypes.
+#define GL_SILENCE_DEPRECATION
+#include <OpenGL/gl3.h>
+#define GTA2GL_FN_TYPE(type, name) decltype(&::name)
+#else
 #define GL_GLEXT_PROTOTYPES 0
 #include <GL/glcorearb.h>
+#define GTA2GL_FN_TYPE(type, name) type
+#endif
 
 #define GTA2GL_FUNCS(X)                                            \
     X(PFNGLGETERRORPROC, glGetError)                               \
@@ -77,7 +85,7 @@
 
 struct GLFuncs
 {
-#define GTA2GL_DECLARE(type, name) type name;
+#define GTA2GL_DECLARE(type, name) GTA2GL_FN_TYPE(type, name) name;
     GTA2GL_FUNCS(GTA2GL_DECLARE)
 #undef GTA2GL_DECLARE
 

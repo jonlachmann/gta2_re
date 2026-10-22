@@ -27,14 +27,19 @@ $(OUT)/capvideo.dll: $(CAPVIDEO_SRC) $(HEADERS) | $(OUT)
 	$(CXX) $(CXXFLAGS) -o $@ $(CAPVIDEO_SRC) $(LDFLAGS) -lddraw -ldxguid -luuid
 
 # Native tests: gbh layer (texture updates), ini options, and a compile check of the GL core and SDL platform.
+# ponytail: the SDL3 check is skipped without SDL3 (not packaged on Ubuntu 24.04); drop the guard once CI has libsdl3-dev.
 HOSTCXX = g++ -O1 -g -Wall -Wno-unused-parameter -std=c++11
 test: | $(OUT)
 	$(HOSTCXX) -o $(OUT)/gbh_test tests/gbh_test.cpp core/gbh_api.cpp core/cmdlog.cpp core/capture.cpp && $(OUT)/gbh_test
 	$(HOSTCXX) -o $(OUT)/options_test tests/options_test.cpp core/options.cpp && $(OUT)/options_test
 	for f in core/gl_renderer.cpp core/gl_enhanced.cpp core/vid_system.cpp core/gl_funcs.cpp; do $(HOSTCXX) -c -o /dev/null $$f || exit 1; done
-	$(HOSTCXX) $$(sdl2-config --cflags) -c -o /dev/null platform/sdl_context.cpp
+	if pkg-config --exists sdl3; then $(HOSTCXX) $$(pkg-config --cflags sdl3) -c -o /dev/null platform/sdl_context.cpp; else echo "SDL3 not found, sdl_context.cpp not checked"; fi
+
+# Native SDL3 window drawing through the GL core, no game needed.
+demo: | $(OUT)
+	$(HOSTCXX) $$(pkg-config --cflags sdl3) -o $(OUT)/sdl_demo tools/sdl_demo.cpp platform/sdl_context.cpp $(CORE) $$(pkg-config --libs sdl3)
 
 clean:
 	rm -rf $(OUT)
 
-.PHONY: all test clean
+.PHONY: all test demo clean
