@@ -21,7 +21,7 @@ class Fix16
 {
   public:
     // 9.6f func
-    static inline s32 __stdcall Round_To_Int_410BF0(Fix16& input)
+    static inline s32 __stdcall Round_To_Int_410BF0(const Fix16& input)
     {
         s32 v = input.mValue;
         return (v + 0x2000) >> 14;
@@ -333,14 +333,14 @@ class Fix16
     // inline budget charges the front-end size, 48 here (41 without the local, 46 with a non-const one).
     // Car::ApplyExplosionImpulse_443710 needs >= 48 and CarPhysics::EnforceGearSensitiveMaxSpeed_562D00
     // <= 49; with GetLength_41E260 at 162, Crane::ComputeHookPolar_47F6C0 needs >= 48 too.
-    inline static Fix16 __stdcall SquareRoot(Fix16& input)
+    inline static Fix16 __stdcall SquareRoot(const Fix16& input)
     {
         const f64 value = input.AsDouble();
         return Fix16(sqrt(value));
     }
 
     // SquareRoot forced inline, only for Fix16_Point::GetLength_SqrtForced_43A240 (unexplained)
-    __forceinline static Fix16 __stdcall SquareRoot_forced(Fix16& input)
+    __forceinline static Fix16 __stdcall SquareRoot_forced(const Fix16& input)
     {
         return Fix16(sqrt(input.AsDouble()));
     }
@@ -348,7 +348,7 @@ class Fix16
     EXPORT static Fix16 __stdcall Max_44E540(const Fix16& lhs, const Fix16& rhs);
     // 9.6f 0x41E130, out-of-line copy Max_44E540. Small functions inline it (Ped_List::FindClosestActivePed_471340),
     // and as a site after the two Abs it sets their nested budget in MaxAbsDistance_42A6B0
-    inline static Fix16 __stdcall Max_41E130(Fix16& a, Fix16& b)
+    inline static Fix16 __stdcall Max_41E130(const Fix16& a, const Fix16& b)
     {
         if (a > b)
         {
@@ -379,7 +379,7 @@ class Fix16
     EXPORT Fix16 Negate_4086A0() const throw();
 
     // Needed this for a GetLength variant used by ScriptThread::GetSpeed_50E190.
-    inline static Fix16 __stdcall Abs_negate_out_of_line(Fix16& input)
+    inline static Fix16 __stdcall Abs_negate_out_of_line(const Fix16& input)
     {
         if (input.mValue > 0)
         {
@@ -441,10 +441,10 @@ class Fix16
 
     // Out-of-line copy of the inline below, at its address (callers use the inline, which VC6 emits as
     // its own COMDAT copy). Defined in CarPhysics.cpp.
-    EXPORT static Fix16 __stdcall Max3_ool_55EEE0(Fix16& first, Fix16& second, Fix16& third);
+    EXPORT static Fix16 __stdcall Max3_ool_55EEE0(const Fix16& first, const Fix16& second, const Fix16& third);
 
     // NOTE: 10.5 function - matched but inlined
-    static inline Fix16 __stdcall Max3_55EEE0(Fix16& first, Fix16& second, Fix16& third)
+    static inline Fix16 __stdcall Max3_55EEE0(const Fix16& first, const Fix16& second, const Fix16& third)
     {
         if (first > second)
         {
@@ -496,7 +496,7 @@ class Fix16
         return Fix16(mValue + 0x4000, 0);
     }
 
-    EXPORT static class Ang16 __stdcall atan2_fixed_405320(Fix16& y, Fix16& x);
+    EXPORT static class Ang16 __stdcall atan2_fixed_405320(const Fix16& y, const Fix16& x);
 
   public:
     s32 mValue;
