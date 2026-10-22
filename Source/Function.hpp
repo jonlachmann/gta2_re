@@ -183,12 +183,28 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
     #define NOT_IMPLEMENTED
     #define WIP_IMPLEMENTED
 
-    #define DEFINE_GLOBAL(type, name, addr) type name
-    #define DEFINE_STATIC_GLOBAL(type, name, addr) static type name
-    #define DEFINE_GLOBAL_INIT(type, name, value, addr) type name = value
+    #if defined(GTA2_PORT)
+        // The port registers every global for its state log (Port/port_globals.hpp, docs/port.md)
+        #include "Port/port_globals.hpp"
+    #else
+        #define PORT_GLOBAL(name, addr) static const int portGlobal_##name = 0
+    #endif
+    #define DEFINE_GLOBAL(type, name, addr) \
+        type name;                          \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_STATIC_GLOBAL(type, name, addr) \
+        static type name;                          \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_GLOBAL_INIT(type, name, value, addr) \
+        type name = value;                              \
+        PORT_GLOBAL(name, addr)
 
-    #define DEFINE_GLOBAL_ARRAY(type, name, size, addr) type name[size]
-    #define DEFINE_GLOBAL_ARRAY_INIT(type, name, size, addr, va_args) type name[size] = {va_args}
+    #define DEFINE_GLOBAL_ARRAY(type, name, size, addr) \
+        type name[size];                                \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_GLOBAL_ARRAY_INIT(type, name, size, addr, va_args) \
+        type name[size] = {va_args};                                  \
+        PORT_GLOBAL(name, addr)
 
     #define EXTERN_GLOBAL(type, name) extern type name
     #define EXTERN_GLOBAL_ARRAY(type, name, size) extern type name[size]
