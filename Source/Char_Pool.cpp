@@ -19,7 +19,7 @@
 
 #include "Frontend.hpp" // For the cheat bools
 
-#include <DINPUT.H>
+#include <dinput.h>
 #include "ped_graphic_type.hpp"
 
 // Defined in Ped.cpp

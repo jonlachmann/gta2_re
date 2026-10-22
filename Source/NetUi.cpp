@@ -4,7 +4,7 @@
 #include "NetPlay.hpp"
 #include "registry.hpp"
 #include "TextTable.hpp"
-#include <COMMCTRL.H>
+#include <commctrl.h>
 #include <direct.h>
 #if defined(GTA2_PORT)
 #include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
