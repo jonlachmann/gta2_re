@@ -6,8 +6,3 @@ void CC ImGuiDebugDraw()
 {
 }
 
-// decomp_main's entry point (test.cpp) turns off traffic lights, trains and more through this for its
-// "boot to map" debugging. The port plays the full game.
-void EnableBoot2MapDebugOptions()
-{
-}
