@@ -12,7 +12,7 @@ status snapshot.
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
 | M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. Left: running on Linux. See "M1 so far" and "The Linux build". |
-| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field, headless, in under a minute. It found a false match (`Ped::Deallocate_45EB60`); the port now matches to game frame 186 of `attr1.rep`, where a pedestrian's movement differs. See "M2: the replay test". |
+| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Two fixes so far; the port matches to game frame 290 of `attr1.rep`. See "M2: the replay test". |
 | M3-M6 | Not started. |
 
 Branches (local, not pushed yet):
@@ -386,8 +386,20 @@ The renderer's command log (`GTA2GL_CMDLOG`) would be the other clean interface 
 state is upstream of it, and a state diff names the field and frame where a render diff only shows the
 symptom.
 
-**Open: frame 186.** With the counter fixed, the next onset is pedestrian slot 13's char (`Char_B4`): its
-velocity, `field_54_jump_scale_counter` and flags differ from frame 186.
+- **Calls.** When frame-end state isn't enough, `TRACE=<a>-<b>:<function>,..` traces calls instead:
+  an int3 at each function's entry (10.5.exe address from `og_function_data_v105.csv`, the port's from
+  its symbols, which carry the address) and at the return address logs `this`, the arguments and the
+  return value, sized by the port's DWARF; the first call or return that differs is printed with context:
+  `TRACE='180-186:CanReachTile_550090,ChooseNextMovementTile_551400,state_1_5504F0' state_check.py`.
+
+**Found so far:**
+
+1. Frame 174: `Ped::Deallocate_45EB60`, a false match (wrong case label, above).
+2. Frame 186: a pedestrian sidestepped in the port. The call trace showed `CanReachTile_550090` making
+   three of the original's four recursive checks and returning 0: in its (+1, +1) case `bRes_1` is read
+   before it is set. VC6 keeps it in the same place as `bRes_2`, set true just before; clang doesn't. A
+   matching function can depend on such VC6 behaviour, so the port sets it under `GTA2_PORT`.
+3. Open: frame 291, char slot 22's rotation (`0x2d0` in the port, `0` in 10.5.exe) and velocity sign.
 
 Tools for this, all in `Scripts/port/`: `replay_check.py` (frames), `snapshot.py` (memory at a frame),
 `trig_check.py` (the tables). winedbg notes: attaching to a running 32-bit process faults under macOS
