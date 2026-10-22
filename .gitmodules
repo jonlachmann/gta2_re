@@ -9,7 +9,8 @@
 	url = https://github.com/MrSapps/Detours
 [submodule "3rdParty/GTA2Hax"]
 	path = 3rdParty/GTA2Hax
-	url = https://github.com/CriminalRETeam/GTA2Hax.git
+	url = https://github.com/jonlachmann/GTA2Hax.git
+	branch = gta2_re-port
 [submodule "3rdParty/cpp_permuter"]
 	path = 3rdParty/cpp_permuter
 	url = https://github.com/CriminalRETeam/cpp_permuter.git
