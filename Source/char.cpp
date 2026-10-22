@@ -4488,6 +4488,11 @@ bool Char::CanReachTile_550090(u8 xpos, u8 ypos)
                 }
                 else
                 {
+#if defined(GTA2_PORT)
+                    // Read before it is set: VC6 keeps bRes_1 and bRes_2 in one place, so this branch starts with
+                    // bRes_2's true (found by the port's state check, docs/port.md)
+                    bRes_1 = true;
+#endif
                     field_80_sprite_ptr->field_14_xy.x.add_one_491EF0();
                     if (!Char::CanReachTile_550090(xpos, ypos))
                     {
