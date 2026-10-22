@@ -112,7 +112,12 @@ EXPORT s32 __stdcall DMA_Video_LoadDll_5EB970(const char_type* lpLibFileName)
     gVidFuncs_708600.pVid_WindowProc = &pVid_WindowProc;
     gVidFuncs_708600.pVid_InitDLL = &pVid_InitDLL;
 
+#if defined(GTA2_PORT)
+    // The port links the renderer in: its gbh_*/Vid_* exports are the exe's own (docs/port.md)
+    hDmaVideoDll_7085E8 = GetModuleHandleA(NULL);
+#else
     hDmaVideoDll_7085E8 = LoadLibraryA(lpLibFileName);
+#endif
     if (hDmaVideoDll_7085E8)
     {
         load_gbh_func(pVid_GetVersion, T_Vid_GetVersion, "Vid_GetVersion");
