@@ -6,13 +6,14 @@ this file records what has been tried, what it found, and how to repeat it. The 
 redone from a later, more complete decomp, so the **Repeating it** section matters more than the
 status snapshot.
 
-## Status (2026-10-22)
+## Status (2026-10-23)
 
 | Milestone (issue #840) | State |
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
-| M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Left: running on Linux, gamepad, trig tables. See "M1 so far" and "The Linux build". |
-| M2-M6 | Not started. |
+| M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. Left: running on Linux. See "M1 so far" and "The Linux build". |
+| M2. Replay test | Started: `Scripts/port/replay_check.py` compares the attract replay frame by frame with `10.5.exe` under wine. The port matches for the first 187 game frames of `attr1.rep` (of about 4300), then diverges; the cause is traced to a walking-cop spawn flag but not yet found. See "M2: the replay test". |
+| M3-M6 | Not started. |
 
 Branches (local, not pushed yet):
 
@@ -277,6 +278,80 @@ Findings:
 - Apple clang's `cpuid.h` clashes with MinGW's `intrin.h` (`__cpuidex`), which SDL's headers include:
   `build.sh` presets `__CPUID_H`. And `-static` links `libwinpthread` statically, but then SDL's import
   library must be given by path (`libSDL3.dll.a`), as `-static` ignores `-lSDL3`.
+
+### Trig tables and gamepad
+
+- **Trig tables**: the sine, cosine and tangent tables (1440 entries each) are computed at start-up from
+  the C library. Dumped from a running `10.5.exe` (`Scripts/port/trig_check.py`, winedbg): every entry is at
+  least 1e-6 from a truncation boundary, far more than any difference between correct `sin`/`cos`/`tan`,
+  except tan(90°) and tan(270°). Those are out of `s32` range, where VC6's conversion keeps the low 32
+  bits of an x87-precision value; in C++ the conversion is undefined (and traps on some targets). Under
+  `GTA2_PORT` those two entries take `10.5.exe`'s values. The port's tables are identical in all 4320.
+- **Gamepad**: the first SDL gamepad, behind the same DirectInput replacement as the keyboard, in
+  DirectInput's joystick layout (X/Y at offsets 0/4 in -1000..1000 with a 25% dead zone, button n at
+  48 + n). Pad bindings come from the game's Controls menu (bit 15 of a `[control]` value), as in the
+  original. `GTA2_PORT_PAD=<ms>:<offset>:<value>,...` scripts pad input for tests.
+
+## M2: the replay test (branch `port`)
+
+GTA2 records replays of its inputs and random seeds, and attract mode plays `data\attract\attr1.rep` and
+the others after 60 s idle on the start menu. Played by two exes, they must give the same frames.
+
+```bash
+Scripts/port/build_gl_dlls_clang.sh                          # 10.5.exe renders with the port's renderer code
+python3 Scripts/port/patch_attract.py Scripts/bin_comp/10.5.exe build_port/game/gta2_105_attract.exe 3000
+GTA2_PORT_ATTRACT_MS=3000 FIRST=60 LAST=360 GTA2_DIR=~/Documents/GTA2 RENDERER=$PWD/build_port/gl_clang \
+  python3 Scripts/port/replay_check.py $PWD/build_port/game/gta2_105_attract.exe $PWD/build_port/gta2_port.exe
+```
+
+What it takes to compare fairly:
+
+- **The same settings.** The first comparisons failed on configuration, not code: the port rendered at
+  960x720 (frames can't match the original's 640x480), and lacked the install's `do_blood` and
+  `exploding_on = 0`, so kills showed score pop-ups instead of blood. `run_wine.sh` now gives both exes
+  the install's settings (`reg2ini.py` turns `gta2_install.reg` into `gta2.ini`) and a 640x480 window.
+- **The same renderer code.** PR #837's DLLs built with MinGW's gcc round some vertices differently from
+  the port's clang build: single-pixel differences. `build_gl_dlls_clang.sh` builds them with clang.
+- **A short wait.** Attract mode starts after 60 s of wall-clock idle; `GTA2_PORT_ATTRACT_MS` and a
+  patched copy of `10.5.exe` (`patch_attract.py`, 2 bytes in `Frontend::Run_4AEDB0`) shorten it for both.
+- `10.5.exe` against itself gives identical frames, so the replay is deterministic.
+
+Fixes it found in the port:
+
+- **x87, not SSE.** clang compiled the game's float code with SSE2, which ignores the x87 control word
+  the game runs with (single precision, round down; `gbh_InitDLL`). `-mno-sse -mfpmath=387` for the game
+  code; the frames then match for 87 more frames.
+- **VC6's `rand`.** glibc's `rand` is another generator (`Port/port_rand.h`; Windows' UCRT happens to use
+  the same LCG).
+- **Logs.** `ErrorLog` only wrote through VC6's iostreams, so the port wrote no `test\error.log` or
+  `warning.log`; and the decomp's `gFile_67C530` was a separate, never-opened object, while in `10.5.exe`
+  it is `gErrorLog_67C530` (0x67C530). Both fixed under `GTA2_PORT`, so `log_random` works.
+
+**The open divergence.** With `GTA2_DEBUG=log_random` both exes log every random draw: the first 10,106
+are identical, the first difference is at game frame 187. Traced back with `snapshot.py` and winedbg
+breakpoints (comparing memory at the same moment):
+
+1. Frame 187: pedestrian 38 makes an extra draw in the port. Its position and offscreen counter are
+   identical; the draws are in a different order because...
+2. ...the original updates one more pedestrian (pool slot 13), spawned at the end of frame 186, whose
+   AI runs first. In the port that pedestrian is freed right after spawning (`dead_9`, inactive), through
+   `SpawnPedestrianAt_46E380`'s `delloc_ret_2` exit for walking cops, because...
+3. ...`gNumberWalkingCopsSpawned_6787CD` is 1 in the port and 0 in `10.5.exe` at frame 186. Both
+   deallocated the same walking cop at frame 173 (`Deallocate_45EB60` only decrements for `guard`, 28, not
+   `walking_guard_29`, so not there), and the flag is otherwise only reset when `PedManager` is
+   constructed. Next step: a write watchpoint on 0x6787CD in both (`watch *0x6787cd` in winedbg) to find
+   what clears it in the original.
+
+Not ruled out yet: decomp code whose meaning differs between VC6 and clang (a matching function can
+still rely on VC6 behaviour, such as an evaluation order or undefined behaviour), and uninitialised heap
+memory (the pools are allocated with `new`; tried and ruled out: uninitialised stack variables, with
+`-ftrivial-auto-var-init=pattern` the divergence stays at the same draw).
+
+Tools for this, all in `Scripts/port/`: `replay_check.py` (frames), `snapshot.py` (memory at a frame),
+`trig_check.py` (the tables). winedbg notes: attaching to a running 32-bit process faults under macOS
+wine's wow64 mode, so start the exe under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run_wine.sh`);
+`cont N` is slow per hit, so break on `RunGameFrame_4DA850` with a condition on the frame counter
+(`*(int*)(*(int*)0x67ab34)`) first; casts make dereferences work (`x /4x *(unsigned int*)0x676978`).
 
 ## The Linux build (branch `port`)
 
