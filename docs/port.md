@@ -11,7 +11,7 @@ status snapshot.
 | Milestone (issue #840) | State |
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
-| M1. Plays on Linux, Windows | Not started. The renderer's SDL3 platform layer exists (see Renderer). |
+| M1. Plays on Linux, Windows | In progress. On Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound. Frontend still bit-identical to `10.5.exe`. Left: the Linux build, gamepad, network removal, wide strings, trig tables. See "M1 so far". |
 | M2-M6 | Not started. |
 
 Branches (local, not pushed yet):
@@ -232,6 +232,51 @@ These are about the environment, not the port; `10.5.exe` behaves the same.
   `ucrtbase.fopen` and so on (the MinGW build uses the UCRT, not `msvcrt`); crash addresses resolve with
   `i686-w64-mingw32-addr2line -f -C -e build_port/gta2_port.exe <addr>`. To look at the game, use
   `GTA2GL_CAPTURE` rather than screen captures.
+
+## M1 so far (branch `port`)
+
+One pattern throughout: **keep the game's code, replace the library under it.** Each Windows API the
+game uses is redirected, in the files that use it and only under `GTA2_PORT`, to a small
+implementation on SDL3 in `Port/`. The game's functions run unchanged, which keeps the port's
+behaviour tied to the decomp (and the replays of M2 meaningful). Each step was checked under wine with
+`Scripts/port/run_wine.sh`: the frontend frames stay bit-identical to `10.5.exe`'s.
+
+| Step | Files | How |
+|---|---|---|
+| Renderer linked in | `Source/gbh_graphics.cpp`, `Source/dma_video.cpp` (one guarded line each) | The renderer is compiled into the exe with its exports kept (`-Wl,--kill-at`); the loaders take `GetModuleHandle(NULL)` instead of `LoadLibrary`, so `GetProcAddress` finds the `gbh_*`/`Vid_*` functions in the exe. On Linux the same is `dlsym` on the program. |
+| Entry point | `Port/main.cpp` | SDL's `main`, straight into `WinMain_5E53F0`. `test.cpp` isn't used. |
+| Window, GL, event loop | `Port/sdl_win32.{hpp,cpp}`, included by `winmain.cpp` | The dozen user32 calls of `winmain.cpp` (`CreateWindowExA`, `PeekMessageA`, `DispatchMessageA`, `SetWindowPos`, `ShowCursor`, ...) act on one SDL window. SDL events become the window messages `WindowProc_5E4EE0` handles: close, focus, minimise, Alt+Enter. `GetDeviceCaps(BITSPIXEL)` says 16, so windowed mode is offered on any desktop. |
+| `Vid_*` | `Port/sdl_video.cpp`, `Renderers/OpenGL/platform/sdl_context.cpp` | `glvideo.cpp`'s functions, with an SDL GL context on that window (`CreateGLContextForSDLWindow`) instead of WGL. |
+| Keyboard | `Port/sdl_dinput.cpp`, `Source/input.cpp`, `Source/InputRecorder_67F8B0.cpp` | An `IDirectInputA` whose keyboard returns SDL key events as DIK events: buffered (`GetDeviceData`, the game) and as a state array (`GetDeviceState`, the frontend). No gamepad or mouse data yet. |
+| Settings | `Port/registry_ini.{hpp,cpp}`, included by the 5 files that use the registry | `Reg*` on `gta2.ini`: `[screen]`, `[control]`, ... with `dword:`/`str:`/`hex` values. |
+| Sound | `Port/miles_sdl.cpp`, `Source/3rdParty/mss.h` | The 52 `AIL_*` functions `cSampleManager.cpp` calls, as a software mixer in an SDL3 audio callback, plus WAV streams via `SDL_LoadWAV`. No 3D provider, so the game uses its 2D path. |
+
+Tests: `Port/tests/*_test.cpp` (the ini parser, the mixer), built by `build.sh` into `build_port/*.exe`
+and run under wine. Scripted input for checks without a person: `GTA2_PORT_KEYS=<ms>:<dik>:<1|0>,...`.
+Sound without speakers: `SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=sdlaudio.raw` writes the mix
+(float stereo, 44.1 kHz) to the game folder.
+
+Checks so far: the frontend is bit-identical at frames 30/100/200/400 after every step; Return on the
+main menu opens the play menu; holding Up in city 1 walks the player into the church (its "Get lost, ya
+bum!" brief appears); 20 s of city 1 give sound without clipping (not listened to yet).
+
+Findings:
+
+- **The issue's caution about faking Windows messages** ("would cost more") holds for the whole message
+  API, but the game's own window needs about ten messages; translating SDL events into those was less
+  code than rewriting `WinMain_5E53F0` and `WindowProc_5E4EE0`, and leaves them as decompiled.
+- `GetDeviceCaps(BITSPIXEL)` decides whether the game offers windowed mode at all (16-bit desktops
+  only, a DirectDraw limit).
+- GTA2's debug settings are on when the value **exists**, whatever its value (`Get_Debug_Setting_586E20`):
+  to turn `skip_frontend` off, delete it.
+- Without settings, the game defaults to **full screen** (`start_mode` 1).
+- The frontend reads the keyboard with `GetDeviceState` (immediate), the game with `GetDeviceData`
+  (buffered, one event per frame; the PR's README explains why that lagged under wine with DMA's DLLs).
+- Miles plays centred 2D sounds at full volume in both channels: an equal-power pan (+3 dB at the
+  centre) clipped constantly.
+- Apple clang's `cpuid.h` clashes with MinGW's `intrin.h` (`__cpuidex`), which SDL's headers include:
+  `build.sh` presets `__CPUID_H`. And `-static` links `libwinpthread` statically, but then SDL's import
+  library must be given by path (`libSDL3.dll.a`), as `-static` ignores `-lSDL3`.
 
 ## Renderer on SDL3 and macOS (branch `sdl3-mac`)
 
