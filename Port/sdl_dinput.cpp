@@ -1,8 +1,10 @@
 // Port (docs/port.md): the DirectInput the game uses, on SDL3 events. Port_DirectInputCreateA hands out an
 // IDirectInputA whose devices answer the calls of InputRecorder_67F8B0.cpp and winmain.cpp, so the game's
 // input code runs unchanged: the keyboard returns SDL key events as buffered DIK events, as DirectInput did.
-// ponytail: no gamepad (EnumDevices finds none) and no mouse data yet; add an SDL_Gamepad-backed device
-// for the joystick data format (gInputDeviceFormat_601A6C) when gamepads are wanted.
+// The first SDL gamepad is the game's joystick, in DirectInput's joystick layout (gInputDeviceFormat_601A6C):
+// offset 0/4 the X/Y axis in -1000..1000 (the game's DIPROP_RANGE), 48 + n button n. The left stick and the
+// d-pad drive the axes. Bindings to the pad are set in the game's Controls menu, as in the original.
+// ponytail: no mouse data (the game doesn't use the mouse for play); one pad.
 #define DIRECTINPUT_VERSION 0x0700
 #include <SDL3/SDL.h>
 #include <deque>
@@ -19,6 +21,12 @@ struct KeyEvent
     DWORD time;
 };
 std::deque<KeyEvent> gKeyEvents; // buffered events (GetDeviceData, the game)
+std::deque<KeyEvent> gPadEvents; // the joystick's: dik is the data format offset
+SDL_Gamepad* gPad;
+bool gScriptedPad; // GTA2_PORT_PAD: tests without a pad
+int gStickX, gStickY, gDpadX, gDpadY; // -1000..1000
+int gLastX, gLastY; // what the game was last told
+const GUID kPadGuid = {0x47544132, 0x5044, 0x0001, {'S', 'D', 'L', '3', 'P', 'A', 'D', 0}};
 unsigned char gKeyState[256]; // immediate state (GetDeviceState, the frontend)
 DWORD gSequence;
 
@@ -30,6 +38,70 @@ void AddKeyEvent(DWORD dik, bool down, DWORD time)
         gKeyEvents.push_back(ev);
     }
     gKeyState[dik & 0xFF] = down ? 0x80 : 0;
+}
+
+void AddPadEvent(DWORD ofs, DWORD data)
+{
+    KeyEvent ev = {ofs, data, (DWORD)SDL_GetTicks()};
+    if (gPadEvents.size() < 256)
+    {
+        gPadEvents.push_back(ev);
+    }
+}
+
+// Test hook: GTA2_PORT_PAD=<ms>:<offset>:<value>,... queues pad events (and makes the game see a pad).
+void QueueScriptedPad()
+{
+    static const char* pNext = SDL_getenv("GTA2_PORT_PAD");
+    while (pNext && *pNext)
+    {
+        unsigned ms = 0, ofs = 0;
+        int value = 0;
+        if (SDL_sscanf(pNext, "%u:%u:%d", &ms, &ofs, &value) != 3 || ms > SDL_GetTicks())
+        {
+            return;
+        }
+        AddPadEvent(ofs, (DWORD)value);
+        pNext = SDL_strchr(pNext, ',');
+        pNext = pNext ? pNext + 1 : NULL;
+    }
+}
+
+// Stick to the game's range, with the 25% dead zone it sets (DIPROP_DEADZONE 2500 of 10000)
+int ScaleAxis(Sint16 v)
+{
+    const int scaled = v * 1000 / 32767;
+    return scaled > -250 && scaled < 250 ? 0 : scaled;
+}
+
+// One axis from the stick and the d-pad: the d-pad wins while it's held. Reports changes only.
+void UpdateAxis(DWORD ofs, int stick, int dpad, int& last)
+{
+    const int value = dpad ? dpad : stick;
+    if (value != last)
+    {
+        last = value;
+        AddPadEvent(ofs, (DWORD)value);
+    }
+}
+
+// SDL gamepad buttons as DirectInput numbers them for XInput pads
+int PadButton(int b)
+{
+    switch (b)
+    {
+        case SDL_GAMEPAD_BUTTON_SOUTH: return 0;
+        case SDL_GAMEPAD_BUTTON_EAST: return 1;
+        case SDL_GAMEPAD_BUTTON_WEST: return 2;
+        case SDL_GAMEPAD_BUTTON_NORTH: return 3;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return 4;
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return 5;
+        case SDL_GAMEPAD_BUTTON_BACK: return 6;
+        case SDL_GAMEPAD_BUTTON_START: return 7;
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK: return 8;
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return 9;
+        default: return -1;
+    }
 }
 
 // Test hook: GTA2_PORT_KEYS=<ms>:<dik>:<1 down|0 up>,... queues key events at those times after start.
@@ -130,11 +202,11 @@ DWORD ToDik(SDL_Scancode sc)
     }
 }
 
-// One device class for the keyboard and the mouse; only the keyboard has data.
+// One device class for the keyboard, the joystick and the mouse (which has no data).
 class Device : public IDirectInputDevice2A
 {
   public:
-    explicit Device(bool keyboard) : mRefs(1), mKeyboard(keyboard)
+    Device(bool keyboard, bool pad) : mRefs(1), mKeyboard(keyboard), mPad(pad)
     {
     }
 
@@ -194,24 +266,25 @@ class Device : public IDirectInputDevice2A
     // Buffered events: rgdod NULL with *pdwInOut = INFINITE flushes; DIGDD_PEEK leaves them queued.
     STDMETHOD(GetDeviceData)(DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD flags)
     {
-        if (!mKeyboard)
+        if (!mKeyboard && !mPad)
         {
             *pdwInOut = 0;
             return DI_OK;
         }
-        QueueScriptedKeys();
-        DWORD n = gKeyEvents.size() < *pdwInOut ? (DWORD)gKeyEvents.size() : *pdwInOut;
+        mKeyboard ? QueueScriptedKeys() : QueueScriptedPad();
+        std::deque<KeyEvent>& events = mKeyboard ? gKeyEvents : gPadEvents;
+        DWORD n = events.size() < *pdwInOut ? (DWORD)events.size() : *pdwInOut;
         for (DWORD i = 0; rgdod && i < n; i++)
         {
             DWORD* pOut = (DWORD*)((char*)rgdod + i * cbObjectData); // dwOfs, dwData, dwTimeStamp, dwSequence
-            pOut[0] = gKeyEvents[i].dik;
-            pOut[1] = gKeyEvents[i].data;
-            pOut[2] = gKeyEvents[i].time;
+            pOut[0] = events[i].dik;
+            pOut[1] = events[i].data;
+            pOut[2] = events[i].time;
             pOut[3] = gSequence++;
         }
         if (!(flags & DIGDD_PEEK))
         {
-            gKeyEvents.erase(gKeyEvents.begin(), gKeyEvents.begin() + n);
+            events.erase(events.begin(), events.begin() + n);
         }
         *pdwInOut = n;
         return DI_OK;
@@ -284,6 +357,7 @@ class Device : public IDirectInputDevice2A
   private:
     ULONG mRefs;
     bool mKeyboard;
+    bool mPad;
 };
 
 class DInput : public IDirectInputA
@@ -304,12 +378,38 @@ class DInput : public IDirectInputA
     }
     STDMETHOD(CreateDevice)(REFGUID guid, LPDIRECTINPUTDEVICEA* ppDevice, LPUNKNOWN)
     {
-        *ppDevice = new Device(IsEqualGUID(guid, GUID_SysKeyboard));
+        *ppDevice = new Device(IsEqualGUID(guid, GUID_SysKeyboard), IsEqualGUID(guid, kPadGuid));
         return DI_OK;
     }
-    STDMETHOD(EnumDevices)(DWORD, LPDIENUMDEVICESCALLBACKA, LPVOID, DWORD)
+    // Joysticks: the first SDL gamepad, if one is connected at start-up (as DirectInput saw it)
+    STDMETHOD(EnumDevices)(DWORD type, LPDIENUMDEVICESCALLBACKA callback, LPVOID ref, DWORD)
     {
-        return DI_OK; // no gamepads yet
+        if (type != DIDEVTYPE_JOYSTICK)
+        {
+            return DI_OK;
+        }
+        if (!gPad && !gScriptedPad)
+        {
+            int count = 0;
+            SDL_JoystickID* pIds = SDL_GetGamepads(&count);
+            if (count > 0)
+            {
+                gPad = SDL_OpenGamepad(pIds[0]);
+            }
+            SDL_free(pIds);
+        }
+        if (gPad || gScriptedPad)
+        {
+            DIDEVICEINSTANCEA instance = {};
+            instance.dwSize = sizeof(instance);
+            instance.guidInstance = kPadGuid;
+            instance.guidProduct = kPadGuid;
+            instance.dwDevType = DIDEVTYPE_JOYSTICK;
+            SDL_strlcpy(instance.tszInstanceName, gPad ? SDL_GetGamepadName(gPad) : "Scripted pad", sizeof(instance.tszInstanceName));
+            SDL_strlcpy(instance.tszProductName, instance.tszInstanceName, sizeof(instance.tszProductName));
+            callback(&instance, ref);
+        }
+        return DI_OK;
     }
     STDMETHOD(GetDeviceStatus)(REFGUID)
     {
@@ -330,6 +430,52 @@ DInput gDInput;
 // Called with every SDL event the window loop sees (sdl_win32.cpp).
 void Port_DInputOnEvent(const SDL_Event& e)
 {
+    if (gPad && (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION || e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                 e.type == SDL_EVENT_GAMEPAD_BUTTON_UP))
+    {
+        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
+        {
+            if (e.gaxis.which != SDL_GetGamepadID(gPad))
+            {
+                return;
+            }
+            if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
+            {
+                gStickX = ScaleAxis(e.gaxis.value);
+            }
+            else if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
+            {
+                gStickY = ScaleAxis(e.gaxis.value);
+            }
+        }
+        else
+        {
+            if (e.gbutton.which != SDL_GetGamepadID(gPad))
+            {
+                return;
+            }
+            const bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+            switch (e.gbutton.button)
+            {
+                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: gDpadX = down ? -1000 : 0; break;
+                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: gDpadX = down ? 1000 : 0; break;
+                case SDL_GAMEPAD_BUTTON_DPAD_UP: gDpadY = down ? -1000 : 0; break;
+                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: gDpadY = down ? 1000 : 0; break;
+                default:
+                {
+                    const int n = PadButton(e.gbutton.button);
+                    if (n >= 0)
+                    {
+                        AddPadEvent(48 + n, down ? 0x80 : 0);
+                    }
+                    break;
+                }
+            }
+        }
+        UpdateAxis(0, gStickX, gDpadX, gLastX);
+        UpdateAxis(4, gStickY, gDpadY, gLastY);
+        return;
+    }
     if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
     {
         const DWORD dik = ToDik(e.key.scancode);
@@ -342,6 +488,8 @@ void Port_DInputOnEvent(const SDL_Event& e)
 
 HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE, DWORD, LPDIRECTINPUTA* ppDI, LPUNKNOWN)
 {
+    SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    gScriptedPad = SDL_getenv("GTA2_PORT_PAD") != NULL;
     *ppDI = &gDInput;
     return DI_OK;
 }
