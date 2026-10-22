@@ -12,7 +12,7 @@ SDL3_DIR=${SDL3_DIR:-$OUT/sdl3}
 # ponytail: SDL's headers pull in MinGW's intrin.h, whose __cpuidex clashes with Apple clang's cpuid.h; nothing here
 # uses cpuid.h, so its include guard is preset. Drop it with a clang/MinGW pair that agree.
 SDLINC="-I$SDL3_DIR/include -D__CPUID_H"
-CXXFLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 ${OPT:--O2} -g -w -Wno-address-of-temporary -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fsjlj-exceptions -nostdinc++ -nostdlibinc $INC -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_CRT_NON_CONFORMING_SWPRINTFS -D_USE_32BIT_TIME_T -DGTA2_PORT $SDLINC $*"
+CXXFLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 ${OPT:--O2} -g -w -Wno-address-of-temporary -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fsjlj-exceptions -nostdinc++ -nostdlibinc $INC -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_CRT_NON_CONFORMING_SWPRINTFS -D_USE_32BIT_TIME_T -DGTA2_PORT -DBUILD_MSS $SDLINC $*"
 RENFLAGS="--target=i686-w64-mingw32 -std=c++11 ${OPT:--O2} -g -w -nostdinc++ -nostdlibinc $INC -fsjlj-exceptions -DGTA2GL_BUILD_DLL $SDLINC"
 # gta2_lib_src without the ImGui overlay, plus StdAfx.cpp and Port/ (main.cpp replaces test.cpp)
 SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v ImGuiDebug.cpp) StdAfx.cpp Port/*.cpp)
@@ -37,21 +37,21 @@ wait
 for o in "${OBJS[@]}"; do [ -f "$o" ] || fail=1; done
 [ $fail -eq 0 ] || { echo "compile failed"; exit 1; }
 i686-w64-mingw32-windres -I. resources.rc -O coff -o $OUT/obj/resources.o
-# Import libraries for the game's own mss32.dll and binkw32.dll (from the GTA2 install): their exports are
+# Import library for the game's own binkw32.dll (Miles is Port/miles_sdl.cpp) (from the GTA2 install): their exports are
 # decorated stdcall names (_AIL_startup@0), which the "name == export" form of a .def maps to.
-for dll in mss32 binkw32; do
+for dll in binkw32; do
   { echo "LIBRARY $dll.dll"; echo EXPORTS
     i686-w64-mingw32-objdump -p "${GTA2_DLL_DIR:-$OUT/dlls}/$dll.dll" | sed -n '/Ordinal\/Name Pointer/,/^$/p' | awk '/^[[:space:]]+\[/ {print $NF}' |
       sed -E 's/^_([A-Za-z0-9_]+@[0-9]+)$/\1 == _\1/'; } > $OUT/$dll.def
   i686-w64-mingw32-dlltool -d $OUT/$dll.def -l $OUT/lib$dll.a
 done
 i686-w64-mingw32-g++ -mwindows -static -Wl,--kill-at -o $OUT/gta2_port.exe "${OBJS[@]}" $OUT/obj/resources.o \
-  -L$OUT $SDL3_DIR/lib/libSDL3.dll.a -lmss32 -lbinkw32 -lversion \
+  -L$OUT $SDL3_DIR/lib/libSDL3.dll.a -lbinkw32 -lversion \
   -ldplayx -ldinput -ldxguid -lddraw -lwinmm -lole32 -luuid -lgdi32 -lcomctl32 -lopengl32 2>&1 | tee $OUT/link.log | head -60
 # Port/tests: one exe per test, linked with the Port/ file of the same name
 for t in "${TESTS[@]}"; do
   n=$(basename "$t" .cpp); u=${n%_test}
-  clang++ $CXXFLAGS -c "$t" -o $OUT/obj/test_$n.o && i686-w64-mingw32-g++ -static -o $OUT/$n.exe $OUT/obj/test_$n.o $OUT/obj/Port_$u.cpp.o
+  clang++ $CXXFLAGS -c "$t" -o $OUT/obj/test_$n.o && i686-w64-mingw32-g++ -static -o $OUT/$n.exe $OUT/obj/test_$n.o $OUT/obj/Port_$u.cpp.o $SDL3_DIR/lib/libSDL3.dll.a
 done
 cp $SDL3_DIR/bin/SDL3.dll $OUT/
 echo "built $OUT/gta2_port.exe (needs SDL3.dll next to it)"
