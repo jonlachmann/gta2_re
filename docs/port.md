@@ -11,7 +11,7 @@ status snapshot.
 | Milestone (issue #840) | State |
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
-| M1. Plays on Linux, Windows | In progress. On Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound. Frontend still bit-identical to `10.5.exe`. Left: the Linux build, gamepad, network removal, wide strings, trig tables. See "M1 so far". |
+| M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Left: running on Linux, gamepad, trig tables. See "M1 so far" and "The Linux build". |
 | M2-M6 | Not started. |
 
 Branches (local, not pushed yet):
@@ -277,6 +277,55 @@ Findings:
 - Apple clang's `cpuid.h` clashes with MinGW's `intrin.h` (`__cpuidex`), which SDL's headers include:
   `build.sh` presets `__CPUID_H`. And `-static` links `libwinpthread` statically, but then SDL's import
   library must be given by path (`libSDL3.dll.a`), as `-static` ignores `-lSDL3`.
+
+## The Linux build (branch `port`)
+
+Built on the Mac, without running it (a Linux VM wasn't wanted yet): the non-Windows code is the same for
+Linux and macOS, and the Windows build under wine keeps testing the shared SDL3 code at runtime.
+
+```bash
+brew install lld
+Scripts/port/build_linux.sh      # -> build_port/linux/gta2_port, ELF i386, needs libSDL3.so.0
+```
+
+The target files (sysroot) are Debian trixie's i386 packages, unpacked without running anything: `libc6`,
+`libc6-dev`, `linux-libc-dev`, `libgcc-14-dev`, `libgcc-s1`, `libstdc++-14-dev`, `libstdc++6`,
+`libcrypt-dev`, `libcrypt1`, `libsdl3-0`, `libsdl3-dev`, `libgl-dev`, `libegl-dev`, `libglx-dev`
+(URLs from `dists/trixie/main/binary-i386/Packages.xz`; `tar xf x.deb && tar xf data.tar.* -C sysroot`), plus
+a `lib -> usr/lib` symlink (merged /usr).
+
+How the game compiles without Windows: `Port/compat/` has headers under the Windows names
+(`windows.h`, `objbase.h`, `mmsystem.h`, `dinput.h`, `ddraw.h`, `dplay.h`, `io.h`, ...), with types,
+constants and declarations only, and `port_linux.h` is force-included first in every game file:
+
+| Difference | Where | How |
+|---|---|---|
+| Windows types, COM | `compat/windows.h`, `objbase.h` | 32-bit definitions (`DWORD` is `unsigned int`, not `unsigned long`); interfaces are C++ classes with virtual methods, the same layout as COM on 32-bit x86. |
+| Microsoft keywords | build flags | `-fms-extensions` (`__declspec`, `__forceinline`, `__int64`); `-Wl,--no-dependent-libraries` ignores `#pragma comment(lib, ...)`. |
+| 2-byte `wchar_t` | `port_wchar.cpp` | `-fshort-wchar` keeps the game's strings and `L""` literals 2-byte, but glibc's wide functions take 4-byte ones: `swprintf` and the 8 other wide functions the game calls are our own, with Microsoft's semantics (`swprintf(buf, fmt, ...)` without a size; `%s` wide). |
+| Windows paths | `posix_files.cpp` | `fopen`, `_findfirst` and friends, `_stat`, `_getcwd`: backslashes become slashes, and every path component is matched case-insensitively (the game asks for `data\audio\vocals\...`, the folder is `Vocals`). |
+| Window, input, settings, sound | `sdl_win32.cpp`, `sdl_dinput.cpp`, `registry_ini.cpp`, `miles_sdl.cpp` | the same as on Windows. |
+| The renderer's "DLLs" | `posix_win32.cpp` | `LoadLibrary`/`GetProcAddress` are `dlopen(NULL)`/`dlsym`; the program is linked with `-rdynamic`. |
+| Network | `netplay_offline.cpp`, `compat/dplay.h` | `NetPlay.cpp` and `Network_20324.cpp` aren't built; a single-player `NetPlay` answers the rest of the game (no players, no messages). The network code only runs once a network game has started, which can't happen. |
+| Windows-only checks | `port_winmain.cpp` | DirectX and DirectMusic versions, exe version info, the GTA2 Manager launch. |
+| Movies | `Source/3rdParty/bink.cpp` | its stubs (no movies until M5). |
+| Other Win32 calls | `posix_win32.cpp` | time, mutexes (no single-instance check), CD drive type (always fixed), computer name, keyboard layout (US). |
+
+Findings:
+
+- libstdc++'s `<cwchar>` and `<cstdio>` `#undef` the C names, so redirect macros defined before them are
+  lost: `port_linux.h` includes them first and redirects after.
+- `struct _stat` can't have an `st_mtime` member: it's a macro in both glibc and macOS.
+- Debian's `libc.so` linker script names `/lib/...`; with merged /usr the sysroot needs `lib -> usr/lib`.
+- **Calling conventions**: clang honours `__stdcall` on Linux i386 (the callee pops its arguments). The
+  renderer declared its `gbh_*` functions `__stdcall` only on `_WIN32`, so the Linux build would have
+  corrupted the stack on the first renderer call. Everything the game calls through a pointer has to use
+  the same convention on both sides; Miles, Bink and DirectInput share one header with the game, so they do.
+- The game compiles with all its `GTA2_ASSERT_SIZEOF` checks passing on Linux i386, as the issue predicted.
+
+Not verified until it runs on Linux: anything at runtime. Expected trouble spots: paths the game builds
+in ways `posix_files.cpp` doesn't cover, uninitialised-memory differences, and the frame pacing on the
+first frames.
 
 ## Renderer on SDL3 and macOS (branch `sdl3-mac`)
 
