@@ -1216,6 +1216,7 @@ void sprite_delta::Delta_5ABA00(u8* pArray)
 {
     // Inline asm in the original (lodsw, rep movsb). Each entry is a u16 offset from the end
     // of the previous run, a u8 length and that many bytes.
+#if defined(_MSC_VER)
     sprite_delta* pThis = this;
     __asm
     {
@@ -1239,6 +1240,19 @@ void sprite_delta::Delta_5ABA00(u8* pArray)
         pop esi
         pop edi
     }
+#else
+    const u8* pSrc = (const u8*)field_0_pData;
+    const u8* pEnd = pSrc + field_4_len;
+    while (pSrc != pEnd)
+    {
+        pArray += pSrc[0] | (pSrc[1] << 8);
+        u32 len = pSrc[2];
+        pSrc += 3;
+        memcpy(pArray, pSrc, len);
+        pArray += len;
+        pSrc += len;
+    }
+#endif
 }
 
 // https://decomp.me/scratch/Cc0Dx Not fully working
@@ -1247,6 +1261,7 @@ void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
 {
     // Inline asm in the original (lodsw / loop)
     // Each entry: u16 offset, u8 len, then len bytes written backwards from the end of the row
+#if defined(_MSC_VER)
     __asm
     {
         push edi
@@ -1283,6 +1298,27 @@ void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
         pop esi
         pop edi
     }
+#else
+    const u8* pSrc = (const u8*)field_0_pData;
+    const u8* pEnd = pSrc + field_4_len;
+    u8* pDst = pArray - 1 + width;
+    while (pSrc != pEnd)
+    {
+        u32 offset = pSrc[0] | (pSrc[1] << 8);
+        u32 len = pSrc[2];
+        pSrc += 3;
+        u32 mirror = (offset & 0xFF) << 1;
+        pDst += offset - mirror;
+        if (mirror >= 0x100)
+        {
+            pDst += 0x200;
+        }
+        for (; len; len--)
+        {
+            *pDst-- = *pSrc++;
+        }
+    }
+#endif
 }
 
 MATCH_FUNC(0x5abaa0)
