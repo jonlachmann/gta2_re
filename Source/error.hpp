@@ -41,10 +41,11 @@ class ErrorLog
     // the original's ??0ofstream@@QAE@XZ call and EH frame (ErrorLog::ErrorLog 0x4D94E0)
     ofstream field_0_ofstr;
 #else
-    // Only keeps the 0x3C bytes (the globals registry checks sizes); never used as a stream
+    // Keeps the 0x3C bytes (the globals registry checks sizes); the port writes through a FILE* in it
     struct fake_ofstream
     {
-      char buffer[0x3C];
+      FILE* file;
+      char buffer[0x3C - sizeof(FILE*)];
     };
     fake_ofstream field_0_ofstr;
 #endif
