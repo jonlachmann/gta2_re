@@ -3,7 +3,7 @@
 #include "Function.hpp"
 #include <windows.h>
 
-#if defined(__clang__) || (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
 #include <FSTREAM.H>
 #define ostream_type ostream
 #else
@@ -36,7 +36,7 @@ class ErrorLog
     // although clang-cl preprocessing, bad build options or something is causing field 0x3C to
     // end up at the wrong offset
 
-#if !defined(__clang__) && (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     // VC6: the real classic ofstream (0x3C bytes, checked with sizeof), so the constructor emits
     // the original's ??0ofstream@@QAE@XZ call and EH frame (ErrorLog::ErrorLog 0x4D94E0)
     ofstream field_0_ofstr;
