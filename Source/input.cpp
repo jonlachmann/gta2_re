@@ -16,7 +16,7 @@ HRESULT WINAPI Fn_DirectInputCreateA(HINSTANCE hinst, u32 dwVersion, LPDIRECTINP
 MATCH_FUNC(0x4986D0)
 void __stdcall Input::DirectInputCreate_4986D0(HINSTANCE hInstance)
 {
-    #if defined(__clang__) || (_MSC_VER <= 1200)
+    #if defined(_MSC_VER) && _MSC_VER <= 1200
     #pragma comment(lib, "DInput.lib")
     // VC6-compatible path
     if (DirectInputCreateA(hInstance, 0x0700, &gpDInput_67B804, NULL) < 0)

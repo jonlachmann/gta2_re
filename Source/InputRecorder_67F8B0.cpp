@@ -248,7 +248,7 @@ bool InputDevices::game_pads_init_498BA0()
 {
     if (gpDInput_67B804)
     {
-#if defined(__clang__) || (_MSC_VER <= 1200)
+#if defined(_MSC_VER) && _MSC_VER <= 1200
     #pragma comment(lib, "DInput.lib")
         // VC6-compatible path
         if (FAILED(DirectInputCreateA(gHInstance_708220, 0x700, &gpDInput_67B804, NULL)))
