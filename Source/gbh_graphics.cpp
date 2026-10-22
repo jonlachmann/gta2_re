@@ -125,7 +125,12 @@ EXPORT s32 __stdcall GBH_GraphicsLoadDll_5EA680(const char_type* lpLibFileName)
         return 0;
     }
 
+#if defined(GTA2_PORT)
+    // The port links the renderer in: its gbh_*/Vid_* exports are the exe's own (docs/port.md)
+    gGbhDllHandle_7085D8 = GetModuleHandleA(NULL);
+#else
     gGbhDllHandle_7085D8 = LoadLibraryA(lpLibFileName);
+#endif
     if (gGbhDllHandle_7085D8)
     {
         load_gbh_func(pgbh_InitDLL, T_gbh_InitDLL, "gbh_InitDLL");
