@@ -255,6 +255,10 @@ bool InputDevices::game_pads_init_498BA0()
         {
             return 1;
         }
+#elif defined(GTA2_PORT)
+        // DirectInput on SDL3 (Port/sdl_dinput.cpp, docs/port.md)
+        HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE, DWORD, LPDIRECTINPUTA*, LPUNKNOWN);
+        Port_DirectInputCreateA(gHInstance_708220, 0x700, &gpDInput_67B804, 0);
 #else
     #pragma comment(lib, "DInput8.lib")
         // Runtime dynamic loading path
