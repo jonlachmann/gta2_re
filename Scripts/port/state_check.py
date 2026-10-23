@@ -5,6 +5,7 @@
 # the differing fields are printed by name.
 # usage: state_check.py [until game frame, default 600]
 #   env GTA2_DIR (the install), SPEED (default 10), ATTRACT_MS (default 3000), DUMP (GTA2_STATELOG_DUMP for all runs)
+#   SECONDS=<n> runs each exe n s (whatever the frame) and DEMO=<n> compares the nth attract demo
 #   TRACE_THIS=<n>: with the trace, the first n bytes of *this at each call, compared field by field
 #   TRACE_FIELDS=<regex>: only those fields of *this
 #   TRACE=<a>-<b>:<name>,..  instead: both exes with a call trace of those functions (names or address parts as in
@@ -54,7 +55,8 @@ def run(exe, log, extra, until=None):
     p = subprocess.Popen([os.path.join(ROOT, 'Scripts', 'port', 'run_wine.sh'), exe], env=env, stdout=out, stderr=out)
     # A crash opens winedbg's dialog and the game sits there: stop when the log stops growing
     size, moved, note = -1, time.time(), ''
-    while last_frame(path) < until and p.poll() is None:
+    limit = float(os.environ.get('SECONDS', '600'))  # SECONDS=n: stop each run after n s (later demos, DEMO=)
+    while (last_frame(path) < until or os.environ.get('SECONDS')) and p.poll() is None and time.time() - start < limit:
         time.sleep(0.5)
         now = os.path.getsize(path) if os.path.exists(path) else 0
         if now != size:
@@ -158,6 +160,21 @@ def trace():
             words = words[(abs(n) + 3) // 4:]
         return ' '.join(f[:3] + ['this'] + args)  # ecx: an address (or junk for a static function), see TRACE_THIS
     a, b = open(o + '.trace').read().split('\n'), open(p + '.trace').read().split('\n')
+
+    def one_demo(lines):  # DEMO=n: only the nth demo's lines (the game frame starts again with each demo)
+        want, demo, last, out = int(os.environ.get('DEMO', '1')), 1, None, []
+        for l in lines:
+            f = l.split()
+            if len(f) > 1 and f[1].lstrip('-').isdigit():
+                frame = int(f[1])
+                if last is not None and frame < last:
+                    demo += 1
+                last = frame
+            if demo == want:
+                out.append(l)
+        return out
+    if os.environ.get('DEMO'):
+        a, b = one_demo(a), one_demo(b)
     # Functions the port inlined everywhere never show up there: leave them out of both
     label = lambda l: l.split()[2] if len(l.split()) > 2 else ''
     both = {label(l) for l in a} & {label(l) for l in b}
@@ -256,10 +273,17 @@ dumps = [run(EXE, 'state_port.log', PORT, frame) + '.dump',
          run(os.path.join(GAME, 'gta2_105_attract.exe'), 'state_og.log', og_extra, frame) + '.dump']
 
 def load(path):
-    d = {}
+    """(frame, entry) -> dwords, from the first record of each frame of demo DEMO (frames start again each demo)"""
+    d, seen, last = {}, {}, None
+    want = int(os.environ.get('DEMO', '1'))
     for line in open(path):
         p = line.split()
-        d.setdefault((int(p[1]), p[2]), [int(v.split('@')[0], 16) for v in p[3:]])  # the first record of a frame
+        key = (int(p[1]), p[2])
+        if key != last and (last is None or last[0] != key[0]):
+            seen[key] = seen.get(key, 0) + 1
+        last = key
+        if seen.get(key) == want:
+            d.setdefault(key, [int(v.split('@')[0], 16) for v in p[3:]])
     return d
 
 lay = layout.load(EXE, TABLE)

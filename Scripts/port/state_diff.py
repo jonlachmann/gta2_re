@@ -22,16 +22,21 @@ def chunks(table):
                 out.append('%s+0x%x' % (prefix, off))
     return out
 
+DEMO = int(os.environ.get('DEMO', '1'))  # DEMO=n: compare the nth attract demo of the logs
+
+
 def frames(path):
-    """Yields (game frame, live state) at the first record of each frame, for the first demo of a log."""
-    state, last = {}, -1
+    """Yields (game frame, live state) at the first record of each frame, for demo DEMO of a log."""
+    state, last, demo = {}, -1, 1
     for line in open(path):
         parts = line.split()
         if not parts or parts[0] != 'F':
             continue
         frame = int(parts[2])
         if frame < last:
-            return  # the next demo: compare the first one only
+            demo += 1  # the game frame starts again: the next demo
+            if demo > DEMO:
+                return
         if not line.endswith('\n'):
             return  # cut off by the kill
         for item in parts[3:]:
@@ -39,7 +44,8 @@ def frames(path):
             state[int(c, 16)] = h
         if frame != last:
             last = frame
-            yield frame, state
+            if demo == DEMO:
+                yield frame, state
 
 def lockstep(path_a, path_b):
     """Yields (frame, state A, state B) for the frames both logs have."""
