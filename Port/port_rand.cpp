@@ -11,8 +11,11 @@ void port_srand_5EDED7(unsigned int seed)
     sState = seed;
 }
 
+unsigned int gPortRandCalls; // for the sim bench (Port/headless/sim_bench.cpp): who draws how many
+
 int port_rand_5EDEE1()
 {
+    gPortRandCalls++;
     sState = sState * 214013u + 2531011u;
     return (int)((sState >> 16) & 0x7FFF);
 }
