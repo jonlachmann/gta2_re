@@ -127,10 +127,11 @@ struct DmapInfoList;
 
 // The column data is an array of 32-bit words that the map indexes; the decomp types it u16* (4 bytes on the
 // original). The 64-bit port needs 4-byte elements too.
+// (A macro on 32-bit: a new typedef name moves VC6's code in Particle_4C::UpdateCollisionBurst_state_31_34_53BAC0.)
 #if defined(GTA2_PORT) && defined(__LP64__)
-typedef u32 MapColumnWord;
+    #define MapColumnWord u32
 #else
-typedef u16* MapColumnWord;
+    #define MapColumnWord u16*
 #endif
 
 struct gmp_compressed_map_32
