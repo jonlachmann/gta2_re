@@ -430,7 +430,8 @@ an uninitialised stack temporary (a heap-address-like `aim_x`, a `field_24` noth
 like the debris it can't match; it only affects drawing the arrows (`gHud_2B00_706620\+0x(1f|2[0-5])`).
 **Open:** across runs the later demos aren't exactly reproducible: demo 2 once diverged at frame 578 in the
 ped pool, and a rerun dumping that frame found it identical. Something timing-dependent is left after the
-first demo; a port-vs-port noise run and a `_rand` trace across the demo change are the next steps.
+first demo. The port itself is deterministic: two port runs match each other through demos 2 and 3 (with
+input, FPS and draw-timing state left out), so it is on 10.5.exe's side or in how the noise run lines up.
 
 The state log also compares **pointer fields by what they point to**: layout.py marks pointer-typed fields
 (not where a union overlays something else) in the mask, and the log hashes them as (entry, offset).
