@@ -15,6 +15,7 @@ fi
 { [ -f "$GAME/gta2_install.reg" ] && python3 Scripts/port/reg2ini.py "$GAME/gta2_install.reg"
   printf '[screen]\nstart_mode=dword:0\nwindow_width=dword:640\nwindow_height=dword:480\nfull_width=dword:640\nfull_height=dword:480\ndo_play_movie=dword:0\n'
   [ -n "$GTA2_LOCKSTEP" ] && printf 'max_frame_rate=dword:0\nmin_frame_rate=dword:0\n'
+  printf '\n[software\\freeloader.com\\gta2]\ncityinstalled=dword:3\n' # the installer's: every area playable, no CD check (FreeLoader::CheckCityInstalled_4AE1F0)
   printf '\n[debug]\n'
   [ -n "$MAP" ] && printf 'skip_frontend=dword:1\nmapname=str:%s.gmp\nstylename=str:%s.sty\nscriptname=str:%s.scr\n' "$MAP" "$MAP" "$MAP"
   for flag in $GTA2_DEBUG; do printf '%s=dword:1\n' $flag; done
