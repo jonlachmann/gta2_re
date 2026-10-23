@@ -335,12 +335,24 @@ void Run(int ticks)
         }
     }
 
-    // Tick cost, per service
+    // Tick cost, per service. GTA2_SIMBENCH_NORECYCLE: cars aren't despawned (debug skip_recycling), with counts
+    // and the tick cost every 500 ticks, to see the world fill up
+    const bool norecycle = getenv("GTA2_SIMBENCH_NORECYCLE") != NULL;
+    bSkip_recycling_67D575 |= norecycle;
     Counts("before");
     a = Clock::now();
+    Clock::time_point w = a;
     for (int i = 0; i < ticks; i++)
     {
         TimedTick();
+        if (norecycle && (i + 1) % 500 == 0)
+        {
+            const Clock::time_point now = Clock::now();
+            char when[64];
+            snprintf(when, sizeof(when), "tick %d, %.1f us per tick", i + 1, Ms(w, now) * 1000.0 / 500);
+            Counts(when);
+            w = now;
+        }
     }
     b = Clock::now();
     const double perTick = Ms(a, b) / ticks;
