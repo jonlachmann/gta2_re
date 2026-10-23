@@ -33,18 +33,31 @@ Commands carry the server tick they are for. The server buffers them per tick an
 - Scores are applied after the resimulation.
 - `GTA2_NET_TESTKILL=<tick>:<victim>:<killer>,...` kills players on the server for tests.
 
-`--lag ms --jitter ms --loss %` puts a link conditioner on either end. `--bot` plays with the simple bot (chase the nearest player, shoot when close and facing it). It has no route finding yet, so it gets stuck on buildings.
+`--lag ms --jitter ms --loss %` puts a link conditioner on either end.
+
+**Bots** (`session/bot.hpp`) are players that perceive and decide on their own:
+- **What a bot sees:** a `BotView` built from what its client knows. That is its own body as predicted, the snapshot's players, cars and peds, and the static map as plain data (`engine::NavMap`: per cell the walking height and the ways to its neighbours, from the map's wall faces and slopes).
+- **What it does:** it returns the input bits a person would press. It uses no game logic: no route finder, no ped AI.
+- **Other brains:** smarter brains, or one that sends the view to another process and reads its answer, implement the same `BotBrain` interface.
+- **Navigation:** `session/bot_nav.cpp` (A*, tested on made-up maps).
+- **The simple brain:** walks its route to the nearest player and fights when close, with presses for fists and holding for guns. Walking while facing `rot` moves along (sin, cos) (measured).
+
+Usage and test switches:
+- `--bot [brain]` (default `simple`);
+- `GTA2_NET_NAVDUMP=<file.pgm>` writes the map as a picture;
+- `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server.
 
 **Measured** (bots on Downtown, 60 s):
 
 | Link | Result |
 |---|---|
 | Loopback | 28-107 bytes per snapshot; both clients see the same positions; up to 13 cars and 11 peds mapped; prediction error 0.00 blocks |
+| 80 ms round trip, three armed bots on Downtown, 5 minutes | The bots find each other and fight: frags and deaths on the server (for example 1/1, 2/3, 2/1), every client shows them and carries out each death once; no crash, nobody drops; prediction error 0.00 blocks. |
 | 100 ms round trip, 2% loss, test kills (4 deaths, one without a killer) | Every client shows the server's frags and deaths and carries out each death exactly once (2, 1, 1). |
 | 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
 
 **Not yet:**
-- bots that find their way (route finding), so they meet and fight;
+- bots that fight well (they find each other, but often stand next to each other without hitting);
 - car drivers and peds in cars;
 - velocities and state (cars move only by snapshots);
 - interpolation;
