@@ -233,6 +233,9 @@ int Port_MessageBoxA(HWND, LPCSTR text, LPCSTR caption, UINT)
     return IDOK;
 }
 
+// The game's next frame time (Source/winmain.cpp: RunGameFrame_4DA850 runs a frame once timeGetTime reaches it)
+extern unsigned int gMatchStartTime_6F5A28;
+
 BOOL Port_PeekMessageA(LPMSG pMsg, HWND, UINT, UINT, UINT)
 {
     SDL_Event e;
@@ -253,6 +256,13 @@ BOOL Port_PeekMessageA(LPMSG pMsg, HWND, UINT, UINT, UINT)
         msg.wParam = gQuitCode;
         *pMsg = msg;
         return TRUE;
+    }
+    // Nothing to do until the next frame: the game's loop would spin on PeekMessageA and RunGameFrame_4DA850 and
+    // keep a core busy (as the original does). A millisecond's sleep while a frame is more than 1 ms away; never
+    // when one is due (lockstep runs, replays, the frontend's own timing), so nothing runs slower.
+    if ((int)(gMatchStartTime_6F5A28 - timeGetTime()) > 1)
+    {
+        SDL_Delay(1);
     }
     return FALSE;
 }
