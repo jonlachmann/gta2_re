@@ -40,6 +40,9 @@ class Transport
 
 // Listens on <port>; nullptr and <error> on failure
 Transport* CreateServerTransport(uint16_t port, uint32_t maxPeers, std::string* error);
+// A link conditioner around <inner> (taking it over): every send held back delayMs +- jitterMs, lossPercent of the
+// unreliable ones dropped. For tests (--lag, --loss); use it on both ends.
+Transport* CreateConditioner(Transport* inner, int delayMs, int jitterMs, int lossPercent);
 // Starts connecting to host:port (a kConnect event follows, or kDisconnect on failure); its peer is 0
 Transport* CreateClientTransport(const char* host, uint16_t port, std::string* error);
 } // namespace net
