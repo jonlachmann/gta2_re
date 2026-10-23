@@ -1,38 +1,87 @@
-// Port (docs/port.md): non-Windows builds have no network game; DirectPlay (NetPlay.cpp) and the lobby
-// (NetUi.cpp) are left out. The game only uses them when a network game was started
-// (bStartNetworkGame_7081F0), which can't happen here; this single-player NetPlay answers the few calls
-// the rest of the game makes: no players, no messages.
+// Port/net (docs/netcode.md, "Code layout"): the game's network layer (NetPlay, NetUi) for the port, in place of
+// DirectPlay (NetPlay.cpp, NetUi.cpp). Without a network game it answers like a single-player machine: no players,
+// no messages. With one (StartNetworkGame, or the GTA2_OFFLINE_MP experiment) the game boots a network game with
+// its settings, and NetPlay::SendToAll_521B20, which the game calls once per network frame after the tick, is the
+// netcode's frame hook. Remote players are never "in use" here, so the game never waits for their messages: the
+// netcode sets every player's input itself.
+#include "engine.hpp"
 #include "Source/NetPlay.hpp"
 #include "Source/NetUi.hpp"
 #include <stdlib.h>
 #include <string.h>
 
-// Experiment (docs/netcode.md, "Evaluations"): GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>], with -N
-// on the command line, starts a local network game with that many players and no remote ones: only player 0 gets
-// input, the others stand where the script put them. Not netcode, just whether the game boots that way.
+DEFINE_GLOBAL(NetPlay, gNetPlay_7071E8, 0x7071E8);
+
 namespace
 {
-const char* OfflineMp(int field)
+net::engine::NetworkGame gNetGame;
+bool gActive;
+bool gChecked;
+net::engine::FrameHook gHook;
+void* gHookUser;
+
+// GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>] (docs/netcode.md, "Evaluations", 4): a local
+// network game without the netcode, only player 0 with input
+void CheckEnvironment()
 {
-    static char sFields[5][260];
-    static int sCount = -1;
-    if (sCount < 0)
+    if (gChecked)
     {
-        sCount = 0;
-        const char* env = getenv("GTA2_OFFLINE_MP");
-        for (const char* p = env; p && *p && sCount < 5; sCount++)
-        {
-            const char* end = strchr(p, ':');
-            const size_t n = end ? (size_t)(end - p) : strlen(p);
-            memcpy(sFields[sCount], p, n < 259 ? n : 259);
-            p = end ? end + 1 : p + n;
-        }
+        return;
     }
-    return field < sCount ? sFields[field] : NULL;
+    gChecked = true;
+    const char* env = getenv("GTA2_OFFLINE_MP");
+    if (gActive || !env)
+    {
+        return;
+    }
+    std::string fields[5];
+    int n = 0;
+    for (const char* p = env; *p && n < 5; n++)
+    {
+        const char* end = strchr(p, ':');
+        fields[n] = end ? std::string(p, end) : std::string(p);
+        p = end ? end + 1 : p + strlen(p);
+    }
+    net::engine::NetworkGame g;
+    g.players = atoi(fields[0].c_str());
+    g.gmp = fields[1];
+    g.sty = fields[2];
+    g.scr = fields[3];
+    g.gameType = n > 4 ? atoi(fields[4].c_str()) : 1;
+    net::engine::StartNetworkGame(g);
+}
+
+bool Active()
+{
+    CheckEnvironment();
+    return gActive;
 }
 } // namespace
 
-DEFINE_GLOBAL(NetPlay, gNetPlay_7071E8, 0x7071E8);
+void net::engine::StartNetworkGame(const NetworkGame& game)
+{
+    gNetGame = game;
+    gActive = true;
+    gChecked = true;
+    gNetPlay_7071E8.field_5D4_player_idx = game.localPlayer;
+    gNetPlay_7071E8.field_758_n2.field_4_players_count = 2; // > 1: the game calls SendToAll every frame
+}
+
+const net::engine::NetworkGame& net::engine::CurrentNetworkGame()
+{
+    return gNetGame;
+}
+
+bool net::engine::NetworkGameActive()
+{
+    return Active();
+}
+
+void net::engine::SetFrameHook(FrameHook hook, void* user)
+{
+    gHook = hook;
+    gHookUser = user;
+}
 
 NetPlay::NetPlay()
 {
@@ -52,11 +101,11 @@ NetPlay::~NetPlay()
 
 s32 NetPlay::SetProtoAndConnection_51DAE0(GUID*, Network_Buffer*)
 {
-    return OfflineMp(0) != NULL;
+    return Active();
 }
 s32 NetPlay::InitializeConnection_51E5C0()
 {
-    return OfflineMp(0) != NULL;
+    return Active();
 }
 void NetPlay::Disconnect_520D10()
 {
@@ -74,11 +123,11 @@ void NetPlay::SetExitGameCallBack_521330(s32, Game*)
 }
 s32 NetPlay::CountActivePlayers_521350()
 {
-    return OfflineMp(0) ? atoi(OfflineMp(0)) : 0;
+    return Active() ? gNetGame.players : 0;
 }
 bool NetPlay::WaitForPlayersSync_5213E0()
 {
-    return OfflineMp(0) != NULL;
+    return Active();
 }
 s32 NetPlay::SendToPlayer_521630(Network_Buffer*, s32, char_type)
 {
@@ -88,8 +137,13 @@ bool NetPlay::ReceiveGameMessage_521890(Network_Buffer*, s32*, u32*)
 {
     return 0;
 }
+// The game sends this machine's input for the next tick: the netcode's frame hook
 void NetPlay::SendToAll_521B20(Network_Buffer*)
 {
+    if (gHook)
+    {
+        gHook(gHookUser);
+    }
 }
 s32 NetPlay::SendPlayerIsQuitting_521D20()
 {
@@ -106,10 +160,10 @@ NetUi::NetUi()
 NetUi::~NetUi()
 {
 }
-// The lobby never shows: 0 is "cancelled", so Start_NetworkGame_5E5A30 doesn't start a network game.
+// The lobby: "cancelled" (0) without a network game, so Start_NetworkGame_5E5A30 starts none
 s32 NetUi::ShowNetworkUiBlocking_519BD0(HINSTANCE)
 {
-    return OfflineMp(0) != NULL;
+    return Active();
 }
 s32 __stdcall NetUi::cb_FillSessionList_519D30(NetUi*, Network_NameList*)
 {
@@ -117,27 +171,24 @@ s32 __stdcall NetUi::cb_FillSessionList_519D30(NetUi*, Network_NameList*)
 }
 void NetUi::CopyGameSettings_51C7F0(NetworkGameSettings* pSettings)
 {
-    if (OfflineMp(0))
+    if (Active())
     {
-        pSettings->field_20190_game_speed = 2; // 33 ms
-        pSettings->field_20194_frag_limit = 10;
-        pSettings->field_20198_game_type = OfflineMp(4) ? atoi(OfflineMp(4)) : 1; // frags
-        pSettings->field_201A0_police_on = 0;
-        pSettings->field_201A4_game_time_limit = 10;
+        pSettings->field_20190_game_speed = 2; // 33 ms; the netcode sets its own tick length after the boot
+        pSettings->field_20194_frag_limit = gNetGame.fragLimit;
+        pSettings->field_20198_game_type = gNetGame.gameType;
+        pSettings->field_201A0_police_on = gNetGame.police;
+        pSettings->field_201A4_game_time_limit = gNetGame.timeLimitMin;
     }
 }
 char_type* NetUi::GetMapName_51CA10()
 {
-    static char_type sEmpty[1];
-    return OfflineMp(1) ? (char_type*)OfflineMp(1) : sEmpty;
+    return (char_type*)gNetGame.gmp.c_str();
 }
 char_type* NetUi::GetMapStyName_51CA50()
 {
-    static char_type sEmpty[1];
-    return OfflineMp(2) ? (char_type*)OfflineMp(2) : sEmpty;
+    return (char_type*)gNetGame.sty.c_str();
 }
 char_type* NetUi::GetMapScrName_51CA90()
 {
-    static char_type sEmpty[1];
-    return OfflineMp(3) ? (char_type*)OfflineMp(3) : sEmpty;
+    return (char_type*)gNetGame.scr.c_str();
 }
