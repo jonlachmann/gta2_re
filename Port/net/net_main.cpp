@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Code layout"): the command line and the session's lifetime.
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
-//   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple)
+//            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
+//   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple, carhop, rammer)
 //   either: [--lag ms] [--jitter ms] [--loss percent]  a link conditioner on this end's sends (tests)
 //   --replay <file>  a client session recorded with GTA2_NET_RECORD=<file>, played back without a server
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
@@ -9,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+int gPortTrafficCap = 16; // Source/Car.cpp, CarManager::CanAllocateCarOfKind_446930
 
 void PortRandSound_Separate(bool separate); // Port/port_rand.cpp (not its header: that one renames rand)
 
@@ -116,6 +119,10 @@ int NetMain_Init(std::vector<std::string>& args)
         else if (a == "--tickms" && more)
         {
             sc.game.tickMs = atoi(args[++i].c_str());
+        }
+        else if (a == "--traffic" && more)
+        {
+            gPortTrafficCap = atoi(args[++i].c_str());
         }
         else if (a == "--name" && more)
         {
