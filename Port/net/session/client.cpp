@@ -3,6 +3,7 @@
 #include "session.hpp"
 #include <chrono>
 #include <math.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <thread>
 
@@ -139,6 +140,26 @@ uint32_t net::Client::Lead() const
 void net::Client::Reconcile(const Snapshot& snap)
 {
     const uint32_t s = snap.tick;
+    // The display error: what tick S showed of the cars and peds against the server's S
+    const std::vector<engine::ReplicaPos>& shown = mShown[s % kRing];
+    if (!shown.empty() && shown.back().id == 0xFFFFFFFFu && (uint32_t)shown.back().x == s)
+    {
+        size_t j = 0;
+        for (size_t i = 0; i + 1 < shown.size(); i++)
+        {
+            for (j = 0; j < snap.entities.size() && snap.entities[j].id != shown[i].id; j++)
+            {
+            }
+            if (j < snap.entities.size())
+            {
+                const float dx = snap.entities[j].f[0] / 16384.0f - shown[i].x, dy = snap.entities[j].f[1] / 16384.0f - shown[i].y;
+                const float e = sqrtf(dx * dx + dy * dy);
+                mShownErrorSum += e;
+                mShownErrorCount++;
+                mShownErrorMax = e > mShownErrorMax ? e : mShownErrorMax;
+            }
+        }
+    }
     for (size_t i = 0; i < snap.entities.size(); i++)
     {
         int player = 0;
@@ -173,6 +194,24 @@ void net::Client::Reconcile(const Snapshot& snap)
         mResimTicks++;
     }
     mRollbacks++;
+    if (!getenv("GTA2_NET_NOEXTRAP")) // ponytail: an env switch for the comparison; cl_remote_mode comes with N5
+    {
+        Extrapolate(snap);
+    }
+}
+
+// Cars and peds the client doesn't drive: on from S to our tick by their speed over the last snapshots
+void net::Client::Extrapolate(const Snapshot& snap)
+{
+    for (uint32_t back = 1; back <= 4 && back < snap.tick; back++)
+    {
+        const Snapshot& prev = mReceived[(snap.tick - back) % kRing];
+        if (prev.tick == snap.tick - back)
+        {
+            engine::Extrapolate(snap, prev, (int)(mTick - snap.tick));
+            return;
+        }
+    }
 }
 
 // A simple stand-in player for tests: walks, turns now and then, shoots now and then (better bots: N6)
@@ -208,6 +247,8 @@ void net::Client::Frame()
         mTick++;
         engine::SaveGame(*mSaves[mTick % kSaves], mTick);
         engine::PlayerPosition(mSlot, &mPredX[mTick % kRing], &mPredY[mTick % kRing]);
+        engine::ReplicaPositions(mShown[mTick % kRing]);
+        mShown[mTick % kRing].push_back(engine::ReplicaPos{0xFFFFFFFFu, (float)mTick, 0}); // its tick, last
     }
     TransportEvent e;
     while (mTransport->Poll(e))
@@ -261,11 +302,15 @@ void net::Client::Frame()
             float drift = 0;
             engine::ReplicaStats(snap, &cars, &peds, &drift);
             printf("net: frame %u, tick %u (server %u, our commands %d ticks early), %zu entities (%d cars, %d peds), %u rollbacks, "
-                   "%.1f ticks resimulated each, prediction error up to %.2f blocks\n",
+                   "%.1f ticks resimulated each, prediction error up to %.2f blocks, cars and peds shown %.2f blocks off (up to %.2f)\n",
                    mFrame, mTick, mLatestTick, mSlack, snap.entities.size(), cars, peds, mRollbacks,
-                   mRollbacks ? (float)mResimTicks / mRollbacks : 0.0f, mMaxError);
+                   mRollbacks ? (float)mResimTicks / mRollbacks : 0.0f, mMaxError,
+                   mShownErrorCount ? (float)(mShownErrorSum / mShownErrorCount) : 0.0f, mShownErrorMax);
             mRollbacks = mResimTicks = 0;
             mMaxError = 0;
+            mShownErrorSum = 0;
+            mShownErrorCount = 0;
+            mShownErrorMax = 0;
         }
     }
     // Keep our commands about two ticks early: a little faster when they are late, slower when far ahead
