@@ -35,6 +35,12 @@ Commands carry the server tick they are for. The server buffers them per tick an
 
 `--lag ms --jitter ms --loss %` puts a link conditioner on either end.
 
+**Joining and leaving** (`engine/slots.cpp`):
+- A slot without a client is out of the game the way the game handles a player who left (`Player::Disconnect_568730`): its ped walks on as a pedestrian.
+- A joining client gets a new player ped at the next restart zone and an empty score. The ped is set up as the map script's `PLAYER_PED` and `Player::InitPlayerPed_565490` do, but keeps the slot's weapons.
+- The server takes empty slots out at the start, puts joiners in and takes leavers out.
+- Snapshots carry only the slots in the game, and clients mirror them.
+
 **Bots** (`session/bot.hpp`) are players that perceive and decide on their own:
 - **What a bot sees:** a `BotView` built from what its client knows. That is its own body as predicted, the snapshot's players, cars and peds, and the static map as plain data (`engine::NavMap`: per cell the walking height and the ways to its neighbours, from the map's wall faces and slopes).
 - **What it does:** it returns the input bits a person would press. It uses no game logic: no route finder, no ped AI.
@@ -52,17 +58,18 @@ Usage and test switches:
 | Link | Result |
 |---|---|
 | Loopback | 28-107 bytes per snapshot; both clients see the same positions; up to 13 cars and 11 peds mapped; prediction error 0.00 blocks |
+| Four slots, two bots, a third joining after 40 s, one leaving after 80 s | The joiner spawns at a restart zone and everyone sees it; the leaver disappears everywhere; no crash. |
 | 80 ms round trip, three armed bots on Downtown, 5 minutes | The bots find each other and fight: frags and deaths on the server (for example 1/1, 2/3, 2/1), every client shows them and carries out each death once; no crash, nobody drops; prediction error 0.00 blocks. |
 | 100 ms round trip, 2% loss, test kills (4 deaths, one without a killer) | Every client shows the server's frags and deaths and carries out each death exactly once (2, 1, 1). |
 | 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
 
 **Not yet:**
+- **players in cars on clients.** A client's ped enters a car by its own predicted input. When the server disagrees (another car, or none), the client has to put the ped into the server's car, or take it out, the way the game's enter and exit state machines end (`Ped::EnterCarStateMachine_46BDC0`, `ExitCarStateMachine_46C250`). This needs the car's NetId in the player entity and a bot that uses cars to test it;
+- traffic drivers and passengers (client cars have none: they move by snapshots and dead reckoning);
 - bots that fight well (they find each other, but often stand next to each other without hitting);
-- car drivers and peds in cars;
 - velocities and state (cars move only by snapshots);
 - interpolation;
 - the comparison check;
-- joining with the slot's ped respawned;
 - modes beyond the game's own frags;
 - the player cap above 6.
 
