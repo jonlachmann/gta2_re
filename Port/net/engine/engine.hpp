@@ -108,6 +108,18 @@ struct ReplicaPos
 };
 void ReplicaPositions(std::vector<ReplicaPos>& out);
 
+// Where the players on foot, and the cars and peds the snapshots map, are now (raw Fix16, Ang16 0..1439), and a
+// move of one to a pose (grid-safe; players in a car or halfway in or out, dead ones and cars a carrier holds
+// stay). For blending a correction in (client.cpp)
+struct Pose
+{
+    uint32_t id;
+    int32_t x, y, z;
+    int32_t rot;
+};
+void Poses(std::vector<Pose>& out);
+void SetPose(const Pose& p);
+
 // The static map as a bot may know it (navmap.cpp): for every cell the height a walker is at, and which of its four
 // neighbours it can walk to. Plain data, built once per map, so a bot plans its own way without the game's routes.
 struct NavMap

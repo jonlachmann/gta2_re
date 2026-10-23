@@ -75,6 +75,9 @@ bool IsSpareDriver(const Ped* ped);
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 // The physics the snapshot has for it (kCarPhysics on), set after MoveCar
 void SetCarPhysics(Car* car, const EntityState& e);
+// The cars and peds of Poses/SetPose (replica.cpp)
+void ReplicaPoses(std::vector<Pose>& out);
+void SetReplicaPose(const Pose& p);
 // GTA2_NET_CARDIFF: the members of a car's physics that differ here from the snapshot's, printed
 void DebugCarDiff(Car* car, const EntityState& e, uint32_t tick);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);

@@ -765,3 +765,45 @@ void net::engine::TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSam
         }
     }
 }
+
+void net::engine::ReplicaPoses(std::vector<Pose>& out)
+{
+    std::set<Car*> liveCars;
+    std::set<Ped*> livePeds;
+    Live(liveCars, livePeds);
+    for (auto& c : gCars)
+    {
+        if (Sprite* s = liveCars.count(c.second) ? c.second->field_50_car_sprite : NULL)
+        {
+            out.push_back(Pose{c.first, s->field_14_xy.x.mValue, s->field_14_xy.y.mValue, s->field_1C_zpos.mValue, s->field_0_rotation.rValue});
+        }
+    }
+    for (auto& q : gPeds)
+    {
+        Ped* ped = q.second;
+        if (Sprite* s = livePeds.count(ped) && !ped->field_16C_car && ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL)
+        {
+            out.push_back(Pose{q.first, s->field_14_xy.x.mValue, s->field_14_xy.y.mValue, s->field_1C_zpos.mValue, s->field_0_rotation.rValue});
+        }
+    }
+}
+
+void net::engine::SetReplicaPose(const Pose& p)
+{
+    if (p.id >= kPedIdBase)
+    {
+        auto it = gPeds.find(p.id);
+        if (it != gPeds.end() && !it->second->field_16C_car)
+        {
+            MovePed(it->second, Raw(p.x), Raw(p.y), Raw(p.z), Angle(p.rot));
+        }
+    }
+    else
+    {
+        auto it = gCars.find(p.id);
+        if (it != gCars.end() && it->second->field_50_car_sprite)
+        {
+            MoveCar(it->second, Raw(p.x), Raw(p.y), Raw(p.z), Angle(p.rot));
+        }
+    }
+}

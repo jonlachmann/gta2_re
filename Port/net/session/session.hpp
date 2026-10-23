@@ -83,6 +83,7 @@ class Client
     void Reconcile(const Snapshot& snap);
     void Extrapolate(const Snapshot& snap);
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
+    void Blend(const std::vector<engine::Pose>& shown);
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;
