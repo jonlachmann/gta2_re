@@ -26,16 +26,25 @@ A client starts the server's network game. The server takes every player's input
 
 Commands carry the server tick they are for. The server buffers them per tick and repeats the last one when one is late. It reports the newest command tick it got, and the client keeps two ticks of lead by that: a jump when far off, a 10% faster or slower tick otherwise.
 
-`--lag ms --jitter ms --loss %` puts a link conditioner on either end.
+**Health, deaths, weapons, scores.** These are the server's:
+- The player entity carries health, a death count and the last killer, the selected weapon, the ammo of the 15 personal weapons, frags and points.
+- On a client, player peds take no damage of their own (the game's invulnerability counter, every tick).
+- A death the server had is carried out with the game's own `Ped::Kill_46F9D0`, credited to the killer. `Player::Wasted_567130` then leaves the corpse and respawns. The deaths carried out are part of the rollback set, so a resimulation never repeats one.
+- Scores are applied after the resimulation.
+- `GTA2_NET_TESTKILL=<tick>:<victim>:<killer>,...` kills players on the server for tests.
+
+`--lag ms --jitter ms --loss %` puts a link conditioner on either end. `--bot` plays with the simple bot (chase the nearest player, shoot when close and facing it). It has no route finding yet, so it gets stuck on buildings.
 
 **Measured** (bots on Downtown, 60 s):
 
 | Link | Result |
 |---|---|
 | Loopback | 28-107 bytes per snapshot; both clients see the same positions; up to 13 cars and 11 peds mapped; prediction error 0.00 blocks |
+| 100 ms round trip, 2% loss, test kills (4 deaths, one without a killer) | Every client shows the server's frags and deaths and carries out each death exactly once (2, 1, 1). |
 | 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
 
 **Not yet:**
+- bots that find their way (route finding), so they meet and fight;
 - car drivers and peds in cars;
 - velocities and state (cars move only by snapshots);
 - interpolation;
