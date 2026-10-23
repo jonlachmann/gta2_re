@@ -300,6 +300,16 @@ void net::Client::Frame()
     mFrame++;
     engine::DebugSetFrame(mFrame);
     engine::DebugSoundChannels(mFrame);
+    engine::DebugAnimLog(mFrame);
+    if (getenv("GTA2_NET_ANIMLOG") && mFrame % 3 == 0)
+    {
+        printf("net: frame %u, remote buttons:", mFrame);
+        for (size_t i = 0; i < mRemote.size(); i++)
+        {
+            printf(" 0x%x", mRemote[i]);
+        }
+        printf("\n");
+    }
     // What arrives this frame: from the network, or the recording
     std::vector<TransportEvent> events;
     uint32_t recordedFrame = 0, recordedInput = 0;

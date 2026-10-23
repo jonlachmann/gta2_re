@@ -21,10 +21,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <unordered_map>
 
 EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
 EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
+EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
 
 namespace
 {
@@ -346,7 +348,9 @@ void net::engine::Capture(Snapshot& out)
         EntityState e = Entity(1 + i, kEntityPlayer);
         PutPosition(e, s, kPlayerX, kPlayerY, kPlayerZ, kPlayerRot);
         e.f[kPlayerInCar] = ped->field_16C_car != NULL;
-        e.f[kPlayerButtons] = (int32_t)(p->field_4_inputs & 0x3FFFFF);
+        // The controls the tick ran with (winmain.cpp's Net_Set_Local_Player_Inputs_4DAD50 takes them from here; the
+        // player's own copy, Player::field_4_inputs, is zeroed once used): what clients predict this player with
+        e.f[kPlayerButtons] = (int32_t)(gPrevNetInputs_6F5B28.field_0_inputs[i].field_0_Inputs & 0x3FFFFF);
         e.f[kPlayerHealth] = ped->field_216_health;
         const bool dead = p->field_28_wasted_or_busted != 0;
         if (dead && !gWasDead[i] && i < MAX_PLAYERS)
@@ -733,4 +737,29 @@ void net::engine::DrawOverlay()
     v[2].x = x + r, v[2].y = y + r;
     v[3].x = x - r, v[3].y = y + r;
     pgbh_DrawFlatRect(v, (s32)0xFFFF00FF); // magenta: where the server has us (a snapshot's tick, before the prediction)
+}
+
+void net::engine::DebugAnimLog(uint32_t frame)
+{
+    static const bool on = getenv("GTA2_NET_ANIMLOG") != NULL;
+    if (!on || frame % 3)
+    {
+        return;
+    }
+    std::string line;
+    char buf[160];
+    for (int i = 0; i < PlayerCount(); i++)
+    {
+        Player* p = GetPlayer(i);
+        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+        Char* c = ped ? ped->field_168_game_object : NULL;
+        if (c && i != LocalPlayer())
+        {
+            snprintf(buf, sizeof(buf), " p%d[in 0x%x ped %d/%d char %d anim %d frame %d timer %d]", i, (unsigned)p->field_4_inputs,
+                     (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2, (int)c->field_10_char_state, (int)c->field_6C_animation_state,
+                     (int)c->field_68_animation_frame, (int)c->field_70_frame_timer);
+            line += buf;
+        }
+    }
+    printf("net: frame %u, anim:%s\n", frame, line.c_str());
 }
