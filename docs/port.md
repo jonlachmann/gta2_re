@@ -166,7 +166,7 @@ non-MSVC compilers now take those, and the declaration's guard became `!defined(
 The plan removes these in M0. Since the clang build is a Windows exe for now, they still work there, and
 removing them fits better with M1, when the platform code moves to SDL3:
 
-- DirectPlay and the lobby (`NetPlay.*`, `Network_20324.*`, the network paths in `winmain.cpp`). Single
+- DirectPlay and the lobby (`NetPlay.*`, `NetUi.*`, the network paths in `winmain.cpp`). Single
   player still asks `gNetPlay_7071E8` for the player index, the player count and names, so removing it
   means a small single-player replacement for those few methods, not just deleting files.
 - The matching tools (`build.py`, `Scripts/bin_comp`, reccmp, permuter, HookLoader, the `MATCH_FUNC`
@@ -435,7 +435,7 @@ constants and declarations only, and `port_linux.h` is force-included first in e
 | Windows paths | `posix_files.cpp` | `fopen`, `_findfirst` and friends, `_stat`, `_getcwd`: backslashes become slashes, and every path component is matched case-insensitively (the game asks for `data\audio\vocals\...`, the folder is `Vocals`). |
 | Window, input, settings, sound | `sdl_win32.cpp`, `sdl_dinput.cpp`, `registry_ini.cpp`, `miles_sdl.cpp` | the same as on Windows. |
 | The renderer's "DLLs" | `posix_win32.cpp` | `LoadLibrary`/`GetProcAddress` are `dlopen(NULL)`/`dlsym`; the program is linked with `-rdynamic`. |
-| Network | `netplay_offline.cpp`, `compat/dplay.h` | `NetPlay.cpp` and `Network_20324.cpp` aren't built; a single-player `NetPlay` answers the rest of the game (no players, no messages). The network code only runs once a network game has started, which can't happen. |
+| Network | `netplay_offline.cpp`, `compat/dplay.h` | `NetPlay.cpp` and `NetUi.cpp` aren't built; a single-player `NetPlay` answers the rest of the game (no players, no messages). The network code only runs once a network game has started, which can't happen. |
 | Windows-only checks | `port_winmain.cpp` | DirectX and DirectMusic versions, exe version info, the GTA2 Manager launch. |
 | Movies | `Source/3rdParty/bink.cpp` | its stubs (no movies until M5). |
 | Other Win32 calls | `posix_win32.cpp` | time, mutexes (no single-instance check), CD drive type (always fixed), computer name, keyboard layout (US). |
