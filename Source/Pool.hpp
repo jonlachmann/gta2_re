@@ -1,6 +1,14 @@
 #pragma once
 #include "types.hpp"
 
+// A pool's capacity. Port builds with -DGTA2_POOL_SCALE=<k> multiply the entity, sprite and grid pools by k
+// (docs/netcode.md: a server that simulates the whole map); everywhere else it is the original size.
+#if defined(GTA2_PORT) && defined(GTA2_POOL_SCALE)
+    #define GTA2_POOL(n) ((n) * GTA2_POOL_SCALE)
+#else
+    #define GTA2_POOL(n) n
+#endif
+
 // TODO: name these better, this "basic" pool has O(1) allocate
 // and deallocate.
 template<typename PoolType, s32 PoolSize>

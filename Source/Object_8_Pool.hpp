@@ -4,7 +4,7 @@
 #include "Pool.hpp"
 
 
-class Object_8_Pool : public PoolBasic<Object_8, 1101>
+class Object_8_Pool : public PoolBasic<Object_8, GTA2_POOL(1101)>
 {
   public:
     __forceinline Object_8_Pool()

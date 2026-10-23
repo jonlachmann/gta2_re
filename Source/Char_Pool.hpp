@@ -22,7 +22,7 @@ class CharPool
         field_0_pool.DeAllocate(pChar);
     }
 
-    PoolBasic<Char, 400> field_0_pool;
+    PoolBasic<Char, GTA2_POOL(400)> field_0_pool;
 };
 
 class PedListNode
@@ -50,7 +50,7 @@ GTA2_ASSERT_SIZEOF_ALWAYS(PedListNode, 0x8);
 class PedListNodePool
 {
   public:
-    PoolBasic<PedListNode, 100> field_0_pool;
+    PoolBasic<PedListNode, GTA2_POOL(100)> field_0_pool;
 
     ~PedListNodePool()
     {
@@ -188,7 +188,7 @@ class PedPool
         return field_0_pool.field_4_pPrev;
     }
 
-    Pool<Ped, 200> field_0_pool;
+    Pool<Ped, GTA2_POOL(200)> field_0_pool;
 };
 
 EXTERN_GLOBAL(PedManager*, gPedManager_6787BC);
