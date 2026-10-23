@@ -41,6 +41,20 @@ Commands carry the server tick they are for. The server buffers them per tick an
 - The server takes empty slots out at the start, puts joiners in and takes leavers out.
 - Snapshots carry only the slots in the game, and clients mirror them.
 
+**Players in cars** (`engine/vehicles.cpp`):
+- A client gets into and out of cars by its own predicted input.
+- When both sides have settled and the server has the player elsewhere, the client puts the ped into the server's car, or out of its own, at once. This ends the way the game's own entering does (the char back to its pool, in car and driving, `Car::AssignDriver_4406E0`) and leaving does (`Car::ClearDriver_4407F0`, `Ped::StartPedWalking_470200`).
+- The cars players sit in, or are getting into, are never removed, and replicas never remove a car any ped points to (a corpse cloned in a car).
+
+**Test fixture** (`session/replay.cpp`): `GTA2_NET_RECORD=<file>` records a client session (the welcome, then per frame the packets, the round trip and the input). `--replay <file>` plays it back without a server, as fast as the game runs: 8 minutes of game in 10-15 s, the same every time, so a crash can be reproduced and run down. `GTA2_NET_CHECKGRID=1` checks after every step that each link in the collision grid has a live owner whose sprite it is.
+
+With the fixture, a client crash after 1-4 minutes of car hopping turned out to be the replicas' own doing:
+- **What happened:** a car's sprite stayed linked in the collision grid after the car was freed. The sprite was reused, as a roof light, a skid or a particle, and a collision query read through the dead link.
+- **Why:** the grid keeps a sprite in the rows of the collision rect it was added with. The replicas turned cars after re-adding them, and moved cars that aren't in the grid: despawning ones, and ones a carrier holds (`Car::Deactivate_43AA60`, grid 3).
+- **The fix:** moves now change position and rotation between removal and re-adding, and leave such cars alone. Four car-hopping clients ran 6 and 8 minutes with no failed check and no crash.
+
+**CPU.** The game's loop spins between frames, as the original does. The port's `PeekMessageA` now sleeps 1 ms while the next frame is more than 1 ms away: a server takes about 6% of a core, a predicting client about 16%. Lockstep runs and replays don't sleep.
+
 **Bots** (`session/bot.hpp`) are players that perceive and decide on their own:
 - **What a bot sees:** a `BotView` built from what its client knows. That is its own body as predicted, the snapshot's players, cars and peds, and the static map as plain data (`engine::NavMap`: per cell the walking height and the ways to its neighbours, from the map's wall faces and slopes).
 - **What it does:** it returns the input bits a person would press. It uses no game logic: no route finder, no ped AI.
@@ -49,7 +63,7 @@ Commands carry the server tick they are for. The server buffers them per tick an
 - **The simple brain:** walks its route to the nearest player and fights when close, with presses for fists and holding for guns. Walking while facing `rot` moves along (sin, cos) (measured).
 
 Usage and test switches:
-- `--bot [brain]` (default `simple`);
+- `--bot [brain]` (`simple`, the default; `carhop`, which gets into the nearest car, drives, gets out, again);
 - `GTA2_NET_NAVDUMP=<file.pgm>` writes the map as a picture;
 - `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server.
 
@@ -64,7 +78,6 @@ Usage and test switches:
 | 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
 
 **Not yet:**
-- **players in cars on clients.** A client's ped enters a car by its own predicted input. When the server disagrees (another car, or none), the client has to put the ped into the server's car, or take it out, the way the game's enter and exit state machines end (`Ped::EnterCarStateMachine_46BDC0`, `ExitCarStateMachine_46C250`). This needs the car's NetId in the player entity and a bot that uses cars to test it;
 - traffic drivers and passengers (client cars have none: they move by snapshots and dead reckoning);
 - bots that fight well (they find each other, but often stand next to each other without hitting);
 - velocities and state (cars move only by snapshots);
