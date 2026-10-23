@@ -234,6 +234,98 @@ class CarHopBot : public net::BotBrain
     int mEntered = 0, mLeft = 0;
     uint32_t mButtons = 0;
 };
+// Gets into the nearest car and drives at the nearest other player, to hit it; backs out with the wheel turned the
+// other way when it hasn't moved for a second. Gets out only when it has to (a wreck, a death), then the next car.
+class RamBot : public net::BotBrain
+{
+  public:
+    uint32_t Think(const net::BotView& v) override
+    {
+        mButtons = Decide(v);
+        return mButtons;
+    }
+
+    std::string Describe() const override
+    {
+        char line[128];
+        snprintf(line, sizeof(line), "%s, %d cars entered, %d times backing out, buttons 0x%x", mInCar ? "driving" : "on foot", mEntered,
+                 mReversals, mButtons);
+        return line;
+    }
+
+  private:
+    const net::BotView::Seen* Nearest(const net::BotView& v, net::BotView::Seen::Kind kind, float* pDist) const
+    {
+        const net::BotView::Seen* best = NULL;
+        *pDist = 1e9f;
+        for (size_t i = 0; i < v.seen.size(); i++)
+        {
+            const float d = hypotf(v.seen[i].x - v.x, v.seen[i].y - v.y);
+            if (v.seen[i].kind == kind && d < *pDist && (kind != net::BotView::Seen::kPlayer || v.seen[i].health > 0))
+            {
+                *pDist = d;
+                best = &v.seen[i];
+            }
+        }
+        return best;
+    }
+
+    uint32_t Decide(const net::BotView& v)
+    {
+        if (!v.hasBody || v.health <= 0)
+        {
+            return 0;
+        }
+        const bool inCar = v.car != 0;
+        if (inCar != mInCar)
+        {
+            mInCar = inCar;
+            mEntered += inCar;
+            mStill = 0;
+        }
+        float d = 0;
+        if (!inCar)
+        {
+            const net::BotView::Seen* car = Nearest(v, net::BotView::Seen::kCar, &d);
+            if (!car)
+            {
+                return net::kBtnForward | (v.frame % 90 < 20 ? net::kBtnLeft : 0); // look for one
+            }
+            if (d < 2.5f)
+            {
+                return v.frame % 20 < 2 ? net::kBtnEnterExit : 0; // a press now and then: the game walks us to the door
+            }
+            const int err = TurnTo(v.rot, car->x - v.x, car->y - v.y);
+            return Steer(err) | ((err < 0 ? -err : err) < 300 ? net::kBtnForward : 0);
+        }
+        // Stuck: hardly moved over the last second
+        if (v.frame % 30 == 0)
+        {
+            const bool still = hypotf(v.x - mLastX, v.y - mLastY) < 0.5f;
+            mLastX = v.x;
+            mLastY = v.y;
+            if (still && v.frame >= mBackUntil && ++mStill >= 1)
+            {
+                mBackUntil = v.frame + 30;
+                mReversals++;
+                mStill = 0;
+            }
+        }
+        const net::BotView::Seen* target = Nearest(v, net::BotView::Seen::kPlayer, &d);
+        const int err = target ? TurnTo(v.rot, target->x - v.x, target->y - v.y) : (v.frame / 60 % 2 ? 200 : -200); // none in sight: wander
+        if (v.frame < mBackUntil)
+        {
+            return net::kBtnBack | (err > 0 ? net::kBtnRight : net::kBtnLeft); // backing, the wheel the other way
+        }
+        return net::kBtnForward | Steer(err);
+    }
+
+    bool mInCar = false;
+    int mEntered = 0, mReversals = 0, mStill = 0;
+    float mLastX = 0, mLastY = 0;
+    uint32_t mBackUntil = 0;
+    uint32_t mButtons = 0;
+};
 } // namespace
 
 std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
@@ -241,6 +333,10 @@ std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
     if (kind == "carhop")
     {
         return std::unique_ptr<BotBrain>(new CarHopBot());
+    }
+    if (kind == "rammer")
+    {
+        return std::unique_ptr<BotBrain>(new RamBot());
     }
     if (kind.empty() || kind == "simple")
     {
