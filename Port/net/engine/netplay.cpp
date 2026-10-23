@@ -2,7 +2,6 @@
 // (NetUi.cpp) are left out. The game only uses them when a network game was started
 // (bStartNetworkGame_7081F0), which can't happen here; this single-player NetPlay answers the few calls
 // the rest of the game makes: no players, no messages.
-#if !defined(_WIN32)
 #include "Source/NetPlay.hpp"
 #include "Source/NetUi.hpp"
 #include <stdlib.h>
@@ -142,4 +141,3 @@ char_type* NetUi::GetMapScrName_51CA90()
     static char_type sEmpty[1];
     return OfflineMp(3) ? (char_type*)OfflineMp(3) : sEmpty;
 }
-#endif
