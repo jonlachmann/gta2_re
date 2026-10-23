@@ -6,10 +6,12 @@
 // reference table, weapons and objects (not synced).
 #include "internal.hpp"
 #include "Source/Car.hpp"
+#include "Source/Char_Pool.hpp"
 #include "Source/Gang.hpp"
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
 #include "Source/char.hpp"
+#include "Source/Weapon.hpp"
 #include "Source/PedGroup.hpp"
 #include "Source/Game.hpp"
 #include <stddef.h>
@@ -105,7 +107,8 @@ const Member kCharValues[] = {CM(field_10_char_state, 4, true),      CM(field_14
 #undef CM
 const size_t kCharCount = sizeof(kCharValues) / sizeof(kCharValues[0]);
 const int kGroup = kChar + (int)kCharCount; // its group: leader (net id), its index (99: the leader), type, counts
-const int kEnd = kGroup + 5;
+const int kWeapons = kGroup + 5; // its weapon and its second one: weapon_type + 1, 0 none
+const int kEnd = kWeapons + 2;
 static_assert(kEnd + 1 <= net::kMaxFields, "a ped's fields and its age (access.cpp)");
 
 int32_t Get(const void* p, const Member& d)
@@ -228,6 +231,8 @@ void net::engine::PedStateFields(std::vector<FieldDesc>& out)
     out.push_back(FieldDesc{"group_type", 8, true});
     out.push_back(FieldDesc{"group_count", 8, false});
     out.push_back(FieldDesc{"group_count2", 8, false});
+    out.push_back(FieldDesc{"weapon", 6, false});
+    out.push_back(FieldDesc{"weapon2", 6, false});
 }
 
 void net::engine::CapturePedState(const Ped* p, EntityState& e)
@@ -263,6 +268,8 @@ void net::engine::CapturePedState(const Ped* p, EntityState& e)
             e.f[kChar + i] = Get(c, kCharValues[i]);
         }
     }
+    e.f[kWeapons] = p->field_170_selected_weapon ? p->field_170_selected_weapon->field_1C_idx + 1 : 0;
+    e.f[kWeapons + 1] = p->field_174_pWeapon ? p->field_174_pWeapon->field_1C_idx + 1 : 0;
     if (const PedGroup* g = p->field_164_ped_group)
     {
         e.f[kGroup] = (int32_t)PedId(g->field_2C_ped_leader);
@@ -347,6 +354,17 @@ void net::engine::ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityS
         group->field_34_count = (u8)n;
         group->field_36_count = (char_type)n;
     }
+    // A member whose leader isn't here is in no group here: its objective to follow the group goes too (the server's,
+    // copied with the AI state; Ped::UpdateGroupMemberFollow_469BD0 assumes a group)
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext) // every ped: one taken out above too
+    {
+        if (!p->field_164_ped_group &&
+            (p->field_258_objective == objectives_enum::objective_8 || p->field_25C_internal_objective == objectives_enum::objective_8))
+        {
+            p->field_258_objective = objectives_enum::no_obj_0;
+            p->field_25C_internal_objective = objectives_enum::no_obj_0;
+        }
+    }
 }
 
 namespace
@@ -420,7 +438,38 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     {
         return true; // a corpse on both sides
     }
-    if (p->field_16C_car || InCarTransition(p) || e.f[kPedCar] || e.f[kPedState])
+    // Its weapons, the game's way of arming a ped (Ped::ForceWeapon_46F600 drops the one it had): a gang member here
+    // had none and never showed the shots the server's fired
+    const int32_t has = p->field_170_selected_weapon ? p->field_170_selected_weapon->field_1C_idx + 1 : 0;
+    if (has != e.f[kWeapons])
+    {
+        if (e.f[kWeapons])
+        {
+            p->ForceWeapon_46F600(e.f[kWeapons] - 1);
+        }
+        else
+        {
+            p->RemovePedWeapons_462510();
+        }
+    }
+    if ((p->field_174_pWeapon ? p->field_174_pWeapon->field_1C_idx + 1 : 0) != e.f[kWeapons + 1])
+    {
+        if (e.f[kWeapons + 1])
+        {
+            p->GiveWeapon_46F650(e.f[kWeapons + 1] - 1);
+        }
+        else
+        {
+            p->RemoveSecondaryWeapon_462550();
+        }
+    }
+
+    // Sitting in the same car on both sides (a driver), its AI goes too, but not its states (in and out of cars are
+    // replica.cpp's): a chasing driver followed its own objectives here
+    const bool driving = p->field_16C_car && e.f[kPedCar] && !e.f[kPedState] && !InCarTransition(p) &&
+                         ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPedCar] - 1)) == p->field_16C_car &&
+                         p->field_278_ped_state_1 == ped_state_1::in_car_10;
+    if (!driving && (p->field_16C_car || InCarTransition(p) || e.f[kPedCar] || e.f[kPedState]))
     {
         // In a car, or on its way into or out of one, on either side: that is replica.cpp's (ForceIntoCar, ForceOutOfCar
         // when both have settled). The AI's objectives and targets then belong to the entering and leaving: set from the
@@ -458,7 +507,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     flags = (flags & ~kFlagsSent) | ((u32)e.f[kFlags] & kFlagsSent);
     memcpy(&p->field_21C_bf, &flags, sizeof(flags));
     p->field_216_health = (s16)(e.f[kHealth] > 0 ? e.f[kHealth] : 1); // a death comes from the server's state, whole
-    if (Plain(e.f[kStates + kState1], e.f[kStates + kState2]) && Plain(p->field_278_ped_state_1, p->field_27C_ped_state_2) &&
+    if (!driving && Plain(e.f[kStates + kState1], e.f[kStates + kState2]) && Plain(p->field_278_ped_state_1, p->field_27C_ped_state_2) &&
         Plain(e.f[kStates + kStored1], e.f[kStates + kStored2]) && p->field_168_game_object)
     {
         p->field_278_ped_state_1 = e.f[kStates + kState1];
@@ -487,6 +536,10 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
                                       &p->field_158_escape_car};
     for (int i = 0; i < kCarRefCount; i++)
     {
+        if (i == kRefTargetToEnter && p->field_16C_car)
+        {
+            continue; // in a car: what it got into is its car, and leaving it reads this (Ped::ExitCarStateMachine_46C250)
+        }
         *carMembers[i] = carRefs[i];
     }
     p->field_17C_pGang = GangAt(e.f[kGangs]);
