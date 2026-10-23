@@ -6,7 +6,44 @@ A plan for client/server multiplayer in the port, in the style of Quake 3 and CS
 - delta compression against acked state;
 - every packet within a 1400-byte MTU.
 
-Nothing here is built yet. It builds on the port (`docs/port.md`): the headless build, the state log and its pointer canonicalisation.
+It builds on the port (`docs/port.md`): the headless build, the state log and its pointer canonicalisation.
+
+## Status and how to run it
+
+**Built:**
+- milestone **S** (sound out of the rollback, its own random stream);
+- `core/` with tests (`Scripts/port/net_tests.sh`);
+- the ENet `transport/` with a loopback test;
+- the engine bridge, with the game's network layer as the frame hook;
+- server, client and a test bot.
+
+A client starts the server's network game. The server takes every player's input from its client, and sends each client delta snapshots of its area: all players, cars and peds within 24 blocks, cut to 1372 bytes. A client puts the players, cars and peds into its own game: it adopts what the map script made on both sides, creates the rest, moves them every snapshot and removes what the server drops. No prediction yet: a client's own player runs free and is snapped back when it is more than a block off.
+
+**Measured** (two bots on Downtown, 60 s, loopback):
+- 28-107 bytes per snapshot;
+- both clients see the same positions;
+- up to 13 cars and 11 peds mapped;
+- an entity drifts at most 0.2 blocks between snapshots;
+- no crash.
+
+**Not yet:**
+- prediction (N4), clock sync and per-tick commands;
+- car drivers and peds in cars;
+- velocities and state (cars move only by snapshots);
+- interpolation;
+- the comparison check;
+- joining with the slot's ped respawned;
+- modes beyond the game's own frags;
+- the player cap above 6.
+
+```
+Scripts/port/build_mac.sh                                    # or build_linux.sh / build.sh
+GTA2_HEADLESS=1 GTA2_ARGS="--server --map downtown-6p --players 4" Scripts/port/run_mac.sh
+GTA2_ARGS="--connect 127.0.0.1 --name me" Scripts/port/run_mac.sh                  # play with the keyboard
+GTA2_HEADLESS=1 GTA2_ARGS="--connect 127.0.0.1 --bot --name bot1" Scripts/port/run_mac.sh   # a test bot
+```
+
+Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--gametype 1-3`, `--fraglimit`, `--timelimit`, `--tickms`. Client options: `--connect host[:port]`, `--name`, `--bot`.
 
 ## Decisions
 
@@ -493,9 +530,9 @@ The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attac
 | | Goal | Check |
 |---|---|---|
 | N0 | **Done**, see "N0 measurements". | Whole-world rollback holds: ~30 µs per busy tick, 0.06 ms save/restore, rollback exact. |
-| S | Sound fixes before prediction: its own random stream for `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, and sound kept out of the rollback set (`SoundPosEntry` from a pool, or the sound layer not rolled back at all). | The rollback check exact with sound on; the sim's draws unchanged by muting sound. |
+| S | **Done.** Sound fixes before prediction: its own random stream for `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, and sound kept out of the rollback set (`SoundPosEntry` from a pool, or the sound layer not rolled back at all). | The rollback check exact with sound on; the sim's draws unchanged by muting sound. |
 | N1 | Local rollback, no network: save every tick; every K ticks restore K back and resimulate with the same inputs. | The state log hash after resim equals the hash without it. Proves the restore set is complete and the resim is deterministic within one binary. |
-| N2 | One binary with `--server`/`--connect`; the server starts its network game through the offline stubs (as `GTA2_OFFLINE_MP` does); ENet loopback, full snapshots (no delta), schema v1 starting with peds, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
+| N2 | **Mostly done** (see "Status"; the comparison check is still to do). One binary with `--server`/`--connect`; the server starts its network game through the offline stubs (as `GTA2_OFFLINE_MP` does); ENet loopback, full snapshots (no delta), schema v1 starting with peds, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
 | N3 | Bitstream, field masks, per-entity acked baselines, priority and the 1372-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
 | N4 | CSP: tick-stamped commands with redundancy, the server input buffer, clock sync, rollback on snapshot. | Prediction error 0 for the local player when it moves alone, at 150 ms RTT. |
 | N5 | Remote view modes, projectile modes, lag compensation history. | Tuning by playing; switch with cvars. |
