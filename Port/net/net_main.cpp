@@ -2,9 +2,11 @@
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
 //   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple)
 //   either: [--lag ms] [--jitter ms] [--loss percent]  a link conditioner on this end's sends (tests)
+//   --replay <file>  a client session recorded with GTA2_NET_RECORD=<file>, played back without a server
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
 #include "net_main.hpp"
 #include "session/session.hpp"
+#include "../port_rand_sound.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,7 +71,7 @@ bool ReadMmp(const std::string& name, net::engine::NetworkGame& g)
 int NetMain_Init(std::vector<std::string>& args)
 {
     bool server = false;
-    std::string connect, map = "downtown-6p", name = "player";
+    std::string connect, map = "downtown-6p", name = "player", replay;
     net::ServerConfig sc;
     net::ClientConfig cc;
     sc.game.players = 6;
@@ -127,6 +129,10 @@ int NetMain_Init(std::vector<std::string>& args)
                 return -1;
             }
         }
+        else if (a == "--replay" && more)
+        {
+            replay = args[++i];
+        }
         else if (a == "--lag" && more)
         {
             sc.lagMs = cc.lagMs = atoi(args[++i].c_str());
@@ -145,10 +151,11 @@ int NetMain_Init(std::vector<std::string>& args)
         }
     }
     args = rest;
-    if (!server && connect.empty())
+    if (!server && connect.empty() && replay.empty())
     {
         return 0;
     }
+    PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same (milestone S)
     setvbuf(stdout, NULL, _IOLBF, 0); // the net: lines as they happen, also when the process is killed
     std::string error;
     if (server)
@@ -168,6 +175,18 @@ int NetMain_Init(std::vector<std::string>& args)
         }
         net::engine::StartNetworkGame(sc.game);
         gTickMs = sc.game.tickMs;
+    }
+    else if (!replay.empty())
+    {
+        gClient = new net::Client();
+        net::engine::NetworkGame game;
+        if (!gClient->StartReplay(replay.c_str(), &game, &error))
+        {
+            fprintf(stderr, "net: %s\n", error.c_str());
+            return -1;
+        }
+        net::engine::StartNetworkGame(game);
+        gTickMs = 1;
     }
     else
     {

@@ -38,6 +38,37 @@ net::Client::~Client()
 {
 }
 
+void net::Client::Welcomed(const Welcome& welcome, engine::NetworkGame* pGame)
+{
+    mSlot = welcome.slot;
+    mConnected = true;
+    pGame->players = welcome.players;
+    pGame->localPlayer = welcome.slot;
+    pGame->gameType = welcome.gameType;
+    pGame->fragLimit = welcome.fragLimit;
+    pGame->timeLimitMin = welcome.timeLimitMin;
+    pGame->tickMs = welcome.tickMs;
+    mTickMs = welcome.tickMs ? welcome.tickMs : 33;
+    pGame->police = welcome.police;
+    pGame->gmp = welcome.gmp;
+    pGame->sty = welcome.sty;
+    pGame->scr = welcome.scr;
+}
+
+bool net::Client::StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error)
+{
+    Welcome welcome;
+    mReplay.reset(new ClientReplay());
+    if (!mReplay->Open(path, &welcome))
+    {
+        *error = std::string("not a recording: ") + path;
+        return false;
+    }
+    Welcomed(welcome, pGame);
+    printf("net: replaying %s as player %d of %d, %s\n", path, mSlot, welcome.players, welcome.scr.c_str());
+    return true;
+}
+
 bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error)
 {
     mConfig = config;
@@ -82,19 +113,16 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
         *error = "a welcome we don't understand";
         return false;
     }
-    mSlot = welcome.slot;
-    mConnected = true;
-    pGame->players = welcome.players;
-    pGame->localPlayer = welcome.slot;
-    pGame->gameType = welcome.gameType;
-    pGame->fragLimit = welcome.fragLimit;
-    pGame->timeLimitMin = welcome.timeLimitMin;
-    pGame->tickMs = welcome.tickMs;
-    mTickMs = welcome.tickMs ? welcome.tickMs : 33;
-    pGame->police = welcome.police;
-    pGame->gmp = welcome.gmp;
-    pGame->sty = welcome.sty;
-    pGame->scr = welcome.scr;
+    Welcomed(welcome, pGame);
+    if (const char* path = getenv("GTA2_NET_RECORD"))
+    {
+        mRecorder.reset(new ClientRecorder());
+        if (!mRecorder->Open(path, welcome))
+        {
+            printf("net: can't record to %s\n", path);
+            mRecorder.reset();
+        }
+    }
     printf("net: joined %s:%u as player %d of %d, %s\n", config.host.c_str(), config.port, mSlot, welcome.players, welcome.scr.c_str());
     return true;
 }
@@ -132,7 +160,7 @@ void net::Client::OnSnapshot(BitReader& r)
 uint32_t net::Client::Lead() const
 {
     // Half the round trip in ticks, and two to spare: our command for a tick should arrive just before it runs
-    return (mTransport->RoundTripMs(0) / 2 + mTickMs - 1) / mTickMs + 2;
+    return (mRtt / 2 + mTickMs - 1) / mTickMs + 2;
 }
 
 // A snapshot of tick S: back to the game as it was after S, the server's state on top, then the ticks since then
@@ -222,9 +250,34 @@ void net::Client::Extrapolate(const Snapshot& snap)
 void net::Client::Frame()
 {
     mFrame++;
+    // What arrives this frame: from the network, or the recording
+    std::vector<TransportEvent> events;
+    uint32_t recordedFrame = 0, recordedInput = 0;
+    if (mReplay)
+    {
+        if (!mReplay->Frame(&recordedFrame, &mRtt, &recordedInput, events))
+        {
+            printf("net: the replay ends at frame %u\n", mFrame);
+            fflush(stdout);
+            exit(0);
+        }
+    }
+    else
+    {
+        TransportEvent e;
+        while (mTransport->Poll(e))
+        {
+            events.push_back(e);
+        }
+        mRtt = mTransport->RoundTripMs(0);
+    }
     // This frame's input first: a restore below would overwrite the game's input buffers
     uint32_t local = engine::LocalInput();
-    if (!mConfig.bot.empty() && engine::GameRunning())
+    if (mReplay)
+    {
+        local = recordedInput;
+    }
+    else if (!mConfig.bot.empty() && engine::GameRunning())
     {
         if (!mBot)
         {
@@ -249,6 +302,10 @@ void net::Client::Frame()
         local = mBot ? mBot->Think(mBotView) : 0;
     }
     local &= 0x3FFFFF;
+    if (mRecorder)
+    {
+        mRecorder->Frame(mFrame, mRtt, local, events);
+    }
     engine::ClientModeFrame();
     if (mSaves.empty())
     {
@@ -288,9 +345,9 @@ void net::Client::Frame()
         engine::ReplicaPositions(mShown[mTick % kRing]);
         mShown[mTick % kRing].push_back(engine::ReplicaPos{0xFFFFFFFFu, (float)mTick, 0}); // its tick, last
     }
-    TransportEvent e;
-    while (mTransport->Poll(e))
+    for (size_t i = 0; i < events.size(); i++)
     {
+        const TransportEvent& e = events[i];
         if (e.type == TransportEvent::kReceive && e.channel == kChannelUnreliable)
         {
             BitReader r(e.data.data(), e.data.size());
@@ -373,7 +430,7 @@ void net::Client::Frame()
     {
         tickMs = !mSlackKnown ? mTickMs : mSlack < 1 ? mTickMs - mTickMs / 10 : mSlack > 4 ? mTickMs + mTickMs / 10 : mTickMs;
     }
-    engine::SetTickMs(tickMs); // every frame: a restore brings back the game's tick length too
+    engine::SetTickMs(mReplay ? 1 : tickMs); // every frame: a restore brings back the game's tick length too (a replay: no waiting)
 
     // The next tick's inputs: ours (predicted and sent), the others' last known
     const uint32_t next = mTick + 1;
@@ -402,8 +459,11 @@ void net::Client::Frame()
             n = 0; // only consecutive ticks
         }
     }
-    BitWriter w;
-    WriteCommands(w, mLatestTick, cmds, n);
-    mTransport->Send(0, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
-    mTransport->Flush();
+    if (mTransport)
+    {
+        BitWriter w;
+        WriteCommands(w, mLatestTick, cmds, n);
+        mTransport->Send(0, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
+        mTransport->Flush();
+    }
 }
