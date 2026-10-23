@@ -11,7 +11,7 @@ mkdir -p $OUT/obj
 COMMON="--target=i686-linux-gnu --sysroot=$R ${OPT:--O2} -g -w -fPIC"
 # Game: the same flags as the Windows build (docs/port.md), plus the Windows names from Port/compat
 CXXFLAGS="$COMMON -fshort-wchar -std=c++17 -fms-extensions -Wno-address-of-temporary -fno-strict-aliasing -fwrapv
-  -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -mno-sse -mfpmath=387 -IPort/compat -include Port/compat/port_linux.h
+  -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fno-strict-return -mno-sse -mfpmath=387 -IPort/compat -include Port/compat/port_linux.h
   -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_USE_32BIT_TIME_T -DGTA2_PORT -DBUILD_MSS -DSTATELOG_IN_PORT $*"
 RENFLAGS="$COMMON -std=c++11"
 SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v 'ImGuiDebug.cpp\|NetPlay.cpp\|NetUi.cpp')
