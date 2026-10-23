@@ -9,6 +9,7 @@
 #include <string.h>
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
+void PortRandParticle_Memory(unsigned char** ppAddr, unsigned int* pSize); // Port/port_rand.cpp
 extern short gPortZoneRoundRobin; // a function's static in the original (map_0x370.cpp): not a registered global
 
 namespace
@@ -81,6 +82,11 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
     blocks.push_back(deaths);
     Block zones = {(unsigned char*)&gPortZoneRoundRobin, sizeof(gPortZoneRoundRobin), "restart zone round robin"};
     blocks.push_back(zones);
+    Block particles = {0, 0, "particle random stream"};
+    unsigned int size = 0;
+    PortRandParticle_Memory(&particles.addr, &size);
+    particles.size = size;
+    blocks.push_back(particles);
     Block sound = {0, 0, "SoundPosEntry pool"};
     SoundPool_Memory(&sound.addr, &sound.size);
     blocks.push_back(sound);

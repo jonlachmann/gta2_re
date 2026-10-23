@@ -15,7 +15,8 @@ int gPortTrafficCap = 16; // Source/Car.cpp, CarManager::CanAllocateCarOfKind_44
 void (*gPortDrawOverlay)() = NULL; // Source/Game.cpp, Game::Draw_4B92D0
 short gPortZoneRoundRobin; // Source/map_0x370.cpp, Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0 (respawn zones)
 
-void PortRandSound_Separate(bool separate); // Port/port_rand.cpp (not its header: that one renames rand)
+void PortRandSound_Separate(bool separate);
+void PortRandParticle_Separate(bool separate); // Port/port_rand_particle.h (it renames gRng_6F6784) // Port/port_rand.cpp (not its header: that one renames rand)
 
 namespace
 {
@@ -166,6 +167,7 @@ int NetMain_Init(std::vector<std::string>& args)
         return 0;
     }
     PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same (milestone S)
+    PortRandParticle_Separate(true); // and particles: a resimulation makes the flames it made before
     if (getenv("GTA2_NET_MARKER"))
     {
         gPortDrawOverlay = net::engine::DrawOverlay; // where the newest snapshot has us, over the frame
