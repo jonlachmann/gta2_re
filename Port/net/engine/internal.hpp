@@ -57,6 +57,10 @@ enum CarField
     kCarDamage, // Car::field_74_damage (32000 and up: exploded), the server's
     kCarAreas, // its dented areas (Car::field_8_damaged_areas)
     kCarWrecked, // exploded or burning out (the wreck countdown running, or a wreck)
+    kCarLights, // Car::field_A4_light_flags (brake, head, emergency lights...), field_A5 flash phase, field_A7 horn, field_A8 horn cooldown
+    kCarFlash,
+    kCarHorn,
+    kCarHornCooldown,
     kCarPhysics, // then its whole CarPhysics, member by member (access.cpp's kPhysics; all 0 without physics)
 };
 enum CarDriver
