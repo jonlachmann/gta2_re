@@ -5,6 +5,7 @@
 #include "Renderers/OpenGL/platform/gl_context.hpp"
 #include "sdl_win32.hpp"
 #include "headless/state_log.hpp"
+void SimBench_Frame(unsigned flip); // headless/sim_bench.cpp
 #include <SDL3/SDL.h>
 #include <stdio.h>
 
@@ -142,6 +143,7 @@ EXPORT void __stdcall Vid_FlipBuffers(SVideo* pVideo)
         pSys->Flip(); // returns at once without a GL context (headless)
     }
     StateLog_Frame(++gFlips);
+    SimBench_Frame(gFlips);
 }
 
 EXPORT void __stdcall Vid_ReleaseSurface(SVideo*)
