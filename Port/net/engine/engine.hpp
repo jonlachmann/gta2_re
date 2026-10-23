@@ -87,6 +87,7 @@ bool PlayerPosition(int player, float* pX, float* pY);
 // A client's replicas (replica.cpp): how many cars and peds are mapped, and how far (in blocks, the largest) the
 // mapped ones are from <snap> right now, before it is applied: the drift of one tick of the client's own sim
 void ReplicaStats(const Snapshot& snap, int* pCars, int* pPeds, float* pMaxDrift);
+void PoolUse(int* pCars, int* pPeds, int* pChars); // live cars, peds, chars in this game
 
 // Where this game has its mapped cars and peds now: NetId and x, y in blocks
 struct ReplicaPos
@@ -96,9 +97,29 @@ struct ReplicaPos
 };
 void ReplicaPositions(std::vector<ReplicaPos>& out);
 
+// The static map as a bot may know it (navmap.cpp): for every cell the height a walker is at, and which of its four
+// neighbours it can walk to. Plain data, built once per map, so a bot plans its own way without the game's routes.
+struct NavMap
+{
+    static const int kSize = 256;
+    enum Way : uint8_t
+    {
+        kNorth = 1, // -y
+        kSouth = 2, // +y
+        kWest = 4, // -x
+        kEast = 8, // +x
+    };
+    uint8_t height[kSize * kSize]; // 255: nobody stands here
+    uint8_t ways[kSize * kSize];
+};
+void BuildNavMap(NavMap& out);
+// Where this game has a player now (x, y, z in blocks; rot 0..1439); false without a ped
+bool PlayerPose(int player, float* pX, float* pY, float* pZ, int* pRot);
+
 // Tests: the game's own death for a player, credited to another (-1: nobody); a server's frags follow from it
 void DebugKill(int victim, int killer);
-bool PlayerWasted(int player); // in this game: dead and waiting to respawn (Player::field_28_wasted_or_busted)
+bool PlayerWasted(int player);
+void DebugArm(int player, int weapon, int ammo); // Player::AddWeaponWithAmmo_564960, for tests // in this game: dead and waiting to respawn (Player::field_28_wasted_or_busted)
 
 // What a client doesn't simulate (client_mode.cpp): spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
