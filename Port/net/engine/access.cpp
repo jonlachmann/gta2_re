@@ -126,7 +126,8 @@ net::Schema BuildSchema()
         player.fields.push_back(FieldDesc{kNames[i], 32, false}); // kPlayerName...
     }
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
-                                   {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false}}};
+                                   {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false},
+                                   {"lights", 8, false}, {"flash", 8, false}, {"horn", 8, false}, {"horn_cooldown", 8, false}}};
     for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
     {
         car.fields.push_back(FieldDesc{kPhysics[i].name, (uint8_t)(kPhysics[i].size * 8), kPhysics[i].isSigned});
@@ -419,6 +420,10 @@ void net::engine::Capture(Snapshot& out)
             e.f[kCarDamage] = c->field_74_damage;
             e.f[kCarAreas] = (int32_t)c->field_8_damaged_areas.m_var;
             e.f[kCarWrecked] = IsWrecked(c);
+            e.f[kCarLights] = (u8)c->field_A4_light_flags;
+            e.f[kCarFlash] = (u8)c->field_A5_flash_phase_counter;
+            e.f[kCarHorn] = c->field_A7_horn;
+            e.f[kCarHornCooldown] = c->field_A8_horn_cooldown;
             if (const CarPhysics* m = c->field_58_physics)
             {
                 for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
@@ -891,6 +896,12 @@ bool net::engine::SetCarDamage(Car* car, const EntityState& e)
         car->field_74_damage = (s16)e.f[kCarDamage];
         car->field_8_damaged_areas.m_var = (u32)e.f[kCarAreas];
     }
+    // Its lights and horn: a siren switched with the horn key (Car::HandleSpecialInput_441800 counts the horn down) came
+    // on again here after the server had it off
+    car->field_A4_light_flags = (char_type)e.f[kCarLights];
+    car->field_A5_flash_phase_counter = (char_type)e.f[kCarFlash];
+    car->field_A7_horn = (u8)e.f[kCarHorn];
+    car->field_A8_horn_cooldown = (u8)e.f[kCarHornCooldown];
     return true;
 }
 
