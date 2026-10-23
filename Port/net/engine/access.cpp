@@ -18,6 +18,7 @@
 #include "Source/sprite.hpp"
 #include "Source/GameSession.hpp"
 #include "Source/Weapon.hpp"
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -133,12 +134,17 @@ net::Schema BuildSchema()
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false},
                                    {"car", 25, false}, {"state", 1, false}}};
     net::engine::PedStateFields(ped.fields);
+    // The last field of cars, peds and pickups: how many ticks old its state is (0: this snapshot's; a busy area's far
+    // entities get theirs less often, AgeField)
+    car.fields.push_back(FieldDesc{"age", 6, false});
+    ped.fields.push_back(FieldDesc{"age", 6, false});
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
     net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"reach", 10, false}, {"zone_turn", 16, true}}};
     s.types.push_back(world); // kEntityWorld
-    net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false}}};
+    net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false},
+                                         {"age", 6, false}}};
     s.types.push_back(object); // kEntityObject
     return s;
 }
@@ -926,4 +932,39 @@ void net::engine::SetSnapshotReach(Snapshot& snap, float blocks)
             snap.entities[k].f[kWorldReach] = v < 0 ? 0 : v > 1023 ? 1023 : v;
         }
     }
+}
+
+float net::engine::PlayerViewRadius(int player)
+{
+    // How far its camera shows, centre to corner, at ground level (the inverse of Camera::ProjectWorldToScreen_4B90E0;
+    // the camera rises as the player drives faster)
+    Player* p = GetPlayer(player);
+    if (!p)
+    {
+        return 0;
+    }
+    const Camera& c = p->field_90_game_camera;
+    const float scale = c.field_60_screen_scale.x.ToFloat();
+    if (scale <= 0)
+    {
+        return 0;
+    }
+    const float depth = 8.0f + c.field_98_cur_pos.field_8_z.ToFloat(); // (8 - z) + camera z, at z 0
+    const float hw = c.field_70_screen_px_center_x * depth / scale, hh = c.field_74_screen_px_center_y * depth / scale;
+    return sqrtf(hw * hw + hh * hh);
+}
+
+int net::engine::AgeField(uint8_t type)
+{
+    if (type != kEntityCar && type != kEntityPed && type != kEntityObject)
+    {
+        return -1;
+    }
+    return (int)NetSchema().types[type].fields.size() - 1;
+}
+
+int net::engine::EntityAge(const EntityState& e)
+{
+    const int f = AgeField(e.type);
+    return f < 0 ? 0 : e.f[f];
 }

@@ -162,18 +162,27 @@ void net::Server::OnReceive(const TransportEvent& e)
 
 void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
 {
-    // The client's area: every player, and the cars and peds near its own
+    // The client's area: every player and the cars they sit in, and the cars, peds and pickups near its own
     float x = 0, y = 0;
     const bool located = engine::PlayerPosition(slot, &x, &y);
     std::vector<const EntityState*> near;
     Snapshot snap;
     snap.tick = mTick;
+    std::vector<uint32_t> playersCars;
+    for (size_t i = 0; i < world.entities.size(); i++)
+    {
+        if (world.entities[i].type == engine::kEntityPlayer && engine::PlayerCarId(world.entities[i]))
+        {
+            playersCars.push_back(engine::PlayerCarId(world.entities[i]));
+        }
+    }
     for (size_t i = 0; i < world.entities.size(); i++)
     {
         const EntityState& e = world.entities[i];
-        if (e.type == engine::kEntityPlayer || e.type == engine::kEntityWorld)
+        const bool playersCar = std::find(playersCars.begin(), playersCars.end(), e.id) != playersCars.end();
+        if (e.type == engine::kEntityPlayer || e.type == engine::kEntityWorld || playersCar)
         {
-            snap.entities.push_back(e);
+            snap.entities.push_back(e); // wherever they are: a player far off isn't a ped without its car
         }
         else if (located && Distance(e, x, y) <= mConfig.interestRadius)
         {
@@ -188,32 +197,127 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         base = &acked;
     }
     static const Snapshot kEmpty;
-    // Fit kMaxPayload: drop the farthest entities until it does (ponytail: per-entity baselines and priorities, N3)
-    size_t keep = near.size();
+    const Schema& schema = engine::NetSchema();
+    // Fit kMaxPayload by priority, as Quake 3's successors do. The entities the client has stay in every snapshot: one
+    // left out would be removed there (and cost a whole new one later). Each gets this tick's state, or, when there is
+    // no room, the state the client already has with its age (the ticks since it was new) - a few bits; the client
+    // applies only new state and predicts the rest on. Who gets new state: the highest priority, which grows with
+    // the age and falls with the distance. New entities come after, nearest first, as room allows.
+    auto inBase = [&](const EntityState& e) -> const EntityState* {
+        if (!base)
+        {
+            return NULL;
+        }
+        auto it = std::lower_bound(base->entities.begin(), base->entities.end(), e.id, [](const EntityState& b, uint32_t id) { return b.id < id; });
+        return it != base->entities.end() && it->id == e.id && it->type == e.type ? &*it : NULL;
+    };
+    auto cost = [&](const EntityState* from, const EntityState& to) -> size_t { // bits, as one entry of a delta
+        Snapshot a, b;
+        if (from)
+        {
+            a.entities.push_back(*from);
+        }
+        b.entities.push_back(to);
+        BitWriter t;
+        WriteDelta(t, schema, a, b);
+        return t.BitCount();
+    };
+    struct Item
+    {
+        const EntityState* now;
+        const EntityState* had; // in the client's baseline
+        EntityState aged; // what it has, with its age
+        size_t freshBits, agedBits;
+        float priority;
+        int pick; // 0: not sent (new, no room), 1: aged, 2: this tick's
+    };
+    std::vector<Item> items(near.size());
+    for (size_t i = 0; i < near.size(); i++)
+    {
+        Item& it = items[i];
+        it.now = near[i];
+        it.had = inBase(*near[i]);
+        it.freshBits = cost(it.had, *it.now);
+        it.pick = 0;
+        it.agedBits = 0;
+        it.priority = 0;
+        if (it.had)
+        {
+            it.aged = *it.had;
+            const int f = engine::AgeField(it.had->type);
+            const int age = (int)(mTick - base->tick) + engine::EntityAge(*it.had);
+            if (f >= 0)
+            {
+                it.aged.f[f] = age < 1 ? 1 : age > 63 ? 63 : age;
+            }
+            it.agedBits = cost(it.had, it.aged);
+            it.priority = (float)(age + 1) / (1.0f + Distance(*it.now, x, y) / 6.0f);
+        }
+        else
+        {
+            it.priority = 9.0f / (1.0f + Distance(*it.now, x, y) / 6.0f); // new: as if 8 ticks old (one near comes soon)
+        }
+    }
+    size_t fixedBits = 0;
+    for (size_t i = 0; i < snap.entities.size(); i++)
+    {
+        fixedBits += cost(inBase(snap.entities[i]), snap.entities[i]);
+    }
+    std::vector<size_t> order(items.size());
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        order[i] = i;
+    }
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return items[a].priority > items[b].priority; });
     BitWriter w;
+    size_t budget = (size_t)kMaxPayload * 8 - 96; // the header, the entry count, a margin
     for (;;)
     {
-        Snapshot candidate = snap;
-        for (size_t i = 0; i < keep; i++)
+        size_t bits = fixedBits;
+        for (size_t i = 0; i < items.size(); i++) // what the client has stays, aged
         {
-            candidate.entities.push_back(*near[i]);
+            items[i].pick = items[i].had ? 1 : 0;
+            bits += items[i].had ? items[i].agedBits : 0;
         }
-        // How far it reaches: all of the area, or as far as the farthest it kept (a client keeps what lies beyond)
-        engine::SetSnapshotReach(candidate, keep == near.size() ? mConfig.interestRadius : keep ? Distance(*near[keep - 1], x, y) : 0.0f);
+        for (size_t k = 0; k < order.size(); k++) // then new state, by priority, as room allows
+        {
+            Item& it = items[order[k]];
+            const size_t was = it.had ? it.agedBits : 0;
+            if (bits - was + it.freshBits <= budget)
+            {
+                bits += it.freshBits - was;
+                it.pick = 2;
+            }
+        }
+        Snapshot candidate = snap;
+        size_t fresh = 0;
+        for (size_t i = 0; i < items.size(); i++)
+        {
+            if (items[i].pick == 2)
+            {
+                candidate.entities.push_back(*items[i].now);
+                fresh++;
+            }
+            else if (items[i].pick == 1)
+            {
+                candidate.entities.push_back(items[i].aged);
+            }
+        }
+        engine::SetSnapshotReach(candidate, mConfig.interestRadius); // nothing it has goes missing
         SortById(candidate);
         w = BitWriter();
         SnapshotHeader h = {mTick, base ? base->tick : mTick, s.lastCmdTick};
         WriteSnapshotHeader(w, h);
-        WriteDelta(w, engine::NetSchema(), base ? *base : kEmpty, candidate);
-        if (w.ByteCount() <= kMaxPayload || keep == 0)
+        WriteDelta(w, schema, base ? *base : kEmpty, candidate);
+        if (w.ByteCount() <= kMaxPayload || budget < 2048)
         {
-            mNearSum += (uint32_t)near.size();
-            mKeptSum += (uint32_t)keep;
-            mCut += keep < near.size();
+            mNearSum += (uint32_t)items.size();
+            mKeptSum += (uint32_t)fresh;
+            mCut += fresh < items.size();
             s.sent[mTick % kRing] = candidate;
             break;
         }
-        keep = keep * 3 / 4;
+        budget -= budget / 8; // the estimate was off (ids' gaps): a little less
     }
     static const bool sFieldStats = getenv("GTA2_NET_FIELDSTATS") != NULL;
     if (sFieldStats && base)
@@ -371,7 +475,14 @@ void net::Server::Frame()
         printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n",
                mTick, used, world.entities.size(), sent, used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
         mBytesSent = 0;
-        printf("net: tick %u, snapshots kept %.0f%% of the entities in the clients' areas, %u of %u cut for size\n", mTick,
+        for (size_t i = 0; i < mSlots.size(); i++)
+        {
+            if (mSlots[i].used)
+            {
+                printf("net: tick %u, player %zu sees %.1f blocks (centre to corner)\n", mTick, i, engine::PlayerViewRadius((int)i));
+            }
+        }
+        printf("net: tick %u, snapshots had new state for %.0f%% of the entities in the clients' areas (%u of %u not for all)\n", mTick,
                mNearSum ? 100.0 * mKeptSum / mNearSum : 100.0, mCut, used * 300);
         mNearSum = mKeptSum = mCut = 0;
     }

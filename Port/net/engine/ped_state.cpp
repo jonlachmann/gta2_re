@@ -106,7 +106,7 @@ const Member kCharValues[] = {CM(field_10_char_state, 4, true),      CM(field_14
 const size_t kCharCount = sizeof(kCharValues) / sizeof(kCharValues[0]);
 const int kGroup = kChar + (int)kCharCount; // its group: leader (net id), its index (99: the leader), type, counts
 const int kEnd = kGroup + 5;
-static_assert(kEnd <= net::kMaxFields, "a ped's fields");
+static_assert(kEnd + 1 <= net::kMaxFields, "a ped's fields and its age (access.cpp)");
 
 int32_t Get(const void* p, const Member& d)
 {

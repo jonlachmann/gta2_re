@@ -227,6 +227,10 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                 gCars[e.id] = car;
                 mapped.insert(car);
             }
+            if (EntityAge(e))
+            {
+                continue; // the state the client already has (a busy area's far car): predicted on here
+            }
             // The shared traffic driver, as the server has it (a car with its own driver gets it from its ped entity)
             if (!owned.count(car))
             {
@@ -312,6 +316,10 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                 gPeds[e.id] = ped;
                 mapped.insert(ped);
                 ped->field_244_remap = (char_type)e.f[kPedRemap] ^ 1; // set below, with its char's
+            }
+            if (EntityAge(e))
+            {
+                continue; // the state the client already has: predicted on here
             }
             // Its look: the remap and its char's colours (a ped made here, or adopted, had its own: a gang member's showed
             // another gang's)
