@@ -21,4 +21,4 @@ fi
   [ -n "$GTA2_INI_EXTRA" ] && printf '%b\n' "$GTA2_INI_EXTRA"
 } > "$GAME/gta2.ini"
 [ -n "$GTA2GL_CAPTURE" ] && mkdir -p "$GAME/${GTA2GL_CAPTURE%%,*}"
-cd "$GAME" && exec ../gta2_port
+cd "$GAME" && exec ${GTA2_BIN:-../gta2_port} # GTA2_BIN: another build, e.g. ../../mac_x4/gta2_port

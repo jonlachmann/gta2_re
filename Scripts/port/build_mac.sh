@@ -4,7 +4,7 @@
 # usage: Scripts/port/build_linux.sh [extra clang flags]   env: OPT (default -O2), JOBS, FORCE
 set -eo pipefail
 cd "$(dirname "$0")/../.."
-OUT=build_port/mac
+OUT=${OUT:-build_port/mac} # OUT=build_port/mac_x4 Scripts/port/build_mac.sh -DGTA2_POOL_SCALE=4: a second build next to it
 BREW=${BREW:-/opt/homebrew}
 mkdir -p $OUT/obj
 COMMON="${OPT:--O2} -g -w -I$BREW/include -DGL_SILENCE_DEPRECATION"
