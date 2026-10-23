@@ -54,6 +54,10 @@ void Apply(const Snapshot& snap, int localPlayer);
 // The position of a player's ped or car, in blocks; false without a ped
 bool PlayerPosition(int player, float* pX, float* pY);
 
+// A client's replicas (replica.cpp): how many cars and peds are mapped, and how far (in blocks, the largest) the
+// mapped ones are from <snap> right now, before it is applied: the drift of one tick of the client's own sim
+void ReplicaStats(const Snapshot& snap, int* pCars, int* pPeds, float* pMaxDrift);
+
 // What a client doesn't simulate (client_mode.cpp): spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
 } // namespace engine

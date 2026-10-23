@@ -1,7 +1,7 @@
 // Port/net (docs/netcode.md, "Net schema"): players, inputs and entities as plain data. Positions are Fix16 raw
 // values (14 fraction bits): x and y below 256 blocks fit 22 bits, z below 8 blocks 17 bits; angles are Ang16
 // (0..1439), 11 bits. So what a client gets is exactly the server's value.
-#include "engine.hpp"
+#include "internal.hpp"
 #include "Source/Car.hpp"
 #include "Source/CarPhysics.hpp"
 #include "Source/Char_Pool.hpp"
@@ -21,66 +21,22 @@ namespace
 {
 using net::FieldDesc;
 
-// Player: what a client needs to show a player and run it on between snapshots
-enum PlayerField
-{
-    kPlayerX,
-    kPlayerY,
-    kPlayerZ,
-    kPlayerRot,
-    kPlayerInCar,
-    kPlayerButtons,
-    kPlayerFields
-};
-// Car and ped: position and look, for now
-enum CarField
-{
-    kCarX,
-    kCarY,
-    kCarZ,
-    kCarRot,
-    kCarModel,
-    kCarFields
-};
-enum PedField
-{
-    kPedX,
-    kPedY,
-    kPedZ,
-    kPedRot,
-    kPedFields
-};
-
 net::Schema BuildSchema()
 {
     net::Schema s;
     net::EntityType player = {"player", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"in_car", 1, false}, {"buttons", 22, false}}};
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false}}};
-    net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}}};
+    net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false}}};
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
     return s;
 }
 
-// NetIds: players 1..N; cars and peds by their own unique serials (Car::field_6C_car_id, Ped::field_200_id), so an
-// id is never reused for another entity
-const uint32_t kCarIdBase = 0x01000000;
-const uint32_t kPedIdBase = 0x02000000;
-
 Player* GetPlayer(int i)
 {
     Game* g = gGame_0x40_67E008;
     return g && i >= 0 && i < (int)g->field_23_num_players ? g->field_4_players[i] : NULL;
-}
-
-Sprite* PedSprite(Ped* ped)
-{
-    if (ped->field_16C_car)
-    {
-        return ped->field_16C_car->field_50_car_sprite;
-    }
-    return ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
 }
 
 net::EntityState Entity(uint32_t id, uint8_t type)
@@ -100,8 +56,19 @@ void PutPosition(net::EntityState& e, const Sprite* s, int x, int y, int z, int 
     e.f[rot] = s->field_0_rotation.rValue;
 }
 
+} // namespace
+
+Sprite* net::engine::PedSprite(Ped* ped)
+{
+    if (ped->field_16C_car)
+    {
+        return ped->field_16C_car->field_50_car_sprite;
+    }
+    return ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
+}
+
 // Moves a car the way Car::SetPosition_443D00 does, and turns it
-void MoveCar(Car* car, Fix16 x, Fix16 y, Fix16 z, Ang16 rot)
+void net::engine::MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     car->SetPosition_443D00(x, y, z);
     car->field_50_car_sprite->set_ang_lazy_420690(rot);
@@ -112,7 +79,7 @@ void MoveCar(Car* car, Fix16 x, Fix16 y, Fix16 z, Ang16 rot)
 }
 
 // Moves a ped on foot: its sprite out of the collision grid and back, as Car::SetPosition_443D00 does for cars
-void MovePed(Ped* ped, Fix16 x, Fix16 y, Fix16 z, Ang16 rot)
+void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Sprite* s = ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
     if (!s)
@@ -127,8 +94,6 @@ void MovePed(Ped* ped, Fix16 x, Fix16 y, Fix16 z, Ang16 rot)
     ped->field_1AC_cam.y = y;
     ped->field_1AC_cam.z = z;
 }
-} // namespace
-
 const net::Schema& net::engine::NetSchema()
 {
     static const Schema s = BuildSchema();
@@ -225,6 +190,7 @@ void net::engine::Capture(Snapshot& out)
         {
             EntityState e = Entity(kPedIdBase + p->field_200_id, kEntityPed);
             PutPosition(e, s, kPedX, kPedY, kPedZ, kPedRot);
+            e.f[kPedRemap] = (uint8_t)p->field_244_remap;
             out.entities.push_back(e);
         }
     }
@@ -238,7 +204,7 @@ void net::engine::Apply(const Snapshot& snap, int localPlayer)
         const EntityState& e = snap.entities[k];
         if (e.type != kEntityPlayer)
         {
-            continue; // cars and peds: N2's next step
+            continue; // cars and peds: replica.cpp
         }
         const int i = (int)e.id - 1;
         Player* p = GetPlayer(i);
@@ -273,4 +239,5 @@ void net::engine::Apply(const Snapshot& snap, int localPlayer)
             SetPlayerInput(i, (uint32_t)e.f[kPlayerButtons]); // runs it on with its own input until the next snapshot
         }
     }
+    ApplyCarsAndPeds(snap);
 }
