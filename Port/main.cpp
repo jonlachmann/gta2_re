@@ -4,22 +4,46 @@
 #include <SDL3/SDL_main.h>
 #include "headless/fast_clock.hpp"
 #include "net/net_main.hpp"
+#include "net/engine/engine.hpp"
 #include <string>
 #include <vector>
 
 #if !defined(_WIN32)
     #include <execinfo.h>
     #include <signal.h>
+    #include <stdio.h>
+    #if defined(__APPLE__)
+        #include <sys/ucontext.h>
+    #else
+        #include <ucontext.h>
+    #endif
     #include <unistd.h>
 
-// A crash prints its backtrace to stderr (macOS throttles its crash reports), then dies as it would have
-static void OnCrash(int sig)
+// A crash prints the faulting address, the instruction and its backtrace to stderr (macOS throttles its crash
+// reports), then dies as it would have
+static void OnCrash(int sig, siginfo_t* info, void* context)
 {
+    char line[160];
+    unsigned long long pc = 0;
+    #if defined(__APPLE__) && defined(__aarch64__)
+    pc = ((ucontext_t*)context)->uc_mcontext->__ss.__pc;
+    #elif defined(__APPLE__) && defined(__x86_64__)
+    pc = ((ucontext_t*)context)->uc_mcontext->__ss.__rip;
+    #elif defined(__i386__)
+    pc = ((ucontext_t*)context)->uc_mcontext.gregs[REG_EIP];
+    #endif
+    const int n0 = snprintf(line, sizeof(line), "\ngta2_port: crashed (signal %d) at address %p, instruction 0x%llx; backtrace:\n", sig,
+                            info ? info->si_addr : NULL, pc);
+    write(2, line, n0 > 0 ? (size_t)n0 : 0);
     void* frames[64];
     const int n = backtrace(frames, 64);
-    const char msg[] = "\ngta2_port: crashed, backtrace:\n";
-    write(2, msg, sizeof(msg) - 1);
     backtrace_symbols_fd(frames, n, 2);
+    static bool sOnce;
+    if (!sOnce) // the netcode's view of the game, not signal-safe but worth it once
+    {
+        sOnce = true;
+        net::engine::DebugOnCrash();
+    }
     signal(sig, SIG_DFL);
     raise(sig);
 }
@@ -28,9 +52,12 @@ static void OnCrash(int sig)
 int main(int argc, char** argv)
 {
 #if !defined(_WIN32)
-    signal(SIGSEGV, OnCrash);
-    signal(SIGBUS, OnCrash);
-    signal(SIGABRT, OnCrash);
+    struct sigaction sa = {};
+    sa.sa_sigaction = OnCrash;
+    sa.sa_flags = SA_SIGINFO;
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGBUS, &sa, NULL);
+    sigaction(SIGABRT, &sa, NULL);
 #endif
 #if defined(_WIN32)
     FastClock_Install(); // GTA2_SPEED (docs/port.md, M2)

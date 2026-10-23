@@ -185,12 +185,15 @@ void net::Client::Reconcile(const Snapshot& snap)
         return;
     }
     engine::RestoreGame(*saved);
+    engine::DebugCheckPlayerCars("after the restore");
     engine::Apply(snap);
+    engine::DebugCheckPlayerCars("after the apply");
     std::vector<uint32_t> buttons(mRemote);
     for (uint32_t t = s + 1; t <= mTick; t++)
     {
         buttons[mSlot] = mHistTick[t % kRing] == t ? mHistButtons[t % kRing] : 0;
         engine::ResimTick(buttons.data(), (int)buttons.size());
+        engine::DebugCheckPlayerCars("after a resimulated tick");
         engine::SaveGame(*mSaves[t % kSaves], t);
         mResimTicks++;
     }
@@ -263,6 +266,20 @@ void net::Client::Frame()
         mLocalDeaths[i] += w && !mWasWasted[i];
         mWasWasted[i] = w;
     }
+    {
+        const Snapshot& latest = mReceived[mLatestTick % kRing];
+        for (size_t i = 0; i < latest.entities.size(); i++)
+        {
+            int p = 0;
+            uint32_t b = 0;
+            if (engine::PlayerOf(latest.entities[i], &p, &b))
+            {
+                mCarFrames++;
+                mCarMismatch += (engine::PlayerCarId(latest.entities[i]) != 0) != engine::PlayerInCar(p);
+            }
+        }
+    }
+    engine::DebugCheckPlayerCars("after the frame's tick");
     if (mSynced) // the tick that just ran
     {
         mTick++;
@@ -336,7 +353,10 @@ void net::Client::Frame()
             printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
             int poolCars = 0, poolPeds = 0, poolChars = 0;
             engine::PoolUse(&poolCars, &poolPeds, &poolChars);
-            printf("net: frame %u, this game has %d cars, %d peds, %d chars\n", mFrame, poolCars, poolPeds, poolChars);
+            printf("net: frame %u, this game has %d cars, %d peds, %d chars; in or out of a car differently from the newest snapshot: "
+                   "%.1f%% of player frames\n",
+                   mFrame, poolCars, poolPeds, poolChars, mCarFrames ? 100.0 * mCarMismatch / mCarFrames : 0.0);
+            mCarFrames = mCarMismatch = 0;
             if (mBot)
             {
                 printf("net: frame %u, bot %s\n", mFrame, mBot->Describe().c_str());

@@ -160,10 +160,88 @@ class SimpleBot : public net::BotBrain
     bool mTrying = false, mStuck = false;
     uint32_t mUnstickUntil = 0;
 };
+// Gets into the nearest car, drives about 10 s with a turn now and then, gets out, and again
+class CarHopBot : public net::BotBrain
+{
+  public:
+    uint32_t Think(const net::BotView& v) override
+    {
+        mButtons = Decide(v);
+        return mButtons;
+    }
+
+    std::string Describe() const override
+    {
+        char line[128];
+        snprintf(line, sizeof(line), "%s, %d cars entered, %d left, buttons 0x%x", mInCar ? "driving" : "on foot", mEntered, mLeft, mButtons);
+        return line;
+    }
+
+  private:
+    uint32_t Decide(const net::BotView& v)
+    {
+        if (!v.hasBody || v.health <= 0)
+        {
+            return 0;
+        }
+        const bool inCar = v.car != 0;
+        if (inCar != mInCar)
+        {
+            mInCar = inCar;
+            mEntered += inCar;
+            mLeft += !inCar;
+            mSince = v.frame;
+        }
+        const uint32_t press = v.frame % 20 < 2 ? net::kBtnEnterExit : 0; // a press now and then, not held
+        if (inCar)
+        {
+            if (v.frame - mSince > 300)
+            {
+                return press; // out again
+            }
+            const int phase = (int)((v.frame - mSince) / 45) % 4;
+            return net::kBtnForward | (phase == 1 ? net::kBtnLeft : phase == 3 ? net::kBtnRight : 0);
+        }
+        if (v.frame - mSince < 60)
+        {
+            return 0; // a moment on foot after getting out
+        }
+        const net::BotView::Seen* car = NULL;
+        float best = 1e9f;
+        for (size_t i = 0; i < v.seen.size(); i++)
+        {
+            const float d = hypotf(v.seen[i].x - v.x, v.seen[i].y - v.y);
+            if (v.seen[i].kind == net::BotView::Seen::kCar && d < best)
+            {
+                best = d;
+                car = &v.seen[i];
+            }
+        }
+        if (!car)
+        {
+            return net::kBtnForward | (v.frame % 90 < 20 ? net::kBtnLeft : 0); // look for one
+        }
+        if (best < 2.5f)
+        {
+            return press; // the game walks us to the door
+        }
+        const int err = TurnTo(v.rot, car->x - v.x, car->y - v.y);
+        return Steer(err) | ((err < 0 ? -err : err) < 300 ? net::kBtnForward : 0);
+    }
+
+    bool mInCar = false;
+    uint32_t mSince = 0;
+    int mEntered = 0, mLeft = 0;
+    uint32_t mButtons = 0;
+};
 } // namespace
 
 std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
 {
+    if (kind == "carhop")
+    {
+        return std::unique_ptr<BotBrain>(new CarHopBot());
+    }
     if (kind.empty() || kind == "simple")
     {
         return std::unique_ptr<BotBrain>(new SimpleBot());
@@ -199,6 +277,7 @@ void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t fr
             if (s.player == self)
             {
                 view.health = s.health;
+                view.car = engine::PlayerCarId(e);
                 continue;
             }
         }

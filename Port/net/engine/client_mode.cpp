@@ -21,6 +21,16 @@ void net::engine::ProtectPlayers()
         {
             ped->field_208_invulnerability = 2; // counts down once per tick: never 0 between our frames
         }
+        // The car a player sits in or is getting into stays: one marked for removal before (it wasn't the server's,
+        // or not yet) would otherwise go with the player in it, as Ped::SpawnPedInCar_45C730 knows
+        Car* cars[2] = {ped ? ped->field_16C_car : NULL, ped ? ped->field_150_target_objective_car : NULL};
+        for (int k = 0; k < 2; k++)
+        {
+            if (cars[k] && cars[k]->field_88_despawn_status != car_despawn_status::active_1)
+            {
+                cars[k]->field_88_despawn_status = car_despawn_status::active_1;
+            }
+        }
     }
 }
 

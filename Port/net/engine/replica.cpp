@@ -10,7 +10,13 @@
 #include "Source/Player.hpp"
 #include "Source/char.hpp"
 #include "Source/sprite.hpp"
+#include "Source/sound_obj.hpp"
+#include "Source/Camera.hpp"
 #include "Source/collide.hpp"
+#include "Source/SpriteGrid.hpp"
+#include "Source/Object_5C.hpp"
+#include "Source/ObjectPool.hpp"
+#include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
 #include <set>
@@ -65,6 +71,10 @@ void PlayerOwned(std::set<const void*>& out)
                 {
                     out.insert(peds[k]->field_16C_car);
                 }
+                if (peds[k]->field_150_target_objective_car) // the car it is getting into
+                {
+                    out.insert(peds[k]->field_150_target_objective_car);
+                }
             }
         }
     }
@@ -103,6 +113,34 @@ bool RoomForPed()
     return ped && chr && spr;
 }
 
+// A car goes, unless a ped points to it (its driver, a passenger, a corpse cloned in it, Player::Wasted_567130):
+// that ped would point at a removed car (the sound listener's camera follows a player's corpse and reads its car,
+// sound_obj::InterrogateAudioEntities_41A730)
+int gOccupiedKept;
+std::set<Car*> gReferenced; // cars a live ped points to, gathered once per apply
+
+void GatherReferencedCars()
+{
+    gReferenced.clear();
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+    {
+        if (p->field_16C_car)
+        {
+            gReferenced.insert(p->field_16C_car);
+        }
+    }
+}
+
+void RemoveCar(Car* car)
+{
+    if (car->field_54_driver || gReferenced.count(car))
+    {
+        gOccupiedKept++;
+        return;
+    }
+    car->DespawnSoon_421490();
+}
+
 // This game's live cars and peds; a mapped one the game removed by itself (a wreck, a death, or a resimulation
 // since the map was saved) is forgotten
 void Live(std::set<Car*>& cars, std::set<Ped*>& peds)
@@ -123,6 +161,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     std::set<Car*> liveCars;
     std::set<Ped*> livePeds;
     Live(liveCars, livePeds);
+    GatherReferencedCars();
     std::set<const void*> owned;
     PlayerOwned(owned);
     std::set<const void*> mapped(owned);
@@ -146,7 +185,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
             Car* car = it != gCars.end() ? it->second : NULL;
             if (car && car->field_84_car_info_idx != e.f[kCarModel])
             {
-                car->DespawnSoon_421490(); // another model under this id: should not happen, ids aren't reused
+                RemoveCar(car); // another model under this id: should not happen, ids aren't reused
                 gCars.erase(it);
                 car = NULL;
             }
@@ -175,7 +214,12 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
             }
             if (!owned.count(car)) // a player's car follows the player (access.cpp)
             {
+                const bool before = DebugGridOk("before moving a car", car);
                 MoveCar(car, Raw(e.f[kCarX]), Raw(e.f[kCarY]), Raw(e.f[kCarZ]), Angle(e.f[kCarRot]));
+                if (before)
+                {
+                    DebugGridOk("after moving a car", car);
+                }
             }
         }
         else if (e.type == kEntityPed)
@@ -218,7 +262,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     {
         if (!seen.count(it->first))
         {
-            it->second->DespawnSoon_421490();
+            RemoveCar(it->second);
             it = gCars.erase(it);
         }
         else
@@ -245,7 +289,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     {
         if (!owned.count(c) && !mapped.count(c) && !c->IsDespawning_4215B0())
         {
-            c->DespawnSoon_421490();
+            RemoveCar(c);
         }
     }
     for (Ped* p : livePeds)
@@ -268,6 +312,11 @@ void net::engine::PoolUse(int* pCars, int* pPeds, int* pChars)
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         ++*pPeds;
+    }
+    if (gOccupiedKept)
+    {
+        printf("net: %d removals of occupied cars skipped\n", gOccupiedKept);
+        gOccupiedKept = 0;
     }
     if (gRefusedPeds[0] + gRefusedPeds[1] + gRefusedPeds[2])
     {
@@ -407,6 +456,151 @@ void net::engine::ReplicaPositions(std::vector<ReplicaPos>& out)
         {
             ReplicaPos p = {q.first, s->field_14_xy.x.ToFloat(), s->field_14_xy.y.ToFloat()};
             out.push_back(p);
+        }
+    }
+}
+
+Car* net::engine::ReplicaCar(uint32_t netId)
+{
+    auto it = gCars.find(netId);
+    return it != gCars.end() ? it->second : NULL;
+}
+
+namespace
+{
+// Every sprite linked into a collision grid still has its collision shape (a freed sprite left in the grid crashes the next
+// collision query: SpriteGrid::FindCollidingSpriteInRow_478880)
+bool GridsSound(const char* where)
+{
+    static int sReported;
+    SpriteGrid* grids[1] = {gSpriteGrid_1_679208}; // the collision grid; 2 and 3 hold shapeless sprites from the start
+    for (int g = 0; g < 1; g++)
+    {
+        for (int y = 0; grids[g] && y < 256; y++)
+        {
+            // field_0_rows is private and the class's first member (debug only: read it as the array it is)
+            GridCell* const* rows = reinterpret_cast<GridCell* const*>(grids[g]);
+            for (GridCell* c = rows[y]; c; c = c->mpNext)
+            {
+                for (GridSpriteLink* l = c->field_4_pSpriteLinks; l; l = l->mpNext)
+                {
+                    if (!l->field_0_pSprite || !l->field_0_pSprite->field_C_pCollisionShape) // what the queries read
+                    {
+                        if (sReported++ < 3)
+                        {
+                            Sprite* sp = l->field_0_pSprite;
+                            Object* o = sp && sp->GetType_416B40() != sprite_types_enum::car_2 && sp->GetType_416B40() != sprite_types_enum::ped_3 ?
+                                            sp->field_8_object_2C_ptr : NULL;
+                            bool live = false;
+                            for (Object* q = gObject_2C_Pool_6F8F80->field_4_pPrev; q && !live; q = q->mpNext)
+                            {
+                                live = q == o;
+                            }
+                            printf("net: CHECK %s: grid %d cell (%d, %d) links a sprite %p without a shape (type %d), object %p (model %d, in the "
+                                   "pool's list %d, removal state %d, its sprite %p)\n",
+                                   where, g + 1, (int)c->field_0_x, y, (void*)sp, sp ? (int)sp->GetType_416B40() : -1, (void*)o,
+                                   o ? (int)o->field_18_model : -1, (int)live, o ? (int)o->field_25_removal_state : -1, o ? (void*)o->field_4_sprite : NULL);
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+} // namespace
+
+bool net::engine::DebugGridOk(const char* where, Car* car)
+{
+    static const bool sOn = getenv("GTA2_NET_CHECKGRID") != NULL;
+    if (sOn && !GridsSound(where))
+    {
+        if (car)
+        {
+            printf("net: CHECK %s: car %p model %d, kind %d, driver %p, despawn status %d\n", where, (void*)car, (int)car->field_84_car_info_idx,
+                   (int)car->field_A0_car_kind, (void*)car->field_54_driver, (int)car->field_88_despawn_status);
+        }
+        return false;
+    }
+    return true;
+}
+
+bool net::engine::DebugCheckPlayerCars(const char* where)
+{
+    static int sReported;
+    if (getenv("GTA2_NET_CHECKGRID"))
+    {
+        GridsSound(where);
+    }
+    std::set<Car*> liveCars;
+    std::set<Ped*> livePeds;
+    Live(liveCars, livePeds);
+    Game* g = gGame_0x40_67E008;
+    for (u32 i = 0; g && i < g->field_23_num_players; i++)
+    {
+        Player* p = g->field_4_players[i];
+        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+        if (ped && ped->field_16C_car && (!liveCars.count(ped->field_16C_car) || !ped->field_16C_car->field_50_car_sprite))
+        {
+            if (sReported++ < 5)
+            {
+                printf("net: CHECK %s: player %u's ped is in a car that is gone (state %d/%d, despawn status %d)\n", where, i,
+                       (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
+                       liveCars.count(ped->field_16C_car) ? (int)ped->field_16C_car->field_88_despawn_status : -1);
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+void net::engine::DebugOnCrash()
+{
+    Game* g = gGame_0x40_67E008;
+    if (!g || !g->field_38_local_player)
+    {
+        return;
+    }
+    std::set<Car*> liveCars;
+    std::set<Ped*> livePeds;
+    Live(liveCars, livePeds);
+    Player* p = g->field_38_local_player;
+    Ped* ped = p->field_2C4_player_ped;
+    Ped* camPed = p->field_90_game_camera.field_34_target_ped;
+    Car* camCar = p->field_90_game_camera.field_38_target_car;
+    fprintf(stderr, "net: crash state: local player %d in use %d, ped %p (live %d) car %p, camera ped %p (live %d, the player's %d) car %p (live %d)\n",
+            (int)p->field_2E_idx, (int)p->field_8E_in_use, (void*)ped, (int)livePeds.count(ped), ped ? (void*)ped->field_16C_car : NULL,
+            (void*)camPed, (int)livePeds.count(camPed), camPed == ped, (void*)camCar, (int)liveCars.count(camCar));
+    // The sound listener's camera (sound_obj::InterrogateAudioEntities_41A730 reads its followed ped's car)
+    Camera* listener = NULL;
+    if (gSound_obj_66F680.field_1478_type5Idx)
+    {
+        SoundObject* so = gSound_obj_66F680.field_147C_audio_entities[gSound_obj_66F680.field_1478_type5Idx].field_4_pObj;
+        listener = so ? so->field_C_pAny.pCamera_0xBC : NULL;
+    }
+    Camera* cams[3] = {&p->field_90_game_camera, &p->field_208_aux_game_camera, &p->field_14C_view_camera};
+    for (int k = 0; k < 3; k++)
+    {
+        Ped* cp = cams[k]->field_34_target_ped;
+        fprintf(stderr, "net: crash state: camera %d%s follows ped %p (live %d, in car %p live %d)\n", k, cams[k] == listener ? " (the listener)" : "",
+                (void*)cp, (int)livePeds.count(cp), cp && livePeds.count(cp) ? (void*)cp->field_16C_car : NULL,
+                cp && livePeds.count(cp) ? (int)liveCars.count(cp->field_16C_car) : -1);
+    }
+    if (listener && listener != cams[0] && listener != cams[1] && listener != cams[2])
+    {
+        Ped* cp = listener->field_34_target_ped;
+        fprintf(stderr, "net: crash state: the listener is another camera %p, follows ped %p (live %d, aux of the player %d)\n", (void*)listener,
+                (void*)cp, (int)livePeds.count(cp), cp == p->field_2C8_aux_ped);
+    }
+    Car* cars[2] = {ped ? ped->field_16C_car : NULL, camPed ? camPed->field_16C_car : NULL};
+    for (int k = 0; k < 2; k++)
+    {
+        if (cars[k])
+        {
+            fprintf(stderr, "net: crash state: car %p live %d sprite %p despawn status %d driver %p mapped %d\n", (void*)cars[k],
+                    (int)liveCars.count(cars[k]), (void*)cars[k]->field_50_car_sprite, (int)cars[k]->field_88_despawn_status,
+                    (void*)cars[k]->field_54_driver, 0);
         }
     }
 }

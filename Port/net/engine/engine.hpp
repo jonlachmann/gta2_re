@@ -62,6 +62,7 @@ bool PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons);
 int PlayerHealth(const EntityState& e); // a player entity's health
 int PlayerFrags(const EntityState& e);
 int PlayerDeaths(const EntityState& e);
+uint32_t PlayerCarId(const EntityState& e); // the NetId of the car it drives, 0 on foot
 
 // Rollback (rollback.cpp): the whole game world and this client's replicas, saved after a tick and restored to
 // resimulate from there
@@ -125,6 +126,9 @@ void PutInGame(int slot, bool freshScore);
 // Tests: the game's own death for a player, credited to another (-1: nobody); a server's frags follow from it
 void DebugKill(int victim, int killer);
 bool PlayerWasted(int player);
+bool PlayerInCar(int player); // in this game
+bool DebugCheckPlayerCars(const char* where);
+void DebugOnCrash(); // from the crash handler (Port/main.cpp): the local player's ped, car and camera // every in-game player's car is a live car; prints the first time not
 void DebugArm(int player, int weapon, int ammo); // Player::AddWeaponWithAmmo_564960, for tests // in this game: dead and waiting to respawn (Player::field_28_wasted_or_busted)
 
 // What a client doesn't simulate (client_mode.cpp): spawning and despawning, scripts, police; called every frame
