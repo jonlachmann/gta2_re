@@ -418,7 +418,7 @@ void gtx_0x106C::load_delx_5AAB30(u32 delx_chunk_size)
     for (; off < delx_chunk_size;)
     {
         u32 size = 2 * pIter->field_2_delta_count + 4;
-        field_60_delta_len += 8 * pIter->field_2_delta_count + 4;
+        field_60_delta_len += GTX_DELTAS_SIZE(pIter->field_2_delta_count);
         pIter = (delta_entry*)((u8*)pIter + size);
         off += size;
     }
@@ -442,7 +442,7 @@ void gtx_0x106C::load_delx_5AAB30(u32 delx_chunk_size)
         }
 
         u32 size = 2 * pSrc->field_2_delta_count + 4;
-        pDst = (sprite_deltas*)((u8*)pDst + 8 * pDst->field_2_count + 4);
+        pDst = (sprite_deltas*)((u8*)pDst + GTX_DELTAS_SIZE(pDst->field_2_count));
         off2 += size;
         pSrc = (delta_entry*)((u8*)pSrc + size);
     }
@@ -455,13 +455,26 @@ void gtx_0x106C::SetDeltaDataPtrs_5AABF0()
     s32 size;
     delta_entry* i = (delta_entry*)field_50_delta_buffer;
 
+#if defined(GTA2_PORT) && defined(__LP64__)
+    // Port, 64-bit: the deltas' pointers are 8 bytes; the loop below treats them as 4-byte words
+    for (sprite_deltas* d = (sprite_deltas*)field_50_delta_buffer; (u8*)d < (u8*)field_50_delta_buffer + field_60_delta_len;
+         d = (sprite_deltas*)((u8*)d + GTX_DELTAS_SIZE(d->field_2_count)))
+    {
+        for (u32 delta_idx = 0; delta_idx < d->field_2_count; delta_idx++)
+        {
+            d->field_4_deltas[delta_idx].field_0_pData =
+                (delta_store_entry*)((u8*)field_48_delta_store + (uptr)d->field_4_deltas[delta_idx].field_0_pData);
+        }
+    }
+    return;
+#endif
     for (u32 offset = 0; offset < field_60_delta_len; offset += size)
     {
         for (u32 delta_idx = 0; delta_idx < i->field_2_delta_count; delta_idx++)
         {
             *(u32*)&i->field_4_delta[4 * delta_idx] += *(u32*)&field_48_delta_store; // TODO: fix me
         }
-        size = 8 * (u8)i->field_2_delta_count + 4;
+        size = GTX_DELTAS_SIZE((u8)i->field_2_delta_count);
         i = (delta_entry*)((char_type*)i + size);
     }
 }
@@ -585,7 +598,7 @@ void gtx_0x106C::build_delta_container_5AAC70()
             maxSprite = pIter->field_0_which_sprite;
         }
 
-        u32 size = 8 * pIter->field_2_count + 4;
+        u32 size = GTX_DELTAS_SIZE(pIter->field_2_count);
         off += size;
         pIter = (sprite_deltas*)((u8*)pIter + size);
     }
@@ -618,7 +631,7 @@ void gtx_0x106C::build_delta_container_5AAC70()
             maxSprite = pIter->field_0_which_sprite;
         }
 
-        u32 size = 8 * pIter->field_2_count + 4;
+        u32 size = GTX_DELTAS_SIZE(pIter->field_2_count);
         pIter = (sprite_deltas*)((u8*)pIter + size);
         off2 += size;
     }
@@ -1332,7 +1345,7 @@ void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
         u32 len = pSrc[2];
         pSrc += 3;
         u32 mirror = (offset & 0xFF) << 1;
-        pDst += offset - mirror;
+        pDst += (s32)(offset - mirror); // signed: a step back on 64-bit too
         if (mirror >= 0x100)
         {
             pDst += 0x200;
