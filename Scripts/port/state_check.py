@@ -6,6 +6,7 @@
 # usage: state_check.py [until game frame, default 600]
 #   env GTA2_DIR (the install), SPEED (default 10), ATTRACT_MS (default 3000), DUMP (GTA2_STATELOG_DUMP for all runs)
 #   TRACE_THIS=<n>: with the trace, the first n bytes of *this at each call, compared field by field
+#   TRACE_FIELDS=<regex>: only those fields of *this
 #   TRACE=<a>-<b>:<name>,..  instead: both exes with a call trace of those functions (names or address parts as in
 #       og_function_data_v105.csv) at game frames a..b, then the first call or return that differs
 # Needs build_port/gta2_port.exe (Scripts/port/build.sh) and build_port/gl_clang (build_gl_dlls_clang.sh).
@@ -19,6 +20,8 @@ UNTIL = int(sys.argv[1]) if len(sys.argv) > 1 else 600
 ATTRACT_MS = os.environ.get('ATTRACT_MS', '3000')
 BASE = dict(os.environ, WINEPREFIX=os.path.join(ROOT, 'build_port', 'wineprefix'), WINEDEBUG='-all',
             GTA2_SPEED=os.environ.get('SPEED', '10'), GTA2_PORT_ATTRACT_MS=ATTRACT_MS, GTA2_LOCKSTEP='1')
+# what state_diff.py ignores is no pointer target in the logs either (Port/headless/state_log.cpp)
+BASE['GTA2_STATELOG_IGNORE'] = os.environ.get('IGNORE', 'gTileVerts_|gSound_obj_66F680|gSampManager_6FFF00')
 if os.environ.get('DUMP'):
     BASE['GTA2_STATELOG_DUMP'] = os.environ['DUMP']
 
@@ -105,6 +108,7 @@ def trace():
     # Compare what the signatures say: the stack arguments by size, the return value by size, pointers masked
     lay = layout.Layout(EXE)
     sigs = {o.split('=')[0]: lay.signature(o.split('=')[0]) for o in og}
+    only_fields = re.compile(os.environ.get('TRACE_FIELDS', ''))  # TRACE_FIELDS=<regex>: compare only these of *this
     this_layout = {}
     def this_diff(x, y):
         """The fields of *this that differ between two call lines, by name (padding and pointers left out)."""
@@ -117,6 +121,8 @@ def trace():
         da, db = (bytes.fromhex(''.join(w[6:8] + w[4:6] + w[2:4] + w[0:2] for w in l.split('|')[1].split())) for l in (x, y))
         out = []
         for off, n, f, *_ in fields:
+            if 'unused' in f or '_pad' in f or not only_fields.search(f):  # junk the original never reads
+                continue
             if off + n > min(len(da), len(db)) or n > 4096:
                 continue
             for o in range(off, off + n, 4):  # arrays dword by dword, each masked if it is a pointer in both
@@ -136,7 +142,7 @@ def trace():
             sig = (sig[0], -sig[1])
             if og:
                 f = f[:3] + [f[4]] if f[0] == 'R' else f[:4] + f[5:]
-            elif sig[1] > 8:  # the port too, past 8 bytes
+            elif sig[1] > 4:  # the port too, for classes past 4 bytes (MinGW returns those through memory)
                 f = f[:3] + [f[4]] if f[0] == 'R' else f[:4] + f[5:]
         def val(v, n):
             v = int(v, 16) & ((1 << (8 * min(n, 4))) - 1)
@@ -145,6 +151,9 @@ def trace():
             return ' '.join(f[:3] + ([val(f[3], sig[1])] if sig[1] else []))
         args, words = [], f[4:]
         for n in sig[0]:
+            if n < -4:  # a class by value: 10.5.exe copies it onto the stack, the port may pass a pointer to a copy
+                args.append('class')
+                break  # the arguments after it sit elsewhere on each side
             args.append(('ptr' if n < 0 else val(words[0], n)) if words else '?')
             words = words[(abs(n) + 3) // 4:]
         return ' '.join(f[:3] + ['this'] + args)  # ecx: an address (or junk for a static function), see TRACE_THIS

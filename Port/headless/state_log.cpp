@@ -14,7 +14,7 @@
 //   GTA2_STATELOG_DUMP=<a>-<b>:<n>,.. full bytes of those entries (names, *name for pointees) at game frames a..b
 //   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
 //                                     a..b, to <log>.trace:
-//                                     C <game frame> <label> <ecx> <4 stack dwords> at the entry and
+//                                     C <game frame> <label> <ecx> <6 stack dwords> at the entry and
 //                                     R <game frame> <label> <eax> <dword at eax> at the return; both end in ^<esp>.
 //   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords> int3 breakpoints, so the
 //                                     same in 10.5.exe and in the port (Scripts/port/state_check.py, TRACE=)
@@ -46,6 +46,7 @@ struct Entry
     const unsigned char* addr; // in this process
     unsigned size;
     bool pointee;
+    bool ignored; // GTA2_STATELOG_IGNORE: not a pointer target either
     std::vector<unsigned char> mask; // 0xFF per byte to hash, 0 for padding; empty: all of it
 };
 
@@ -150,11 +151,11 @@ const unsigned char* Target(const Entry& e)
 
 void Add(const char* name, unsigned og, const unsigned char* addr, unsigned size, unsigned pointeeSize)
 {
-    Entry e = {name, og, addr, size, false};
+    Entry e = {name, og, addr, size, false, false};
     gEntries.push_back(e);
     if (pointeeSize)
     {
-        Entry p = {std::string("*") + name, og, addr, pointeeSize, true};
+        Entry p = {std::string("*") + name, og, addr, pointeeSize, true, false};
         gEntries.push_back(p);
     }
     if (og == 0x67AB34)
@@ -318,8 +319,8 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* ep)
         const int frame = Frame();
         if (frame >= gTraceFrom && frame <= gTraceTo)
         {
-            fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x ^%08lx", frame, entry->label.c_str(), (unsigned long)c->Ecx, sp[1],
-                    sp[2], sp[3], sp[4], (unsigned long)c->Esp);
+            fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x %08x %08x ^%08lx", frame, entry->label.c_str(), (unsigned long)c->Ecx,
+                    sp[1], sp[2], sp[3], sp[4], sp[5], sp[6], (unsigned long)c->Esp);
             const unsigned* self = (const unsigned*)(size_t)c->Ecx;
             if (gTraceThis && self && !IsBadReadPtr(self, gTraceThis))
             {
@@ -462,6 +463,20 @@ void StateLog_Init()
     fclose(table);
 #endif
     gLog = fopen(path, "w");
+    // GTA2_STATELOG_IGNORE=a|b|..: entries whose name contains one of these (state_diff.py's IGNORE) are no
+    // pointer targets: what points into them would only be compared by chance
+    if (const char* ig = getenv("GTA2_STATELOG_IGNORE"))
+    {
+        std::string list = std::string(ig) + "|";
+        for (size_t start = 0, bar; (bar = list.find('|', start)) != std::string::npos; start = bar + 1)
+        {
+            const std::string part = list.substr(start, bar - start);
+            for (size_t i = 0; !part.empty() && i < gEntries.size(); i++)
+            {
+                gEntries[i].ignored |= gEntries[i].name.find(part) != std::string::npos;
+            }
+        }
+    }
     ParseMask();
     ParseDump();
 #if defined(_WIN32)
@@ -495,7 +510,7 @@ void StateLog_Frame(unsigned flip)
     for (size_t i = 0; i < gEntries.size(); i++)
     {
         const unsigned char* t = Target(gEntries[i]);
-        if (t && gEntries[i].size)
+        if (t && gEntries[i].size && !gEntries[i].ignored)
         {
             Range rg = {(size_t)t, (size_t)t + gEntries[i].size, (unsigned)i};
             gRanges.push_back(rg);
