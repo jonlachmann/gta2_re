@@ -175,9 +175,14 @@ BOOL Port_SetWindowPos(HWND, HWND, int x, int y, int cx, int cy, UINT flags)
     {
         return TRUE;
     }
-    if (!(flags & SWP_NOSIZE) && cx > 0 && cy > 0)
+    // The game sizes its window to the video mode, again on every mode reset (when it gets focus back). The renderer
+    // scales the picture to the window (GLRenderer::Present), so only the first size is taken: after that the window
+    // keeps the size its user gave it (set again, it and its drawable disagreed until it was resized by hand)
+    static bool sSized;
+    if (!(flags & SWP_NOSIZE) && cx > 0 && cy > 0 && !sSized)
     {
         SDL_SetWindowSize(gWindow, cx, cy);
+        sSized = true;
     }
     if (!(flags & SWP_NOMOVE))
     {
