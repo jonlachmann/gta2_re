@@ -84,7 +84,8 @@ class Layout:
         return num(a['DW_AT_count']) if 'DW_AT_count' in a else num(a['DW_AT_upper_bound']) + 1 if 'DW_AT_upper_bound' in a else 0
 
     def fields(self, off, base=0, prefix='', out=None):
-        """[(offset, size, name)] of the leaf fields of a type."""
+        """[(offset, size, name, pointer)] of the leaf fields of a type; pointer: 1 for pointer fields (and arrays
+        of pointers), which the state log compares by what they point to."""
         out = [] if out is None else out
         off = self.strip(off)
         tag, attrs, children = self.dies[off]
@@ -97,7 +98,7 @@ class Layout:
                     name = prefix + ca.get('DW_AT_name', '"?"').strip('"')
                     if 'DW_AT_data_bit_offset' in ca:
                         bit = num(ca['DW_AT_data_bit_offset'])
-                        out.append((base + bit // 8, (bit % 8 + num(ca['DW_AT_bit_size']) + 7) // 8, name))
+                        out.append((base + bit // 8, (bit % 8 + num(ca['DW_AT_bit_size']) + 7) // 8, name, 0))
                     else:
                         self.fields(num(ca['DW_AT_type']), base + num(ca.get('DW_AT_data_member_location', '0')), name + '.', out)
         elif tag == 'DW_TAG_array_type':
@@ -108,13 +109,16 @@ class Layout:
                 esize *= d
             plain = self.dies[self.strip(elem)][0] not in ('DW_TAG_structure_type', 'DW_TAG_class_type', 'DW_TAG_union_type', 'DW_TAG_array_type')
             if plain or len(dims) > 1:
-                out.append((base, esize * (dims[0] if dims else 0), prefix.rstrip('.') + '[]'))
+                out.append((base, esize * (dims[0] if dims else 0), prefix.rstrip('.') + '[]', int(self.is_pointer(elem))))
             else:
                 for i in range(dims[0] if dims else 0):
                     self.fields(elem, base + i * esize, '%s[%d].' % (prefix.rstrip('.'), i), out)
         else:
-            out.append((base, self.size(off), prefix.rstrip('.')))
+            out.append((base, self.size(off), prefix.rstrip('.'), int(self.is_pointer(off))))
         return out
+
+    def is_pointer(self, off):
+        return self.dies[self.strip(off)][0] == 'DW_TAG_pointer_type'
 
     def entry(self, name):
         """Fields of a state log entry: a global, or *global for what it points to."""
@@ -165,7 +169,7 @@ class Layout:
 def padding(fields, size):
     """[(offset, length)] of the bytes no field covers."""
     used = bytearray(size)
-    for off, n, _ in fields:
+    for off, n, *_ in fields:
         used[off:off + n] = b'\1' * len(used[off:off + n])
     out, i = [], 0
     while i < size:
@@ -182,7 +186,7 @@ def padding(fields, size):
 def load(exe, table):
     """{entry name: [(offset, size, field)]}, cached next to the table."""
     cache = table + '.layout.json'
-    if os.path.exists(cache) and os.path.getmtime(cache) > os.path.getmtime(exe):
+    if os.path.exists(cache) and os.path.getmtime(cache) > max(os.path.getmtime(exe), os.path.getmtime(table)):
         return {k: [tuple(f) for f in v] for k, v in json.load(open(cache)).items()}
     lay, out = Layout(exe), {}
     for line in open(table):
@@ -212,7 +216,17 @@ def write_mask(exe, table, path):
         for e, fields in lay.items():
             for off, n in padding(fields, sizes[e]):
                 f.write('%s %x %x\n' % (e, off, n))
+            # pointer fields: compared by what they point to; not where a union puts something else on them
+            plain = bytearray(sizes[e])
+            for off, n, _, ptr in fields:
+                if not ptr:
+                    plain[off:off + n] = b'\1' * len(plain[off:off + n])
+            done = set()
+            for off, n, _, ptr in fields:
+                if ptr and n % 4 == 0 and off not in done and not any(plain[off:off + n]):
+                    done.add(off)
+                    f.write('%s %x %x p\n' % (e, off, n))
 
 if __name__ == '__main__':
-    assert padding([(0, 1, 'a'), (4, 4, 'b')], 10) == [(1, 3), (8, 2)]
+    assert padding([(0, 1, 'a', 0), (4, 4, 'b', 1)], 10) == [(1, 3), (8, 2)]
     write_mask(*sys.argv[1:4])

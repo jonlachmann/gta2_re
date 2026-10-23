@@ -116,7 +116,7 @@ def trace():
         fields = this_layout[name]
         da, db = (bytes.fromhex(''.join(w[6:8] + w[4:6] + w[2:4] + w[0:2] for w in l.split('|')[1].split())) for l in (x, y))
         out = []
-        for off, n, f in fields:
+        for off, n, f, *_ in fields:
             if off + n > min(len(da), len(db)) or n > 4096:
                 continue
             for o in range(off, off + n, 4):  # arrays dword by dword, each masked if it is a pointer in both
@@ -220,7 +220,7 @@ def load(path):
     d = {}
     for line in open(path):
         p = line.split()
-        d.setdefault((int(p[1]), p[2]), [int(v, 16) for v in p[3:]])  # the first record of a frame
+        d.setdefault((int(p[1]), p[2]), [int(v.split('@')[0], 16) for v in p[3:]])  # the first record of a frame
     return d
 
 lay = layout.load(EXE, TABLE)
