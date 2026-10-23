@@ -42,6 +42,25 @@ class File
     EXPORT static size_t __stdcall Global_ReadRemainder_4A7250(void* Buffer, u32* pMaxFileSize);
 
     EXPORT static char_type __stdcall SkipWhitespace_4A7340(FILE* Stream);
+
+#if defined(GTA2_PORT) && defined(__LP64__)
+    // Port, 64-bit: size_t is no longer u32, and callers pass both. These take the other one.
+    static void AppendBufferToFile_4A6F50(const char_type* FileName, void* Buffer, u32* pBufferSize)
+    {
+        size_t size = *pBufferSize;
+        AppendBufferToFile_4A6F50(FileName, Buffer, &size);
+    }
+    static void WriteBufferToFile_4A6E80(const char_type* FileName, void* Buffer, u32* pBufferSize)
+    {
+        size_t size = *pBufferSize;
+        WriteBufferToFile_4A6E80(FileName, Buffer, &size);
+    }
+    static void Global_Seek_4A7140(size_t* pOffset)
+    {
+        u32 offset = (u32)*pOffset;
+        Global_Seek_4A7140(&offset);
+    }
+#endif
 };
 
 // Copy protection: a file of the game CD with its expected size
