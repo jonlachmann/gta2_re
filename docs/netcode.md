@@ -226,6 +226,160 @@ The bench also found a 64-bit bug that crashed the Mac build whenever a ped touc
 
 Steps 1, 3 and 5 make the modes work; 2 makes "none" safe; 4 keeps the traffic around players right when the rest of the map is full.
 
+## Evaluations (before building)
+
+Measured with `Port/headless/sim_bench.cpp` (`GTA2_NETEVAL=heap,rand,churn,diverge,single,explode`), the offline multiplayer experiment in `Port/netplay_offline.cpp` (`GTA2_OFFLINE_MP`) and an ENet probe. The probe was built in a scratch folder and is not in the repo. None of this is netcode; it is what the design rests on. Native macOS, busy attract demo or Wil unless noted.
+
+### 1. What changes per tick (schema and snapshot size)
+
+`GTA2_NETEVAL=churn` diffs every pool's slots tick by tick for 300 ticks. The fields come from clang's 64-bit record layouts (`-fdump-record-layouts`).
+
+| Type | Size | Fields that change | Bytes changed per changed entity per tick | The biggest changers |
+|---|---|---|---|---|
+| Car | 264 | 25 | 1.1 | `last_seen_timer` (local), doors, flash phase, damage |
+| CarPhysics | 192 | 33 | 6.2 | `cm1`/`cp1` (centre of mass points), velocity, linear velocity, gas, skids |
+| CarAI | 144 | 19 | 1.6 | timers (local), angle, speed |
+| Ped | 776 | 65 | 5.0 | position (`field_1AC_cam`), off-screen counter (local), move target, facing and aim angles |
+| Char | 208 | 42 | 3.7 | animation frame and timers, velocity, rotation, state |
+| Sprite | 80 | 14 | 2.7 | position, sprite index (animation), z, rotation |
+| Object | 64 | 10 | 15.6, but only 1.3 objects per tick | sprite, `pAny`, id: objects mostly appear and disappear |
+| Player | 2400 | 7 | 68 | the two cameras, scores |
+
+- **Mostly a few dynamic values.** The state that really moves per entity: position (x, y, z), rotation, the car's two physics points and two velocities, gas, the ped's targets and angles, the char's velocity, state and animation frame.
+- **A large share is local counters** that the client can run itself: off-screen counters, last-seen timers, animation frame timers, AI tick counters.
+- **Peds have the widest state** (65 fields in 5 minutes). That is the part of the schema to build first and check with the comparison oracle.
+- **Snapshot estimate.** The whole demo world changes ~830 bytes per tick, ~680 without the local counters, at byte granularity. The interest area holds about half of it: 15 cars, 35 peds on foot, 72 objects in 26 × 20 blocks. With an id and field mask per entity, that is **~500 bytes per snapshot at 30 Hz**, ~600 at 15 Hz. It fits the 1372-byte cap (see 7) with room to spare. Busier scenes rely on the priority cut.
+- **Join estimate.** A full state of the interest area, from the fields that ever change plus the static ones (model, remap, type), is **~20 KB** uncompressed: about 15 reliable messages of 1372 bytes.
+
+### 2. How fast a client's own simulation drifts (`diverge`)
+
+The same state is simulated K ticks twice, the second time with a different random stream: the worst case for a client simulating other entities itself.
+
+| After | Cars off by > 1 px | Cars > 1 block | Peds off by > 1 px | Peds > 1/4 block | Peds > 1 block |
+|---|---|---|---|---|---|
+| 1 tick (33 ms) | 0% | 0% | 0% | 0% | 0% |
+| 3 ticks (100 ms) | 0% | 0% | 0-3% | 0% | 0% |
+| 10 ticks (330 ms) | 0-0.3% | 0% | 0-17% | 0-1% | 0% |
+| 30 ticks (1 s) | 0.3-1.2% | 0-0.3% | 46% | 5-14% | 0% |
+| 90 ticks (3 s) | 2-5% | 2-4% | 55-70% | 18-42% | 0-27% |
+
+The local player doesn't drift at all (its input doesn't depend on randomness).
+- **Running the full sim on the client works well** for everything at normal latencies. Within 330 ms nearly everything stays within a pixel. So `cl_remote_mode extrap` (dead reckoning by the game's own sim) is a good default.
+- **Interpolation matters mostly for peds** past ~300 ms and for lossy links.
+- **Traffic cars hardly drift** (they follow the road arrows).
+
+### 3. Random numbers and sound (`rand`, `heap`)
+
+- **The sim draws 67 random numbers per tick; the sound service draws 5,** all from the game's one `rand()` stream. The 5 come from `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, which refills a 5-entry table every service. A client that mutes sound during a resim draws differently and mispredicts on its own. **Sound needs its own random stream** (a port-only `rand` for that table).
+- **During ticks, only sound uses the heap:** `sound_obj::AddSoundObject_419FA0` allocates a `SoundPosEntry` per sound entity, and `FreeSoundEntry_41A090` frees it. The sim itself allocates nothing.
+- **Sound breaks a rollback.** A restore brings back pointers to sound entries that were freed in between: heap corruption, and one "pointer being freed was not allocated" abort. Network games clear `skip_audio` (`ClearDebugFlags_4DB170`), so they hit it. **The client keeps sound out of the rollback set:** the sound entities as a separate, non-rolled-back layer, or a pool instead of `new`.
+
+### 4. A headless multiplayer game (`GTA2_OFFLINE_MP`)
+
+The offline stubs in `Port/netplay_offline.cpp` answer "connected, N players, settings, map" instead of "no network". With `-N` (`GTA2_ARGS=-N`) the game then starts a real network game without DirectPlay. This is the path a server takes.
+
+```
+GTA2_ARGS=-N GTA2_OFFLINE_MP=6:wil-multi.gmp:wil.sty:downtown-6P.scr:1 GTA2_LOCKSTEP=1 GTA2_HEADLESS=1 \
+  GTA2_SIMBENCH=300:3000 Scripts/port/run_mac.sh
+```
+
+- **Every multiplayer map boots with 6 players and spawns all six peds** at the script's positions, in all three game types: downtown, industrial, res, mp1, mp2 and mp5, frags/points/tag.
+- **Tick cost** with six idle players: 16-31 µs, against 13 µs for one.
+- **Stability.** 100 s of game time on every map; one abort (`res-6p`) was the sound rollback problem of 3.
+- **No debug path exists:** `-N` is the only trigger, and the stubs decide the rest (about nine return values, listed by the survey below).
+- **Above 6 players.** About 45-50 sites depend on the count:
+  - 13-14 arrays sized `MAX_PLAYERS`, several in structures with size asserts;
+  - about 13 loops, and 7 literal `6`s (for example `Car::ManageDespawning_442310`, winmain's give-up loops, `gCurrentInputsBufferSize = 48`);
+  - a `u8` disconnect bitmask (a cap of 8);
+  - the six-row results screen;
+  - colours from the ped remap (7 palettes);
+  - the 17-slot HUD arrow pool;
+  - **the number of `PLAYER_PED` declarations in each map's script** (6 in all of them): more players need more spawn points.
+
+  Nothing in the save data depends on it. A compile-time cap (say 32, port only) plus a runtime count covers most of it. That leaves fewer than 10 places with real logic: the bitmask, the results screen, colours, spawn points, and the two `< 6` loops.
+
+**Game rules.** Network games change some rules, all gated by `bStartNetworkGame_7081F0`:
+- police at most wanted level 1;
+- gangs use their basic weapon;
+- car weapons cost a tenth;
+- all car models spawn;
+- endless respawns at the Restart zones, round robin (`Player::RespawnPlayer_5670B0`).
+
+**Scoring.** Frags go through `GameSession::UpdateFrags_4C5CD0`, points through `PlayerScoreTracker::AddCash_592620` and tag through `TagGame`. The win check (frag or points limit) is at `PlayerScoreTracker.cpp:226`. Team modes and CTF don't exist and would be new mode code.
+
+### 5. Advancing one object on its own (`single`)
+
+Rockets are fired around the player. Then each moving object is advanced either with one full tick or with its own `Object::PoolUpdate` only, from the same state.
+- `PoolUpdate` alone gives the full tick's position for **15 of 15** moving objects, and the same bytes for 14.
+- So **projectile rewind-on-spawn can advance a projectile by itself.** Collisions with other entities then test against their current, not their rewound, positions unless a position history is added.
+
+The run afterwards ran the collision grid's link pool (4096) dry in `Particle_4C::UpdateObjectBeamLink_state_38_538AC0`, from the rockets' explosions and fire. That's one more reason the grid pools need headroom.
+
+### 6. Rollback in harder scenes (`explode`)
+
+| Scene | Result |
+|---|---|
+| Wil, Industrial, Residential, each with 250 traffic cars, 100-126 peds and 20 explosions (fire, debris) | Rollback of 30 ticks exact in all three (with `skip_audio`) |
+| Six-player network games | Exact, except while sound is on (see 3) |
+
+Residential was down to **46 free collision-grid links** with 250 cars: the grid pools are the first limit for a fuller world. Not covered yet: a running mission, cranes and trains moving during the window.
+
+### 7. ENet 1.3.18 (probe in a scratch folder, not in the repo)
+
+**Limits and overhead:**
+- The largest unreliable packet that is not fragmented at `host->mtu = 1400` is **1372 bytes**: `mtu - 28`, because ENet fragments anything above `mtu - 4 - 24`. With CRC32 it is 1368.
+- ENet's MTU is the UDP payload: 1400 is a 1428-byte IPv4 packet. If 1400 has to be the IP packet, use `mtu = 1372` (payload 1344).
+- A snapshot-only datagram has 10 bytes of overhead. ENet bundles up to 32 commands per datagram (acks, reliables, pings).
+- There is no MTU setter: set `host->mtu` on both sides before connecting. The default is 1392, and there is no path-MTU discovery.
+
+**Larger packets:** an unreliable packet larger than the cap is **sent as reliable fragments** by default. Under 10% loss its latency went to a 207 ms median, 637 ms p95 and 820 ms max; at 2000 bytes, seconds, and the backlog grows. It also delays the separate reliable channel (p95 1.4 s), since all reliable data shares one send window. `ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT` keeps the fragments unreliable: losing one loses the whole packet.
+
+**Measured delivery** (proxy with 50 ms each way, ±10 ms jitter, reordering):
+- Capped snapshots arrive as often as the raw loss allows (97% at 5% loss, 89-92% at 10%), with p95 latency 60 ms.
+- Reliable 40-byte messages: median 52 ms. p95 85-180 ms at 5% loss and 190-310 ms at 10%. Worst case 0.5 s at 5% and 2 s at 10%, because the retransmit timeout doubles and there is no fast retransmit.
+
+**Throttle, RTT and compression:**
+- The packet throttle drops unreliable packets when the RTT rises: 3-8 of 900 snapshots in an RTT spike. Turning it off with `enet_peer_throttle_configure(peer, 5000, 32, 0)` lost nothing.
+- `peer->roundTripTime` is accurate (99-107 ms against 101-107 ms) but excludes send-queue delay.
+- The built-in range coder compresses whole datagrams after the fragmentation decision, so it doesn't raise the cap. Compress our own payload instead.
+
+**Settings for us:**
+- `host->mtu = 1400`; 2 channels; throttle off; `enet_host_flush` after each tick.
+- Channel 0 only unreliable (snapshots capped at **1372**, inputs with the last few commands repeated).
+- Channel 1 only reliable (events, join state in messages under the cap, chat).
+- Never mix reliable sends into the snapshot channel: at 10% loss that cost 6% of the snapshots and up to 450 ms of delay.
+- Lower `timeoutMaximum` (`enet_peer_timeout`).
+
+### 8. Bots
+
+**Bots are players whose inputs come from a bot brain.** That's the same path a network client's inputs take (`Player::SetInputs_565740`, then `ControlInputs_566820` and `Service_5687F0`). Everything downstream stays the game's own: frags, respawn, car entry, weapons.
+
+The ped objective AI can't simply drive a player ped:
+- walking reads `Player::field_8_turn_speed`/`field_C_move_direction` for `player_2` peds (`Char::state_0_54DDF0`);
+- `HandleControls_5668D0` clears attacking unless the attack bit is set;
+- `Car::AssignDriver_4406E0` removes the car AI when a player drives;
+- about 70 `player_2` checks in `Ped.cpp`/`char.cpp`.
+
+A bot brain can reuse:
+- auto-aim (`Ped::ComputeAimAngle_45C9D0`);
+- target searches (`FindBestTargetPed_466BF0`, the threat list);
+- the nearest car (`GetNearestFrontVehicle_445210`);
+- road routes (`RouteFinder::StartRoute_58A190`);
+- foot paths (`PathFinder::ComputePath_554AB0`, tied to a ped id);
+- the steering logic in `Ped::UpdateMovementTowardsTarget_4672E0` and `GotoAreaInCar_468310`, as a reference.
+
+The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attack, enter/exit, handbrake/jump, the weapons, three specials, plus a key code for chat.
+
+### What this changes in the plan
+
+- **Size cap:** 1372 bytes of payload, not ~1350 (`host->mtu = 1400`, throttle off, snapshots and reliables on separate channels).
+- **Sound:** its own random stream, and out of the rollback set, before client-side prediction.
+- **Remote entities:** extrapolation by the full sim as the default, interpolation as the option for peds and lossy links.
+- **The server's start path:** the offline stubs (as in the experiment) plus a port-only player cap. Spawn points beyond a script's `PLAYER_PED`s become part of the mode module.
+- **Projectiles:** rewind-on-spawn is possible with `Object::PoolUpdate` per object.
+- **The schema starts with peds:** the widest state.
+- **Collision-grid pools need headroom** on the server, even at 1×.
+
 ## Wire format
 
 - **Encoding.** Little-endian bitstream, never `memcpy` of structs. Clients are 32- and 64-bit, and struct padding differs between them.
@@ -238,7 +392,7 @@ Steps 1, 3 and 5 make the modes work; 2 makes "none" safe; 4 keeps the traffic a
   per-player block, events since the acked tick (unreliable copies of reliable ones, for latency)
   ```
 
-- **Size cap.** Payload of at most **~1350 bytes**, so that ENet's header and the UDP/IP headers fit in 1400 and ENet never fragments an unreliable packet. Check `ENET_HOST_DEFAULT_MTU` for the version we vendor and set the host MTU to 1400.
+- **Size cap.** Payload of at most **1372 bytes** with `host->mtu = 1400`, the largest unreliable packet ENet 1.3.18 doesn't fragment (see "Evaluations", 7). An oversized unreliable packet would silently go out as reliable fragments.
 - **Per-entity acked baselines** instead of Q3's single acked snapshot:
   - For each client, the server remembers which entity states each sent snapshot carried.
   - When the client acks that snapshot, those states become the client's baselines for those entities.
@@ -275,7 +429,7 @@ Steps 1, 3 and 5 make the modes work; 2 makes "none" safe; 4 keeps the traffic a
 | N0 | **Done**, see "N0 measurements". | Whole-world rollback holds: ~30 µs per busy tick, 0.06 ms save/restore, rollback exact. |
 | N1 | Local rollback, no network: save every tick; every K ticks restore K back and resimulate with the same inputs. | The state log hash after resim equals the hash without it. Proves the restore set is complete and the resim is deterministic within one binary. |
 | N2 | Server main, ENet loopback, full snapshots (no delta), schema v1, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
-| N3 | Bitstream, field masks, per-entity acked baselines, priority and the 1350-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
+| N3 | Bitstream, field masks, per-entity acked baselines, priority and the 1372-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
 | N4 | CSP: tick-stamped commands with redundancy, the server input buffer, clock sync, rollback on snapshot. | Prediction error 0 for the local player when it moves alone, at 150 ms RTT. |
 | N5 | Remote view modes, projectile modes, lag compensation history. | Tuning by playing; switch with cvars. |
 | N6 | Game flow: join and leave mid-game, spawn, scores, chat, script events, map change, `MAX_PLAYERS` 16 (`#if GTA2_PORT`; affects player arrays, HUD, scores, remaps, spawn points), server browser or direct connect. | 16 bot clients (a headless client with scripted input) on one map. |
