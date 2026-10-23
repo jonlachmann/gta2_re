@@ -156,7 +156,7 @@ class CarAIPool
         field_0_pool.DeAllocate(p78);
     }
 
-    PoolBasic<CarAI, 306> field_0_pool;
+    PoolBasic<CarAI, GTA2_POOL(306)> field_0_pool;
 };
 
 EXTERN_GLOBAL(CarAIPool*, gCarAI_78_Pool_677CF8);

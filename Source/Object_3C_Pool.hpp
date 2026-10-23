@@ -4,6 +4,6 @@
 #include "Pool.hpp"
 
 
-typedef PoolBasic<Object_3C, 385> TObject_3C_Pool;
+typedef PoolBasic<Object_3C, GTA2_POOL(385)> TObject_3C_Pool;
 
 EXTERN_GLOBAL(TObject_3C_Pool*, gObject_3C_Pool_6F8F7C);

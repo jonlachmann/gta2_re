@@ -39,6 +39,6 @@ GTA2_ASSERT_SIZEOF_ALWAYS(ParticleManager, 0x8);
 
 EXTERN_GLOBAL(ParticleManager*, gParticle_8_6FD5E8);
 
-typedef Pool<Particle_4C, 500> T_Particle_4C_Pool;
+typedef Pool<Particle_4C, GTA2_POOL(500)> T_Particle_4C_Pool;
 
 EXTERN_GLOBAL(T_Particle_4C_Pool*, gParticle_4C_Pool_6FD5E4);

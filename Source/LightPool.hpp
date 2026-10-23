@@ -23,7 +23,7 @@ class LightBase
         UpdatePool_45BF50();
     }
 
-    Pool<Light, 3000> field_0_pool;
+    Pool<Light, GTA2_POOL(3000)> field_0_pool;
 };
 
 class LightPool : public LightBase

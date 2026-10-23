@@ -750,7 +750,7 @@ class AttachedSpritePool
         field_0_pool.DeAllocate(pItem);
     }
 
-    PoolBasic<AttachedSprite, 300> field_0_pool;
+    PoolBasic<AttachedSprite, GTA2_POOL(300)> field_0_pool;
 };
 
 class SpriteShapePool
@@ -775,7 +775,7 @@ class SpriteShapePool
         return field_0_pool.Allocate();
     }
 
-    PoolBasic<SpriteShape, 5031> field_0_pool;
+    PoolBasic<SpriteShape, GTA2_POOL(5031)> field_0_pool;
 };
 
 class SpritePool
@@ -806,7 +806,7 @@ class SpritePool
         return field_0_pool.field_0_pHead != NULL;
     }
 
-    PoolBasic<Sprite, 5031> field_0_pool;
+    PoolBasic<Sprite, GTA2_POOL(5031)> field_0_pool;
 };
 GTA2_ASSERT_SIZEOF_ALWAYS(SpritePool, 0x49B28)
 
