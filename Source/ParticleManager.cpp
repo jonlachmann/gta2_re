@@ -12,6 +12,9 @@
 #include "Object_5C.hpp"
 #include "sprite.hpp"
 #include "rng.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_rand_particle.h" // particles on a stream of their own for the netcode (docs/netcode.md)
+#endif
 
 // Forward declarations: the functions below are in address order
 static inline Ang16 AddAng16_ool(const Ang16& a, const Ang16& b);

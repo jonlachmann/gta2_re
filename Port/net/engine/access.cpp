@@ -29,6 +29,8 @@ EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
 EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
 EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
 extern short gPortZoneRoundRobin; // Port/net/net_main.cpp
+unsigned int PortRandState(); // Port/port_rand.cpp (its header renames rand)
+void PortRandSetState(unsigned int state);
 
 namespace
 {
@@ -128,7 +130,7 @@ net::Schema BuildSchema()
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
-    net::EntityType world = {"world", {{"cycle", 32, false}, {"zone_turn", 16, true}}};
+    net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"zone_turn", 16, true}}};
     s.types.push_back(world); // kEntityWorld
     return s;
 }
@@ -337,6 +339,7 @@ void net::engine::Capture(Snapshot& out)
     EntityState w = Entity(kWorldId, kEntityWorld);
     w.f[kWorldCycle] = gpRng_67AB34->get_cur_rng_41CFE0();
     w.f[kWorldZoneTurn] = gPortZoneRoundRobin;
+    w.f[kWorldRand] = (int32_t)PortRandState();
     out.entities.push_back(w);
     for (int i = 0; i < PlayerCount(); i++)
     {
@@ -468,6 +471,10 @@ void net::engine::Apply(const Snapshot& snap)
         {
             gpRng_67AB34->field_0_rng = snap.entities[k].f[kWorldCycle];
             gPortZoneRoundRobin = (short)snap.entities[k].f[kWorldZoneTurn];
+            if (!getenv("GTA2_NET_NORANDSYNC"))
+            {
+                PortRandSetState((unsigned int)snap.entities[k].f[kWorldRand]);
+            }
         }
     }
     // The slots the server has in the game, and only those (a join or a leave on the server: the same here)
