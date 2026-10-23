@@ -132,38 +132,56 @@ class Layout:
             var = num(self.dies[var][1]['DW_AT_type'])
         return sorted(self.fields(var))
 
+    def find_function(self, name):
+        """The subprogram DIE of a function: by name, else by its address suffix (_4DF4D0), so a function the decomp
+        renamed is still found under the csv's name."""
+        want = '"%s"' % name
+        m = re.search(r'_([0-9A-Fa-f]{6})$', name)
+        suffix = m.group(1).upper() if m else None
+        by_suffix = None
+        for off, (tag, attrs, children) in self.dies.items():
+            if tag != 'DW_TAG_subprogram' or 'DW_AT_name' not in attrs:
+                continue
+            if attrs['DW_AT_name'] == want:
+                return off
+            if suffix and by_suffix is None and attrs['DW_AT_name'].strip('"').upper().endswith('_' + suffix):
+                by_suffix = off
+        return by_suffix
+
     def signature(self, name):
         """(sizes of the stack arguments, -4 for pointers; size of the return value, negative for a class)."""
-        for off, (tag, attrs, children) in self.dies.items():
-            if tag == 'DW_TAG_subprogram' and attrs.get('DW_AT_name') == '"%s"' % name:
-                ret = self.size(num(attrs['DW_AT_type'])) if 'DW_AT_type' in attrs else 0
-                if 'DW_AT_type' in attrs and self.dies[self.strip(num(attrs['DW_AT_type']))][0] in (
-                        'DW_TAG_structure_type', 'DW_TAG_class_type', 'DW_TAG_union_type'):
-                    ret = -ret  # a class: VC6 returns it through a hidden first argument
-                # pointers and references as -4: compared as pointers, whatever range they point into
-                # and classes by value as -size: each compiler passes those its own way (a copy or a pointer to one)
-                def kind(t):
-                    tag = self.dies[self.strip(t)][0]
-                    if tag in ('DW_TAG_pointer_type', 'DW_TAG_reference_type', 'DW_TAG_rvalue_reference_type'):
-                        return -4
-                    if tag in ('DW_TAG_structure_type', 'DW_TAG_class_type', 'DW_TAG_union_type') and self.size(t) > 4:
-                        return -self.size(t)
-                    return self.size(t)
-                args = [kind(num(self.dies[c][1]['DW_AT_type'])) for c in children
-                        if self.dies[c][0] == 'DW_TAG_formal_parameter' and 'DW_AT_artificial' not in self.dies[c][1]]
-                return args, ret
-        return None
+        off = self.find_function(name)
+        if off is None:
+            return None
+        tag, attrs, children = self.dies[off]
+        ret = self.size(num(attrs['DW_AT_type'])) if 'DW_AT_type' in attrs else 0
+        if 'DW_AT_type' in attrs and self.dies[self.strip(num(attrs['DW_AT_type']))][0] in (
+                'DW_TAG_structure_type', 'DW_TAG_class_type', 'DW_TAG_union_type'):
+            ret = -ret  # a class: VC6 returns it through a hidden first argument
+
+        # pointers and references as -4: compared as pointers, whatever range they point into;
+        # classes by value as -size: each compiler passes those its own way (a copy or a pointer to one)
+        def kind(t):
+            tag = self.dies[self.strip(t)][0]
+            if tag in ('DW_TAG_pointer_type', 'DW_TAG_reference_type', 'DW_TAG_rvalue_reference_type'):
+                return -4
+            if tag in ('DW_TAG_structure_type', 'DW_TAG_class_type', 'DW_TAG_union_type') and self.size(t) > 4:
+                return -self.size(t)
+            return self.size(t)
+        args = [kind(num(self.dies[c][1]['DW_AT_type'])) for c in children
+                if self.dies[c][0] == 'DW_TAG_formal_parameter' and 'DW_AT_artificial' not in self.dies[c][1]]
+        return args, ret
 
     def this_fields(self, name):
         """Fields of the class a member function's this points to, or None."""
-        for off, (tag, attrs, children) in self.dies.items():
-            if tag == 'DW_TAG_subprogram' and attrs.get('DW_AT_name') == '"%s"' % name:
-                for c in children:
-                    ca = self.dies[c][1]
-                    if self.dies[c][0] == 'DW_TAG_formal_parameter' and 'DW_AT_artificial' in ca:
-                        ptr = self.strip(num(ca['DW_AT_type']))
-                        return sorted(self.fields(num(self.dies[ptr][1]['DW_AT_type'])))
-                return None
+        off = self.find_function(name)
+        if off is None:
+            return None
+        for c in self.dies[off][2]:
+            ca = self.dies[c][1]
+            if self.dies[c][0] == 'DW_TAG_formal_parameter' and 'DW_AT_artificial' in ca:
+                ptr = self.strip(num(ca['DW_AT_type']))
+                return sorted(self.fields(num(self.dies[ptr][1]['DW_AT_type'])))
         return None
 
 def padding(fields, size):
