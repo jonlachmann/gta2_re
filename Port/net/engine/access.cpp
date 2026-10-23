@@ -10,10 +10,13 @@
 #include "Source/Player.hpp"
 #include "Source/SpriteGrid.hpp"
 #include "Source/char.hpp"
+#include "Source/rng.hpp"
 #include "Source/network_data.hpp"
 #include "Source/sprite.hpp"
 #include "Source/GameSession.hpp"
 #include "Source/Weapon.hpp"
+#include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unordered_map>
@@ -24,6 +27,74 @@ EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
 namespace
 {
 using net::FieldDesc;
+
+// A car's whole physics state on the wire: every CarPhysics member but its two pointers and the unused padding, at
+// its own size (by name: the 64-bit layout isn't the original's). Whatever acts on a car (input, collisions, slopes,
+// oil, skids) leaves its mark here, so a predicted car goes on from exactly the server's.
+struct PhysicsMember
+{
+    const char* name;
+    size_t offset;
+    uint8_t size; // bytes: 1, 2 or 4
+    bool isSigned;
+};
+#define PM(member, sz, sg) {#member, offsetof(CarPhysics, member), sz, sg}
+#define PM_POINT(member) PM(member.x, 4, true), PM(member.y, 4, true)
+const PhysicsMember kPhysics[] = {
+    PM_POINT(field_0_vel_read_only), PM(field_8_total_damage_q, 4, false), PM_POINT(field_10_last_skid_pos[0]),
+    PM_POINT(field_10_last_skid_pos[1]), PM_POINT(field_10_last_skid_pos[2]), PM_POINT(field_10_last_skid_pos[3]),
+    PM_POINT(field_30_cm1), PM_POINT(field_38_cp1), PM_POINT(field_40_linvel_1), PM_POINT(field_48_force_accum),
+    PM_POINT(field_50_linear_accel), PM(field_58_theta, 2, true), PM(field_60_gas_pedal, 4, true),
+    PM(field_64_brake_pressure, 4, true), PM(field_68_air_z_vel, 4, true), PM(field_6C_cp3, 4, true), PM(field_70_z_vel, 4, true),
+    PM(field_74_ang_vel_rad, 4, true), PM(field_78_pointing_ang_rad, 4, true), PM(field_7C_torque_accum, 4, true),
+    PM(field_80_angular_accel, 4, true), PM(field_84_front_skid, 4, true), PM(field_88_rear_skid, 4, true), PM(field_8C_state, 4, true),
+    PM(field_90_timer_since_last_move, 1, false), PM(field_91_is_foot_brake_on, 1, true), PM(field_92_is_hand_brake_on, 1, true),
+    PM(field_93_is_forward_gas_on, 1, true), PM(field_94_is_backward_gas_on, 1, true), PM(field_95_is_coasting, 1, true),
+    PM(field_98_surface_type, 4, true), PM(field_9C_block_spec, 4, true), PM(field_A0_oil_spin_dir, 4, true),
+    PM(field_A4_oil_spin_timer, 1, true), PM(field_A5_current_slope_length, 1, false), PM(field_A6_current_slope_left_tiles, 1, true),
+    PM(field_A7_current_tile_z, 1, false), PM(field_A8_hand_brake_force, 1, true), PM(field_A9_car_model, 1, true),
+    PM(field_AA_sbw, 1, true), PM(field_AB_tpa, 1, true), PM(field_AC_drive_wheels_locked_q, 1, false),
+    PM(field_AD_turn_direction, 1, true)};
+#undef PM_POINT
+#undef PM
+const size_t kCp1X = 13; // kPhysics' field_38_cp1.x: 0 only for a car without physics (nobody is at x 0)
+static_assert(net::engine::kCarPhysics + sizeof(kPhysics) / sizeof(kPhysics[0]) <= net::kMaxFields, "a car's fields");
+
+int32_t GetMember(const CarPhysics* m, const PhysicsMember& d)
+{
+    const unsigned char* p = (const unsigned char*)m + d.offset;
+    if (d.size == 1)
+    {
+        return d.isSigned ? (int32_t) * (const int8_t*)p : (int32_t) * (const uint8_t*)p;
+    }
+    if (d.size == 2)
+    {
+        int16_t v;
+        memcpy(&v, p, 2);
+        return v;
+    }
+    int32_t v;
+    memcpy(&v, p, 4);
+    return v;
+}
+
+void SetMember(CarPhysics* m, const PhysicsMember& d, int32_t v)
+{
+    unsigned char* p = (unsigned char*)m + d.offset;
+    if (d.size == 1)
+    {
+        *p = (unsigned char)v;
+    }
+    else if (d.size == 2)
+    {
+        const int16_t s = (int16_t)v;
+        memcpy(p, &s, 2);
+    }
+    else
+    {
+        memcpy(p, &v, 4);
+    }
+}
 
 net::Schema BuildSchema()
 {
@@ -41,11 +112,17 @@ net::Schema BuildSchema()
     player.fields.push_back(FieldDesc{"state", 2, false}); // kPlayerState
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
                                    {"driver", 2, false}}};
+    for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
+    {
+        car.fields.push_back(FieldDesc{kPhysics[i].name, (uint8_t)(kPhysics[i].size * 8), kPhysics[i].isSigned});
+    }
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false},
                                    {"car", 25, false}, {"state", 1, false}}};
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
+    net::EntityType world = {"world", {{"cycle", 32, false}}};
+    s.types.push_back(world); // kEntityWorld
     return s;
 }
 
@@ -119,11 +196,50 @@ void net::engine::MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16&
     gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
     s->set_xyz_lazy_420600(x, y, z);
     s->set_ang_lazy_420690(rot);
-    if (car->field_58_physics)
+    if (CarPhysics* m = car->field_58_physics)
     {
-        car->field_58_physics->SetSprite_563560(s);
+        const Fix16 steer = m->field_78_pointing_ang_rad; // SetSprite_563560 zeroes the steering
+        m->SetSprite_563560(s);
+        m->field_78_pointing_ang_rad = steer;
     }
     gSpriteGrid_1_679208->AddToRegionBuckets_477B20(s);
+}
+
+void net::engine::SetCarPhysics(Car* car, const EntityState& e)
+{
+    CarPhysics* m = car->field_58_physics;
+    if (!m || !e.f[kCarPhysics + kCp1X]) // no physics on the server
+    {
+        return;
+    }
+    for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
+    {
+        SetMember(m, kPhysics[i], e.f[kCarPhysics + i]);
+    }
+}
+
+void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
+{
+    static const bool on = getenv("GTA2_NET_CARDIFF") != NULL;
+    const CarPhysics* m = car ? car->field_58_physics : NULL;
+    if (!on || !m || !e.f[kCarPhysics + kCp1X])
+    {
+        return;
+    }
+    char line[2048];
+    int n = 0;
+    for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]) && n < (int)sizeof(line) - 80; i++)
+    {
+        const int32_t here = GetMember(m, kPhysics[i]), there = e.f[kCarPhysics + i];
+        if (here != there)
+        {
+            n += snprintf(line + n, sizeof(line) - n, " %s %d/%d", kPhysics[i].name, here, there);
+        }
+    }
+    if (n)
+    {
+        printf("net: tick %u, our car predicted (here/server):%s\n", tick, line);
+    }
 }
 
 void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
@@ -211,6 +327,9 @@ bool net::engine::PlayerPosition(int player, float* pX, float* pY)
 void net::engine::Capture(Snapshot& out)
 {
     out.entities.clear();
+    EntityState w = Entity(kWorldId, kEntityWorld);
+    w.f[kWorldCycle] = gpRng_67AB34->get_cur_rng_41CFE0();
+    out.entities.push_back(w);
     for (int i = 0; i < PlayerCount(); i++)
     {
         Player* p = GetPlayer(i);
@@ -253,6 +372,13 @@ void net::engine::Capture(Snapshot& out)
             PutPosition(e, c->field_50_car_sprite, kCarX, kCarY, kCarZ, kCarRot);
             e.f[kCarModel] = c->field_84_car_info_idx;
             e.f[kCarDriver] = !c->field_54_driver ? kDriverNone : IsSpareDriver(c->field_54_driver) ? kDriverTraffic : kDriverPed;
+            if (const CarPhysics* m = c->field_58_physics)
+            {
+                for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
+                {
+                    e.f[kCarPhysics + i] = GetMember(m, kPhysics[i]);
+                }
+            }
             out.entities.push_back(e);
         }
     }
@@ -320,6 +446,13 @@ int net::engine::PlayerDeaths(const EntityState& e)
 
 void net::engine::Apply(const Snapshot& snap)
 {
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        if (snap.entities[k].type == kEntityWorld)
+        {
+            gpRng_67AB34->field_0_rng = snap.entities[k].f[kWorldCycle];
+        }
+    }
     // The slots the server has in the game, and only those (a join or a leave on the server: the same here)
     bool sent[MAX_PLAYERS] = {};
     for (size_t k = 0; k < snap.entities.size(); k++)
@@ -509,4 +642,21 @@ bool net::engine::PlayerInCar(int player)
 {
     Player* p = GetPlayer(player);
     return p && p->field_8E_in_use && p->field_2C4_player_ped && p->field_2C4_player_ped->field_16C_car;
+}
+
+void net::engine::DebugOwnCarDiff(const Snapshot& snap)
+{
+    Player* p = GetPlayer(LocalPlayer());
+    Car* car = p && p->field_2C4_player_ped ? p->field_2C4_player_ped->field_16C_car : NULL;
+    if (!car)
+    {
+        return;
+    }
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        if (snap.entities[k].type == kEntityCar && ReplicaCar(snap.entities[k].id) == car)
+        {
+            DebugCarDiff(car, snap.entities[k], snap.tick);
+        }
+    }
 }

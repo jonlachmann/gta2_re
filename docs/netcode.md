@@ -48,6 +48,8 @@ Commands carry the server tick they are for. The server buffers them per tick an
 
 **Drivers** (`engine/replica.cpp`). A car carries its driver: none, the traffic driver, or a ped. All traffic cars share one driver, CarManager's spare (`Car::SpawnDriverPed`, `CarManager::GetSpareDriver_421960`): a ped that points to no car and is never on the street. So that one isn't sent as a ped. A car marked "traffic driver" gets the client's own spare (`Car::SpawnDriverPed`), and loses it when the server's car has none. Any other driver is a ped entity with the car it sits in. The client adopts the driver its car already has, or makes one (`Ped::SpawnDriver_470B00`), and once settled puts the ped into that car (`ForceIntoCar`). The spare never leaves a car the normal way: putting a ped into a traffic car just clears the spare.
 
+**Cars carry their whole physics** (`engine/access.cpp`, `kPhysics`): every `CarPhysics` member but its two pointers, by name (the 64-bit layout isn't the original's), so a predicted car goes on from exactly the server's state, whatever acted on it. A **world** entity, always sent, carries the game's tick counter (`gpRng_67AB34`'s `field_0_rng`). Timers are stamped with it (a car's "damaged until", a ped's voice...), and before it was sent the client counted from elsewhere, which made its car diverge on 237 of 237 desyncs in a test drive. `GTA2_NET_CARDIFF=1` prints each member of the local car the client predicted differently from the server. A car-hopping bot, 150 s: 6 differences, all small (about 0.02 blocks), against 237 before. Getting into and out of a car still shows up to about 1.2 blocks for a moment.
+
 **Test fixture** (`session/replay.cpp`): `GTA2_NET_RECORD=<file>` records a client session (the welcome, then per frame the packets, the round trip and the input). `--replay <file>` plays it back without a server, as fast as the game runs: 8 minutes of game in 10-15 s, the same every time, so a crash can be reproduced and run down. `GTA2_NET_CHECKGRID=1` checks after every step that each link in the collision grid has a live owner whose sprite it is.
 
 With the fixture, a client crash after 1-4 minutes of car hopping turned out to be the replicas' own doing:
@@ -83,7 +85,7 @@ Usage and test switches:
 **Not yet:**
 - passengers;
 - bots that fight well (they find each other, but often stand next to each other without hitting);
-- velocities and state (cars move only by snapshots);
+- ped state beyond position (cars have their whole physics now);
 - interpolation;
 - the comparison check;
 - modes beyond the game's own frags;

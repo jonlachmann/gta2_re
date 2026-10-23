@@ -47,7 +47,9 @@ enum EntityKind : uint8_t
     kEntityPlayer = 0,
     kEntityCar = 1,
     kEntityPed = 2,
+    kEntityWorld = 3, // one, kWorldId: game-wide state (no position), in every client's snapshot
 };
+const uint32_t kWorldId = 0;
 // Every player, car and ped
 void Capture(Snapshot& out);
 // Puts a snapshot's players, cars and peds into this game
@@ -93,6 +95,9 @@ void PoolUse(int* pCars, int* pPeds, int* pChars); // live cars, peds, chars in 
 // those are the same (mapped) ped
 void DriverStats(const Snapshot& snap, int* pSent, int* pDriven, int* pSame);
 // Traffic cars: how many the snapshot has with the shared traffic driver, and how many have it here too
+// GTA2_NET_CARDIFF: where this game's prediction of the local player's car differs from the snapshot's (call after
+// restoring the snapshot's tick, before applying it)
+void DebugOwnCarDiff(const Snapshot& snap);
 void TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSame);
 
 // Where this game has its mapped cars and peds now: NetId and x, y in blocks

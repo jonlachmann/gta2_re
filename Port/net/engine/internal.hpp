@@ -34,6 +34,10 @@ enum PlayerField
     kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead
     kPlayerWeapons = 15,
 };
+enum WorldField
+{
+    kWorldCycle, // the game's tick counter (gpRng_67AB34's field_0_rng): timers are stamped with it (a car's damage, a ped's voice...)
+};
 enum CarField
 {
     kCarX,
@@ -42,6 +46,7 @@ enum CarField
     kCarRot,
     kCarModel,
     kCarDriver, // kDriverNone, kDriverTraffic (the car manager's shared spare driver), kDriverPed (sent as a ped entity)
+    kCarPhysics, // then its whole CarPhysics, member by member (access.cpp's kPhysics; all 0 without physics)
 };
 enum CarDriver
 {
@@ -68,6 +73,10 @@ Sprite* PedSprite(Ped* ped); // its car's when it is in one
 // ped of its own, never sent, moved, forced or removed
 bool IsSpareDriver(const Ped* ped);
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
+// The physics the snapshot has for it (kCarPhysics on), set after MoveCar
+void SetCarPhysics(Car* car, const EntityState& e);
+// GTA2_NET_CARDIFF: the members of a car's physics that differ here from the snapshot's, printed
+void DebugCarDiff(Car* car, const EntityState& e, uint32_t tick);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 
 // The deaths a client has carried out per player (part of the rollback set: world.cpp)

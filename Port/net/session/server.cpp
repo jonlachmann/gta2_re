@@ -170,7 +170,7 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
     for (size_t i = 0; i < world.entities.size(); i++)
     {
         const EntityState& e = world.entities[i];
-        if (e.type == engine::kEntityPlayer)
+        if (e.type == engine::kEntityPlayer || e.type == engine::kEntityWorld)
         {
             snap.entities.push_back(e);
         }

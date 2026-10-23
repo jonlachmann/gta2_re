@@ -214,6 +214,7 @@ void net::Client::Reconcile(const Snapshot& snap)
     }
     engine::RestoreGame(*saved);
     engine::DebugCheckPlayerCars("after the restore");
+    engine::DebugOwnCarDiff(snap);
     engine::Apply(snap);
     engine::DebugCheckPlayerCars("after the apply");
     std::vector<uint32_t> buttons(mRemote);
