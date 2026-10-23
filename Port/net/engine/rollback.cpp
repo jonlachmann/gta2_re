@@ -4,6 +4,7 @@
 #include "world.hpp"
 #include "Source/Game.hpp"
 #include "Source/Player.hpp"
+#include "Source/CollisionSoundQueue.hpp"
 #include "Source/Weapon.hpp"
 #include "Source/WeaponManager.hpp"
 #include "Source/sound_obj.hpp"
@@ -88,8 +89,15 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
     {
         g->UpdateGame_4B9410(); // the tick without the sound service (Game::ExecuteGame_4B9640 without sound)
     }
-    // What the sound service takes from the sim each tick, taken here as it doesn't run: a resimulated shot was heard
-    // when it was predicted. Left set, the flag went into the saves and every restore fired it again (a stuck gun).
+    // What the sound service takes from the sim each tick, taken here as it doesn't run: a resimulated sound was heard
+    // when it was predicted. Left there, it went into the saves and every restore played it again (a gun that went on
+    // firing, a laugh or a step heard over and over). The sim's word to the sound: a weapon's shot, the impacts of the
+    // tick (a landing, a crash) and a voice line.
+    if (gCollisionSoundQueue_66AFE0)
+    {
+        gCollisionSoundQueue_66AFE0->Reset_40BB90();
+    }
+    gSound_obj_66F680.field_544C[0].field_18 = 0; // sound_obj::PlayVocal_418C80's slot (0: none)
     for (Weapon* w = gWeapon_30_Pool_707014->field_0_pool.field_4_pPrev; w; w = w->mpNext)
     {
         w->TakeF2C_41CC80();
