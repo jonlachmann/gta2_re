@@ -8,7 +8,8 @@
 //                                     64-byte chunk whose hash changed since the previous line (entries are cut
 //                                     into chunks in table order: Scripts/port/state_diff.py does the same)
 //   GTA2_STATELOG_TABLE=<file>        (nullvideo.dll) the list written by a port run
-//   GTA2_STATELOG_MASK=<file>         lines <name> <hex offset> <hex length>: padding bytes, left out of the hashes
+//   GTA2_STATELOG_MASK=<file>         lines <name> <hex offset> <hex length> [p]: padding bytes, left out of the
+//                                     hashes, or with p pointer fields, hashed as what they point to
 //                                     (Scripts/port/layout.py writes it from the port's DWARF)
 //   GTA2_STATELOG_DUMP=<a>-<b>:<n>,.. full bytes of those entries (names, *name for pointees) at game frames a..b
 //   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
@@ -18,9 +19,10 @@
 //   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords> int3 breakpoints, so the
 //                                     same in 10.5.exe and in the port (Scripts/port/state_check.py, TRACE=)
 //
-// Values that look like pointers (0x00400000..0x7FFEFFFF, per aligned dword) are hashed as what they point into:
-// (entry, offset) when that is one of the logged entries, else nothing. Positions (Fix16 up to 0x3FC000),
-// counters and flags are below that range.
+// Pointer fields (marked p in GTA2_STATELOG_MASK) are hashed as what they point into: (entry, offset) when that is
+// one of the logged entries, else nothing, so a pointer to the wrong object shows up. Other values that look like
+// pointers (0x00400000..0x7FFEFFFF, per aligned dword) are left out: they differ between the processes, and
+// positions (Fix16 up to 0x3FC000), counters and flags are below that range.
 #include "state_log.hpp"
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,16 +69,16 @@ struct Range
 {
     size_t start, end;
     unsigned entry;
-    bool operator<(const Range& o) const
+    bool operator<(const Range& o) const // ties: the lowest entry last, so the search below picks it
     {
-        return start < o.start;
+        return start < o.start || (start == o.start && entry > o.entry);
     }
 };
 std::vector<Range> gRanges;
 
 unsigned Canonical(unsigned v)
 {
-    Range key = {v, 0, 0};
+    Range key = {v, 0, 0}; // upper_bound: past every range that starts at or below v
     std::vector<Range>::const_iterator it = std::upper_bound(gRanges.begin(), gRanges.end(), key);
     for (int back = 0; back < 4 && it != gRanges.begin(); back++) // nested entries: the innermost that holds it
     {
@@ -89,6 +91,8 @@ unsigned Canonical(unsigned v)
     return 0xFFFFFFFFu; // the heap, the stack, code: not comparable
 }
 
+const unsigned char kPointerMask = 0x7F; // mask bytes of a pointer field (layout.py knows the types)
+
 unsigned Hash(const unsigned char* p, const unsigned char* mask, unsigned size)
 {
     unsigned h = 2166136261u; // FNV-1a
@@ -97,15 +101,22 @@ unsigned Hash(const unsigned char* p, const unsigned char* mask, unsigned size)
     {
         unsigned v;
         memcpy(&v, p + i, 4);
+        unsigned m = 0xFFFFFFFFu;
         if (mask)
         {
-            unsigned m;
             memcpy(&m, mask + i, 4);
-            v &= m;
         }
-        if (LooksLikePointer(v))
+        if (m == 0x7F7F7F7Fu) // a pointer field: what it points to
         {
-            v = Canonical(v);
+            v = LooksLikePointer(v) ? Canonical(v) : v;
+        }
+        else
+        {
+            v &= m;
+            if (LooksLikePointer(v)) // a pointer, or a value we can't tell from one: left out
+            {
+                v = 0xFFFFFFFFu;
+            }
         }
         for (int b = 0; b < 4; b++)
         {
@@ -114,7 +125,7 @@ unsigned Hash(const unsigned char* p, const unsigned char* mask, unsigned size)
     }
     for (; i < size; i++)
     {
-        h = (h ^ (mask ? p[i] & mask[i] : p[i])) * 16777619u;
+        h = (h ^ (mask && mask[i] != kPointerMask ? p[i] & mask[i] : p[i])) * 16777619u;
     }
     return h;
 }
@@ -163,19 +174,20 @@ void ParseMask()
     char line[512];
     while (fgets(line, sizeof(line), f))
     {
-        char name[400];
+        char name[400], kind[4] = "";
         unsigned off, len;
-        if (sscanf(line, "%399s %x %x", name, &off, &len) != 3)
+        if (sscanf(line, "%399s %x %x %3s", name, &off, &len, kind) < 3)
         {
             continue;
         }
+        const unsigned char fill = kind[0] == 'p' ? kPointerMask : 0; // p: a pointer field, else padding
         for (size_t i = 0; i < gEntries.size(); i++) // ponytail: linear search, a map if the mask grows
         {
             Entry& e = gEntries[i];
             if (e.name == name && off + len <= e.size)
             {
                 e.mask.resize(e.size, 0xFF);
-                memset(&e.mask[off], 0, len);
+                memset(&e.mask[off], fill, len);
                 break;
             }
         }
@@ -534,6 +546,11 @@ void StateLog_Frame(unsigned flip)
                         unsigned v = 0;
                         memcpy(&v, p + b, e.size - b < 4 ? e.size - b : 4);
                         fprintf(gDump, " %08x", v);
+                        const unsigned c = LooksLikePointer(v) ? Canonical(v) : 0xFFFFFFFFu;
+                        if (c != 0xFFFFFFFFu) // where it points: @<entry>+<offset>
+                        {
+                            fprintf(gDump, "@%s+%x", gEntries[c >> 20].name.c_str(), c & 0xFFFFFu);
+                        }
                     }
                     fputc('\n', gDump);
                 }
