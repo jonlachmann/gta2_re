@@ -38,14 +38,32 @@ void net::engine::ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const 
 
 void net::engine::ForceIntoCar(Ped* ped, Car* car)
 {
-    if (!car || (ped->field_16C_car == car && ped->field_278_ped_state_1 == ped_state_1::in_car_10))
+    if (!car || !car->field_50_car_sprite || (ped->field_16C_car == car && ped->field_278_ped_state_1 == ped_state_1::in_car_10))
     {
-        return;
+        return; // no car to get into (one being despawned has no sprite)
+    }
+    // Anyone else on the way into this car: still walking up, the game's own cancel; at the door already, this waits
+    // for a later snapshot (it would finish getting in, the car's driver now, after this ped: Ped::UpdateCharB4_462B80)
+    for (Ped* other = gPedPool_6787B8->field_0_pool.field_4_pPrev; other; other = other->mpNext)
+    {
+        Char* oc = other->field_168_game_object;
+        if (other == ped || other->field_16C_car || !oc ||
+            (other->field_150_target_objective_car != car && other->field_154_target_to_enter != car && oc->field_84_target_car != car))
+        {
+            continue;
+        }
+        if (other->field_27C_ped_state_2 == ped_state_2::ped2_entering_a_car_6 || other->field_278_ped_state_1 == ped_state_1::entering_car_3)
+        {
+            return;
+        }
+        other->CancelEnterCarObjective_45C5C0();
     }
     Sprite* cs = car->field_50_car_sprite;
     if (ped->field_16C_car && ped->field_16C_car != car)
     {
-        ForceOutOfCar(ped, cs->field_14_xy.x, cs->field_14_xy.y, cs->field_1C_zpos, cs->field_0_rotation);
+        Sprite* was = ped->field_16C_car->field_50_car_sprite; // out where it sits
+        Sprite* at = was ? was : cs;
+        ForceOutOfCar(ped, at->field_14_xy.x, at->field_14_xy.y, at->field_1C_zpos, at->field_0_rotation);
     }
     if (Ped* driver = car->field_54_driver)
     {
