@@ -119,6 +119,7 @@ bool RoomForPed()
 // sound_obj::InterrogateAudioEntities_41A730)
 int gOccupiedKept;
 std::set<Car*> gReferenced; // cars a live ped points to, gathered once per apply
+int gPedsRemade; // for the log
 
 void GatherReferencedCars()
 {
@@ -331,6 +332,22 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
             {
                 MovePed(ped, Raw(e.f[kPedX]), Raw(e.f[kPedY]), Raw(e.f[kPedZ]), Angle(e.f[kPedRot]));
             }
+            if (!ApplyPedState(ped, e))
+            {
+                // A corpse of this game's own (a death predicted that the server didn't have): it goes, and the next
+                // snapshot makes the ped again
+                if (ped->field_16C_car && ped->field_16C_car->field_54_driver != ped && !ped->field_248_enter_car_as_passenger)
+                {
+                    ped->field_16C_car = NULL;
+                }
+                if (ped->IsActive_433B40() && !ped->field_16C_car)
+                {
+                    ped->Deallocate_45EB60();
+                }
+                gPeds.erase(e.id);
+                mapped.erase(ped);
+                gPedsRemade++;
+            }
         }
     }
 
@@ -400,6 +417,11 @@ void net::engine::PoolUse(int* pCars, int* pPeds, int* pChars)
     {
         printf("net: %d explosions the server had carried out, %d wrecks of this game's own made again\n", gExplosionsCarried, gWrecksReplaced);
         gExplosionsCarried = gWrecksReplaced = 0;
+    }
+    if (gPedsRemade)
+    {
+        printf("net: %d corpses of this game's own made again\n", gPedsRemade);
+        gPedsRemade = 0;
     }
     if (gOccupiedKept)
     {
@@ -546,6 +568,12 @@ void net::engine::ReplicaPositions(std::vector<ReplicaPos>& out)
             out.push_back(p);
         }
     }
+}
+
+Ped* net::engine::ReplicaPed(uint32_t netId)
+{
+    auto it = gPeds.find(netId);
+    return it != gPeds.end() ? it->second : NULL;
 }
 
 Car* net::engine::ReplicaCar(uint32_t netId)

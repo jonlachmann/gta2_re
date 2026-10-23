@@ -127,6 +127,7 @@ net::Schema BuildSchema()
     }
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false},
                                    {"car", 25, false}, {"state", 1, false}}};
+    net::engine::PedStateFields(ped.fields);
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
@@ -426,6 +427,7 @@ void net::engine::Capture(Snapshot& out)
             e.f[kPedRemap] = (uint8_t)p->field_244_remap;
             e.f[kPedCar] = car ? car->field_6C_car_id + 1 : 0;
             e.f[kPedState] = InCarTransition(p) ? 1 : 0;
+            CapturePedState(p, e);
             out.entities.push_back(e);
         }
     }
@@ -557,7 +559,8 @@ void net::engine::Apply(const Snapshot& snap)
         // The car it is going to get into, as the server has it, while it is still on its way (not at the door yet): in a
         // jam the nearest car in front (CarManager::GetNearestFrontVehicle_445210) can be another one here
         Car* serverTarget = e.f[kPlayerTarget] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerTarget] - 1)) : NULL;
-        if (serverTarget && serverTarget->field_50_car_sprite && !ped->field_16C_car && ped->get_objective_403A80() == objectives_enum::enter_car_as_driver_35 &&
+        if (serverTarget && serverTarget->field_50_car_sprite && !ped->field_16C_car && !ped->isDead_403B60() && !(e.f[kPlayerState] & 2) &&
+            ped->get_objective_403A80() == objectives_enum::enter_car_as_driver_35 &&
             ped->field_150_target_objective_car != serverTarget && ped->field_278_ped_state_1 != ped_state_1::entering_car_3)
         {
             ped->SetObjective2_463830(objectives_enum::no_obj_0); // as Player.cpp starts it when the enter key is pressed
@@ -568,7 +571,10 @@ void net::engine::Apply(const Snapshot& snap)
         }
         // In the server's car, or on foot as the server has it: predicted by this game's own input, put right here
         // when both sides have settled (neither halfway into or out of a car, nobody dead)
-        const bool settled = !(e.f[kPlayerState] & 3) && !InCarTransition(ped) && !ped->isDead_403B60();
+        // ... and not counting down to its respawn here (wasted): the ped waits at the restart zone in a plain state, and
+        // put into the server's car (respawned there already) its char went, which the respawn reads
+        // (Ped::ResetForPlayerRespawn_45C410)
+        const bool settled = !(e.f[kPlayerState] & 3) && !InCarTransition(ped) && !ped->isDead_403B60() && !p->field_28_wasted_or_busted;
         if (settled)
         {
             Car* serverCar = e.f[kPlayerCar] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) : NULL;
@@ -788,10 +794,12 @@ void net::engine::DebugSelfLog(uint32_t frame)
         return;
     }
     Sprite* s = PedSprite(ped);
-    printf("net: frame %u, self: at (%.2f, %.2f) states %d/%d dead %d wasted %d countdown %d aux %p camera mode %d health %d\n", frame,
+    printf("net: frame %u, self: at (%.2f, %.2f) states %d/%d dead %d wasted %d countdown %d aux %p camera mode %d health %d char %p car %p "
+           "objective %d\n", frame,
            s ? s->field_14_xy.x.ToFloat() : -1.0f, s ? s->field_14_xy.y.ToFloat() : -1.0f, (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
            (int)ped->isDead_403B60(), (int)p->field_28_wasted_or_busted, (int)p->field_2C_death_countdown, (void*)p->field_2C8_aux_ped,
-           (int)p->field_68_camera_mode, (int)ped->field_216_health);
+           (int)p->field_68_camera_mode, (int)ped->field_216_health, (void*)ped->field_168_game_object, (void*)ped->field_16C_car,
+           (int)ped->get_objective_403A80());
 }
 
 void net::engine::DebugAnimLog(uint32_t frame)

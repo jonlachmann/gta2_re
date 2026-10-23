@@ -69,6 +69,7 @@ enum PedField
     kPedRemap,
     kPedCar, // the car it drives: Car::field_6C_car_id + 1, 0 on foot (its position is the car's then)
     kPedState, // 1: getting into or out of a car
+    kPedAi, // then its AI state (ped_state.cpp)
 };
 
 const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
@@ -106,6 +107,12 @@ void ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, con
 // replica.cpp: a snapshot's cars and peds into a client's game (players: access.cpp)
 void ApplyCarsAndPeds(const Snapshot& snap);
 Car* ReplicaCar(uint32_t netId); // this game's car for a server car, if it has one
+Ped* ReplicaPed(uint32_t netId); // and ped
+// A ped's AI state (ped_state.cpp): its fields (kPedAi on), capture, apply. Apply: false when the ped is dead here and
+// not on the server (it has to be made again)
+void PedStateFields(std::vector<FieldDesc>& out);
+void CapturePedState(const Ped* p, EntityState& e);
+bool ApplyPedState(Ped* p, const EntityState& e);
 bool DebugGridOk(const char* where, Car* car); // GTA2_NET_CHECKGRID: the collision grid has no freed sprites
 // The replica mapping, saved and restored with the world (rollback.cpp): an opaque copy
 struct ReplicaState;
