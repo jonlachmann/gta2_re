@@ -660,3 +660,34 @@ void net::engine::DebugOwnCarDiff(const Snapshot& snap)
         }
     }
 }
+
+void net::engine::Poses(std::vector<Pose>& out)
+{
+    out.clear();
+    for (int i = 0; i < PlayerCount(); i++)
+    {
+        Player* p = GetPlayer(i);
+        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+        Sprite* s = ped && !ped->field_16C_car && ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
+        if (s)
+        {
+            out.push_back(Pose{(uint32_t)(1 + i), s->field_14_xy.x.mValue, s->field_14_xy.y.mValue, s->field_1C_zpos.mValue, s->field_0_rotation.rValue});
+        }
+    }
+    ReplicaPoses(out);
+}
+
+void net::engine::SetPose(const Pose& pose)
+{
+    if (pose.id >= kCarIdBase)
+    {
+        SetReplicaPose(pose);
+        return;
+    }
+    Player* p = GetPlayer((int)pose.id - 1);
+    Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+    if (ped && !ped->field_16C_car && !InCarTransition(ped) && !ped->isDead_403B60())
+    {
+        MovePed(ped, Fix16(pose.x, 0), Fix16(pose.y, 0), Fix16(pose.z, 0), Ang16((s16)pose.rot, (u8)0));
+    }
+}

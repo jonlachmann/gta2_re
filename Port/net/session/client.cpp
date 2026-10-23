@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <thread>
+#include <unordered_map>
 
 namespace
 {
@@ -212,6 +213,8 @@ void net::Client::Reconcile(const Snapshot& snap)
         engine::ApplyScores(snap);
         return;
     }
+    std::vector<engine::Pose> before; // what this frame would have shown, to blend the correction in
+    engine::Poses(before);
     engine::RestoreGame(*saved);
     engine::DebugCheckPlayerCars("after the restore");
     engine::DebugOwnCarDiff(snap);
@@ -228,9 +231,49 @@ void net::Client::Reconcile(const Snapshot& snap)
     }
     mRollbacks++;
     engine::ApplyScores(snap);
-    if (!getenv("GTA2_NET_NOEXTRAP")) // ponytail: an env switch for the comparison; cl_remote_mode comes with N5
+    if (getenv("GTA2_NET_EXTRAP")) // off by default: the resimulation, from the server's state, does better
     {
         Extrapolate(snap);
+    }
+    Blend(before);
+}
+
+// The correction in steps: what is shown moves from where it was a part of the way to the corrected state each frame
+// (GTA2_NET_BLEND, 0.3; 1: at once). The saves keep the corrected state, so the blend only touches the live tick
+// before the next snapshot's resimulation; more than 2 blocks off (a respawn, a car entered) jumps.
+void net::Client::Blend(const std::vector<engine::Pose>& shown)
+{
+    static const float alpha = getenv("GTA2_NET_BLEND") ? (float)atof(getenv("GTA2_NET_BLEND")) : 0.3f;
+    if (alpha >= 1 || alpha <= 0)
+    {
+        return;
+    }
+    std::vector<engine::Pose> now;
+    engine::Poses(now);
+    std::unordered_map<uint32_t, const engine::Pose*> before;
+    for (size_t i = 0; i < shown.size(); i++)
+    {
+        before[shown[i].id] = &shown[i];
+    }
+    const int32_t kFar = 2 << 14;
+    for (size_t i = 0; i < now.size(); i++)
+    {
+        const engine::Pose& n = now[i];
+        auto it = before.find(n.id);
+        if (it == before.end())
+        {
+            continue;
+        }
+        const engine::Pose& b = *it->second;
+        const int32_t dx = n.x - b.x, dy = n.y - b.y, dz = n.z - b.z;
+        int32_t dr = ((n.rot - b.rot) % 1440 + 1440 + 720) % 1440 - 720; // the short way round
+        if (abs(dx) > kFar || abs(dy) > kFar || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
+        {
+            continue;
+        }
+        const engine::Pose p = {n.id, b.x + (int32_t)(dx * alpha), b.y + (int32_t)(dy * alpha), b.z + (int32_t)(dz * alpha),
+                                ((b.rot + (int32_t)(dr * alpha)) % 1440 + 1440) % 1440};
+        engine::SetPose(p);
     }
 }
 
