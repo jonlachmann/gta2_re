@@ -550,6 +550,17 @@ class Map_0x370
                            u32* outBlockBytes,
                            DmapInfoList** outSubObj,
                            s32* outSubObjBytes);
+#if defined(GTA2_PORT) && defined(__LP64__)
+    // Port, 64-bit: a caller passes size_t counts, which are no longer u32
+    void GetModifiedMapData_4E8CF0(u16*** outColumnPtr, size_t* outColumnBytes, gmp_block_info** outBlockPtr, size_t* outBlockBytes,
+                                   DmapInfoList** outSubObj, s32* outSubObjBytes)
+    {
+        u32 columnBytes, blockBytes;
+        GetModifiedMapData_4E8CF0(outColumnPtr, &columnBytes, outBlockPtr, &blockBytes, outSubObj, outSubObjBytes);
+        *outColumnBytes = columnBytes;
+        *outBlockBytes = blockBytes;
+    }
+#endif
 
     EXPORT void do_process_loaded_zone_data_4E8E30();
 

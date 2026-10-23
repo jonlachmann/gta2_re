@@ -18,7 +18,14 @@ struct Value
     std::vector<BYTE> data;
 };
 typedef std::map<std::string, Value> Section;
-std::map<std::string, Section> gSections; // the HKEY handed out is a Section*
+// The HKEY handed out is a Section*. Built on first use: other globals' constructors read settings
+// (cSampleManager's), and in some link orders they run first.
+std::map<std::string, Section>& Sections()
+{
+    static std::map<std::string, Section> sSections;
+    return sSections;
+}
+#define gSections Sections()
 bool gLoaded;
 const char* const kFile = "gta2.ini";
 const char* const kGameKey = "software\\dma design ltd\\gta2\\";
