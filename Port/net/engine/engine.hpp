@@ -102,6 +102,8 @@ void DebugOwnCarDiff(const Snapshot& snap);
 void DebugSoundChannels(uint32_t frame);
 // GTA2_NET_ANIMLOG: the other players' inputs, states and walking animation, every third frame
 void DebugAnimLog(uint32_t frame);
+// GTA2_NET_SELFLOG: the local player around a death (position, states, the death fields), every frame
+void DebugSelfLog(uint32_t frame);
 // GTA2_NET_MARKER: a square drawn where the newest snapshot has the local player (raw Fix16), over the frame
 void SetServerMarker(int32_t x, int32_t y, int32_t z);
 void DrawOverlay(); // the game calls it while drawing (Game::Draw_4B92D0, gPortDrawOverlay)

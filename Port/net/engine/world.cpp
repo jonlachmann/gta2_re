@@ -9,6 +9,7 @@
 #include <string.h>
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
+extern short gPortZoneRoundRobin; // a function's static in the original (map_0x370.cpp): not a registered global
 
 namespace
 {
@@ -78,6 +79,8 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
     Block deaths = {0, 0, "net deaths"};
     NetDeaths_Memory(&deaths.addr, &deaths.size);
     blocks.push_back(deaths);
+    Block zones = {(unsigned char*)&gPortZoneRoundRobin, sizeof(gPortZoneRoundRobin), "restart zone round robin"};
+    blocks.push_back(zones);
     Block sound = {0, 0, "SoundPosEntry pool"};
     SoundPool_Memory(&sound.addr, &sound.size);
     blocks.push_back(sound);

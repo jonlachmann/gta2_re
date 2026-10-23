@@ -27,6 +27,7 @@
 EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
 EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
 EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
+extern short gPortZoneRoundRobin; // Port/net/net_main.cpp
 
 namespace
 {
@@ -125,7 +126,7 @@ net::Schema BuildSchema()
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
-    net::EntityType world = {"world", {{"cycle", 32, false}}};
+    net::EntityType world = {"world", {{"cycle", 32, false}, {"zone_turn", 16, true}}};
     s.types.push_back(world); // kEntityWorld
     return s;
 }
@@ -249,11 +250,9 @@ void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
 void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Sprite* s = ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
-    if (!s || InCarTransition(ped) || ped->isDead_403B60())
+    if (!s || InCarTransition(ped))
     {
-        // Getting in or out, or dying: the game keeps its char's place in the collision grid itself, and re-added, a link
-        // stays behind when the char goes (a dead player's, moved where the server had it)
-        return;
+        return; // getting in or out, the game keeps its char's place in the collision grid itself: re-added, a link stays behind
     }
     gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
     s->set_xyz_lazy_420600(x, y, z);
@@ -335,6 +334,7 @@ void net::engine::Capture(Snapshot& out)
     out.entities.clear();
     EntityState w = Entity(kWorldId, kEntityWorld);
     w.f[kWorldCycle] = gpRng_67AB34->get_cur_rng_41CFE0();
+    w.f[kWorldZoneTurn] = gPortZoneRoundRobin;
     out.entities.push_back(w);
     for (int i = 0; i < PlayerCount(); i++)
     {
@@ -459,6 +459,7 @@ void net::engine::Apply(const Snapshot& snap)
         if (snap.entities[k].type == kEntityWorld)
         {
             gpRng_67AB34->field_0_rng = snap.entities[k].f[kWorldCycle];
+            gPortZoneRoundRobin = (short)snap.entities[k].f[kWorldZoneTurn];
         }
     }
     // The slots the server has in the game, and only those (a join or a leave on the server: the same here)
@@ -532,7 +533,9 @@ void net::engine::Apply(const Snapshot& snap)
         }
         if (!ped->isDead_403B60())
         {
-            ped->set_health_4039A0((s16)e.f[kPlayerHealth]);
+            // At least 1: a death here comes from the server's death count (above), whole; the health the server's dying
+            // ped has (0) started a death of this game's own, undone by the next restore (a flicker of dying and living)
+            ped->set_health_4039A0((s16)(e.f[kPlayerHealth] > 0 ? e.f[kPlayerHealth] : 1));
         }
         const Fix16 x(e.f[kPlayerX], 0), y(e.f[kPlayerY], 0), z(e.f[kPlayerZ], 0);
         const Ang16 rot((s16)e.f[kPlayerRot], (u8)0);
@@ -737,6 +740,31 @@ void net::engine::DrawOverlay()
     v[2].x = x + r, v[2].y = y + r;
     v[3].x = x - r, v[3].y = y + r;
     pgbh_DrawFlatRect(v, (s32)0xFFFF00FF); // magenta: where the server has us (a snapshot's tick, before the prediction)
+}
+
+void net::engine::DebugSelfLog(uint32_t frame)
+{
+    static const bool on = getenv("GTA2_NET_SELFLOG") != NULL;
+    static uint32_t sUntil;
+    Player* p = on ? GetPlayer(LocalPlayer()) : NULL;
+    Ped* ped = p ? p->field_2C4_player_ped : NULL;
+    if (!ped)
+    {
+        return;
+    }
+    if (p->field_28_wasted_or_busted || ped->isDead_403B60())
+    {
+        sUntil = frame + 30;
+    }
+    if (frame > sUntil)
+    {
+        return;
+    }
+    Sprite* s = PedSprite(ped);
+    printf("net: frame %u, self: at (%.2f, %.2f) states %d/%d dead %d wasted %d countdown %d aux %p camera mode %d health %d\n", frame,
+           s ? s->field_14_xy.x.ToFloat() : -1.0f, s ? s->field_14_xy.y.ToFloat() : -1.0f, (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
+           (int)ped->isDead_403B60(), (int)p->field_28_wasted_or_busted, (int)p->field_2C_death_countdown, (void*)p->field_2C8_aux_ped,
+           (int)p->field_68_camera_mode, (int)ped->field_216_health);
 }
 
 void net::engine::DebugAnimLog(uint32_t frame)

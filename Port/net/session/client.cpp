@@ -271,6 +271,28 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
         const engine::Pose& b = *it->second;
         const int32_t dx = n.x - b.x, dy = n.y - b.y, dz = n.z - b.z;
         int32_t dr = ((n.rot - b.rot) % 1440 + 1440 + 720) % 1440 - 720; // the short way round
+        if (n.id >= 0x01000000u && n.id < 0x02000000u && (dx || dy)) // the cars' corrections, for the log
+        {
+            const float d = sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f;
+            mCarCorrections++;
+            mCarCorrectionSum += d;
+            mCarCorrectionMax = d > mCarCorrectionMax ? d : mCarCorrectionMax;
+            mCarSnaps += abs(dx) > kFar || abs(dy) > kFar;
+        }
+        if (n.id < 0x01000000u && (dx || dy)) // the players' corrections, for the log
+        {
+            const float d = sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f;
+            mPlayerCorrections++;
+            mPlayerCorrectionSum += d;
+            mPlayerCorrectionMax = d > mPlayerCorrectionMax ? d : mPlayerCorrectionMax;
+            mPlayerSnaps += abs(dx) > kFar || abs(dy) > kFar;
+        }
+        static const bool sCorrLog = getenv("GTA2_NET_CORRLOG") != NULL;
+        if (sCorrLog && (abs(dx) > 8192 || abs(dy) > 8192 || abs(dr) > 180)) // over half a block or 45 degrees
+        {
+            printf("net: frame %u, correction of %u: %.2f blocks, %d degrees%s\n", mFrame, n.id, sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f,
+                   dr / 4, abs(dx) > kFar || abs(dy) > kFar ? " (jumped)" : "");
+        }
         if (abs(dx) > kFar || abs(dy) > kFar || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
         {
             continue;
@@ -301,6 +323,7 @@ void net::Client::Frame()
     engine::DebugSetFrame(mFrame);
     engine::DebugSoundChannels(mFrame);
     engine::DebugAnimLog(mFrame);
+    engine::DebugSelfLog(mFrame);
     if (getenv("GTA2_NET_ANIMLOG") && mFrame % 3 == 0)
     {
         printf("net: frame %u, remote buttons:", mFrame);
@@ -491,6 +514,14 @@ void net::Client::Frame()
             {
                 printf("net: frame %u, bot %s\n", mFrame, mBot->Describe().c_str());
             }
+            printf("net: frame %u, players' corrections: %u, %.2f blocks on average, up to %.2f, %u over 2 blocks (jumped)\n", mFrame,
+                   mPlayerCorrections, mPlayerCorrections ? mPlayerCorrectionSum / mPlayerCorrections : 0.0f, mPlayerCorrectionMax, mPlayerSnaps);
+            printf("net: frame %u, cars' corrections: %u, %.2f blocks on average, up to %.2f, %u over 2 blocks (jumped)\n", mFrame, mCarCorrections,
+                   mCarCorrections ? mCarCorrectionSum / mCarCorrections : 0.0f, mCarCorrectionMax, mCarSnaps);
+            mCarCorrections = mCarSnaps = 0;
+            mCarCorrectionSum = mCarCorrectionMax = 0;
+            mPlayerCorrections = mPlayerSnaps = 0;
+            mPlayerCorrectionSum = mPlayerCorrectionMax = 0;
             mRollbacks = mResimTicks = 0;
             mMaxError = 0;
             mShownErrorSum = 0;

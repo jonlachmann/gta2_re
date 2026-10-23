@@ -84,6 +84,10 @@ class Client
     void Extrapolate(const Snapshot& snap);
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
     void Blend(const std::vector<engine::Pose>& shown);
+    uint32_t mPlayerCorrections = 0, mPlayerSnaps = 0;
+    float mPlayerCorrectionSum = 0, mPlayerCorrectionMax = 0;
+    uint32_t mCarCorrections = 0, mCarSnaps = 0;
+    float mCarCorrectionSum = 0, mCarCorrectionMax = 0;
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;

@@ -13,6 +13,7 @@
 
 int gPortTrafficCap = 16; // Source/Car.cpp, CarManager::CanAllocateCarOfKind_446930
 void (*gPortDrawOverlay)() = NULL; // Source/Game.cpp, Game::Draw_4B92D0
+short gPortZoneRoundRobin; // Source/map_0x370.cpp, Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0 (respawn zones)
 
 void PortRandSound_Separate(bool separate); // Port/port_rand.cpp (not its header: that one renames rand)
 
