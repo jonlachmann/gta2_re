@@ -187,7 +187,7 @@ void net::engine::Capture(Snapshot& out)
     for (int i = 0; i < PlayerCount(); i++)
     {
         Player* p = GetPlayer(i);
-        Ped* ped = p ? p->field_2C4_player_ped : NULL;
+        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL; // slots out of the game aren't sent
         Sprite* s = ped ? PedSprite(ped) : NULL;
         if (!s)
         {
@@ -268,6 +268,27 @@ int net::engine::PlayerDeaths(const EntityState& e)
 
 void net::engine::Apply(const Snapshot& snap)
 {
+    // The slots the server has in the game, and only those (a join or a leave on the server: the same here)
+    bool sent[MAX_PLAYERS] = {};
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        const EntityState& e = snap.entities[k];
+        if (e.type == kEntityPlayer && e.id >= 1 && e.id <= MAX_PLAYERS)
+        {
+            sent[e.id - 1] = true;
+            if (!SlotInGame((int)e.id - 1))
+            {
+                PutInGame((int)e.id - 1, false); // its place and score follow from the snapshot
+            }
+        }
+    }
+    for (int i = 0; i < PlayerCount() && i < MAX_PLAYERS; i++)
+    {
+        if (!sent[i] && SlotInGame(i))
+        {
+            TakeOutOfGame(i);
+        }
+    }
     for (size_t k = 0; k < snap.entities.size(); k++)
     {
         const EntityState& e = snap.entities[k];

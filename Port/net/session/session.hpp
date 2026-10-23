@@ -53,6 +53,7 @@ class Server
     std::vector<Slot> mSlots;
     uint32_t mTick = 0;
     uint32_t mBytesSent = 0;
+    bool mStarted = false;
 };
 
 struct ClientConfig

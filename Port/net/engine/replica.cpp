@@ -51,7 +51,11 @@ void PlayerOwned(std::set<const void*>& out)
     for (u32 i = 0; g && i < g->field_23_num_players; i++)
     {
         Player* player = g->field_4_players[i];
-        Ped* peds[2] = {player ? player->field_2C4_player_ped : NULL, player ? player->field_2C8_aux_ped : NULL};
+        if (!player || !player->field_8E_in_use)
+        {
+            continue; // out of the game: its last ped is a pedestrian like any other
+        }
+        Ped* peds[2] = {player->field_2C4_player_ped, player->field_2C8_aux_ped};
         for (int k = 0; k < 2; k++)
         {
             if (peds[k])
