@@ -84,7 +84,7 @@ struct car_rng_list
 class CarThreadTrigger
 {
   public:
-    s32 field_0_pScriptCmd;
+    sptr field_0_pScriptCmd; // a script command or a Generator*
     Object* field_4_O2C;
     s32 field_8_type;
     s32 field_C_action;
