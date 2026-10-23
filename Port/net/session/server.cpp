@@ -270,7 +270,9 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
     }
     std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return items[a].priority > items[b].priority; });
     BitWriter w;
-    size_t budget = (size_t)kMaxPayload * 8 - 96; // the header, the entry count, a margin
+    const int packets = mConfig.packets < 1 ? 1 : mConfig.packets > kMaxParts ? kMaxParts : mConfig.packets;
+    const size_t room = packets == 1 ? kMaxPayload : (size_t)packets * (kMaxPayload - kPartHeader); // bytes
+    size_t budget = room * 8 - 96; // the header, the entry count, a margin
     for (;;)
     {
         size_t bits = fixedBits;
@@ -309,7 +311,7 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         SnapshotHeader h = {mTick, base ? base->tick : mTick, s.lastCmdTick};
         WriteSnapshotHeader(w, h);
         WriteDelta(w, schema, base ? *base : kEmpty, candidate);
-        if (w.ByteCount() <= kMaxPayload || budget < 2048)
+        if (w.ByteCount() <= room || budget < 2048)
         {
             mNearSum += (uint32_t)items.size();
             mKeptSum += (uint32_t)fresh;
@@ -318,6 +320,69 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
             break;
         }
         budget -= budget / 8; // the estimate was off (ids' gaps): a little less
+    }
+    static const bool sDeltaStats = getenv("GTA2_NET_DELTASTATS") != NULL;
+    if (sDeltaStats && base)
+    {
+        // What the updates cost now, and with two changes: the changed fields as a list of indices when that is
+        // shorter than the mask, and each changed value as the difference from the client's (zigzag, varint by 7 bits)
+        static double sNow, sList, sDiff, sBoth;
+        static uint32_t sUpdates, sSince;
+        const Snapshot& now = s.sent[mTick % kRing];
+        const Schema& sc = engine::NetSchema();
+        for (size_t i = 0; i < now.entities.size(); i++)
+        {
+            const EntityState& e = now.entities[i];
+            auto it = std::lower_bound(base->entities.begin(), base->entities.end(), e.id, [](const EntityState& b, uint32_t id) { return b.id < id; });
+            if (it == base->entities.end() || it->id != e.id || it->type != e.type)
+            {
+                continue;
+            }
+            const std::vector<FieldDesc>& fd = sc.types[e.type].fields;
+            int changed = 0;
+            double full = 0, diff = 0;
+            for (size_t f = 0; f < fd.size(); f++)
+            {
+                const uint32_t mask = fd[f].bits >= 32 ? 0xFFFFFFFFu : (1u << fd[f].bits) - 1;
+                if ((uint32_t)(e.f[f] ^ it->f[f]) & mask)
+                {
+                    changed++;
+                    full += fd[f].bits;
+                    int64_t d = (int64_t)e.f[f] - (int64_t)it->f[f];
+                    uint64_t z = d < 0 ? (uint64_t)(-2 * d - 1) : (uint64_t)(2 * d);
+                    int vb = 8;
+                    while (z >= 128)
+                    {
+                        z >>= 7;
+                        vb += 8;
+                    }
+                    diff += vb < fd[f].bits ? vb : fd[f].bits + 1; // a flag bit picks the shorter
+                }
+            }
+            if (!changed)
+            {
+                continue;
+            }
+            int idxBits = 1;
+            while ((1u << idxBits) < fd.size())
+            {
+                idxBits++;
+            }
+            const double maskBits = (double)fd.size(), listBits = 1 + 7 + changed * idxBits;
+            const double sel = maskBits < listBits ? maskBits : listBits;
+            sNow += maskBits + full;
+            sList += sel + full;
+            sDiff += maskBits + diff;
+            sBoth += sel + diff;
+            sUpdates++;
+        }
+        if (++sSince == 300 * (uint32_t)mSlots.size())
+        {
+            printf("net: delta updates: %u, bits each now %.0f, with index lists %.0f, with value differences %.0f, both %.0f\n", sUpdates,
+                   sUpdates ? sNow / sUpdates : 0, sUpdates ? sList / sUpdates : 0, sUpdates ? sDiff / sUpdates : 0, sUpdates ? sBoth / sUpdates : 0);
+            sNow = sList = sDiff = sBoth = 0;
+            sUpdates = sSince = 0;
+        }
     }
     static const bool sFieldStats = getenv("GTA2_NET_FIELDSTATS") != NULL;
     if (sFieldStats && base)
@@ -367,9 +432,23 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
             sSince = 0;
         }
     }
-    if (w.ByteCount() <= kMaxPayload)
+    if (w.ByteCount() > kMaxPayload && w.ByteCount() <= room)
+    {
+        // In parts (each at most kMaxPayload): the client puts them together before reading it
+        std::vector<uint8_t> message(w.Data().begin(), w.Data().begin() + w.ByteCount());
+        std::vector<std::vector<uint8_t>> parts;
+        WriteSnapshotParts(message, mTick, parts);
+        for (size_t k = 0; k < parts.size(); k++)
+        {
+            mTransport->Send(s.peer, kChannelUnreliable, parts[k].data(), parts[k].size(), false);
+        }
+        mBytesSent += (uint32_t)w.ByteCount();
+        mPartsSent += (uint32_t)parts.size();
+    }
+    else if (w.ByteCount() <= kMaxPayload)
     {
         mTransport->Send(s.peer, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
+        mPartsSent++;
         mBytesSent += (uint32_t)w.ByteCount();
     }
 }
@@ -475,6 +554,8 @@ void net::Server::Frame()
         printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n",
                mTick, used, world.entities.size(), sent, used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
         mBytesSent = 0;
+        printf("net: tick %u, %.2f packets per snapshot\n", mTick, used ? mPartsSent / 300.0 / used : 0.0);
+        mPartsSent = 0;
         for (size_t i = 0; i < mSlots.size(); i++)
         {
             if (mSlots[i].used)

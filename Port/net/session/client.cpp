@@ -128,6 +128,45 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
     return true;
 }
 
+void net::Client::OnSnapshotPart(BitReader& r)
+{
+    uint32_t tick = 0;
+    int index = 0, count = 0;
+    std::vector<uint8_t> piece;
+    if (!ReadSnapshotPart(r, &tick, &index, &count, piece) || tick <= mLatestTick)
+    {
+        return;
+    }
+    Parts& p = mParts[tick % 4];
+    if (p.tick != tick || p.count != count)
+    {
+        p.tick = tick; // a newer snapshot's: one that never came whole is dropped
+        p.count = count;
+        p.have = 0;
+        p.pieces.assign((size_t)count, std::vector<uint8_t>());
+    }
+    if (!p.pieces[(size_t)index].empty())
+    {
+        return; // had it
+    }
+    p.pieces[(size_t)index] = piece;
+    if (++p.have < p.count)
+    {
+        return;
+    }
+    std::vector<uint8_t> message;
+    for (int i = 0; i < count; i++)
+    {
+        message.insert(message.end(), p.pieces[(size_t)i].begin(), p.pieces[(size_t)i].end());
+    }
+    p.tick = 0;
+    BitReader whole(message.data(), message.size());
+    if (whole.Bits(8) == kMsgSnapshot)
+    {
+        OnSnapshot(whole);
+    }
+}
+
 void net::Client::OnSnapshot(BitReader& r)
 {
     SnapshotHeader h;
@@ -441,9 +480,14 @@ void net::Client::Frame()
         if (e.type == TransportEvent::kReceive && e.channel == kChannelUnreliable)
         {
             BitReader r(e.data.data(), e.data.size());
-            if (r.Bits(8) == kMsgSnapshot)
+            const uint32_t type = r.Bits(8);
+            if (type == kMsgSnapshot)
             {
                 OnSnapshot(r);
+            }
+            else if (type == kMsgSnapshotPart)
+            {
+                OnSnapshotPart(r);
             }
         }
         else if (e.type == TransportEvent::kDisconnect && mConnected)
