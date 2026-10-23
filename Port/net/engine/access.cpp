@@ -197,7 +197,18 @@ void net::engine::Capture(Snapshot& out)
     SortById(out);
 }
 
-void net::engine::Apply(const Snapshot& snap, int localPlayer)
+bool net::engine::PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons)
+{
+    if (e.type != kEntityPlayer)
+    {
+        return false;
+    }
+    *pPlayer = (int)e.id - 1;
+    *pButtons = (uint32_t)e.f[kPlayerButtons];
+    return true;
+}
+
+void net::engine::Apply(const Snapshot& snap)
 {
     for (size_t k = 0; k < snap.entities.size(); k++)
     {
@@ -206,8 +217,7 @@ void net::engine::Apply(const Snapshot& snap, int localPlayer)
         {
             continue; // cars and peds: replica.cpp
         }
-        const int i = (int)e.id - 1;
-        Player* p = GetPlayer(i);
+        Player* p = GetPlayer((int)e.id - 1);
         Ped* ped = p ? p->field_2C4_player_ped : NULL;
         if (!ped)
         {
@@ -215,17 +225,6 @@ void net::engine::Apply(const Snapshot& snap, int localPlayer)
         }
         const Fix16 x(e.f[kPlayerX], 0), y(e.f[kPlayerY], 0), z(e.f[kPlayerZ], 0);
         const Ang16 rot((s16)e.f[kPlayerRot], (u8)0);
-        Sprite* s = PedSprite(ped);
-        if (i == localPlayer && s)
-        {
-            // No prediction yet (N4): the local player runs free and is only snapped back when it is off by more
-            // than a block from the server's
-            const Fix16 dx = s->field_14_xy.x - x, dy = s->field_14_xy.y - y;
-            if (Fix16::Abs(dx) < Fix16(1) && Fix16::Abs(dy) < Fix16(1))
-            {
-                continue;
-            }
-        }
         if (ped->field_16C_car)
         {
             MoveCar(ped->field_16C_car, x, y, z, rot);
@@ -233,10 +232,6 @@ void net::engine::Apply(const Snapshot& snap, int localPlayer)
         else
         {
             MovePed(ped, x, y, z, rot);
-        }
-        if (i != localPlayer)
-        {
-            SetPlayerInput(i, (uint32_t)e.f[kPlayerButtons]); // runs it on with its own input until the next snapshot
         }
     }
     ApplyCarsAndPeds(snap);

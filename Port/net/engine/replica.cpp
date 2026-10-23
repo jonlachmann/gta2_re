@@ -14,6 +14,12 @@
 #include <set>
 #include <unordered_map>
 
+struct net::engine::ReplicaState
+{
+    std::unordered_map<uint32_t, Car*> cars;
+    std::unordered_map<uint32_t, Ped*> peds;
+};
+
 namespace
 {
 std::unordered_map<uint32_t, Car*> gCars; // NetId -> this game's car
@@ -225,4 +231,23 @@ void net::engine::ReplicaStats(const Snapshot& snap, int* pCars, int* pPeds, flo
         }
     }
     *pMaxDrift = sqrtf(drift);
+}
+
+net::engine::ReplicaState* net::engine::SaveReplicas(ReplicaState* reuse)
+{
+    ReplicaState* state = reuse ? reuse : new ReplicaState();
+    state->cars = gCars;
+    state->peds = gPeds;
+    return state;
+}
+
+void net::engine::RestoreReplicas(const ReplicaState* state)
+{
+    gCars = state->cars;
+    gPeds = state->peds;
+}
+
+void net::engine::FreeReplicas(ReplicaState* state)
+{
+    delete state;
 }

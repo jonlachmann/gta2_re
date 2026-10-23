@@ -16,6 +16,7 @@ struct ServerConfig
     uint16_t port = kDefaultPort;
     engine::NetworkGame game; // game.players: the player slots
     float interestRadius = 24.0f; // blocks around a client's player that its snapshots cover (players: always)
+    int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
 
 class Server
@@ -30,8 +31,11 @@ class Server
         bool used = false;
         uint32_t peer = 0;
         std::string name;
-        uint32_t lastCmdTick = 0; // the newest command tick received
-        uint32_t buttons = 0; // the newest command's input
+        uint32_t lastCmdTick = 0; // the newest command tick received (late ones too)
+        uint32_t cmdTick[64] = {}; // received commands by tick % 64
+        uint32_t cmdButtons[64] = {};
+        uint32_t buttons = 0; // the input applied last (repeated while commands are late)
+        uint32_t late = 0; // ticks without their command (counted for the log)
         uint32_t ackTick = 0; // the newest snapshot the client has
         Snapshot sent[64]; // what was sent, by tick % 64: the baselines
     };
@@ -53,28 +57,52 @@ struct ClientConfig
     uint16_t port = kDefaultPort;
     std::string name = "player";
     bool bot = false; // input from a simple bot instead of the controls
+    int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
 
 class Client
 {
   public:
+    Client();
+    ~Client();
     // Connects and waits for the server's welcome (a few seconds at most): then the game to start is known
     bool Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error);
     void Frame();
 
   private:
     void OnSnapshot(BitReader& r);
+    void Reconcile(const Snapshot& snap);
+    uint32_t Lead() const; // ticks to run ahead of the newest snapshot
     uint32_t BotButtons();
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;
     bool mConnected = false;
     int mSlot = 0;
+    int mTickMs = 33;
     uint32_t mFrame = 0;
-    Snapshot mReceived[64]; // by tick % 64: the baselines
+
+    // Snapshots by tick % 64: the baselines
+    Snapshot mReceived[64];
     uint32_t mLatestTick = 0;
+    int mSlack = 0; // how many ticks early our commands reach the server (newest command - next tick)
+    bool mSlackKnown = false;
+    uint32_t mJumpTick = 0; // our tick at the last jump
     bool mNewSnapshot = false;
-    std::vector<InputCmd> mCmds; // the last few sent, to repeat
+
+    // Prediction: this game's tick (the server tick it is predicting), the game saved after each tick, the inputs
+    // used for each tick, and where the local player was predicted to be
+    bool mSynced = false;
+    uint32_t mTick = 0;
+    std::vector<std::unique_ptr<engine::SavedWorld>> mSaves;
+    uint32_t mHistTick[64] = {};
+    uint32_t mHistButtons[64] = {};
+    float mPredX[64] = {}, mPredY[64] = {};
+    std::vector<uint32_t> mRemote; // other players' last inputs, from snapshots
+    // For the log
+    uint32_t mRollbacks = 0, mResimTicks = 0;
+    float mMaxError = 0;
+
     uint32_t mBotSeed = 1;
     uint32_t mBotButtons = 0;
 };

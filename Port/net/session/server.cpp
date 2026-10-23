@@ -27,6 +27,10 @@ bool net::Server::Start(const ServerConfig& config, std::string* error)
     {
         return false;
     }
+    if (config.lagMs || config.jitterMs || config.lossPercent)
+    {
+        mTransport.reset(CreateConditioner(mTransport.release(), config.lagMs, config.jitterMs, config.lossPercent));
+    }
     printf("net: server on port %u, %d player slots, %s\n", config.port, config.game.players, config.game.scr.c_str());
     return true;
 }
@@ -120,10 +124,16 @@ void net::Server::OnReceive(const TransportEvent& e)
     }
     for (int i = 0; i < n; i++)
     {
-        if (cmds[i].tick > s.lastCmdTick) // ponytail: the newest input wins; per-tick commands come with prediction (N4)
+        // The newest tick a command arrived for, late or not: the client steers its lead by it
+        if (cmds[i].tick <= mTick + kRing)
         {
-            s.lastCmdTick = cmds[i].tick;
-            s.buttons = cmds[i].buttons;
+            s.lastCmdTick = cmds[i].tick > s.lastCmdTick ? cmds[i].tick : s.lastCmdTick;
+        }
+        // Commands for ticks still to come (and not too far ahead) go into the buffer
+        if (cmds[i].tick > mTick && cmds[i].tick <= mTick + kRing)
+        {
+            s.cmdTick[cmds[i].tick % kRing] = cmds[i].tick;
+            s.cmdButtons[cmds[i].tick % kRing] = cmds[i].buttons;
         }
     }
 }
@@ -205,10 +215,20 @@ void net::Server::Frame()
             }
         }
     }
-    // Inputs for the next tick; nobody's slot stands still
+    // Inputs for the next tick: its command, or the last one again if it is late; nobody's slot stands still
+    const uint32_t next = mTick + 1;
     for (size_t i = 0; i < mSlots.size(); i++)
     {
-        engine::SetPlayerInput((int)i, mSlots[i].used ? mSlots[i].buttons : 0);
+        Slot& s = mSlots[i];
+        if (s.used && s.cmdTick[next % kRing] == next)
+        {
+            s.buttons = s.cmdButtons[next % kRing];
+        }
+        else if (s.used)
+        {
+            s.late++;
+        }
+        engine::SetPlayerInput((int)i, s.used ? s.buttons : 0);
     }
     Snapshot world;
     engine::Capture(world);
@@ -228,8 +248,14 @@ void net::Server::Frame()
         {
             used += mSlots[i].used;
         }
-        printf("net: tick %u, %d players, %zu entities, %.0f bytes per snapshot\n", mTick, used, world.entities.size(),
-               used ? mBytesSent / 300.0 / used : 0.0);
+        uint32_t late = 0;
+        for (size_t i = 0; i < mSlots.size(); i++)
+        {
+            late += mSlots[i].late;
+            mSlots[i].late = 0;
+        }
+        printf("net: tick %u, %d players, %zu entities, %.0f bytes per snapshot, %u late commands\n", mTick, used,
+               world.entities.size(), used ? mBytesSent / 300.0 / used : 0.0, late);
         mBytesSent = 0;
     }
 }
