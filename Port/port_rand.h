@@ -3,27 +3,10 @@
 // files that call them.
 #pragma once
 
-namespace port_rand_detail
-{
-inline unsigned int& State()
-{
-    static unsigned int sState = 1;
-    return sState;
-}
-} // namespace port_rand_detail
+// VC6's: a linear congruential generator, 15 bits per call. Out of line, named after 10.5.exe's _rand, so
+// the call trace (Scripts/port/state_check.py TRACE=...:_rand) can follow it in both exes.
+void port_srand_5EDED7(unsigned int seed);
+int port_rand_5EDEE1();
 
-inline void port_srand(unsigned int seed)
-{
-    port_rand_detail::State() = seed;
-}
-
-// VC6's: a linear congruential generator, 15 bits per call
-inline int port_rand()
-{
-    unsigned int& s = port_rand_detail::State();
-    s = s * 214013u + 2531011u;
-    return (int)((s >> 16) & 0x7FFF);
-}
-
-#define srand port_srand
-#define rand port_rand
+#define srand port_srand_5EDED7
+#define rand port_rand_5EDEE1
