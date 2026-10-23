@@ -45,7 +45,7 @@ uint32_t net::Bot::Think(const Snapshot& snap, int slot, uint32_t frame)
             }
         }
     }
-    if (!target || best > 40.0f) // nobody near: wander, turning now and then
+    if (!target || best > 200.0f) // nobody at all: wander, turning now and then
     {
         if (frame % 30 == 0)
         {
@@ -67,7 +67,7 @@ uint32_t net::Bot::Think(const Snapshot& snap, int slot, uint32_t frame)
         err += 1440;
     }
     uint32_t buttons = 0;
-    if (best > 1.5f)
+    if (best > 0.8f)
     {
         buttons |= kForward;
     }
