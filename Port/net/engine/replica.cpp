@@ -166,6 +166,15 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     std::set<const void*> owned;
     PlayerOwned(owned);
     std::set<const void*> mapped(owned);
+    std::set<const Car*> playerIn; // the cars players sit in (not the ones they are getting into: those stay the server's)
+    for (u32 i = 0; gGame_0x40_67E008 && i < gGame_0x40_67E008->field_23_num_players; i++)
+    {
+        Player* pl = gGame_0x40_67E008->field_4_players[i];
+        if (pl && pl->field_8E_in_use && pl->field_2C4_player_ped && pl->field_2C4_player_ped->field_16C_car)
+        {
+            playerIn.insert(pl->field_2C4_player_ped->field_16C_car);
+        }
+    }
     for (auto it = gCars.begin(); it != gCars.end();)
     {
         it = liveCars.count(it->second) && !it->second->IsDespawning_4215B0() ? (mapped.insert(it->second), ++it) : gCars.erase(it);
@@ -229,7 +238,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                     car->SetDriver(NULL);
                 }
             }
-            if (!owned.count(car)) // a player's car follows the player (access.cpp)
+            if (!playerIn.count(car)) // a car a player sits in follows the player (access.cpp); one being entered, the server
             {
                 const bool before = DebugGridOk("before moving a car", car);
                 MoveCar(car, Raw(e.f[kCarX]), Raw(e.f[kCarY]), Raw(e.f[kCarZ]), Angle(e.f[kCarRot]));
@@ -542,6 +551,9 @@ struct LinkWas
     int carModel; // for a car owner
     int carStatus;
     uint32_t frame;
+    // for a char owner: its ped as it was (id, states, objective, the snapshot ped it is (0: none), player)
+    int pedId = -1, state1 = -1, state2 = -1, objective = -1, player = -1;
+    uint32_t netId = 0;
 };
 std::unordered_map<const void*, LinkWas> gLinkWas; // every linked sprite as the last good pass saw it
 
@@ -556,12 +568,19 @@ bool GridsSound(const char* where)
     std::set<Ped*> peds;
     Live(cars, peds);
     std::set<Char*> chars;
+    std::unordered_map<const Char*, Ped*> charPed;
     for (Ped* p : peds)
     {
         if (p->field_168_game_object)
         {
             chars.insert(p->field_168_game_object);
+            charPed[p->field_168_game_object] = p;
         }
+    }
+    std::unordered_map<const Ped*, uint32_t> netIds;
+    for (auto& q : gPeds)
+    {
+        netIds[q.second] = q.first;
     }
     GridCell* const* rows = reinterpret_cast<GridCell* const*>(gSpriteGrid_1_679208); // field_0_rows, private, first
     struct Keep
@@ -613,11 +632,27 @@ bool GridsSound(const char* where)
                 {
                     printf("net: CHECK frame %u %s: grid 1 cell (%d, %d) links sprite %p (type %d): %s\n", gDebugFrame, where, (int)c->field_0_x, y,
                            (void*)sp, type, wrong);
+                    if (type == sprite_types_enum::ped_3 && sp->field_8_char_b4_ptr)
+                    {
+                        const Char* ch = sp->field_8_char_b4_ptr;
+                        bool freed = false;
+                        for (Char* f = gChar_B4_Pool_6FDB44->field_0_pool.field_0_pHead; f && !freed; f = f->mpNext)
+                        {
+                            freed = f == ch;
+                        }
+                        Ped* owner = ch->field_7C_pPed;
+                        printf("net: CHECK   the char is %s, points to ped %p (in the pool %d, id %d, its char %p, states %d/%d)\n", freed ? "freed" : "allocated",
+                               (void*)owner, (int)peds.count(owner), owner && peds.count(owner) ? (int)owner->field_200_id : -1,
+                               owner && peds.count(owner) ? (void*)owner->field_168_game_object : NULL, owner && peds.count(owner) ? (int)owner->field_278_ped_state_1 : -1,
+                               owner && peds.count(owner) ? (int)owner->field_27C_ped_state_2 : -1);
+                    }
                     auto was = gLinkWas.find(sp);
                     if (was != gLinkWas.end())
                     {
-                        printf("net: CHECK   frame %u it was linked as type %d, owner %p (car model %d, despawn status %d)\n", was->second.frame,
-                               was->second.type, was->second.owner, was->second.carModel, was->second.carStatus);
+                        printf("net: CHECK   frame %u it was linked as type %d, owner %p (car model %d, despawn status %d; ped %d, states %d/%d, "
+                               "objective %d, snapshot ped %u, player %d)\n",
+                               was->second.frame, was->second.type, was->second.owner, was->second.carModel, was->second.carStatus, was->second.pedId,
+                               was->second.state1, was->second.state2, was->second.objective, was->second.netId, was->second.player);
                     }
                 }
                 if (wrong)
@@ -628,6 +663,21 @@ bool GridsSound(const char* where)
                 LinkWas w = {type, type == sprite_types_enum::car_2 ? (const void*)sp->field_8_car_bc_ptr : (const void*)sp->field_8_object_2C_ptr,
                              type == sprite_types_enum::car_2 ? (int)sp->field_8_car_bc_ptr->field_84_car_info_idx : -1,
                              type == sprite_types_enum::car_2 ? (int)sp->field_8_car_bc_ptr->field_88_despawn_status : -1, gDebugFrame};
+                if (type == sprite_types_enum::ped_3)
+                {
+                    auto cp = charPed.find(sp->field_8_char_b4_ptr);
+                    if (cp != charPed.end())
+                    {
+                        Ped* p = cp->second;
+                        w.pedId = (int)p->field_200_id;
+                        w.state1 = (int)p->field_278_ped_state_1;
+                        w.state2 = (int)p->field_27C_ped_state_2;
+                        w.objective = (int)p->get_objective_403A80();
+                        w.player = p->field_15C_player ? (int)p->field_15C_player->field_2E_idx : -1;
+                        auto n = netIds.find(p);
+                        w.netId = n != netIds.end() ? n->second : 0;
+                    }
+                }
                 now[sp] = w;
             }
         }

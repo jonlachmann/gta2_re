@@ -12,6 +12,7 @@
 #include <string.h>
 
 int gPortTrafficCap = 16; // Source/Car.cpp, CarManager::CanAllocateCarOfKind_446930
+void (*gPortDrawOverlay)() = NULL; // Source/Game.cpp, Game::Draw_4B92D0
 
 void PortRandSound_Separate(bool separate); // Port/port_rand.cpp (not its header: that one renames rand)
 
@@ -164,6 +165,10 @@ int NetMain_Init(std::vector<std::string>& args)
         return 0;
     }
     PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same (milestone S)
+    if (getenv("GTA2_NET_MARKER"))
+    {
+        gPortDrawOverlay = net::engine::DrawOverlay; // where the newest snapshot has us, over the frame
+    }
     setvbuf(stdout, NULL, _IOLBF, 0); // the net: lines as they happen, also when the process is killed
     std::string error;
     if (server)

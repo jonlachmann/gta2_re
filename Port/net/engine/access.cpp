@@ -2,7 +2,9 @@
 // values (14 fraction bits): x and y below 256 blocks fit 22 bits, z below 8 blocks 17 bits; angles are Ang16
 // (0..1439), 11 bits. So what a client gets is exactly the server's value.
 #include "internal.hpp"
+#include "Source/Camera.hpp"
 #include "Source/Car.hpp"
+#include "Source/gbh_graphics.hpp"
 #include "Source/CarPhysics.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"
@@ -245,8 +247,10 @@ void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
 void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Sprite* s = ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
-    if (!s)
+    if (!s || InCarTransition(ped) || ped->isDead_403B60())
     {
+        // Getting in or out, or dying: the game keeps its char's place in the collision grid itself, and re-added, a link
+        // stays behind when the char goes (a dead player's, moved where the server had it)
         return;
     }
     gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
@@ -511,6 +515,13 @@ void net::engine::Apply(const Snapshot& snap)
                 Player* killer = GetPlayer(k);
                 ped->field_204_killer_id = killer && killer->field_2C4_player_ped ? killer->field_2C4_player_ped->field_200_id : 0;
                 ped->field_208_invulnerability = 0;
+                if (ped->field_16C_car)
+                {
+                    // Out of the car first, the way leaving one ends: the game kills a player at the wheel only with its car
+                    // (and clears the driver then); killed in its seat, the car kept the respawned ped as its driver, and a
+                    // ped pulling that "driver" out gave it a second char (left in the collision grid)
+                    ForceOutOfCar(ped, Fix16(e.f[kPlayerX], 0), Fix16(e.f[kPlayerY], 0), Fix16(e.f[kPlayerZ], 0), Ang16((s16)e.f[kPlayerRot], (u8)0));
+                }
                 ped->Kill_46F9D0();
                 continue;
             }
@@ -690,4 +701,36 @@ void net::engine::SetPose(const Pose& pose)
     {
         MovePed(ped, Fix16(pose.x, 0), Fix16(pose.y, 0), Fix16(pose.z, 0), Ang16((s16)pose.rot, (u8)0));
     }
+}
+
+namespace
+{
+bool gMarker;
+Fix16 gMarkerX, gMarkerY, gMarkerZ;
+} // namespace
+
+void net::engine::SetServerMarker(int32_t x, int32_t y, int32_t z)
+{
+    gMarker = true;
+    gMarkerX = Fix16(x, 0);
+    gMarkerY = Fix16(y, 0);
+    gMarkerZ = Fix16(z, 0);
+}
+
+void net::engine::DrawOverlay()
+{
+    Camera* cam = gViewCamera_676978;
+    if (!gMarker || !cam)
+    {
+        return;
+    }
+    Fix16 sx, sy;
+    cam->ProjectWorldToScreen_4B90E0(gMarkerX, gMarkerY, gMarkerZ, &sx, &sy);
+    const float x = sx.ToFloat(), y = sy.ToFloat(), r = 4.0f;
+    Vert v[4] = {};
+    v[0].x = x - r, v[0].y = y - r;
+    v[1].x = x + r, v[1].y = y - r;
+    v[2].x = x + r, v[2].y = y + r;
+    v[3].x = x - r, v[3].y = y + r;
+    pgbh_DrawFlatRect(v, (s32)0xFFFF00FF); // magenta: where the server has us (a snapshot's tick, before the prediction)
 }

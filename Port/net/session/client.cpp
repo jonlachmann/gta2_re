@@ -196,6 +196,10 @@ void net::Client::Reconcile(const Snapshot& snap)
         if (engine::PlayerOf(snap.entities[i], &player, &buttons) && player >= 0 && player < (int)mRemote.size())
         {
             mRemote[player] = buttons;
+            if (player == mSlot && getenv("GTA2_NET_MARKER"))
+            {
+                engine::SetServerMarker(snap.entities[i].f[0], snap.entities[i].f[1], snap.entities[i].f[2]);
+            }
             if (player == mSlot && mHistTick[s % kRing] == s)
             {
                 // The prediction error: where we had ourselves at S against where the server has us
