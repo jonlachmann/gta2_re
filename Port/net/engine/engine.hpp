@@ -98,6 +98,8 @@ void DriverStats(const Snapshot& snap, int* pSent, int* pDriven, int* pSame);
 // GTA2_NET_CARDIFF: where this game's prediction of the local player's car differs from the snapshot's (call after
 // restoring the snapshot's tick, before applying it)
 void DebugOwnCarDiff(const Snapshot& snap);
+// GTA2_NET_SOUNDLOG: the sound's playing channels, printed when they change
+void DebugSoundChannels(uint32_t frame);
 void TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSame);
 
 // Where this game has its mapped cars and peds now: NetId and x, y in blocks
