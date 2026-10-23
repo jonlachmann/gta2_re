@@ -150,20 +150,76 @@ The server can keep everything that exists anywhere on the map, simulated and ke
 - **wrecks only**;
 - **stock GTA2**: clean up whatever no player sees.
 
-**How GTA2 decides now.** The update loops run every live entity, and the camera only decides spawning and despawning:
-- `Car::ManageDespawning_442310`: a car no player's view has covered for 130 ticks (4.3 s) is marked for despawn. Emergency vehicles go at 300.
-- `Car::CanDespawn_442200`: wrecks (a parked car at maximum damage) may always go. Cars in a player's history (`IsCarInAnyPlayerHistory_4B9C10`), mission cars and special peds' cars never go.
-- Views come from player cameras (`Game::IsSpriteInPlayerBounds_4B9950` and the other `IsSprite*Bounds` functions), not from drawing. A headless server already sees what every player sees.
-- Peds and objects have their own off-screen checks (for example `Object_5C::RequestRemovalWhenOffScreen_5290B0`). These still have to be located.
-- **The debug flag `skip_recycling` is no "no cleanup" mode.** It also turns off `TrafficSpawner::GenerateTraffic_583670`, so no new traffic spawns at all.
-- **Traffic is a global budget.** `MakeTrafficForCurrCamera_5832C0` spawns only while `recycled + proto_recycled != 16`. In the bench the car count stayed at 73 for 9,000 ticks.
+### Where GTA2 decides
 
-**What the server needs** (all `#if GTA2_PORT`, server side):
-1. **A cleanup policy in place of the despawn checks.** Each category gets an "unseen for N seconds" timer and a cap, and the cap evicts the oldest unseen entity first. Categories: ambient traffic, ambient peds, wrecks, corpses, emergency vehicles, dropped weapons and pickups, burning objects. Cvars such as `sv_cleanup none|wrecks|stock|aggressive`, `sv_cleanup_wreck_s`, `sv_cleanup_corpse_s`, `sv_max_cars`. Cars a player has owned, and mission entities, stay protected as now.
-2. **Spawning by density around each player** instead of the global budget. Traffic near a player then stays the same however much the rest of the map holds.
-3. **Larger pools.** The limits are cars 306, peds 200 (chars 400), objects 3825 and sprites 5031. "No cleanup" fills them, and `Pool::Allocate` on an empty free list dereferences null. So: bigger pools on the server, plus **eviction under pressure**: near a full pool, the oldest unseen stale entity goes whatever the mode. That makes "none" mean "until the pools are full".
-4. **Cost.** A busy tick is ~0.2 µs per car and ~0.2 µs per ped. A few thousand entities would be ~1 ms per tick, well inside the 33 ms tick. That assumes nothing scales worse than linearly (collisions go through the sprite grid; long lists such as `Ped_List`'s threat search are the places to measure). The bench measures it once the pools are larger.
-5. **Clients.** Interest management keeps a client's snapshots independent of the size of the world, but a dense area can hold more than the stock pools allow. So clients use the server's pool sizes, and the snapshot priority cut handles the bandwidth. A larger world on the client is a larger rollback copy: about 3.5 MB → ~20 MB, still under a millisecond to save.
+Every cleanup and spawn decision goes through one predicate: `Game::IsSpriteInPlayerBounds_4B9950`, the camera rectangles of the players. The `IsSpriteInAnyPlayerBounds_4B97E0` family, `Char::IsOnScreen_545700` and `Car::IsOnScreenForAnyPlayer_43B730` / `IsVisibleToAnyPlayer_43B750` all build on it. A headless server already has the cameras; drawing doesn't feed any of it. Every live entity is updated every tick, wherever it is.
+
+| What | Where | Rule now |
+|---|---|---|
+| Car despawn | `Car::ManageDespawning_442310`, `CanDespawn_442200`, `UpdateCarDespawnStatus_4424C0`, `IsCarInConditionsToDespawn_442170` | Marked after 130 ticks unseen (emergency vehicles 300), then removed once no player sees it. Never: trains, the 3 cars in a player's history, mission cars, special peds' cars. |
+| Wrecks | `HandleCarExplosion_43D840` → `StartWreckCountdown_441380` (50 ticks) → `TurnToWreck_4436A0` | No own timer: a wreck is a car at maximum damage and goes the normal 130-tick way. |
+| Ambient peds | `Ped::StateMachineTick_4626B0`, `field_20E_offscreen_counter` (reset in `UpdateOnScreenCounter_462620`) | Dummies after `gPedOffscreenDespawnTime_678656` = 40 ticks unseen (fleeing: 200); occupation and special peds after 100. Player and script peds never. |
+| Corpses | `Ped::PoolUpdate` (`Ped.cpp:4453`) | Any non-script ped more than 200 ticks off screen. |
+| Ped removal | `Ped::Deallocate_45EB60`, `DeallocateWithGroupCleanup_45EA00`, `PedPool::UpdatePool_445960` | |
+| Objects | `Object::PoolUpdate` (`Object_5C.cpp:1945`), `field_25_removal_state` | Timers and animations (debris, fire, explosions, pickups on touch); no camera except `RequestRemovalWhenOffScreen_5290B0`, used only by mission cleanup. Caps: 360 objects of kind 2, a FIFO of 88 of kind 3 (`TrimSpriteList_529300`). |
+| Particles | `Particle_4C::PoolUpdate` | Timers only; allocation checks for free particles and sprites. |
+| Traffic spawn | `TrafficSpawner::GenerateTraffic_583670` → `MakeTrafficForCurrCamera_5832C0` → `SpawnTrafficCar_582480` | At the edges of each player's camera, gated by: **16 ambient cars for the whole game** (`recycled + proto_recycled`, `CarManager::CanAllocateCarOfKind_446930`, which also caps parked 200, police 6, mission 24...), a cooldown (`CarManager::field_54_spawn_block`), the per-player pacing `Player::field_680_traffic_spawn_counter` (`SelectTrafficCarModel_444AB0`), and zone car density. `skip_recycling` turns generation off altogether. |
+| Ped spawn | `PedManager::Dummies_470330` → `SpawnDummies_46EB60` | At most `field_0_max_dummy_chars` = 50 dummies (halved above wanted level 3), at the camera edges, while the on-screen count is under the zone's ped density / 25. |
+
+**Pools.** Every capacity is now `GTA2_POOL(n)` (`Pool.hpp`). It is the literal `n` except in a port build with `-DGTA2_POOL_SCALE=<k>`.
+- **They have to grow together.** Sprites (5031) and sprite shapes are the sum of cars 306 + chars 400 + objects 3825 + particles 500. CarAI and CarPhysics match the car pool. The collision grid's links (4096) and cells (6000) run out first: at 282 cars in the stock pools, `GridSpriteLink` was the pool that crashed.
+- **A full pool crashes.** Every `Allocate` dereferences an empty free list; only particles check for space first. The game is safe only because of its logical caps (16 traffic cars, 50 dummies, 360/88 objects).
+- **Size-dependent fields:**
+  - `PedRefTable[255]` with `u8` indices; it returns "no ped" when full.
+  - `PedManager`'s `char_type` counters (they overflow above 127).
+  - `Object::SaveObjects_52A500`'s literal 3825.
+  - `PedListNode` (100), shared by the threat list and every car's passengers.
+
+**Linear scans that grow with the world:**
+- `Ped_List::FindClosestPedInViewCone_4713C0` and the threat-list add/remove (peds × threats);
+- `PedManager::PedById` (a full ped-pool scan, ~20 callers);
+- `CarManager::DoGetNearestCarFromCoord_444FC0`;
+- `Object::PoolTake_522360`;
+- the sorted per-row lists of the sprite grid.
+
+### Benchmark: no cleanup, 4× pools (`build_port/mac_x4`)
+
+```
+OUT=build_port/mac_x4 Scripts/port/build_mac.sh -DGTA2_POOL_SCALE=4
+GTA2_BIN=../../mac_x4/gta2_port GTA2_SIMBENCH_FILL=600 GTA2_SIMBENCH_FILL_PEDS=1 GTA2_LOCKSTEP=1 \
+  GTA2_DEBUG=skip_audio GTA2_HEADLESS=1 GTA2_SIMBENCH=300:3000 Scripts/port/run_mac.sh wil
+```
+
+The fill moves the player's camera to random places in Wil and calls the game's own traffic and ped spawners there, with the caps, the cooldown and the pacing lifted. The traffic gets drivers, AI and routes. During the 3,000 measured ticks nothing is cleaned up: car recycling is off, and every ped's off-screen counter is reset each tick.
+
+| Cars | Peds | Tick | Cars per car | Peds per ped |
+|---|---|---|---|---|
+| 52 (start, idle) | 2 | 8 µs | | |
+| 149 | 58 | 72 µs | 0.34 µs | 0.30 µs |
+| 299 | 136 | 181 µs | 0.43 µs | 0.34 µs |
+| 599 | 329 | 447 µs | 0.52 µs | 0.38 µs |
+| 983 | 661 | **891 µs** | 0.61 µs | 0.42 µs |
+
+- **Scaling.** Slightly worse than linear: about n^1.3 for cars, n^1.2 for peds. The grid lists and the full-pool scans above are the likely causes.
+- **Budget.** A thousand cars and 660 peds take 2.7% of the 33 ms tick. Extrapolated, 4,000 cars and 2,600 peds are ~5 ms, still a sixth of the budget. Cars and peds are 99% of the cost.
+- **The client's rollback copy** with 4× pools is 9.3 MB; save 0.16 ms, restore 0.16 ms. The rollback is still exact.
+- **Grid links.** At 983 cars, 11,000 of 16,384 links were free. The pools at 4× hold ~1,200 cars (the fill stopped at the ped pool: every traffic car needs a driver).
+
+The bench also found a 64-bit bug that crashed the Mac build whenever a ped touched a save point. `CarThreadTriggerCmd` (script data) had `ScriptThread* field_8_thread` in a union, so its later fields moved on 64-bit; it is now `PTR32`. Separately, attract mode with `skip_audio` desyncs the demo replay, probably because sound code shares the game's `rand()` (not confirmed). Use the `wil` start for benches.
+
+### Effort
+
+| Step | Work | Size |
+|---|---|---|
+| 1. Pool sizes | Done for the benchmark (`GTA2_POOL`). For the server: a size per pool rather than one factor, and check the size-dependent fields above (`PedRefTable`, the `char_type` counters, `PedListNode`). | small |
+| 2. Allocation that can fail | `Allocate` returns NULL on an empty pool, in port builds; the ~40 unchecked callers (listed by the survey) back off; or simpler, **eviction under pressure** before every spawn, so the pools never fill. | medium: one central check plus eviction, or many call sites |
+| 3. Cleanup policy | One `Port/cleanup` module with the categories (traffic, ambient peds, wrecks, corpses, emergency, dropped items, burning objects), their "unseen for" timers, caps and oldest-first eviction, and the `sv_cleanup` modes. Hooks in the five decision points: car despawn, ped off-screen removal, corpse removal, object kind caps, traffic/ped caps. Each hook is a `#if GTA2_PORT` call at the existing check. | medium |
+| 4. Spawn by density per player | Replace the global 16-car and 50-dummy budgets with "cars/peds within N tiles of this camera" (the sprite grid can count them); keep the cooldown and pacing per player. | small to medium |
+| 5. Interest areas | The server's "seen" predicate becomes "inside any player's interest area", the same areas the snapshots use; `IsSpriteInPlayerBounds_4B9950` is the one place. | small |
+| 6. Hot spots | Only if the larger maps need it: `PedById` by a table, the threat list as a set, `DoGetNearestCarFromCoord` through the grid. | small each |
+| 7. Check | The bench in `GTA2_SIMBENCH_FILL` form per mode, plus a long soak (an hour of game time at 16 bot players), watching the pool headroom that `Counts` prints. | small |
+
+Steps 1, 3 and 5 make the modes work; 2 makes "none" safe; 4 keeps the traffic around players right when the rest of the map is full.
 
 ## Wire format
 
