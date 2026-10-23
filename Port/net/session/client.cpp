@@ -295,6 +295,7 @@ void net::Client::Frame()
 {
     mFrame++;
     engine::DebugSetFrame(mFrame);
+    engine::DebugSoundChannels(mFrame);
     // What arrives this frame: from the network, or the recording
     std::vector<TransportEvent> events;
     uint32_t recordedFrame = 0, recordedInput = 0;
@@ -321,6 +322,13 @@ void net::Client::Frame()
     if (mReplay)
     {
         local = recordedInput;
+    }
+    static const bool sInputLog = getenv("GTA2_NET_INPUTLOG") != NULL;
+    static uint32_t sLastInput = ~0u;
+    if (sInputLog && local != sLastInput)
+    {
+        printf("net: frame %u, input 0x%x\n", mFrame, local);
+        sLastInput = local;
     }
     else if (!mConfig.bot.empty() && engine::GameRunning())
     {
