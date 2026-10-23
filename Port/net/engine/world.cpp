@@ -15,8 +15,9 @@ namespace
 // winmain.cpp's frame loop around the tick: input buffers, network frame and time counters, pacing. The frame code
 // keeps them and a resimulation doesn't run it, so a restore must leave them alone (10.5.exe addresses). The keyboard
 // too: the input recorder (0x67F8B0) holds a key's bit from its key-down to its key-up, and restored it went back
-// to before the press (a held key moved the player only a little).
-const unsigned kFrameLoop[] = {0x67F8B0, 0x67B990, 0x6F56B8, 0x6F56C8, 0x6F5AEC, 0x6F5A28, 0x6F5868, 0x6F593C, 0x6F57D8, 0x6F5B18, 0x6F5B28,
+// to before the press (a held key moved the player only a little). And the audio driver layer (0x6FFF00, the
+// sample manager): its stream handles restored were ones already closed, freed again on the next vocal.
+const unsigned kFrameLoop[] = {0x67F8B0, 0x67B990, 0x6FFF00, 0x6F56B8, 0x6F56C8, 0x6F5AEC, 0x6F5A28, 0x6F5868, 0x6F593C, 0x6F57D8, 0x6F5B18, 0x6F5B28,
                                0x6F58C0, 0x6F58C4, 0x6F5980, 0x6F573C, 0x6F5860, 0x6F58A0, 0x6F5858, 0x6F5B74, 0x6F5944,
                                0x707098, 0x7081F0, 0x6F58D8, 0x6F5760, 0x6F56E0, 0x6F5798, 0x626A08, 0x706C50};
 
