@@ -12,8 +12,8 @@ status snapshot.
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
 | M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. Left: running on Linux. See "M1 so far" and "The Linux build". |
-| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Two fixes so far; the port matches to game frame 290 of `attr1.rep`. See "M2: the replay test". |
-| M3-M6 | Not started. |
+| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Six divergences found; one is unfixable (the original reads stack garbage, particles only); with that left out the port matches to game frame 795 of `attr1.rep`. See "M2: the replay test". |
+| M3-M6 | Not started as planned, but a **native macOS build (arm64, 64-bit) plays**: frontend, the three cities, attract demos. See "Native macOS". |
 
 Branches (local, not pushed yet):
 
@@ -399,13 +399,57 @@ symptom.
    three of the original's four recursive checks and returning 0: in its (+1, +1) case `bRes_1` is read
    before it is set. VC6 keeps it in the same place as `bRes_2`, set true just before; clang doesn't. A
    matching function can depend on such VC6 behaviour, so the port sets it under `GTA2_PORT`.
-3. Open: frame 291, char slot 22's rotation (`0x2d0` in the port, `0` in 10.5.exe) and velocity sign.
+3. Frame 291: a pedestrian turned the wrong way. `Char::sub_54C090` had two constants swapped between its
+   cases: a false match like 1, which the verifier can't see because it renames globals in order of use.
+   That made `Scripts/bin_comp/check_match_refs.py` (globals, callees and switch targets of every MATCH
+   function against 10.5.exe): its first run found five more (script `<`/`>`, car damage areas, a network
+   setting, a sound case). These decomp fixes are also on branch `decomp-fixes` (off master) for a PR.
+4. Frame 308: debris particles fly elsewhere. **Not fixable**: `Car::HandleCarHitByObject_43F130` passes an
+   `impact_vec` it never sets; in 10.5.exe that stack slot holds `pFoundPed`, a heap address. The particles,
+   grids and render counters differ from then on; with them left out (`IGNORE=`) everything else matches.
+5. Frame 721: the port crashed. `PedGroup::GroupAttackPed_4C9B60` has no `return` on one path (C4716 is off
+   for the match); clang made that path unreachable and ran into the next function. All port builds use
+   `-fno-strict-return`. Found with the call trace's stack check (`^esp` in the trace lines).
+6. Open: frame 795, `gCarInfo_48_6FE258` (the car being simulated) points to another model's info, and the
+   port stalls at frame 1040.
+
+The state log also compares **pointer fields by what they point to**: layout.py marks pointer-typed fields
+(not where a union overlays something else) in the mask, and the log hashes them as (entry, offset).
+Other pointer-looking values are still left out. More trace notes: a crash keeps the trace (unbuffered);
+`Class::*` traces a whole class; calls one side inlined are aligned away; clang's tail calls are off in the
+port build (`-fno-optimize-sibling-calls`) so every return is seen.
 
 Tools for this, all in `Scripts/port/`: `replay_check.py` (frames), `snapshot.py` (memory at a frame),
 `trig_check.py` (the tables). winedbg notes: attaching to a running 32-bit process faults under macOS
 wine's wow64 mode, so start the exe under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run_wine.sh`);
 `cont N` is slow per hit, so break on `RunGameFrame_4DA850` with a condition on the frame counter
 (`*(int*)(*(int*)0x67ab34)`) first; casts make dereferences work (`x /4x *(unsigned int*)0x676978`).
+
+## Native macOS (branch `port`)
+
+`Scripts/port/build_mac.sh` builds `build_port/mac/gta2_port`, a **native arm64, 64-bit** program (Homebrew
+SDL3, the system OpenGL, the Linux build's POSIX layer), and `Scripts/port/run_mac.sh [map]` runs it in a
+copy of the install. It plays the frontend, all three cities and the attract demos. Issue #840 planned ARM64
+with 32-bit pointers (M4), but macOS has no such ABI for programs: the kernel refuses a `__PAGEZERO` below
+4 GB on arm64, and `mmap` won't hand out low addresses, so every pointer is above 4 GB. It is a 64-bit build,
+then, which issue #840 called possible later (117 structures, 168 conversions). What it took:
+
+| Problem | Fix (all VC6-neutral: 32-bit builds keep their types and code) |
+|---|---|
+| Structure size asserts (pointers grow) | off in 64-bit port builds, also GTA2Hax's `STATIC_ASSERT`. `-DGTA2_SIZE_SCAN` turns them on for a scan: 112 structures change, nearly all runtime objects; `SaveData` doesn't. |
+| Integers that hold pointers | `uptr`/`sptr` (`types.hpp`): u32/s32 on 32-bit, pointer-sized on 64-bit. The aligned allocator, car triggers, collided char, police target, Kanji outline. Clang's cast warnings list them: `-Wpointer-to-int-cast -Wint-to-pointer-cast -Wvoid-pointer-to-int-cast` (pointer to int casts are only warnings with `-fms-extensions`). |
+| Script data keeps object pointers in 4-byte slots | `PTR32(T)` (`ptr32.hpp`): a 32-bit handle into a table (`Port/ptr_table.cpp`) on 64-bit, `T*` elsewhere. |
+| File records with 4-byte offsets that become pointers | text keys and the sprite index are copied into the larger entries on load. |
+| Tables sized as `4 * n` | the map's zone list, the GTX delta container and deltas (`GTX_DELTAS_SIZE`), the light grid. |
+| `u16** field_40008_pColumn` holds 32-bit column words | `MapColumnWord`. A **macro** on 32-bit: as a typedef, the new name moved one instruction in `Particle_4C::UpdateCollisionBurst_state_31_34_53BAC0` (3422/3423). |
+| `size_t` is no longer `u32` | overloads for the `File`/`Map` calls that pass the other one. |
+| Asserts | `-DNDEBUG` (the original was a release build): one read a variable before setting it. |
+| C fallback of an inline asm block stepped by a `u32` | signed step (a negative `u32` is +4 GB on a 64-bit pointer). |
+| Static initialisation order | the settings file's sections are built on first use. |
+
+Not done: float code runs on ARM's IEEE single precision instead of x87, so replays won't match 10.5.exe
+bit for bit (playing is fine); network and movies are left out as on Linux; save games of the 32-bit builds
+and this one are interchangeable only for the structures without pointers.
 
 ## The Linux build (branch `port`)
 
