@@ -1641,6 +1641,10 @@ bool CarManager::CanAllocateCarOfKindWithSpare_446870(s32 type)
     }
 }
 
+#if GTA2_PORT
+extern s32 gPortTrafficCap; // the ambient traffic cars for the whole game: 16, or a network server's --traffic (Port/net/net_main.cpp)
+#endif
+
 MATCH_FUNC(0x446930)
 bool CarManager::CanAllocateCarOfKind_446930(s32 type)
 {
@@ -1659,7 +1663,11 @@ bool CarManager::CanAllocateCarOfKind_446930(s32 type)
         case car_kind::parked_car_9:
             return this->field_44_parked_cars < 200;
         case car_kind::recycled_1:
+#if GTA2_PORT
+            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap;
+#else
             return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < 16;
+#endif
         case car_kind::mission_car_8:
             return this->field_3C_mission_cars < 24;
         default:
