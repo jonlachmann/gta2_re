@@ -14,6 +14,7 @@
 #include "Source/sprite.hpp"
 #include "Source/GameSession.hpp"
 #include "Source/Weapon.hpp"
+#include <stdlib.h>
 #include <string.h>
 #include <unordered_map>
 
@@ -414,6 +415,10 @@ void net::engine::Apply(const Snapshot& snap)
             }
         }
         const bool before = DebugGridOk("before moving a player", ped->field_16C_car);
+        Sprite* was = PedSprite(ped);
+        // A jump of the local player (its first snapshot, a respawn): the camera goes there at once, not panning across
+        // the map, as PutInGame and the game's respawn place it
+        const bool jump = i == LocalPlayer() && was && (abs(was->field_14_xy.x.mValue - x.mValue) > (8 << 14) || abs(was->field_14_xy.y.mValue - y.mValue) > (8 << 14));
         if (ped->field_16C_car)
         {
             MoveCar(ped->field_16C_car, x, y, z, rot);
@@ -425,6 +430,12 @@ void net::engine::Apply(const Snapshot& snap)
         if (before)
         {
             DebugGridOk("after moving a player", ped->field_16C_car);
+        }
+        if (jump)
+        {
+            p->field_90_game_camera.UpdateFollowPedCamera_436540(ped);
+            p->field_90_game_camera.CommitPendingTarget_41E410();
+            p->field_90_game_camera.ResetCameraSmoothing_435DD0();
         }
     }
     ApplyCarsAndPeds(snap);
