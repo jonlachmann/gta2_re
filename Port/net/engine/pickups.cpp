@@ -103,6 +103,10 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         seen.insert(e.id);
         auto it = gObjects.find(e.id);
         Object* o = it != gObjects.end() ? it->second : NULL;
+        if (o && EntityAge(e))
+        {
+            continue; // the state the client already has
+        }
         if (o && (o->field_18_model != e.f[kObjModel] || !Near(o->field_4_sprite, e.f[kObjX], e.f[kObjY])))
         {
             static int sLogged;

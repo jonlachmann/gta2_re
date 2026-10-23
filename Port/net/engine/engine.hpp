@@ -43,6 +43,12 @@ void SetTickMs(int ms);
 // what is missing only within it (blocks)
 void SetSnapshotReach(Snapshot& snap, float blocks);
 float SnapshotReach(const Snapshot& snap);
+// How far a player's camera shows (blocks, centre to corner): it zooms out with speed
+float PlayerViewRadius(int player);
+// The age field of cars, peds and pickups (-1: none): how many ticks old the state is. The server sends the far
+// entities of a busy area less often; a client applies only what is new (0) and predicts the rest on
+int AgeField(uint8_t type);
+int EntityAge(const EntityState& e);
 // A slot's name as the game shows it (over the player, in kill messages): Player::field_83C_player_name, up to 15
 void SetPlayerName(int slot, const char* name); // the length of a network tick (the game's own setting offers 50, 40 or 33 ms)
 
