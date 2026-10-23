@@ -1,10 +1,10 @@
 // Port (docs/port.md): non-Windows builds have no network game; DirectPlay (NetPlay.cpp) and the lobby
-// (Network_20324.cpp) are left out. The game only uses them when a network game was started
+// (NetUi.cpp) are left out. The game only uses them when a network game was started
 // (bStartNetworkGame_7081F0), which can't happen here; this single-player NetPlay answers the few calls
 // the rest of the game makes: no players, no messages.
 #if !defined(_WIN32)
 #include "Source/NetPlay.hpp"
-#include "Source/Network_20324.hpp"
+#include "Source/NetUi.hpp"
 #include <string.h>
 
 DEFINE_GLOBAL(NetPlay, gNetPlay_7071E8, 0x7071E8);
@@ -25,7 +25,7 @@ NetPlay::~NetPlay()
 {
 }
 
-s32 NetPlay::SetProtoAndConnection_51DAE0(GUID*, Network_Buffer_8*)
+s32 NetPlay::SetProtoAndConnection_51DAE0(GUID*, Network_Buffer*)
 {
     return 0;
 }
@@ -44,10 +44,10 @@ void NetPlay::GetPlayerName_521100(wchar_t* Destination, u32)
 {
     Destination[0] = 0;
 }
-void NetPlay::SetExitGameCallBack_521330(s32, Game_0x40*)
+void NetPlay::SetExitGameCallBack_521330(s32, Game*)
 {
 }
-s32 NetPlay::GetMaxPlayers_521350()
+s32 NetPlay::CountActivePlayers_521350()
 {
     return 0;
 }
@@ -55,15 +55,15 @@ bool NetPlay::WaitForPlayersSync_5213E0()
 {
     return false;
 }
-s32 NetPlay::SendToPlayer_521630(Network_8*, s32, char_type)
+s32 NetPlay::SendToPlayer_521630(Network_Buffer*, s32, char_type)
 {
     return 0;
 }
-char_type NetPlay::ReceiveGameMessage_521890(Network_8*, s32*, u32*)
+bool NetPlay::ReceiveGameMessage_521890(Network_Buffer*, s32*, u32*)
 {
     return 0;
 }
-void NetPlay::SendToAll_521B20(Network_8*)
+void NetPlay::SendToAll_521B20(Network_Buffer*)
 {
 }
 s32 NetPlay::SendPlayerIsQuitting_521D20()
@@ -75,34 +75,34 @@ s32 NetPlay::SendGiveUp_521DB0(s32)
     return 0;
 }
 
-Network_20324::Network_20324()
+NetUi::NetUi()
 {
 }
-Network_20324::~Network_20324()
+NetUi::~NetUi()
 {
 }
 // The lobby never shows: 0 is "cancelled", so Start_NetworkGame_5E5A30 doesn't start a network game.
-s32 Network_20324::ShowNetworkUiBlocking_519BD0(HINSTANCE)
+s32 NetUi::ShowNetworkUiBlocking_519BD0(HINSTANCE)
 {
     return 0;
 }
-s32 __stdcall Network_20324::cb_FillSessionList_519D30(Network_20324*, Network_NameList*)
+s32 __stdcall NetUi::cb_FillSessionList_519D30(NetUi*, Network_NameList*)
 {
     return 0;
 }
-void Network_20324::CopyGameSettings_51C7F0(NetworkGameSettings*)
+void NetUi::CopyGameSettings_51C7F0(NetworkGameSettings*)
 {
 }
-char_type* Network_20324::GetMapName_51CA10()
+char_type* NetUi::GetMapName_51CA10()
 {
     static char_type sEmpty[1];
     return sEmpty;
 }
-char_type* Network_20324::GetMapStyName_51CA50()
+char_type* NetUi::GetMapStyName_51CA50()
 {
     return GetMapName_51CA10();
 }
-char_type* Network_20324::GetMapScrName_51CA90()
+char_type* NetUi::GetMapScrName_51CA90()
 {
     return GetMapName_51CA10();
 }

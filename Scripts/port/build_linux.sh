@@ -14,7 +14,7 @@ CXXFLAGS="$COMMON -fshort-wchar -std=c++17 -fms-extensions -Wno-address-of-tempo
   -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -mno-sse -mfpmath=387 -IPort/compat -include Port/compat/port_linux.h
   -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_USE_32BIT_TIME_T -DGTA2_PORT -DBUILD_MSS -DSTATELOG_IN_PORT $*"
 RENFLAGS="$COMMON -std=c++11"
-SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v 'ImGuiDebug.cpp\|NetPlay.cpp\|Network_20324.cpp')
+SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v 'ImGuiDebug.cpp\|NetPlay.cpp\|NetUi.cpp')
      StdAfx.cpp Port/*.cpp Port/headless/state_log.cpp Port/headless/fast_clock.cpp Source/3rdParty/bink.cpp) # bink.cpp: stubs, no movies until M5
 REN=Renderers/OpenGL
 RENSRC=($REN/core/gl_funcs.cpp $REN/core/gl_renderer.cpp $REN/core/gl_enhanced.cpp $REN/core/vid_system.cpp $REN/core/capture.cpp
