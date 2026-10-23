@@ -15,6 +15,7 @@
 #include "Source/GameSession.hpp"
 #include "Source/Weapon.hpp"
 #include <string.h>
+#include <unordered_map>
 
 EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
 EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
@@ -37,8 +38,10 @@ net::Schema BuildSchema()
     }
     player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
     player.fields.push_back(FieldDesc{"state", 2, false}); // kPlayerState
-    net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false}}};
-    net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false}}};
+    net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
+                                   {"driver", 2, false}}};
+    net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false},
+                                   {"car", 25, false}, {"state", 1, false}}};
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
@@ -136,6 +139,11 @@ void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16&
     ped->field_1AC_cam.x = x;
     ped->field_1AC_cam.y = y;
     ped->field_1AC_cam.z = z;
+}
+
+bool net::engine::IsSpareDriver(const Ped* ped)
+{
+    return ped && gCarManager_6C_677930 && ped == gCarManager_6C_677930->GetSpareDriver_421960();
 }
 
 const net::Schema& net::engine::NetSchema()
@@ -243,17 +251,35 @@ void net::engine::Capture(Snapshot& out)
             EntityState e = Entity(kCarIdBase + (uint32_t)c->field_6C_car_id, kEntityCar);
             PutPosition(e, c->field_50_car_sprite, kCarX, kCarY, kCarZ, kCarRot);
             e.f[kCarModel] = c->field_84_car_info_idx;
+            e.f[kCarDriver] = !c->field_54_driver ? kDriverNone : IsSpareDriver(c->field_54_driver) ? kDriverTraffic : kDriverPed;
             out.entities.push_back(e);
+        }
+    }
+    // Drivers by their cars: a traffic car knows its driver (Car::field_54_driver), but the driver's own field_16C_car
+    // needn't point back (measured: 1 of 12 did)
+    std::unordered_map<const Ped*, Car*> driving;
+    for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
+    {
+        if (c->field_54_driver && c->field_50_car_sprite && !IsSpareDriver(c->field_54_driver))
+        {
+            driving[c->field_54_driver] = c;
         }
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
-        Sprite* s = p->field_168_game_object ? p->field_168_game_object->field_80_sprite_ptr : NULL;
-        if (s && !p->field_16C_car && p->field_238_ped_type != ped_type::player_2) // players are their own entities
+        // On foot or driving (a driver is where its car is; passengers: not yet); players are their own entities
+        auto d = driving.find(p);
+        Car* car = d != driving.end() ? d->second : NULL;
+        Sprite* s = car ? car->field_50_car_sprite
+                  : !p->field_16C_car && p->field_168_game_object ? p->field_168_game_object->field_80_sprite_ptr
+                  : NULL;
+        if (s && p->field_238_ped_type != ped_type::player_2 && (car || p->IsActive_433B40()) && !IsSpareDriver(p)) // (drivers aren't "active")
         {
             EntityState e = Entity(kPedIdBase + p->field_200_id, kEntityPed);
             PutPosition(e, s, kPedX, kPedY, kPedZ, kPedRot);
             e.f[kPedRemap] = (uint8_t)p->field_244_remap;
+            e.f[kPedCar] = car ? car->field_6C_car_id + 1 : 0;
+            e.f[kPedState] = InCarTransition(p) ? 1 : 0;
             out.entities.push_back(e);
         }
     }

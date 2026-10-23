@@ -409,8 +409,14 @@ void net::Client::Frame()
                 local += " " + std::to_string(mLocalDeaths[i]);
             }
             printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
-            int poolCars = 0, poolPeds = 0, poolChars = 0;
+            int poolCars = 0, poolPeds = 0, poolChars = 0, sent = 0, driven = 0, same = 0;
             engine::PoolUse(&poolCars, &poolPeds, &poolChars);
+            engine::DriverStats(snap, &sent, &driven, &same);
+            int traffic = 0, trafficHere = 0;
+            engine::TrafficDriverStats(snap, &traffic, &trafficHere);
+            printf("net: frame %u, drivers: %d peds in the snapshot, %d of their cars driven here, %d by the same ped; %d traffic cars, %d "
+                   "with the traffic driver here\n",
+                   mFrame, sent, driven, same, traffic, trafficHere);
             printf("net: frame %u, this game has %d cars, %d peds, %d chars; in or out of a car differently from the newest snapshot: "
                    "%.1f%% of player frames\n",
                    mFrame, poolCars, poolPeds, poolChars, mCarFrames ? 100.0 * mCarMismatch / mCarFrames : 0.0);

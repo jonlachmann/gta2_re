@@ -41,6 +41,13 @@ enum CarField
     kCarZ,
     kCarRot,
     kCarModel,
+    kCarDriver, // kDriverNone, kDriverTraffic (the car manager's shared spare driver), kDriverPed (sent as a ped entity)
+};
+enum CarDriver
+{
+    kDriverNone = 0,
+    kDriverTraffic = 1,
+    kDriverPed = 2,
 };
 enum PedField
 {
@@ -49,12 +56,17 @@ enum PedField
     kPedZ,
     kPedRot,
     kPedRemap,
+    kPedCar, // the car it drives: Car::field_6C_car_id + 1, 0 on foot (its position is the car's then)
+    kPedState, // 1: getting into or out of a car
 };
 
 const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
 const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
 
 Sprite* PedSprite(Ped* ped); // its car's when it is in one
+// The one dummy ped every traffic car shares as its driver (Car::SpawnDriverPed, CarManager::field_4_spare_driver): no
+// ped of its own, never sent, moved, forced or removed
+bool IsSpareDriver(const Ped* ped);
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 

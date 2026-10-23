@@ -125,7 +125,7 @@ void GatherReferencedCars()
     gReferenced.clear();
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
-        if (p->field_16C_car)
+        if (p->field_16C_car && !net::engine::IsSpareDriver(p))
         {
             gReferenced.insert(p->field_16C_car);
         }
@@ -134,7 +134,7 @@ void GatherReferencedCars()
 
 void RemoveCar(Car* car)
 {
-    if (car->field_54_driver || gReferenced.count(car))
+    if ((car->field_54_driver && !net::engine::IsSpareDriver(car->field_54_driver)) || gReferenced.count(car))
     {
         gOccupiedKept++;
         return;
@@ -213,6 +213,19 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                 gCars[e.id] = car;
                 mapped.insert(car);
             }
+            // The shared traffic driver, as the server has it (a car with its own driver gets it from its ped entity)
+            if (!owned.count(car))
+            {
+                const bool spare = IsSpareDriver(car->field_54_driver);
+                if (e.f[kCarDriver] == kDriverTraffic && !car->field_54_driver)
+                {
+                    car->SpawnDriverPed();
+                }
+                else if (e.f[kCarDriver] != kDriverTraffic && spare)
+                {
+                    car->SetDriver(NULL);
+                }
+            }
             if (!owned.count(car)) // a player's car follows the player (access.cpp)
             {
                 const bool before = DebugGridOk("before moving a car", car);
@@ -225,10 +238,30 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
         }
         else if (e.type == kEntityPed)
         {
+            // A driver needs its car here first (cars come before peds: their NetIds are smaller)
+            Car* serverCar = e.f[kPedCar] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPedCar] - 1)) : NULL;
+            if (e.f[kPedCar] && (!serverCar || !liveCars.count(serverCar)))
+            {
+                continue;
+            }
             seen.insert(e.id);
             auto it = gPeds.find(e.id);
             Ped* ped = it != gPeds.end() ? it->second : NULL;
-            if (!ped)
+            if (!ped && serverCar)
+            {
+                // Its car's driver here, if nobody's (the map script or the game made it), else a new one
+                Ped* d = serverCar->field_54_driver;
+                if (d && livePeds.count(d) && !mapped.count(d) && !IsSpareDriver(d))
+                {
+                    ped = d;
+                }
+                else if ((!d || IsSpareDriver(d)) && RoomForPed())
+                {
+                    serverCar->SetDriver(NULL);
+                    ped = gPedManager_6787BC->SpawnDriver_470B00(serverCar);
+                }
+            }
+            if (!ped && !serverCar)
             {
                 for (Ped* p : livePeds)
                 {
@@ -244,14 +277,34 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                 {
                     ped = gPedManager_6787BC->SpawnPedAt(Raw(e.f[kPedX]), Raw(e.f[kPedY]), Raw(e.f[kPedZ]), (u8)e.f[kPedRemap], Angle(e.f[kPedRot]));
                 }
-                if (!ped)
-                {
-                    continue;
-                }
+            }
+            if (!ped)
+            {
+                continue;
+            }
+            if (!gPeds.count(e.id))
+            {
                 gPeds[e.id] = ped;
                 mapped.insert(ped);
+                ped->field_244_remap = (char_type)e.f[kPedRemap];
             }
-            if (!ped->field_16C_car)
+            // In the server's car, or on foot, as the server has it (when neither side is getting in or out)
+            const bool settled = !e.f[kPedState] && !InCarTransition(ped) && !ped->isDead_403B60();
+            if (serverCar)
+            {
+                if (serverCar->field_54_driver != ped && settled && !owned.count(serverCar))
+                {
+                    ForceIntoCar(ped, serverCar);
+                }
+            }
+            else if (ped->field_16C_car)
+            {
+                if (settled)
+                {
+                    ForceOutOfCar(ped, Raw(e.f[kPedX]), Raw(e.f[kPedY]), Raw(e.f[kPedZ]), Angle(e.f[kPedRot]));
+                }
+            }
+            else
             {
                 MovePed(ped, Raw(e.f[kPedX]), Raw(e.f[kPedY]), Raw(e.f[kPedZ]), Angle(e.f[kPedRot]));
             }
@@ -295,8 +348,9 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     }
     for (Ped* p : livePeds)
     {
-        // Peds in cars (drivers, passengers) aren't sent yet: they stay with their car
-        if (!owned.count(p) && !mapped.count(p) && !p->field_16C_car && p->field_168_game_object && p->IsActive_433B40())
+        // Drivers are sent too; passengers (not yet) stay with their car
+        const bool passenger = p->field_16C_car && p->field_16C_car->field_54_driver != p;
+        if (!owned.count(p) && !mapped.count(p) && !passenger && !IsSpareDriver(p) && (p->field_168_game_object || p->field_16C_car) && p->IsActive_433B40())
         {
             p->Deallocate_45EB60();
         }
@@ -670,4 +724,43 @@ void net::engine::DebugOnCrash()
 void net::engine::DebugSetFrame(uint32_t frame)
 {
     gDebugFrame = frame;
+}
+
+void net::engine::DriverStats(const Snapshot& snap, int* pSent, int* pDriven, int* pSame)
+{
+    *pSent = *pDriven = *pSame = 0;
+    std::set<Car*> liveCars;
+    std::set<Ped*> livePeds;
+    Live(liveCars, livePeds);
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        const EntityState& e = snap.entities[k];
+        if (e.type != kEntityPed || !e.f[kPedCar])
+        {
+            continue;
+        }
+        ++*pSent;
+        Car* car = ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPedCar] - 1));
+        if (car && liveCars.count(car) && car->field_54_driver)
+        {
+            ++*pDriven;
+            auto it = gPeds.find(e.id);
+            *pSame += it != gPeds.end() && it->second == car->field_54_driver;
+        }
+    }
+}
+
+void net::engine::TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSame)
+{
+    *pSent = *pSame = 0;
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        const EntityState& e = snap.entities[k];
+        if (e.type == kEntityCar && e.f[kCarDriver] == kDriverTraffic)
+        {
+            ++*pSent;
+            Car* car = ReplicaCar(e.id);
+            *pSame += car && IsSpareDriver(car->field_54_driver);
+        }
+    }
 }

@@ -89,6 +89,11 @@ bool PlayerPosition(int player, float* pX, float* pY);
 // mapped ones are from <snap> right now, before it is applied: the drift of one tick of the client's own sim
 void ReplicaStats(const Snapshot& snap, int* pCars, int* pPeds, float* pMaxDrift);
 void PoolUse(int* pCars, int* pPeds, int* pChars); // live cars, peds, chars in this game
+// Drivers: how many peds the snapshot has in a car, how many of their cars have a driver here, and how many of
+// those are the same (mapped) ped
+void DriverStats(const Snapshot& snap, int* pSent, int* pDriven, int* pSame);
+// Traffic cars: how many the snapshot has with the shared traffic driver, and how many have it here too
+void TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSame);
 
 // Where this game has its mapped cars and peds now: NetId and x, y in blocks
 struct ReplicaPos

@@ -22,11 +22,12 @@ bool net::engine::InCarTransition(Ped* ped)
 void net::engine::ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Car* car = ped->field_16C_car;
-    if (!car)
+    if (!car || IsSpareDriver(ped))
     {
         return;
     }
     ped->SetObjective(objectives_enum::no_obj_0, 9999); // whatever it was about to do with the car
+    ped->SetObjective2_463830(objectives_enum::no_obj_0);
     if (car->field_54_driver == ped)
     {
         car->ClearDriver_4407F0();
@@ -48,7 +49,11 @@ void net::engine::ForceIntoCar(Ped* ped, Car* car)
     }
     if (Ped* driver = car->field_54_driver)
     {
-        if (driver != ped)
+        if (IsSpareDriver(driver))
+        {
+            car->SetDriver(NULL); // the traffic driver every car shares: it isn't anywhere to get out of
+        }
+        else if (driver != ped)
         {
             ForceOutOfCar(driver, cs->field_14_xy.x + Fix16(1), cs->field_14_xy.y, cs->field_1C_zpos, cs->field_0_rotation);
         }
@@ -66,7 +71,10 @@ void net::engine::ForceIntoCar(Ped* ped, Car* car)
     ped->field_248_enter_car_as_passenger = 0;
     ped->field_278_ped_state_1 = ped_state_1::in_car_10;
     ped->field_27C_ped_state_2 = ped_state_2::ped2_driving_10;
+    // Nothing left to do on foot: both its objective and the internal one (a walk to a point would run on without
+    // a char, Ped::WalkToTargetPoint_46C770)
     ped->SetObjective(objectives_enum::no_obj_0, 9999);
+    ped->SetObjective2_463830(objectives_enum::no_obj_0);
     car->field_88_despawn_status = car_despawn_status::active_1; // as Ped::SpawnPedInCar_45C730: not removed with a driver
     car->AssignDriver_4406E0(ped);
 }
