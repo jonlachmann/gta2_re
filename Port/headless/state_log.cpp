@@ -15,7 +15,7 @@
 //   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
 //                                     a..b, to <log>.trace:
 //                                     C <game frame> <label> <ecx> <4 stack dwords> at the entry and
-//                                     R <game frame> <label> <eax> <dword at eax> at the return.
+//                                     R <game frame> <label> <eax> <dword at eax> at the return; both end in ^<esp>.
 //   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords> int3 breakpoints, so the
 //                                     same in 10.5.exe and in the port (Scripts/port/state_check.py, TRACE=)
 //
@@ -300,7 +300,8 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* ep)
             // and what eax points to: VC6 returns a class through a hidden pointer, which it returns in eax
             const unsigned* p = (const unsigned*)(size_t)c->Eax;
             const unsigned deref = p && !IsBadReadPtr(p, 4) ? *p : 0;
-            fprintf(gTrace, "R %d %s %08lx %08x\n", frame, ret->pending.back().c_str(), (unsigned long)c->Eax, deref);
+            fprintf(gTrace, "R %d %s %08lx %08x ^%08lx\n", frame, ret->pending.back().c_str(), (unsigned long)c->Eax, deref,
+                    (unsigned long)c->Esp);
         }
         ret->pending.pop_back();
         ret->pendingEsp.pop_back();
@@ -317,8 +318,8 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* ep)
         const int frame = Frame();
         if (frame >= gTraceFrom && frame <= gTraceTo)
         {
-            fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x", frame, entry->label.c_str(), (unsigned long)c->Ecx, sp[1],
-                    sp[2], sp[3], sp[4]);
+            fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x ^%08lx", frame, entry->label.c_str(), (unsigned long)c->Ecx, sp[1],
+                    sp[2], sp[3], sp[4], (unsigned long)c->Esp);
             const unsigned* self = (const unsigned*)(size_t)c->Ecx;
             if (gTraceThis && self && !IsBadReadPtr(self, gTraceThis))
             {
@@ -371,6 +372,7 @@ void ParseTrace(const std::string& path)
     const char* self = getenv("GTA2_STATELOG_TRACE_THIS");
     gTraceThis = self ? (unsigned)atoi(self) & ~3u : 0;
     gTrace = fopen((path + ".trace").c_str(), "w");
+    setvbuf(gTrace, 0, _IONBF, 0); // unbuffered: a crash keeps the trace up to it
     std::string list = t;
     size_t start = 0;
     while (start < list.size())
