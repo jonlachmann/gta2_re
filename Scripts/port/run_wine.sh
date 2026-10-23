@@ -28,6 +28,8 @@ if [ -f "$GAME/gta2_install.reg" ]; then
   LC_ALL=C sed 's/HKEY_CURRENT_USER/HKEY_LOCAL_MACHINE/' "$GAME/gta2_install.reg" > "$OUT/gta2_hklm.reg"
   wine reg import "$(winepath -w "$OUT/gta2_hklm.reg" 2>/dev/null || echo "$OUT/gta2_hklm.reg")" /reg:32 > /dev/null 2>&1 || true
 fi
+# No crash dialog: a crashed run just ends (state_check.py notices)
+wine reg add "HKCU\Software\Wine\WineDbg" /f /v ShowCrashDialog /t REG_DWORD /d 0 > /dev/null
 S='HKLM\SOFTWARE\DMA Design Ltd\GTA2\Screen'; D='HKLM\SOFTWARE\DMA Design Ltd\GTA2\Debug'
 wine reg add "$S" /reg:32 /f /v rendername /d glrender.dll > /dev/null
 wine reg add "$S" /reg:32 /f /v videoname /d "$VIDEO_DLL" > /dev/null
