@@ -235,6 +235,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                     DebugGridOk("after moving a car", car);
                 }
             }
+            SetCarPhysics(car, e); // a player's car too: its place came with the player
         }
         else if (e.type == kEntityPed)
         {
