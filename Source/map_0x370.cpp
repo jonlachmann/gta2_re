@@ -266,9 +266,16 @@ s32 Map_0x370::FindZoneIdxByName_4DF050(const char_type* pZoneName, u8 zone_name
 }
 
 MATCH_FUNC(0x4DF0F0)
+#if GTA2_PORT
+extern s16 gPortZoneRoundRobin; // Port/net/net_main.cpp: the round robin's place, rolled back and sent by a network server
+#endif
 gmp_map_zone* Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0(u8 zone_type)
 {
+#if GTA2_PORT
+    s16& sLastIdx_6F626C = gPortZoneRoundRobin;
+#else
     static s16 sLastIdx_6F626C; // the turn, one for every zone type: a call for one type moves it on for the others too
+#endif
 
     s16 zone_stack[40];
 

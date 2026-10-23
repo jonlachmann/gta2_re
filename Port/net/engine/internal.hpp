@@ -37,6 +37,7 @@ enum PlayerField
 enum WorldField
 {
     kWorldCycle, // the game's tick counter (gpRng_67AB34's field_0_rng): timers are stamped with it (a car's damage, a ped's voice...)
+    kWorldZoneTurn, // which restart zone is next (Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0): a respawn here goes where the server's does
 };
 enum CarField
 {
