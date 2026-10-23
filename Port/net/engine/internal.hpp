@@ -49,5 +49,10 @@ void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang
 
 // replica.cpp: a snapshot's cars and peds into a client's game (players: access.cpp)
 void ApplyCarsAndPeds(const Snapshot& snap);
+// The replica mapping, saved and restored with the world (rollback.cpp): an opaque copy
+struct ReplicaState;
+ReplicaState* SaveReplicas(ReplicaState* reuse);
+void RestoreReplicas(const ReplicaState* state);
+void FreeReplicas(ReplicaState* state);
 } // namespace engine
 } // namespace net

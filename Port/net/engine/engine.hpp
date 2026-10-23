@@ -49,8 +49,29 @@ enum EntityKind : uint8_t
 };
 // Every player, car and ped
 void Capture(Snapshot& out);
-// Puts a snapshot's players into this game (cars and peds: later)
-void Apply(const Snapshot& snap, int localPlayer);
+// Puts a snapshot's players, cars and peds into this game
+void Apply(const Snapshot& snap);
+// A player entity's player index and input bits; false for other entities
+bool PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons);
+
+// Rollback (rollback.cpp): the whole game world and this client's replicas, saved after a tick and restored to
+// resimulate from there
+class SavedWorld
+{
+  public:
+    SavedWorld();
+    ~SavedWorld();
+    SavedWorld(const SavedWorld&) = delete;
+    SavedWorld& operator=(const SavedWorld&) = delete;
+    uint32_t tick = 0;
+    bool valid = false;
+    struct Impl;
+    Impl* mImpl;
+};
+void SaveGame(SavedWorld& out, uint32_t tick);
+void RestoreGame(const SavedWorld& in);
+// One tick without drawing or sound, with every player's buttons (count: players)
+void ResimTick(const uint32_t* buttons, int count);
 // The position of a player's ped or car, in blocks; false without a ped
 bool PlayerPosition(int player, float* pX, float* pY);
 
