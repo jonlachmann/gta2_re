@@ -228,7 +228,7 @@ char_type CarThreadTriggers::AddThreadTrigger_5C86C0(const s32& type, const s32&
         {
             pIter->field_8_type = type;
             pIter->field_C_action = param;
-            pIter->field_0_pScriptCmd = (s32)pScriptThread;
+            pIter->field_0_pScriptCmd = (sptr)pScriptThread;
             pIter->field_14_enable_state = 1;
             pIter->field_4_O2C = gObject_5C_6F8F84->NewTouchPoint_529950(objects::savepoint_161,
                                                                          xpos,

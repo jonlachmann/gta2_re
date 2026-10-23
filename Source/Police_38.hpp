@@ -87,7 +87,7 @@ class PoliceCrew
     s16 field_2C_unused;
     char_type field_2E_unused;
     char_type field_2F_unused;
-    s32 field_30_prev_target_ped;
+    sptr field_30_prev_target_ped; // a Ped*
     char_type field_34_is_dismissed;
     u8 field_35_fast_target_counter;
     char_type field_36_unused;

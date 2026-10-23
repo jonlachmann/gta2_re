@@ -1886,11 +1886,11 @@ static inline Ang16& compound_add_41FA70(Ang16& a, const Ang16& b)
 // 9.6f 0x493040 (a Ped method there)
 static inline void CollideWithElvis_493040(Ped* pPed, Char* pChar)
 {
-    if ((s32)pChar != pPed->field_138_collided_char_b4)
+    if ((sptr)pChar != pPed->field_138_collided_char_b4)
     {
-        pPed->field_138_collided_char_b4 = (s32)pChar;
+        pPed->field_138_collided_char_b4 = (sptr)pChar;
         pPed->field_224_bf.bCollidedWithPed = false;
-        pChar->field_7C_pPed->field_138_collided_char_b4 = (s32)pPed->field_168_game_object;
+        pChar->field_7C_pPed->field_138_collided_char_b4 = (sptr)pPed->field_168_game_object;
         pPed->SetVoiceEventIfNotOnFire_433DD0(ped_ocupation_enum::elvis);
     }
 }
@@ -1898,11 +1898,11 @@ static inline void CollideWithElvis_493040(Ped* pPed, Char* pChar)
 // 9.6f 0x493000 (a Ped method there)
 static inline void CollideWithPed_493000(Ped* pPed, Char* pOther)
 {
-    if ((s32)pOther != pPed->field_138_collided_char_b4)
+    if ((sptr)pOther != pPed->field_138_collided_char_b4)
     {
-        pPed->field_138_collided_char_b4 = (s32)pOther;
+        pPed->field_138_collided_char_b4 = (sptr)pOther;
         pPed->field_224_bf.bCollidedWithPed = true;
-        pOther->field_7C_pPed->field_138_collided_char_b4 = (s32)pPed->field_168_game_object;
+        pOther->field_7C_pPed->field_138_collided_char_b4 = (sptr)pPed->field_168_game_object;
     }
 }
 

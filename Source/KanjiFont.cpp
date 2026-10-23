@@ -65,7 +65,7 @@ void KanjiFont::Load_kanji_dat_4D2090()
 
 // Outlines the pixels of colour field_8E8_colour with colour field_8E9_outline_colour in a 256 wide sprite
 MATCH_FUNC(0x4D2150)
-void KanjiFont::OutlineGlyph_4D2150(s32 pPixels_addr, u16 width, u16 height)
+void KanjiFont::OutlineGlyph_4D2150(sptr pPixels_addr, u16 width, u16 height)
 {
     u8(*pPixels)[256] = reinterpret_cast<u8(*)[256]>(pPixels_addr);
     for (s32 y = 0; y < height; y++)
@@ -256,7 +256,7 @@ void KanjiFont::RenderSmallGlyph_4D2610(wchar_t text_char)
     }
     pgbh_LockTexture(field_8D8_pTexture);
     KanjiFont::ExpandSmallGlyph_4D2240((char_type*)&field_8C8_pKBIT[32 * glyph_idx]); // OBS: probably a pointer
-    KanjiFont::OutlineGlyph_4D2150((s32)field_8D0_pSprtData, 16, 17);
+    KanjiFont::OutlineGlyph_4D2150((sptr)field_8D0_pSprtData, 16, 17);
     pgbh_UnlockTexture(field_8D8_pTexture);
 }
 
@@ -276,7 +276,7 @@ void KanjiFont::RenderLargeGlyph_4D2690(wchar_t text_char)
     }
     pgbh_LockTexture(field_8E4_pTexture);
     KanjiFont::ExpandLargeGlyph_4D23B0((char_type*)&field_8C8_pKBIT[32 * glyph_idx]); // OBS: probably a pointer
-    KanjiFont::OutlineGlyph_4D2150((s32)field_8DC_pSprtData, 32, 34);
+    KanjiFont::OutlineGlyph_4D2150((sptr)field_8DC_pSprtData, 32, 34);
     pgbh_UnlockTexture(field_8E4_pTexture);
 }
 

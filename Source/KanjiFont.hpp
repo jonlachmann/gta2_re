@@ -59,7 +59,7 @@ class KanjiFont
 
     EXPORT void LoadChunks_4D1FC0(const char_type* pChunkId, u32 chunk_len);
     EXPORT void Load_kanji_dat_4D2090();
-    EXPORT void OutlineGlyph_4D2150(s32 pPixels, u16 width, u16 height);
+    EXPORT void OutlineGlyph_4D2150(sptr pPixels, u16 width, u16 height);
     EXPORT u8* ExpandSmallGlyph_4D2240(char_type* pGlyph);
     EXPORT u8* ExpandLargeGlyph_4D23B0(char_type* pGlyph);
     EXPORT void RenderSmallGlyph_4D2610(wchar_t text_char);

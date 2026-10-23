@@ -847,7 +847,7 @@ class Ped
     Ang16 field_132_follow_car_offset_angle;
     Ang16 field_134_rotation;
     s16 field_136_unused;
-    s32 field_138_collided_char_b4;
+    sptr field_138_collided_char_b4; // a Char* or a game object
     TrainStation* field_13C_pTrainStation;
     Car* field_140_stolen_car;
     Ped* field_144_attacker;

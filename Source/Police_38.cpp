@@ -1073,7 +1073,7 @@ void PoliceCrew::State5_PursueOrChase_572920()
                     {
                         if (pPed->get_objective_target_ped_403AD0() == pPed->GetInternalTargetPed_403AF0())
                         {
-                            field_30_prev_target_ped = (s32)pPed->get_objective_target_ped_403AD0();
+                            field_30_prev_target_ped = (sptr)pPed->get_objective_target_ped_403AD0();
                             gCurrentCrewPed_6FEDDC->SetInternalTargetPed_403AE0(field_14_pPursuitTarget->field_0_criminal_ped);
                         }
                         gCurrentCrewPed_6FEDDC->set_objective_target_ped_403AC0(field_14_pPursuitTarget->field_0_criminal_ped);
