@@ -46,6 +46,8 @@ Commands carry the server tick they are for. The server buffers them per tick an
 - When both sides have settled and the server has the player elsewhere, the client puts the ped into the server's car, or out of its own, at once. This ends the way the game's own entering does (the char back to its pool, in car and driving, `Car::AssignDriver_4406E0`) and leaving does (`Car::ClearDriver_4407F0`, `Ped::StartPedWalking_470200`).
 - The cars players sit in, or are getting into, are never removed, and replicas never remove a car any ped points to (a corpse cloned in a car).
 
+**Drivers** (`engine/replica.cpp`). A car carries its driver: none, the traffic driver, or a ped. All traffic cars share one driver, CarManager's spare (`Car::SpawnDriverPed`, `CarManager::GetSpareDriver_421960`): a ped that points to no car and is never on the street. So that one isn't sent as a ped. A car marked "traffic driver" gets the client's own spare (`Car::SpawnDriverPed`), and loses it when the server's car has none. Any other driver is a ped entity with the car it sits in. The client adopts the driver its car already has, or makes one (`Ped::SpawnDriver_470B00`), and once settled puts the ped into that car (`ForceIntoCar`). The spare never leaves a car the normal way: putting a ped into a traffic car just clears the spare.
+
 **Test fixture** (`session/replay.cpp`): `GTA2_NET_RECORD=<file>` records a client session (the welcome, then per frame the packets, the round trip and the input). `--replay <file>` plays it back without a server, as fast as the game runs: 8 minutes of game in 10-15 s, the same every time, so a crash can be reproduced and run down. `GTA2_NET_CHECKGRID=1` checks after every step that each link in the collision grid has a live owner whose sprite it is.
 
 With the fixture, a client crash after 1-4 minutes of car hopping turned out to be the replicas' own doing:
@@ -75,10 +77,11 @@ Usage and test switches:
 | Four slots, two bots, a third joining after 40 s, one leaving after 80 s | The joiner spawns at a restart zone and everyone sees it; the leaver disappears everywhere; no crash. |
 | 80 ms round trip, three armed bots on Downtown, 5 minutes | The bots find each other and fight: frags and deaths on the server (for example 1/1, 2/3, 2/1), every client shows them and carries out each death once; no crash, nobody drops; prediction error 0.00 blocks. |
 | 100 ms round trip, 2% loss, test kills (4 deaths, one without a killer) | Every client shows the server's frags and deaths and carries out each death exactly once (2, 1, 1). |
+| 80 ms round trip, two car-hopping bots and a fighting one, 5 minutes, grid check on | Every traffic car in a snapshot has the traffic driver on the client too (up to 16 at once); a ped driver shows in its car; no crash, no failed check. |
 | 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
 
 **Not yet:**
-- traffic drivers and passengers (client cars have none: they move by snapshots and dead reckoning);
+- passengers;
 - bots that fight well (they find each other, but often stand next to each other without hitting);
 - velocities and state (cars move only by snapshots);
 - interpolation;

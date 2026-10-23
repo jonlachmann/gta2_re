@@ -312,8 +312,10 @@ void net::Server::Frame()
             late += mSlots[i].late;
             mSlots[i].late = 0;
         }
-        printf("net: tick %u, %d players, %zu entities, %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n", mTick,
-               used, world.entities.size(), used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
+        int sent = 0, driven = 0, same = 0;
+        engine::DriverStats(world, &sent, &driven, &same);
+        printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n",
+               mTick, used, world.entities.size(), sent, used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
         mBytesSent = 0;
     }
 }
