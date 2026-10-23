@@ -35,6 +35,7 @@ struct BotView
     float x = 0, y = 0, z = 0;
     int rot = 0;
     int health = 0;
+    uint32_t car = 0; // the car it drives (a Seen kCar id), 0 on foot
     struct Seen
     {
         enum Kind
@@ -67,6 +68,7 @@ class BotBrain
 };
 
 // "simple": walks to the nearest player along its own route and shoots when close and facing it
+// "carhop": walks to the nearest car, gets in, drives a while, gets out, again (tests players in cars)
 std::unique_ptr<BotBrain> CreateBotBrain(const std::string& kind);
 
 // The view a client gives its bot (bot.cpp)

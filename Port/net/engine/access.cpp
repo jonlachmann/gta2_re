@@ -35,6 +35,8 @@ net::Schema BuildSchema()
                                                          "ammo8", "ammo9", "ammo10", "ammo11", "ammo12", "ammo13", "ammo14"};
         player.fields.push_back(FieldDesc{kAmmo[i], 16, false});
     }
+    player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
+    player.fields.push_back(FieldDesc{"state", 2, false}); // kPlayerState
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false}}};
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false}}};
     s.types.push_back(player); // kEntityPlayer
@@ -214,6 +216,8 @@ void net::engine::Capture(Snapshot& out)
         {
             e.f[kPlayerAmmo0 + w] = p->field_718_weapons[w] ? p->field_718_weapons[w]->field_0_ammo : 0;
         }
+        e.f[kPlayerCar] = ped->field_16C_car ? ped->field_16C_car->field_6C_car_id + 1 : 0;
+        e.f[kPlayerState] = (InCarTransition(ped) ? 1 : 0) | (ped->isDead_403B60() ? 2 : 0);
         out.entities.push_back(e);
     }
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
@@ -259,6 +263,11 @@ int net::engine::PlayerHealth(const EntityState& e)
 int net::engine::PlayerFrags(const EntityState& e)
 {
     return e.type == kEntityPlayer ? e.f[kPlayerFrags] : 0;
+}
+
+uint32_t net::engine::PlayerCarId(const EntityState& e)
+{
+    return e.type == kEntityPlayer && e.f[kPlayerCar] ? kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1) : 0;
 }
 
 int net::engine::PlayerDeaths(const EntityState& e)
@@ -336,6 +345,33 @@ void net::engine::Apply(const Snapshot& snap)
         }
         const Fix16 x(e.f[kPlayerX], 0), y(e.f[kPlayerY], 0), z(e.f[kPlayerZ], 0);
         const Ang16 rot((s16)e.f[kPlayerRot], (u8)0);
+        // In the server's car, or on foot as the server has it: predicted by this game's own input, put right here
+        // when both sides have settled (neither halfway into or out of a car, nobody dead)
+        const bool settled = !(e.f[kPlayerState] & 3) && !InCarTransition(ped) && !ped->isDead_403B60();
+        if (settled)
+        {
+            Car* serverCar = e.f[kPlayerCar] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) : NULL;
+            if (serverCar && ped->field_16C_car != serverCar)
+            {
+                const bool before = DebugGridOk("before forcing into a car", serverCar);
+                ForceIntoCar(ped, serverCar);
+                if (before)
+                {
+                    DebugGridOk("after forcing into a car", serverCar);
+                }
+            }
+            else if (!e.f[kPlayerCar] && ped->field_16C_car)
+            {
+                Car* was = ped->field_16C_car;
+                const bool before = DebugGridOk("before forcing out of a car", was);
+                ForceOutOfCar(ped, x, y, z, rot);
+                if (before)
+                {
+                    DebugGridOk("after forcing out of a car", was);
+                }
+            }
+        }
+        const bool before = DebugGridOk("before moving a player", ped->field_16C_car);
         if (ped->field_16C_car)
         {
             MoveCar(ped->field_16C_car, x, y, z, rot);
@@ -343,6 +379,10 @@ void net::engine::Apply(const Snapshot& snap)
         else
         {
             MovePed(ped, x, y, z, rot);
+        }
+        if (before)
+        {
+            DebugGridOk("after moving a player", ped->field_16C_car);
         }
     }
     ApplyCarsAndPeds(snap);
@@ -410,4 +450,10 @@ void net::engine::DebugArm(int player, int weapon, int ammo)
     {
         p->AddWeaponWithAmmo_564960(weapon, (u8)ammo);
     }
+}
+
+bool net::engine::PlayerInCar(int player)
+{
+    Player* p = GetPlayer(player);
+    return p && p->field_8E_in_use && p->field_2C4_player_ped && p->field_2C4_player_ped->field_16C_car;
 }

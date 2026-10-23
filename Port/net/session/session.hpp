@@ -117,5 +117,6 @@ class Client
     BotView mBotView;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;
+    uint32_t mCarFrames = 0, mCarMismatch = 0; // frames x players, and those where in-car differs from the snapshot
 };
 } // namespace net
