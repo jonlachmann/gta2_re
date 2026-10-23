@@ -269,7 +269,7 @@ struct CarThreadTriggerCmd : SCR_CMD_HEADER
     union
     {
         u16 field_8_idx;
-        ScriptThread* field_8_thread;
+        PTR32(ScriptThread) field_8_thread; // script data: 4 bytes in the 64-bit port too (ptr32.hpp)
     };
     u16 field_C;
     s16 field_E_thread_start_cmd;
