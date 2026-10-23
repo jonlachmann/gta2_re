@@ -18,7 +18,12 @@ Nothing here is built yet. It builds on the port (`docs/port.md`): the headless 
 | Transport | **ENet**: unreliable snapshots and inputs, reliable events. |
 | Remote entities | **Configurable**: interpolation, dead reckoning, or interpolation that extrapolates on loss. |
 | Projectiles | **Configurable**: rewind on spawn, or predicted cosmetic plus server spawn. |
-| Players | **Up to 16** (4-bit player ids on the wire). |
+| Players | **Any number**: no fixed count in the protocol (player ids are a varint, byte-sized for up to 255). In the game, `MAX_PLAYERS` (28 uses, ~10 loops written as `< 6`) becomes a port setting. Tested at 16. |
+| Game modes | **Frags first.** Team deathmatch, CTF, points and tag later, so the rules live in one mode module (scoring, spawning, teams, win condition) rather than in the netcode, and teams are part of the player state from the start. |
+| Joining | **Mid-game join**: a full state of the interest area over the reliable channel, then deltas (see Wire format). |
+| Bots | **Yes**: a headless client with scripted or AI input, over the real network path; also how 16 players are tested. |
+| Code | `Port/net/` (protocol, ENet wrapper, schema, rollback), `Port/server_main.cpp`. |
+| Platforms | Server mainly **Linux**, cross-platform (Windows, macOS); ENet 1.3.18. |
 | Rates | Sim fixed at **30 Hz** (33 ms, as the game is built). Snapshot rate configurable per client (10-30 Hz). |
 
 ## Why the engine shapes the design
