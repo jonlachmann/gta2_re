@@ -28,32 +28,55 @@ int32_t ReadValue(net::BitReader& r, const net::FieldDesc& d)
     return (int32_t)v;
 }
 
-// A field mask at the type's field count (up to 64: two words)
-void WriteMask(net::BitWriter& w, uint64_t mask, int n)
+// A field mask: one bit per field of the type, written in 32-bit words at its field count
+struct Mask
 {
-    w.Bits((uint32_t)mask, n < 32 ? n : 32);
-    if (n > 32)
+    uint32_t w[net::kMaxFields / 32];
+    bool Any() const
     {
-        w.Bits((uint32_t)(mask >> 32), n - 32);
+        for (size_t i = 0; i < sizeof(w) / sizeof(w[0]); i++)
+        {
+            if (w[i])
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    bool Has(size_t i) const
+    {
+        return (w[i / 32] >> (i % 32)) & 1;
+    }
+    void Set(size_t i)
+    {
+        w[i / 32] |= 1u << (i % 32);
+    }
+};
+
+void WriteMask(net::BitWriter& w, const Mask& mask, int n)
+{
+    for (int i = 0; i < n; i += 32)
+    {
+        w.Bits(mask.w[i / 32], n - i < 32 ? n - i : 32);
     }
 }
 
-uint64_t ReadMask(net::BitReader& r, int n)
+Mask ReadMask(net::BitReader& r, int n)
 {
-    uint64_t mask = r.Bits(n < 32 ? n : 32);
-    if (n > 32)
+    Mask mask = {};
+    for (int i = 0; i < n; i += 32)
     {
-        mask |= (uint64_t)r.Bits(n - 32) << 32;
+        mask.w[i / 32] = r.Bits(n - i < 32 ? n - i : 32);
     }
     return mask;
 }
 
-void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityState& s, uint64_t mask)
+void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityState& s, const Mask& mask)
 {
     WriteMask(w, mask, (int)t.fields.size());
     for (size_t i = 0; i < t.fields.size(); i++)
     {
-        if (mask & (1ull << i))
+        if (mask.Has(i))
         {
             WriteValue(w, t.fields[i], s.f[i]);
         }
@@ -62,10 +85,10 @@ void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityS
 
 bool ReadFields(net::BitReader& r, const net::EntityType& t, net::EntityState& s)
 {
-    const uint64_t mask = ReadMask(r, (int)t.fields.size());
+    const Mask mask = ReadMask(r, (int)t.fields.size());
     for (size_t i = 0; i < t.fields.size(); i++)
     {
-        if (mask & (1ull << i))
+        if (mask.Has(i))
         {
             s.f[i] = ReadValue(r, t.fields[i]);
         }
@@ -88,14 +111,14 @@ int32_t Wire(const net::FieldDesc& d, int32_t v)
     return (int32_t)u;
 }
 
-uint64_t ChangedMask(const net::EntityType& t, const net::EntityState& a, const net::EntityState& b)
+Mask ChangedMask(const net::EntityType& t, const net::EntityState& a, const net::EntityState& b)
 {
-    uint64_t mask = 0;
+    Mask mask = {};
     for (size_t i = 0; i < t.fields.size(); i++)
     {
         if (Wire(t.fields[i], a.f[i]) != Wire(t.fields[i], b.f[i]))
         {
-            mask |= 1ull << i;
+            mask.Set(i);
         }
     }
     return mask;
@@ -115,7 +138,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         uint32_t id;
         int op;
         const EntityState* now;
-        uint64_t mask;
+        Mask mask;
     };
     std::vector<Entry> entries;
     size_t i = 0, j = 0;
@@ -131,7 +154,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         }
         else if (a && (!b || a->id < b->id))
         {
-            Entry e = {a->id, kRemove, NULL, 0};
+            Entry e = {a->id, kRemove, NULL, Mask()};
             entries.push_back(e);
             i++;
         }
@@ -144,8 +167,8 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
             }
             else
             {
-                const uint64_t mask = ChangedMask(schema.types[b->type], *a, *b);
-                if (mask)
+                const Mask mask = ChangedMask(schema.types[b->type], *a, *b);
+                if (mask.Any())
                 {
                     Entry e = {b->id, kUpdate, b, mask};
                     entries.push_back(e);
