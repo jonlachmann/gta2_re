@@ -254,6 +254,7 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                 }
             }
             SetCarPhysics(car, e); // a player's car too: its place came with the player
+            ApplyCarAi(car, e);
             if (!SetCarDamage(car, e) && !playerIn.count(car) && !gReferenced.count(car))
             {
                 // A wreck here that isn't one on the server can't be unexploded: it goes, and the next snapshot makes the
