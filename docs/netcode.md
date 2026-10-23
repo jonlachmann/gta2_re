@@ -98,6 +98,51 @@ A starting set, refined by the correctness check below:
 
 This is the same loop as the attract-demo replay, with the server as the reference instead of 10.5.exe. The same check measures prediction error under simulated latency: the local player's state predicted for tick S against the server's state at S.
 
+## N0 measurements (native macOS, arm64, `-O2`)
+
+`GTA2_SIMBENCH=<flip>[:<ticks>]` or `GTA2_SIMBENCH=p<peds>[:<ticks>]` (`Port/headless/sim_bench.cpp`, every port build) runs that many sim ticks back to back once the game reaches that flip, or once that many peds are alive. It runs them without drawing, prints the cost of each service, the full-world size and save/restore time, and a rollback check, then exits. The busy scene below is an attract demo through Downtown traffic:
+
+```
+GTA2_HEADLESS=1 GTA2_SIMBENCH=p40:3000 Scripts/port/run_mac.sh
+```
+
+| | Result |
+|---|---|
+| World (registered globals and what they point to, players, light grid) | 1,763 blocks, **3.53 MB**; save **0.06 ms**, restore **0.055 ms** |
+| One sim tick, busy scene (73 cars, 39 peds, 176 objects) | **~30 µs** (30,000-43,000 ticks/s); an idle player in a quiet area is 9 µs |
+| A 10-tick resim (300 ms RTT) | ~0.3 ms plus one restore: ~2% of a 60 fps frame |
+| Rollback: save, 30 ticks, restore, the same 30 ticks | **Reproduces the world exactly** with `skip_audio`. With audio on, one byte of `gSound_obj` differs (the mixer's real-time sample status); nothing in the gameplay state does. |
+
+Cost by service:
+
+| Service | Share of a busy tick |
+|---|---|
+| cars (physics, AI, traffic) | 52% |
+| peds | 28% |
+| objects (projectiles, pickups) | 13% |
+| everything else together (HUD 2%, players 1.4%, ...) | ~7% |
+
+Whole-world rollback holds with a wide margin, so speed gives no reason to cut anything out of the client. The server simulates up to 16 interest areas, so its world is a few times larger, still well under a millisecond per tick.
+
+The check found two pieces of state outside the registry:
+- the `Player` objects (`Game::field_4_players`);
+- `gLightGrid_6F5400`, which points to an array of which the registry knows only one element.
+
+The bench adds both. To make the rollback set complete by construction, the client could allocate all game memory from one arena and snapshot the arena together with the globals.
+
+### What the client runs (client mode)
+
+Every service is one call in `Game::UpdateGame_4B9410`, and several already have a debug skip flag (`bSkip_mission`, `bSkip_police`, `bSkip_ambulance`, `bSkip_particles`, `bSkip_traffic_lights`). Cutting whole services is a flag each. The finer cuts are single calls inside the services.
+
+| Service | Client | Why |
+|---|---|---|
+| players, cars, peds, objects (movement, physics, collisions, weapons) | **run** | This is the prediction, for the local player and for dead reckoning of the rest |
+| traffic spawn (`TrafficSpawner::GenerateTraffic_583670`, in the car service) and dummy peds (`PedManager::Dummies_470330`) | **off** | Only the server creates entities |
+| despawning of far entities (inside the per-entity updates) | **off** | Only the server destroys; these checks still have to be found |
+| scripts, police, ambulance, firefighters, emergency crews, generators, garages | **off** | They create entities or change game state; the results arrive replicated |
+| doors, cranes, crushers, trains/buses, traffic lights | run or off | Deterministic from their state, cheap; running them predicts them, and the snapshot corrects them |
+| particles, tile animations, lights, HUD, sound | **run, cosmetic** | Client only, and muted during resim |
+
 ## Wire format
 
 - **Encoding.** Little-endian bitstream, never `memcpy` of structs. Clients are 32- and 64-bit, and struct padding differs between them.
@@ -144,7 +189,7 @@ This is the same loop as the attract-demo replay, with the server as the referen
 
 | | Goal | Check |
 |---|---|---|
-| N0 | Measurements: sim ticks per second headless (without the state log); save/restore cost of the full world; per-tick heap allocation outside the pools; entities in an interest area on the busiest MP map with 16 players. | Numbers in this doc; they decide whether whole-world rollback holds or needs a fallback (resimulating only the local player and its car). |
+| N0 | **Done**, see "N0 measurements". | Whole-world rollback holds: ~30 µs per busy tick, 0.06 ms save/restore, rollback exact. |
 | N1 | Local rollback, no network: save every tick; every K ticks restore K back and resimulate with the same inputs. | The state log hash after resim equals the hash without it. Proves the restore set is complete and the resim is deterministic within one binary. |
 | N2 | Server main, ENet loopback, full snapshots (no delta), schema v1, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
 | N3 | Bitstream, field masks, per-entity acked baselines, priority and the 1350-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
