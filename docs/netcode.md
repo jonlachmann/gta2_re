@@ -143,6 +143,28 @@ Every service is one call in `Game::UpdateGame_4B9410`, and several already have
 | doors, cranes, crushers, trains/buses, traffic lights | run or off | Deterministic from their state, cheap; running them predicts them, and the snapshot corrects them |
 | particles, tile animations, lights, HUD, sound | **run, cosmetic** | Client only, and muted during resim |
 
+## Whole-map simulation and tunable cleanup
+
+The server can keep everything that exists anywhere on the map, simulated and kept until a cleanup policy removes it. With many players the map then builds up its own history: wrecks, bodies, police chases nobody is watching. How much cleanup a server runs becomes a game mode:
+- **none**: the chaos builds over time;
+- **wrecks only**;
+- **stock GTA2**: clean up whatever no player sees.
+
+**How GTA2 decides now.** The update loops run every live entity, and the camera only decides spawning and despawning:
+- `Car::ManageDespawning_442310`: a car no player's view has covered for 130 ticks (4.3 s) is marked for despawn. Emergency vehicles go at 300.
+- `Car::CanDespawn_442200`: wrecks (a parked car at maximum damage) may always go. Cars in a player's history (`IsCarInAnyPlayerHistory_4B9C10`), mission cars and special peds' cars never go.
+- Views come from player cameras (`Game::IsSpriteInPlayerBounds_4B9950` and the other `IsSprite*Bounds` functions), not from drawing. A headless server already sees what every player sees.
+- Peds and objects have their own off-screen checks (for example `Object_5C::RequestRemovalWhenOffScreen_5290B0`). These still have to be located.
+- **The debug flag `skip_recycling` is no "no cleanup" mode.** It also turns off `TrafficSpawner::GenerateTraffic_583670`, so no new traffic spawns at all.
+- **Traffic is a global budget.** `MakeTrafficForCurrCamera_5832C0` spawns only while `recycled + proto_recycled != 16`. In the bench the car count stayed at 73 for 9,000 ticks.
+
+**What the server needs** (all `#if GTA2_PORT`, server side):
+1. **A cleanup policy in place of the despawn checks.** Each category gets an "unseen for N seconds" timer and a cap, and the cap evicts the oldest unseen entity first. Categories: ambient traffic, ambient peds, wrecks, corpses, emergency vehicles, dropped weapons and pickups, burning objects. Cvars such as `sv_cleanup none|wrecks|stock|aggressive`, `sv_cleanup_wreck_s`, `sv_cleanup_corpse_s`, `sv_max_cars`. Cars a player has owned, and mission entities, stay protected as now.
+2. **Spawning by density around each player** instead of the global budget. Traffic near a player then stays the same however much the rest of the map holds.
+3. **Larger pools.** The limits are cars 306, peds 200 (chars 400), objects 3825 and sprites 5031. "No cleanup" fills them, and `Pool::Allocate` on an empty free list dereferences null. So: bigger pools on the server, plus **eviction under pressure**: near a full pool, the oldest unseen stale entity goes whatever the mode. That makes "none" mean "until the pools are full".
+4. **Cost.** A busy tick is ~0.2 µs per car and ~0.2 µs per ped. A few thousand entities would be ~1 ms per tick, well inside the 33 ms tick. That assumes nothing scales worse than linearly (collisions go through the sprite grid; long lists such as `Ped_List`'s threat search are the places to measure). The bench measures it once the pools are larger.
+5. **Clients.** Interest management keeps a client's snapshots independent of the size of the world, but a dense area can hold more than the stock pools allow. So clients use the server's pool sizes, and the snapshot priority cut handles the bandwidth. A larger world on the client is a larger rollback copy: about 3.5 MB → ~20 MB, still under a millisecond to save.
+
 ## Wire format
 
 - **Encoding.** Little-endian bitstream, never `memcpy` of structs. Clients are 32- and 64-bit, and struct padding differs between them.
