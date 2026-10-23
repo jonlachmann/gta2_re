@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 #define CHECK(c) \
     do \
@@ -267,6 +268,39 @@ void TestMessages()
 }
 } // namespace
 
+// A message cut into parts and put together again, in any order, is the message
+void TestParts()
+{
+    for (size_t size = 1; size < 6 * net::kMaxPayload; size += 997)
+    {
+        std::vector<uint8_t> message(size);
+        for (size_t i = 0; i < size; i++)
+        {
+            message[i] = (uint8_t)Rand();
+        }
+        std::vector<std::vector<uint8_t>> parts;
+        net::WriteSnapshotParts(message, 1234, parts);
+        CHECK(parts.size() == (size + net::kMaxPayload - net::kPartHeader - 1) / (net::kMaxPayload - net::kPartHeader));
+        std::vector<std::vector<uint8_t>> pieces(parts.size());
+        for (size_t k = parts.size(); k-- > 0;) // backwards
+        {
+            CHECK(parts[k].size() <= net::kMaxPayload);
+            net::BitReader r(parts[k].data(), parts[k].size());
+            CHECK(r.Bits(8) == net::kMsgSnapshotPart);
+            uint32_t tick = 0;
+            int index = 0, count = 0;
+            CHECK(net::ReadSnapshotPart(r, &tick, &index, &count, pieces[k]));
+            CHECK(tick == 1234 && index == (int)k && count == (int)parts.size());
+        }
+        std::vector<uint8_t> whole;
+        for (size_t k = 0; k < pieces.size(); k++)
+        {
+            whole.insert(whole.end(), pieces[k].begin(), pieces[k].end());
+        }
+        CHECK(whole == message);
+    }
+}
+
 int main()
 {
     TestBits();
@@ -274,6 +308,8 @@ int main()
     fflush(stdout);
     TestDelta();
     printf("snapshot deltas ok\n");
+    TestParts();
+    printf("snapshot parts ok\n");
     fflush(stdout);
     TestMessages();
     printf("messages ok\n");

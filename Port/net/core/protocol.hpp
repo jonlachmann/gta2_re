@@ -1,13 +1,14 @@
 // Port/net core (docs/netcode.md, "Wire format"): constants and the messages client and server exchange. Every
 // message starts with its type (one byte); readers return false on anything malformed.
 #pragma once
+#include <vector>
 #include "bitstream.hpp"
 #include <stdint.h>
 #include <string>
 
 namespace net
 {
-const uint32_t kProtocolVersion = 2;
+const uint32_t kProtocolVersion = 4;
 const uint16_t kDefaultPort = 27920;
 const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (Evaluations, 7)
 const uint8_t kChannelUnreliable = 0; // snapshots, commands
@@ -22,6 +23,7 @@ enum MsgType : uint8_t
     kMsgReject = 3, // server -> client, reliable, then disconnect
     kMsgCommands = 4, // client -> server, unreliable
     kMsgSnapshot = 5, // server -> client, unreliable
+    kMsgSnapshotPart = 6, // server -> client, unreliable: one part of a snapshot too big for one packet
 };
 
 struct Hello
@@ -76,6 +78,12 @@ struct SnapshotHeader
     uint32_t baseTick;
     uint32_t lastCmdTick;
 };
+// A snapshot message bigger than one packet goes in parts (up to kMaxParts): its tick, the part's index and how many,
+// then a piece of the message's bytes. A client puts them together, in order, once it has all of them
+const int kMaxParts = 8;
+const size_t kPartHeader = 8; // the most a part's header takes, in bytes
+void WriteSnapshotParts(const std::vector<uint8_t>& message, uint32_t tick, std::vector<std::vector<uint8_t>>& parts);
+bool ReadSnapshotPart(BitReader& r, uint32_t* pTick, int* pIndex, int* pCount, std::vector<uint8_t>& piece);
 void WriteSnapshotHeader(BitWriter& w, const SnapshotHeader& h);
 bool ReadSnapshotHeader(BitReader& r, SnapshotHeader& h);
 } // namespace net

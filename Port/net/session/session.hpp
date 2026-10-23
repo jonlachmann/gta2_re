@@ -18,6 +18,7 @@ struct ServerConfig
     uint16_t port = kDefaultPort;
     engine::NetworkGame game; // game.players: the player slots
     float interestRadius = 24.0f; // blocks around a client's player that its snapshots cover (players: always)
+    int packets = 4; // a snapshot's packets at most (--packets, 1..8): a busy area's goes in parts
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
 
@@ -55,6 +56,7 @@ class Server
     uint32_t mTick = 0;
     uint32_t mBytesSent = 0;
     uint32_t mNearSum = 0, mKeptSum = 0, mCut = 0; // the size cut, for the log
+    uint32_t mPartsSent = 0;
     bool mStarted = false;
 };
 
@@ -80,6 +82,14 @@ class Client
 
   private:
     void OnSnapshot(BitReader& r);
+    void OnSnapshotPart(BitReader& r);
+    struct Parts
+    {
+        uint32_t tick = 0;
+        int count = 0, have = 0;
+        std::vector<std::vector<uint8_t>> pieces;
+    };
+    Parts mParts[4]; // snapshots coming in parts, by tick % 4
     void Welcomed(const Welcome& welcome, engine::NetworkGame* pGame);
     void Reconcile(const Snapshot& snap);
     void Extrapolate(const Snapshot& snap);

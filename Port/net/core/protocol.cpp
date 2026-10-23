@@ -146,3 +146,37 @@ bool net::ReadSnapshotHeader(BitReader& r, SnapshotHeader& h)
     h.baseTick = h.tick - back;
     return true;
 }
+
+void net::WriteSnapshotParts(const std::vector<uint8_t>& message, uint32_t tick, std::vector<std::vector<uint8_t>>& parts)
+{
+    parts.clear();
+    const size_t piece = kMaxPayload - kPartHeader;
+    const int count = (int)((message.size() + piece - 1) / piece);
+    for (int i = 0; i < count; i++)
+    {
+        BitWriter w;
+        w.Bits(kMsgSnapshotPart, 8);
+        w.VarU(tick);
+        w.Bits((uint32_t)i, 3);
+        w.Bits((uint32_t)(count - 1), 3);
+        const size_t at = (size_t)i * piece, n = message.size() - at < piece ? message.size() - at : piece;
+        w.Bytes(&message[at], n);
+        parts.push_back(w.Data());
+        parts.back().resize(w.ByteCount());
+    }
+}
+
+bool net::ReadSnapshotPart(BitReader& r, uint32_t* pTick, int* pIndex, int* pCount, std::vector<uint8_t>& piece)
+{
+    *pTick = r.VarU();
+    *pIndex = (int)r.Bits(3);
+    *pCount = (int)r.Bits(3) + 1;
+    if (r.Overflow() || *pIndex >= *pCount)
+    {
+        return false;
+    }
+    // The rest, byte-aligned
+    const size_t left = r.BitsLeft() / 8;
+    piece.resize(left);
+    return left > 0 && r.Bytes(piece.data(), left);
+}
