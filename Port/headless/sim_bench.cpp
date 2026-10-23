@@ -33,6 +33,8 @@
 #include "TileAnimManager.hpp"
 #include "TrafficLights.hpp"
 #include "collide.hpp"
+#include "Camera.hpp"
+#include "map_0x370.hpp"
 #include "debug.hpp"
 #include "winmain.hpp"
 #include "ObjectPool.hpp"
@@ -47,6 +49,9 @@
 void StateLog_Frame(unsigned flip);
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
+EXTERN_GLOBAL(GridSpriteLink_Pool*, gGridSpriteLink_Pool_679200);
+EXTERN_GLOBAL(u8, spawnSideLocked_6787D5);
+EXTERN_GLOBAL(u8, spawnCountLimit_6787D6);
 
 namespace
 {
@@ -255,10 +260,82 @@ template <class T> int Used(T* pFirst)
     return n;
 }
 
+template <class T> int Free(T* pFirst)
+{
+    return Used(pFirst);
+}
+
 void Counts(const char* when)
 {
-    fprintf(stderr, "simbench: %s: %d cars, %d peds, %d objects\n", when, Used(gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev),
-            Used(gPedPool_6787B8->field_0_pool.field_4_pPrev), Used(gObject_2C_Pool_6F8F80->field_4_pPrev));
+    fprintf(stderr, "simbench: %s: %d cars, %d peds, %d objects; free grid links %d, sprites %d\n", when,
+            Used(gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev), Used(gPedPool_6787B8->field_0_pool.field_4_pPrev),
+            Used(gObject_2C_Pool_6F8F80->field_4_pPrev), Free(gGridSpriteLink_Pool_679200->field_0_pHead),
+            Free(gSpritePool_703818->field_0_pool.field_0_pHead));
+}
+
+// GTA2_SIMBENCH_FILL=<cars>: before measuring, fill the map with traffic by the game's own spawner. The first
+// player's camera moves to random places, the traffic cap (16 ambient cars for the whole game,
+// CarManager::CanAllocateCarOfKind_446930) and the cooldown between spawns are lifted for the call, and recycling is off so nothing despawns.
+// GTA2_SIMBENCH_FILL_PEDS: walking peds as well. Stops at <cars> cars, or before the ped pool runs out (every traffic car has a driver).
+bool gPeds;
+
+void Fill(int targetCars)
+{
+    gPeds = getenv("GTA2_SIMBENCH_FILL_PEDS") != NULL;
+    Camera* cam = gGame_0x40_67E008->IteratePlayerCamera_4B9BC0();
+    Player* player = gGame_0x40_67E008->IterateFirstPlayer_4B9CD0();
+    TrafficSpawner* sp = gTrafficSpawner_14_677934;
+    if (!cam || !player)
+    {
+        return;
+    }
+    const WorldRect padded = cam->field_20_padded_view_bounds, view = cam->field_78_view_bounds;
+    const CameraPos pos = cam->field_98_cur_pos;
+    const Fix16 cx = (padded.field_0_left + padded.field_4_right) / 2, cy = (padded.field_8_top + padded.field_C_bottom) / 2;
+    fprintf(stderr, "simbench: fill: traffic %d, proto %d, parked %d, spawn block %d, limit_recycling %d\n",
+            gCarManager_6C_677930->field_28_recycled_cars, gCarManager_6C_677930->field_40_proto_recycled_cars,
+            gCarManager_6C_677930->field_44_parked_cars, (int)gCarManager_6C_677930->field_54_spawn_block, (int)bLimit_recycling_67D4CA);
+    unsigned seed = 12345;
+    int attempts = 0;
+    while (Used(gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev) < targetCars && attempts++ < 200000 &&
+           Free(gPedPool_6787B8->field_0_pool.field_0_pStart) > 8 && Free(gCar_BC_Pool_67792C->field_0_pool.field_0_pStart) > 8)
+    {
+        seed = seed * 1103515245u + 12345u;
+        const Fix16 x = Fix16((s32)(16 + (seed >> 8) % 224)), y = Fix16((s32)(16 + (seed >> 20) % 224));
+        const Fix16 dx = x - cx, dy = y - cy;
+        cam->field_20_padded_view_bounds.field_0_left = padded.field_0_left + dx;
+        cam->field_20_padded_view_bounds.field_4_right = padded.field_4_right + dx;
+        cam->field_20_padded_view_bounds.field_8_top = padded.field_8_top + dy;
+        cam->field_20_padded_view_bounds.field_C_bottom = padded.field_C_bottom + dy;
+        cam->field_78_view_bounds.field_0_left = view.field_0_left + dx;
+        cam->field_78_view_bounds.field_4_right = view.field_4_right + dx;
+        cam->field_78_view_bounds.field_8_top = view.field_8_top + dy;
+        cam->field_78_view_bounds.field_C_bottom = view.field_C_bottom + dy;
+        cam->field_98_cur_pos.field_0_x = pos.field_0_x + dx;
+        cam->field_98_cur_pos.field_4_y = pos.field_4_y + dy;
+        sp->field_0_cam = cam;
+        sp->field_C_player = player;
+        sp->field_10_zone = gMap_0x370_6F6268->GetZoneInfoAt_4DF890(x.ToInt(), y.ToInt());
+        const s32 traffic = gCarManager_6C_677930->field_28_recycled_cars, proto = gCarManager_6C_677930->field_40_proto_recycled_cars;
+        gCarManager_6C_677930->field_28_recycled_cars = 0;
+        gCarManager_6C_677930->field_40_proto_recycled_cars = 0;
+        gCarManager_6C_677930->field_54_spawn_block = 0; // the cooldown between two spawns
+        player->field_680_traffic_spawn_counter = 0xFFFF; // and the player's spawn pacing (SelectTrafficCarModel_444AB0)
+        sp->MakeTrafficForCurrCamera_5832C0();
+        gCarManager_6C_677930->field_28_recycled_cars += traffic;
+        gCarManager_6C_677930->field_40_proto_recycled_cars += proto;
+        if (gPeds) // walking peds too (PedManager::Dummies_470330 without its cap of 50 and the on-screen density)
+        {
+            spawnSideLocked_6787D5 = 0;
+            spawnCountLimit_6787D6 = 2;
+            gPedManager_6787BC->field_6_num_peds_on_screen = 0;
+            gPedManager_6787BC->SpawnDummies_46EB60(cam);
+        }
+    }
+    cam->field_20_padded_view_bounds = padded;
+    cam->field_78_view_bounds = view;
+    cam->field_98_cur_pos = pos;
+    fprintf(stderr, "simbench: fill: %d attempts\n", attempts);
 }
 
 double Ms(Clock::time_point a, Clock::time_point b)
@@ -337,13 +414,27 @@ void Run(int ticks)
 
     // Tick cost, per service. GTA2_SIMBENCH_NORECYCLE: cars aren't despawned (debug skip_recycling), with counts
     // and the tick cost every 500 ticks, to see the world fill up
-    const bool norecycle = getenv("GTA2_SIMBENCH_NORECYCLE") != NULL;
+    const char* fill = getenv("GTA2_SIMBENCH_FILL");
+    const bool norecycle = getenv("GTA2_SIMBENCH_NORECYCLE") != NULL || fill;
     bSkip_recycling_67D575 |= norecycle;
+    if (fill)
+    {
+        Counts("before fill");
+        Fill(atoi(fill));
+        memset(gNs, 0, sizeof(gNs));
+    }
     Counts("before");
     a = Clock::now();
     Clock::time_point w = a;
     for (int i = 0; i < ticks; i++)
     {
+        if (norecycle) // no ped cleanup either: every ped counts as seen (Ped::StateMachineTick_4626B0's off-screen timers)
+        {
+            for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+            {
+                p->field_20E_offscreen_counter = 0;
+            }
+        }
         TimedTick();
         if (norecycle && (i + 1) % 500 == 0)
         {
