@@ -255,7 +255,7 @@ char_type ScriptManager::AddCranePowerupTrigger_511B10(s16 idx)
     SCR_POINTER* pGenerator = static_cast<SCR_POINTER*>(GetBasePointer_512770(pCmd->field_A_generator));
     return gCarThreadTriggers_214_705F20->AddThreadTrigger_5C86C0(car_thread_trigger_type::any_car_1,
                                        car_thread_trigger_action::set_generator_car_type_3,
-                                       reinterpret_cast<SCR_THREAD*>(pGenerator->field_8_generator),
+                                       reinterpret_cast<SCR_THREAD*>(static_cast<Generator*>(pGenerator->field_8_generator)),
                                        Fix16(pCmd->field_C_pos.field_0_x) + kFpHalf_6F75F0,
                                        Fix16(pCmd->field_C_pos.field_1_y) + kFpHalf_6F75F0,
                                        Fix16(pCmd->field_C_pos.field_2_z),
@@ -356,7 +356,7 @@ void ScriptManager::SaveGame_511E10(const char_type* pFileName)
 
     gGameSave_6F78C8.field_5E4_object_data.field_160_secret_tokens_collected = gGameSession_67E8E0.get_secret_tokens_collected_453A80();
 
-    u16** pColData;
+    MapColumnWord* pColData;
     u32 colBytes;
     gmp_block_info* pBlockInfo;
     u32 blockInfoBytes;
@@ -405,7 +405,7 @@ void ScriptManager::LoadSave_511F80(const char_type* pFileName)
     size_t mapSubLen;
     size_t blockInfoLen;
     size_t colDataLen;
-    u16** pColData;
+    MapColumnWord* pColData;
     gmp_block_info* pBlockInfo;
     DmapInfoList* pMapSub;
 

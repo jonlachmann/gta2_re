@@ -85,6 +85,25 @@ void TextTable::RemapExtendedChars_5B5930(wchar_t* pStr)
 MATCH_FUNC(0x5B5960)
 void TextTable::TKEY_Load_5B5960(u32 chunk_size)
 {
+#if defined(GTA2_PORT) && defined(__LP64__)
+    // Port, 64-bit: the file's records are 12 bytes (a 4-byte offset and an 8-character key), the entries hold a
+    // pointer, so they are copied over one by one
+    field_0_tKey.field_4_tKey_count = chunkSize / 12;
+    field_0_tKey.field_0_tKey = new TextKeyEntry[field_0_tKey.field_4_tKey_count];
+    u8* pRaw = new u8[chunkSize];
+    File::Global_Read_4A71C0(pRaw, chunkSize);
+    for (u32 i = 0; i < field_0_tKey.field_4_tKey_count; i++)
+    {
+        u32 offset;
+        memcpy(&offset, pRaw + i * 12, 4);
+        TextKeyEntry& e = field_0_tKey.field_0_tKey[i];
+        memset(&e, 0, sizeof(e));
+        e.field_0_pwstr = (wchar_t*)(uptr)offset;
+        memcpy(&e.field_4_key, pRaw + i * 12 + 4, 8);
+    }
+    delete[] pRaw;
+    return;
+#endif
     // TODO: probably an inline
     field_0_tKey.field_4_tKey_count = chunk_size / sizeof(TextKeyEntry);
     field_0_tKey.field_0_tKey = new TextKeyEntry[field_0_tKey.field_4_tKey_count];
@@ -104,7 +123,7 @@ void TextTable::TDAT_Offsets2Strings_5B59B0(u8* pDat)
     for (u32 idx = 0; idx < static_cast<u32>(field_0_tKey.field_4_tKey_count); idx++)
     {
         // The raw file record is an offset, convert it to a pointer to the string data in the TDAT
-        const s32 offsetInBytes = reinterpret_cast<s32>(ptKeyIter->field_0_pwstr);
+        const s32 offsetInBytes = (s32) reinterpret_cast<sptr>(ptKeyIter->field_0_pwstr);
         ptKeyIter->field_0_pwstr = reinterpret_cast<wchar_t*>(&pDat[offsetInBytes]);
         ptKeyIter++;
     }

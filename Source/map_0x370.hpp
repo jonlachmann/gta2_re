@@ -125,6 +125,14 @@ struct gmp_header
 
 struct DmapInfoList;
 
+// The column data is an array of 32-bit words that the map indexes; the decomp types it u16* (4 bytes on the
+// original). The 64-bit port needs 4-byte elements too.
+#if defined(GTA2_PORT) && defined(__LP64__)
+typedef u32 MapColumnWord;
+#else
+typedef u16* MapColumnWord;
+#endif
+
 struct gmp_compressed_map_32
 {
     EXPORT void ApplyDmapInfos_4E80A0(DmapInfoList* pMapSub);
@@ -141,7 +149,7 @@ struct gmp_compressed_map_32
     u32 field_0_base[256][256];
     s32 field_40000_column_words;
     s32 field_40004_num_blocks;
-    u16** field_40008_pColumn;
+    MapColumnWord* field_40008_pColumn;
     gmp_block_info* field_4000C_block;
 
     gmp_block_info* get_block(u32 block)
@@ -544,7 +552,7 @@ class Map_0x370
     EXPORT void LowerColumn_4E8A10(s32 x_pos, s32 y_pos);
     EXPORT void LowerLevel_4E8B70(s32 x_min, s32 x_max, s32 y_min, s32 y_max);
     EXPORT void OnModifiedMapDataLoaded_4E8C00(u32 column_bytes, u32 block_bytes, u32 obj_bytes);
-    EXPORT void GetModifiedMapData_4E8CF0(u16*** outColumnPtr,
+    EXPORT void GetModifiedMapData_4E8CF0(MapColumnWord** outColumnPtr,
                            u32* outColumnBytes,
                            gmp_block_info** outBlockPtr,
                            u32* outBlockBytes,
@@ -552,7 +560,7 @@ class Map_0x370
                            s32* outSubObjBytes);
 #if defined(GTA2_PORT) && defined(__LP64__)
     // Port, 64-bit: a caller passes size_t counts, which are no longer u32
-    void GetModifiedMapData_4E8CF0(u16*** outColumnPtr, size_t* outColumnBytes, gmp_block_info** outBlockPtr, size_t* outBlockBytes,
+    void GetModifiedMapData_4E8CF0(MapColumnWord** outColumnPtr, size_t* outColumnBytes, gmp_block_info** outBlockPtr, size_t* outBlockBytes,
                                    DmapInfoList** outSubObj, s32* outSubObjBytes)
     {
         u32 columnBytes, blockBytes;

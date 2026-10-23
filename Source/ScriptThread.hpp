@@ -1,4 +1,5 @@
 #pragma once
+#include "ptr32.hpp"
 
 #include "Fix16_Point.hpp"
 #include "Function.hpp"
@@ -38,7 +39,7 @@ struct SCR_ONEVAR_RECT : SCR_CMD_HEADER
 struct SCR_PLAYER_PED
 {
     SCR_CMD_HEADER field_0_header;
-    Ped* field_8_ped;
+    PTR32(Ped) field_8_ped;
     Fix16_Vec field_C_pos;
     Ang16 field_18_rot;
     s16 field_1A_remap;
@@ -57,7 +58,7 @@ struct SCR_CAR_DATA_DEC : SCR_CMD_HEADER
 
 struct SCR_CHAR_DATA_DEC : SCR_CMD_HEADER
 {
-    Ped* field_8_char;
+    PTR32(Ped) field_8_char;
     Fix16_Vec field_C_pos;
     Ang16 field_18_rot;
     s16 field_1A_remap;
@@ -67,7 +68,7 @@ struct SCR_CHAR_DATA_DEC : SCR_CMD_HEADER
 
 struct SCR_OBJ_DATA : SCR_CMD_HEADER
 {
-    Object* field_8_obj;
+    PTR32(Object) field_8_obj;
     Fix16_Vec field_C_pos;
     u16 field_18_obj_id;
     Ang16 field_1A_rot;
@@ -129,13 +130,13 @@ struct SCR_POINTER : SCR_CMD_HEADER
 {
     union
     {
-        Ped* field_8_char;
-        Car* field_8_car;
-        Object* field_8_obj;
-        Crane* field_8_crane;
-        Light* field_8_light;
-        Door* field_8_door;
-        Crusher* field_8_crusher;
+        PTR32(Ped) field_8_char;
+        PTR32(Car) field_8_car;
+        PTR32(Object) field_8_obj;
+        PTR32(Crane) field_8_crane;
+        PTR32(Light) field_8_light;
+        PTR32(Door) field_8_door;
+        PTR32(Crusher) field_8_crusher;
         s32 field_8_counter;
         u16 field_8_index;
         union
@@ -143,9 +144,9 @@ struct SCR_POINTER : SCR_CMD_HEADER
             u16 field_6;
             u16 field_8;
         } words;
-        Generator* field_8_generator;
-        Hud_Arrow* field_8_arrow;
-        AttachedSprite* field_8_sprite;
+        PTR32(Generator) field_8_generator;
+        PTR32(Hud_Arrow) field_8_arrow;
+        PTR32(AttachedSprite) field_8_sprite;
     };
 };
 
@@ -166,7 +167,7 @@ struct SCR_LOC_SEC_CHAR : SCR_CMD_HEADER
 
 struct SCR_THREAD : SCR_CMD_HEADER
 {
-    ScriptThread* field_8_script_thread;
+    PTR32(ScriptThread) field_8_script_thread;
     s16 field_C_thread_id;
     u16 field_E_thread_start_cmd;
     union
@@ -190,7 +191,7 @@ struct SCR_THREAD : SCR_CMD_HEADER
 
 struct SCR_CHAR_AREA_ANY : SCR_CMD_HEADER
 {
-    ScriptThread* field_8_script_thread;
+    PTR32(ScriptThread) field_8_script_thread;
     s16 field_C_unused;
     u16 field_E_unused;
     Fix16 field_10_x;
@@ -273,7 +274,7 @@ struct SCR_RADIOSTATION_DEC : SCR_CMD_HEADER
 
 struct SCR_CRANE_TARGET_DEC : SCR_CMD_HEADER
 {
-    Crane* field_8_crane;
+    PTR32(Crane) field_8_crane;
     u32 field_C_homecrane;
     SCR_XY_f field_10_pos;
     u16 field_18_home_rotation;
@@ -285,7 +286,7 @@ struct SCR_CRANE_TARGET_DEC : SCR_CMD_HEADER
 
 struct SCR_CRANE_BASIC_DEC : SCR_CMD_HEADER
 {
-    Crane* field_8_crane;
+    PTR32(Crane) field_8_crane;
     u32 field_C_homecrane;
     SCR_XY_f field_10_pos;
     u16 field_18_home_rotation;
@@ -449,7 +450,7 @@ struct SCR_IF_JUMP : SCR_CMD_HEADER
 
 struct SCR_DOOR_DATA_DEC : SCR_CMD_HEADER
 {
-    Door* field_8_door;
+    PTR32(Door) field_8_door;
     SCR_XYZ_uc field_C_block;
     u8 field_F_face;
     u8 field_10_gr_id;
@@ -822,9 +823,9 @@ struct SCR_ARROW_ENTITY : SCR_CMD_HEADER
 {
     union
     {
-        Car* field_8_car;
-        Ped* field_8_char;
-        Object* field_8_obj;
+        PTR32(Car) field_8_car;
+        PTR32(Ped) field_8_char;
+        PTR32(Object) field_8_obj;
     };
 };
 
