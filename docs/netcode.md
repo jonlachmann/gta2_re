@@ -63,6 +63,48 @@ The netcode keeps the tick length a variable from the start: in the clock sync, 
 
   The state log already lists every global and heap block (its "entries"), and it maps pointers to `(entry, offset)`. The same registry gives the rollback set and the entity ids.
 
+## Code layout
+
+The netcode lives in `Port/net/`. **Only `engine/` includes decomp headers.** Everything else works on plain data, so the decomp can keep moving (renames, struct fixes, new matches) while the netcode only follows it in one folder.
+
+```
+Port/net/
+  core/        engine-agnostic, unit-tested without the game: bitstream, protocol constants and messages,
+               entity states and their delta coding, input commands
+  transport/   the network: an interface (hosts, peers, channels, events) and its ENet implementation,
+               plus a link conditioner (delay, jitter, loss) for tests
+  engine/      the bridge to the decomp, the only code that knows its types:
+               world.cpp     the rollback set (every global, what it points to, players, light grid, sound pool)
+               netplay.cpp   the game's network layer (NetPlay/NetUi) for the port: how the game loop and the
+                             netcode meet, and the offline multiplayer start
+               access.cpp    players, inputs, entities as plain data (capture and apply, the net schema)
+               client_mode.cpp  what a client doesn't simulate (spawning, despawning, scripts)
+               sound_pool.cpp   SoundPosEntry from a pool in the rollback set (milestone S)
+  session/     server, client and bot logic on top of core, transport and the engine interface
+  mode/        game modes (frags first): join, spawn, scoring, win condition
+  enet/        ENet 1.3.18, vendored (MIT)
+  tests/       core tests (Scripts/port/net_tests.sh)
+  net_main.cpp the command line (--server, --connect, --bot) and the session's lifetime
+```
+
+Dependencies only go one way: `session` and `mode` use `core`, `transport` and the engine interface (`engine/engine.hpp`, plain types only); `engine` uses the decomp and `core`'s data types.
+
+**How the game and the netcode meet.** The game's network game loop already has the boundary we need: the DirectPlay layer, `NetPlay`. Every network frame, `RunGameFrame_4DA850` runs:
+1. the tick (`ExecuteGame_4DA780`);
+2. `do_network_and_local_inputs_4DAF30`, which samples the local input, sends it with `NetPlay::SendToAll_521B20`, draws, receives the other players' inputs, and sets every player's input for the next tick.
+
+The port's `NetPlay` (`engine/netplay.cpp`) makes `SendToAll` the netcode's per-frame hook: after tick T, before the draw. There the server reads its clients and sets every player's input for tick T+1; the client sends its command, applies snapshots, and later rolls back. The netcode needs no frame-loop code in `Source/`.
+
+**What it does need in `Source/`:** a short list of `#if GTA2_PORT` lines, and nothing more:
+
+| Where | Why |
+|---|---|
+| `sound_obj.cpp`: the random table on its own stream (`Port/port_rand_sound.h`) | Muting sound during a resim mustn't change the sim's random numbers. The stream is shared by default, so the replay checks against 10.5.exe stay exact; the netcode switches it on. |
+| `sound_obj.hpp`: `SoundPosEntry::operator new/delete` | From a pool that is part of the rollback set, so a restore can't bring back freed sound entries. |
+| (later, N6) `types.hpp`: `MAX_PLAYERS` | A port-only player cap. |
+
+Each one stays a single include or declaration, so it moves along with the decomp without merge pain.
+
 ## Architecture
 
 ```
