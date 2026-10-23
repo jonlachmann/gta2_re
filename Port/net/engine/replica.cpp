@@ -27,6 +27,7 @@ struct net::engine::ReplicaState
 {
     std::unordered_map<uint32_t, Car*> cars;
     std::unordered_map<uint32_t, Ped*> peds;
+    std::unordered_map<uint32_t, Object*> objects;
 };
 
 namespace
@@ -310,7 +311,17 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
             {
                 gPeds[e.id] = ped;
                 mapped.insert(ped);
+                ped->field_244_remap = (char_type)e.f[kPedRemap] ^ 1; // set below, with its char's
+            }
+            // Its look: the remap and its char's colours (a ped made here, or adopted, had its own: a gang member's showed
+            // another gang's)
+            if ((u8)ped->field_244_remap != (u8)e.f[kPedRemap])
+            {
                 ped->field_244_remap = (char_type)e.f[kPedRemap];
+                if (ped->field_168_game_object)
+                {
+                    ped->SetRemap_433C10((u8)e.f[kPedRemap]);
+                }
             }
             // In the server's car, or on foot, as the server has it (when neither side is getting in or out)
             const bool settled = !e.f[kPedState] && !InCarTransition(ped) && !ped->isDead_403B60();
@@ -351,10 +362,39 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
         }
     }
 
-    // What the server no longer sends goes; so do this game's own cars and peds nobody mapped
+    // Groups (a gang following its leader) once every ped of the snapshot is here
+    std::vector<std::pair<Ped*, const EntityState*>> groupPeds;
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        const EntityState& e = snap.entities[k];
+        auto it = e.type == kEntityPed ? gPeds.find(e.id) : gPeds.end();
+        if (it != gPeds.end() && it->second->IsActive_433B40())
+        {
+            groupPeds.push_back(std::make_pair(it->second, &e));
+        }
+    }
+    ApplyPedGroups(groupPeds);
+    // What the server no longer sends goes, within what this snapshot reached (beyond it, a full snapshot was cut for
+    // size: the car or ped is still there); so do this game's own cars and peds nobody mapped
+    float px = 0, py = 0, pz = 0;
+    int prot = 0;
+    const bool located = PlayerPose(LocalPlayer(), &px, &py, &pz, &prot);
+    const float reach = SnapshotReach(snap) - 1.0f;
+    auto beyond = [&](const Sprite* sp) {
+        if (!sp || !located)
+        {
+            return false;
+        }
+        const float dx = sp->field_14_xy.x.ToFloat() - px, dy = sp->field_14_xy.y.ToFloat() - py;
+        return dx * dx + dy * dy > reach * reach;
+    };
     for (auto it = gCars.begin(); it != gCars.end();)
     {
-        if (!seen.count(it->first))
+        if (!seen.count(it->first) && beyond(it->second->field_50_car_sprite))
+        {
+            ++it;
+        }
+        else if (!seen.count(it->first))
         {
             RemoveCar(it->second);
             it = gCars.erase(it);
@@ -366,7 +406,11 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     }
     for (auto it = gPeds.begin(); it != gPeds.end();)
     {
-        if (!seen.count(it->first))
+        if (!seen.count(it->first) && beyond(PedSprite(it->second)))
+        {
+            ++it;
+        }
+        else if (!seen.count(it->first))
         {
             if (it->second->IsActive_433B40()) // once: Deallocate_45EB60 undoes counters and groups, and marks it inactive
             {
@@ -417,6 +461,11 @@ void net::engine::PoolUse(int* pCars, int* pPeds, int* pChars)
     {
         printf("net: %d explosions the server had carried out, %d wrecks of this game's own made again\n", gExplosionsCarried, gWrecksReplaced);
         gExplosionsCarried = gWrecksReplaced = 0;
+    }
+    if (gPickupsMade + gPickupsRemoved)
+    {
+        printf("net: %d pickups made as the server's, %d removed\n", gPickupsMade, gPickupsRemoved);
+        gPickupsMade = gPickupsRemoved = 0;
     }
     if (gPedsRemade)
     {
@@ -478,6 +527,7 @@ net::engine::ReplicaState* net::engine::SaveReplicas(ReplicaState* reuse)
     ReplicaState* state = reuse ? reuse : new ReplicaState();
     state->cars = gCars;
     state->peds = gPeds;
+    state->objects = PickupMap();
     return state;
 }
 
@@ -485,6 +535,7 @@ void net::engine::RestoreReplicas(const ReplicaState* state)
 {
     gCars = state->cars;
     gPeds = state->peds;
+    PickupMap() = state->objects;
 }
 
 void net::engine::FreeReplicas(ReplicaState* state)

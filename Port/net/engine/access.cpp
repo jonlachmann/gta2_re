@@ -119,6 +119,11 @@ net::Schema BuildSchema()
     player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
     player.fields.push_back(FieldDesc{"state", 2, false}); // kPlayerState
     player.fields.push_back(FieldDesc{"target", 25, false}); // kPlayerTarget
+    static const char* const kNames[4] = {"name0", "name1", "name2", "name3"};
+    for (int i = 0; i < 4; i++)
+    {
+        player.fields.push_back(FieldDesc{kNames[i], 32, false}); // kPlayerName...
+    }
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
                                    {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false}}};
     for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
@@ -131,8 +136,10 @@ net::Schema BuildSchema()
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
-    net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"zone_turn", 16, true}}};
+    net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"reach", 10, false}, {"zone_turn", 16, true}}};
     s.types.push_back(world); // kEntityWorld
+    net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false}}};
+    s.types.push_back(object); // kEntityObject
     return s;
 }
 
@@ -150,6 +157,16 @@ int PlayerIndexOfPed(s32 pedId)
 {
     Ped* killer = pedId ? gPedManager_6787BC->PedById(pedId) : NULL;
     return killer && killer->field_15C_player ? killer->field_15C_player->field_2E_idx : -1;
+}
+
+std::string NarrowName(const Player* p)
+{
+    std::string n;
+    for (int k = 0; k < 16 && p->field_83C_player_name[k]; k++)
+    {
+        n += (char)p->field_83C_player_name[k];
+    }
+    return n;
 }
 
 Player* GetPlayer(int i)
@@ -379,6 +396,10 @@ void net::engine::Capture(Snapshot& out)
         const s32 objective = ped->get_objective_403A80();
         Car* target = objective == objectives_enum::enter_car_as_driver_35 ? ped->field_150_target_objective_car : NULL;
         e.f[kPlayerTarget] = target ? target->field_6C_car_id + 1 : 0;
+        for (int k = 0; k < 16; k++) // 4 characters a field
+        {
+            e.f[kPlayerName + k / 4] |= (int32_t)((uint32_t)(p->field_83C_player_name[k] & 0xFF) << (8 * (k % 4)));
+        }
         out.entities.push_back(e);
     }
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
@@ -431,6 +452,7 @@ void net::engine::Capture(Snapshot& out)
             out.entities.push_back(e);
         }
     }
+    CapturePickups(out);
     SortById(out);
 }
 
@@ -514,6 +536,16 @@ void net::engine::Apply(const Snapshot& snap)
             continue;
         }
         const int i = (int)e.id - 1;
+        // Its name, as the server has it
+        char name[17] = {};
+        for (int k = 0; k < 16; k++)
+        {
+            name[k] = (char)(((uint32_t)e.f[kPlayerName + k / 4] >> (8 * (k % 4))) & 0xFF);
+        }
+        if (name[0] && NarrowName(p) != name)
+        {
+            SetPlayerName(i, name);
+        }
         // Weapons and ammo are the server's
         if (e.f[kPlayerWeapon] >= 1 && e.f[kPlayerWeapon] <= 28)
         {
@@ -623,6 +655,7 @@ void net::engine::Apply(const Snapshot& snap)
         }
     }
     ApplyCarsAndPeds(snap);
+    ApplyPickups(snap);
 }
 
 void net::engine::ApplyScores(const Snapshot& snap)
@@ -853,4 +886,44 @@ bool net::engine::SetCarDamage(Car* car, const EntityState& e)
         car->field_8_damaged_areas.m_var = (u32)e.f[kCarAreas];
     }
     return true;
+}
+
+void net::engine::SetPlayerName(int slot, const char* name)
+{
+    Player* p = GetPlayer(slot);
+    if (!p)
+    {
+        return;
+    }
+    int k = 0;
+    for (; k < 15 && name[k]; k++)
+    {
+        p->field_83C_player_name[k] = (wchar_t)(unsigned char)name[k];
+    }
+    p->field_83C_player_name[k] = 0;
+    gGameSession_67E8E0.SetPlayerName_4C5C30((u16)slot, p->field_83C_player_name); // as Player.cpp sets it up
+}
+
+float net::engine::SnapshotReach(const Snapshot& snap)
+{
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        if (snap.entities[k].type == kEntityWorld)
+        {
+            return snap.entities[k].f[kWorldReach] / 16.0f;
+        }
+    }
+    return 0;
+}
+
+void net::engine::SetSnapshotReach(Snapshot& snap, float blocks)
+{
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        if (snap.entities[k].type == kEntityWorld)
+        {
+            const int v = (int)(blocks * 16);
+            snap.entities[k].f[kWorldReach] = v < 0 ? 0 : v > 1023 ? 1023 : v;
+        }
+    }
 }

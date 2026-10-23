@@ -38,7 +38,13 @@ int LocalPlayer();
 uint32_t LocalInput(); // what this machine's controls give for the next tick
 void SetPlayerInput(int player, uint32_t buttons); // for the next tick
 bool PlayerHasPed(int player);
-void SetTickMs(int ms); // the length of a network tick (the game's own setting offers 50, 40 or 33 ms)
+void SetTickMs(int ms);
+// How far a snapshot's area reaches: the server sets it per client (the farthest entity it kept), a client removes
+// what is missing only within it (blocks)
+void SetSnapshotReach(Snapshot& snap, float blocks);
+float SnapshotReach(const Snapshot& snap);
+// A slot's name as the game shows it (over the player, in kill messages): Player::field_83C_player_name, up to 15
+void SetPlayerName(int slot, const char* name); // the length of a network tick (the game's own setting offers 50, 40 or 33 ms)
 
 // The net schema (access.cpp): entities as plain numbers
 const Schema& NetSchema();
@@ -48,6 +54,7 @@ enum EntityKind : uint8_t
     kEntityCar = 1,
     kEntityPed = 2,
     kEntityWorld = 3, // one, kWorldId: game-wide state (no position), in every client's snapshot
+    kEntityObject = 4, // a pickup (pickups.cpp)
 };
 const uint32_t kWorldId = 0;
 // Every player, car and ped

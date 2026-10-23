@@ -111,6 +111,7 @@ void net::Server::OnHello(uint32_t peer, BitReader& r)
             welcome.serverTick = mTick;
             WriteWelcome(w, welcome);
             engine::PutInGame(slot, true); // a fresh start at the next restart zone
+            engine::SetPlayerName(slot, hello.name.c_str());
             printf("net: %s joined as player %d\n", hello.name.c_str(), slot);
         }
     }
@@ -197,6 +198,8 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         {
             candidate.entities.push_back(*near[i]);
         }
+        // How far it reaches: all of the area, or as far as the farthest it kept (a client keeps what lies beyond)
+        engine::SetSnapshotReach(candidate, keep == near.size() ? mConfig.interestRadius : keep ? Distance(*near[keep - 1], x, y) : 0.0f);
         SortById(candidate);
         w = BitWriter();
         SnapshotHeader h = {mTick, base ? base->tick : mTick, s.lastCmdTick};
