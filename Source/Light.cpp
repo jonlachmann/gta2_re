@@ -77,7 +77,11 @@ Light* Light::RemoveFromGrid_4D6DC0()
 MATCH_FUNC(0x4D6E00)
 void __stdcall LightGrid::AllocGrid_4D6E00()
 {
+#if defined(GTA2_PORT) && defined(__LP64__)
+    gLightGrid_6F5400 = static_cast<Light**>(crt::malloc(0x1000 * sizeof(Light*))); // 64 x 64 cells of 8-byte pointers
+#else
     gLightGrid_6F5400 = static_cast<Light**>(crt::malloc(0x4000u));
+#endif
     for (s32 i = 0; i < 4096; i++)
     {
         gLightGrid_6F5400[i] = NULL;
