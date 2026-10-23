@@ -7,8 +7,31 @@
 #include <string>
 #include <vector>
 
+#if !defined(_WIN32)
+    #include <execinfo.h>
+    #include <signal.h>
+    #include <unistd.h>
+
+// A crash prints its backtrace to stderr (macOS throttles its crash reports), then dies as it would have
+static void OnCrash(int sig)
+{
+    void* frames[64];
+    const int n = backtrace(frames, 64);
+    const char msg[] = "\ngta2_port: crashed, backtrace:\n";
+    write(2, msg, sizeof(msg) - 1);
+    backtrace_symbols_fd(frames, n, 2);
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+#endif
+
 int main(int argc, char** argv)
 {
+#if !defined(_WIN32)
+    signal(SIGSEGV, OnCrash);
+    signal(SIGBUS, OnCrash);
+    signal(SIGABRT, OnCrash);
+#endif
 #if defined(_WIN32)
     FastClock_Install(); // GTA2_SPEED (docs/port.md, M2)
 #endif

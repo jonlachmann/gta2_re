@@ -1,63 +1,16 @@
-// Port/net: see bot.hpp. Angles are the game's (0..1439, a full turn); facing a means moving along (-sin a, -cos a)
-// (Char::GetRunVelocity_545580), and the left key turns towards larger angles.
+// Port/net: the bot's view (what its client knows) and the simple bot (bot.hpp).
 #include "bot.hpp"
-#include "../engine/engine.hpp"
 #include <math.h>
+#include <stdio.h>
 
 namespace
 {
-const uint32_t kForward = 0x1, kLeft = 0x4, kRight = 0x8, kAttack = 0x10;
 const float kPi = 3.14159265f;
-} // namespace
 
-uint32_t net::Bot::Think(const Snapshot& snap, int slot, uint32_t frame)
+// The angle error from facing <rot> to facing the direction (dx, dy), in game units (-720..720)
+int TurnTo(int rot, float dx, float dy)
 {
-    const EntityState* self = 0;
-    for (size_t i = 0; i < snap.entities.size(); i++)
-    {
-        int p = 0;
-        uint32_t b = 0;
-        if (engine::PlayerOf(snap.entities[i], &p, &b) && p == slot)
-        {
-            self = &snap.entities[i];
-        }
-    }
-    if (!self)
-    {
-        return 0;
-    }
-    const float x = self->f[0] / 16384.0f, y = self->f[1] / 16384.0f;
-    const EntityState* target = 0;
-    float best = 1e9f;
-    for (size_t i = 0; i < snap.entities.size(); i++)
-    {
-        int p = 0;
-        uint32_t b = 0;
-        const EntityState& e = snap.entities[i];
-        if (engine::PlayerOf(e, &p, &b) && p != slot && engine::PlayerHealth(e) > 0)
-        {
-            const float dx = e.f[0] / 16384.0f - x, dy = e.f[1] / 16384.0f - y;
-            const float d = sqrtf(dx * dx + dy * dy);
-            if (d < best)
-            {
-                best = d;
-                target = &e;
-            }
-        }
-    }
-    if (!target || best > 200.0f) // nobody at all: wander, turning now and then
-    {
-        if (frame % 30 == 0)
-        {
-            mSeed = mSeed * 1103515245u + 12345u;
-            const uint32_t r = mSeed >> 16;
-            mWander = kForward | ((r % 4 == 0) ? kLeft : (r % 4 == 1) ? kRight : 0);
-        }
-        return mWander;
-    }
-    const float dx = target->f[0] / 16384.0f - x, dy = target->f[1] / 16384.0f - y;
-    int want = (int)(atan2f(-dx, -dy) * 720.0f / kPi);
-    int err = want - self->f[3]; // f[3]: the rotation
+    int err = (int)(atan2f(dx, dy) * 720.0f / kPi) - rot;
     while (err > 720)
     {
         err -= 1440;
@@ -66,22 +19,182 @@ uint32_t net::Bot::Think(const Snapshot& snap, int slot, uint32_t frame)
     {
         err += 1440;
     }
-    uint32_t buttons = 0;
-    if (best > 0.8f)
+    return err;
+}
+
+uint32_t Steer(int err)
+{
+    return err > 30 ? net::kBtnLeft : err < -30 ? net::kBtnRight : 0;
+}
+
+// Walks to the nearest player along its own route (replanned every second, or when the target moves to another
+// cell), turns to face it and shoots when it is close; backs off and turns when stuck
+class SimpleBot : public net::BotBrain
+{
+  public:
+    uint32_t Think(const net::BotView& v) override
     {
-        buttons |= kForward;
+        if (!v.hasBody || v.health <= 0)
+        {
+            return 0;
+        }
+        mX = v.x;
+        mY = v.y;
+        mRot = v.rot;
+        const net::BotView::Seen* target = NULL;
+        float best = 1e9f;
+        for (size_t i = 0; i < v.seen.size(); i++)
+        {
+            const net::BotView::Seen& s = v.seen[i];
+            if (s.kind == net::BotView::Seen::kPlayer && s.health > 0)
+            {
+                const float d = hypotf(s.x - v.x, s.y - v.y);
+                if (d < best)
+                {
+                    best = d;
+                    target = &s;
+                }
+            }
+        }
+        // Stuck: hardly moved for 1.5 s while trying to: back up and turn for half a second
+        if (v.frame % 45 == 0)
+        {
+            mStuck = mTrying && hypotf(v.x - mLastX, v.y - mLastY) < 0.3f;
+            mLastX = v.x;
+            mLastY = v.y;
+            if (mStuck)
+            {
+                mUnstickUntil = v.frame + 15;
+                mPath.clear();
+            }
+        }
+        if (v.frame < mUnstickUntil)
+        {
+            return net::kBtnBack | net::kBtnLeft;
+        }
+        mTrying = false;
+        mTargetDist = target ? best : -1;
+        if (!target)
+        {
+            return 0;
+        }
+        const float dx = target->x - v.x, dy = target->y - v.y;
+        if (best < 6.0f) // close: face it and fight
+        {
+            const int err = TurnTo(v.rot, dx, dy);
+            uint32_t b = Steer(err);
+            if (best > 0.8f)
+            {
+                b |= net::kBtnForward;
+                mTrying = true;
+            }
+            if ((err < 0 ? -err : err) < 100)
+            {
+                b |= net::kBtnAttack;
+            }
+            return b;
+        }
+        // Far: along the route
+        const int N = net::engine::NavMap::kSize;
+        const int cx = (int)v.x, cy = (int)v.y, gx = (int)target->x, gy = (int)target->y;
+        if (v.map && (mPath.empty() || v.frame >= mReplanAt || gy * N + gx != mGoal))
+        {
+            mGoal = gy * N + gx;
+            mReplanAt = v.frame + 30;
+            mNoRoute = !net::FindPath(*v.map, cx, cy, gx, gy, mPath);
+        }
+        // Drop the waypoints up to the one we are on, if it is among the next few (cutting a corner skips some)
+        for (size_t i = 0; i < mPath.size() && i < 6; i++)
+        {
+            if (mPath[i] == cy * N + cx)
+            {
+                mPath.erase(mPath.begin(), mPath.begin() + i + 1);
+                break;
+            }
+        }
+        float wx = target->x, wy = target->y; // no route: straight at it
+        if (!mPath.empty())
+        {
+            // Aim a few cells ahead where the route is straight: smoother than cell by cell
+            const size_t ahead = mPath.size() < 3 ? mPath.size() - 1 : 2;
+            wx = mPath[ahead] % N + 0.5f;
+            wy = mPath[ahead] / N + 0.5f;
+        }
+        const int err = TurnTo(v.rot, wx - v.x, wy - v.y);
+        uint32_t b = Steer(err);
+        if ((err < 0 ? -err : err) < 300) // walk while roughly facing the way
+        {
+            b |= net::kBtnForward;
+            mTrying = true;
+        }
+        return b;
     }
-    if (err > 30)
+
+    std::string Describe() const override
     {
-        buttons |= kLeft;
+        char line[160];
+        snprintf(line, sizeof(line), "at (%.1f, %.1f) rot %d, target %.1f blocks away, route %zu cells%s%s", mX, mY, mRot, mTargetDist,
+                 mPath.size(), mNoRoute ? " (no route found)" : "", mStuck ? ", stuck" : "");
+        return line;
     }
-    else if (err < -30)
+
+  private:
+    float mX = 0, mY = 0, mTargetDist = -1;
+    int mRot = 0;
+    bool mNoRoute = false;
+    std::vector<int> mPath;
+    int mGoal = -1;
+    uint32_t mReplanAt = 0;
+    float mLastX = 0, mLastY = 0;
+    bool mTrying = false, mStuck = false;
+    uint32_t mUnstickUntil = 0;
+};
+} // namespace
+
+std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
+{
+    if (kind.empty() || kind == "simple")
     {
-        buttons |= kRight;
+        return std::unique_ptr<BotBrain>(new SimpleBot());
     }
-    if ((err < 0 ? -err : err) < 100 && best < 8.0f)
+    return nullptr;
+}
+
+void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t frame, const engine::NavMap* map)
+{
+    view.tick = snap.tick;
+    view.frame = frame;
+    view.self = self;
+    view.map = map;
+    view.seen.clear();
+    view.hasBody = engine::PlayerPose(self, &view.x, &view.y, &view.z, &view.rot); // as its client predicts it
+    view.health = 0;
+    for (size_t i = 0; i < snap.entities.size(); i++)
     {
-        buttons |= kAttack;
+        const EntityState& e = snap.entities[i];
+        BotView::Seen s;
+        s.id = e.id;
+        s.player = -1;
+        s.x = e.f[0] / 16384.0f; // every entity type starts with x, y, z, rot
+        s.y = e.f[1] / 16384.0f;
+        s.z = e.f[2] / 16384.0f;
+        s.rot = e.f[3];
+        s.health = 0;
+        uint32_t buttons = 0;
+        if (engine::PlayerOf(e, &s.player, &buttons))
+        {
+            s.kind = BotView::Seen::kPlayer;
+            s.health = engine::PlayerHealth(e);
+            if (s.player == self)
+            {
+                view.health = s.health;
+                continue;
+            }
+        }
+        else
+        {
+            s.kind = e.type == engine::kEntityCar ? BotView::Seen::kCar : BotView::Seen::kPed;
+        }
+        view.seen.push_back(s);
     }
-    return buttons;
 }
