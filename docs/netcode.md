@@ -20,11 +20,35 @@ Nothing here is built yet. It builds on the port (`docs/port.md`): the headless 
 | Projectiles | **Configurable**: rewind on spawn, or predicted cosmetic plus server spawn. |
 | Players | **Any number**: no fixed count in the protocol (player ids are a varint, byte-sized for up to 255). In the game, `MAX_PLAYERS` (28 uses, ~10 loops written as `< 6`) becomes a port setting. Tested at 16. |
 | Game modes | **Frags first.** Team deathmatch, CTF, points and tag later, so the rules live in one mode module (scoring, spawning, teams, win condition) rather than in the netcode, and teams are part of the player state from the start. |
-| Joining | **Mid-game join**: a full state of the interest area over the reliable channel, then deltas (see Wire format). |
-| Bots | **Yes**: a headless client with scripted or AI input, over the real network path; also how 16 players are tested. |
+| Joining | **Mid-game join**: a full state of the interest area over the reliable channel (~20 KB, about 15 messages), then deltas (see Wire format). For now a joiner **spawns at once** at a restart zone with an empty score. The join is a step of the mode module (`OnJoin`: where, when, with what score, which team), so a mode can later add a respawn delay, spawn protection, team balance or a spectator start. |
+| Spawn points | The map's **Restart zones** (`GetNextZoneOfTypeRoundRobin_4DF0F0(0x10)`, already used for multiplayer respawns), plus an **optional per-map file** next to the `.mmp` with extra points. The scripts' 6 `PLAYER_PED` points stay for the first 6 players. |
+| Program | **One binary** for client, server and bots: `--server`, `--connect <host[:port]>`, `--bot`. A separate server target can be split off later. |
+| Connecting | **Command line** (`--connect`). A frontend page and a server browser come later. |
+| Other players on the HUD | GTA2 shows arrows to every player. Whether every player's position and score go to every client, or only those in the interest area, is a **mode option** (`sv_players_always_visible`). |
+| Network-game rules | The original multiplayer rules (police at most wanted level 1, gangs with basic weapons, car weapons at a tenth, all car models, endless respawns) become **server settings**, each one on by default as in the original. |
+| Player colours | **New remaps** for players beyond the 7 palettes (`Player::ColorScoreFromRemap_569A10`, `Hud_Arrow::SetPlayerArrowColour_5D0DC0`). If that turns out to be complicated (style data), it is deferred and the extra players share colours. Team modes colour by team. |
+| Team modes, CTF | New mode code that **reuses the game's assets**: a flag is a pickup object, its carrier gets the HUD arrow, scores use the existing HUD digits and the results screen. |
+| Cleanup | **Stock GTA2** cleanup at first. It still goes through the cleanup-policy hooks (see "Whole-map simulation"), so modes such as `none` or `wrecks` are a setting later, not a rewrite. |
+| Bots | **Yes**: a headless client with scripted or AI input, over the real network path; also how 16 players are tested. **A simple bot first**: chase the nearest player, shoot when facing them, take a car, follow road routes. Better bots later. |
 | Code | `Port/net/` (protocol, ENet wrapper, schema, rollback), `Port/server_main.cpp`. |
 | Platforms | Server mainly **Linux**, cross-platform (Windows, macOS); ENet 1.3.18. |
-| Rates | Sim fixed at **30 Hz** (33 ms, as the game is built). Snapshot rate configurable per client (10-30 Hz). |
+| Rates | **Server settings**: `sv_tickrate`, plus a snapshot rate per client (up to the tick rate). See "Tick rate" below: the game's logic is written per tick, so rates above 30 Hz need the sim scaled. |
+
+### Tick rate
+
+The rate is a server setting because it has to be tuned; fast games run at 64 or 128 ticks per second. In GTA2, though, the simulation is written **per tick**, not per second:
+- speeds, accelerations and turn rates are added once per tick;
+- timers count ticks (for example 130 ticks until a car despawns, 40 for a ped);
+- animations advance a frame per tick.
+
+The original's game speed setting only changes the wall time of a tick (50, 40 or 33 ms), so a faster tick makes the whole game run faster.
+
+| Rate | What it takes |
+|---|---|
+| 20-30 Hz (50-33 ms) | Nothing: the original's range. The first version offers this. |
+| Above 30 Hz | Either run the 30 Hz simulation and raise only the *network* rates (inputs sampled and sent faster, snapshots each tick; this lowers input delay a little but not the tick), or scale the simulation: every per-tick constant and timer for a tick of 1/N s (a separate project through Car, CarPhysics, Ped, Char, Object, Weapon and the timers; it has to stay port-only to keep the match). |
+
+The netcode keeps the tick length a variable from the start: in the clock sync, the input buffer, the interpolation delay and the snapshot timing, so a higher rate later needs no protocol change.
 
 ## Why the engine shapes the design
 
@@ -427,12 +451,14 @@ The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attac
 | | Goal | Check |
 |---|---|---|
 | N0 | **Done**, see "N0 measurements". | Whole-world rollback holds: ~30 µs per busy tick, 0.06 ms save/restore, rollback exact. |
+| S | Sound fixes before prediction: its own random stream for `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, and sound kept out of the rollback set (`SoundPosEntry` from a pool, or the sound layer not rolled back at all). | The rollback check exact with sound on; the sim's draws unchanged by muting sound. |
 | N1 | Local rollback, no network: save every tick; every K ticks restore K back and resimulate with the same inputs. | The state log hash after resim equals the hash without it. Proves the restore set is complete and the resim is deterministic within one binary. |
-| N2 | Server main, ENet loopback, full snapshots (no delta), schema v1, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
+| N2 | One binary with `--server`/`--connect`; the server starts its network game through the offline stubs (as `GTA2_OFFLINE_MP` does); ENet loopback, full snapshots (no delta), schema v1 starting with peds, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
 | N3 | Bitstream, field masks, per-entity acked baselines, priority and the 1372-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
 | N4 | CSP: tick-stamped commands with redundancy, the server input buffer, clock sync, rollback on snapshot. | Prediction error 0 for the local player when it moves alone, at 150 ms RTT. |
 | N5 | Remote view modes, projectile modes, lag compensation history. | Tuning by playing; switch with cvars. |
-| N6 | Game flow: join and leave mid-game, spawn, scores, chat, script events, map change, `MAX_PLAYERS` 16 (`#if GTA2_PORT`; affects player arrays, HUD, scores, remaps, spawn points), server browser or direct connect. | 16 bot clients (a headless client with scripted input) on one map. |
+| N6 | Game flow: the mode module (frags first: join, spawn, score, win), join and leave mid-game, chat, script events, map change; a port-only player cap with a runtime count (~45-50 sites, see "Evaluations", 4); spawn points from restart zones and the per-map file; the network-game rules as server settings; new remaps if simple; the simple bot (`--bot`). | 16 bot clients on one map for an hour. |
+| N8 | Later modes: points, tag (both in the game), team deathmatch and CTF (new, with the game's assets). | One bot match per mode. |
 | N7 | Hardening: the server trusts only inputs; rate limits; protocol version; timeouts. | Fuzz input packets. |
 
 ## From openGTA2 (`openGTA2/network`)
@@ -454,9 +480,17 @@ Fix:
 - **Old acks.** An ack more than 127 snapshots old silently uses a ring slot that has been overwritten. Fall back to a full state.
 - **`Server::sendGameState` has `return` instead of `continue`.** One unconnected client stops the sends to every client after it.
 
-## Defaults I chose (say if you want them otherwise)
+## Assumed, and deferred
 
-- **The server is Linux, 64-bit**, from the port's headless build. Its floats are SSE rather than x87, which doesn't matter for an authoritative server.
+Assumed:
+- **The server is Linux, 64-bit**, from the port's headless build, and builds on Windows and macOS too. Its floats are SSE rather than x87, which doesn't matter for an authoritative server.
 - **No compatibility with the original game's multiplayer.** The DirectPlay `NetPlay` stays as decompiled, unused in the port.
-- **No NAT punch-through or relay.** Dedicated servers have a public port; a master server or browser comes later.
-- **No anti-cheat beyond server authority.** Clients can't set state, only send inputs.
+
+Wanted, but deferred:
+- a frontend page for connecting, then a master server and server browser;
+- NAT punch-through or a relay;
+- anti-cheat beyond server authority (clients can't set state, only send inputs);
+- protocol versioning for mods (data-file hashes at connect come first, in N7);
+- better bots;
+- simulation tick rates above 30 Hz (see "Tick rate");
+- cleanup modes other than stock (prepared by the hooks).
