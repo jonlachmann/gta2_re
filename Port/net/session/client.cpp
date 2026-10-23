@@ -181,6 +181,7 @@ void net::Client::Reconcile(const Snapshot& snap)
     if (!saved || !saved->valid || saved->tick != s)
     {
         engine::Apply(snap); // too old (or too new) to reconcile: take it as it is
+        engine::ApplyScores(snap);
         return;
     }
     engine::RestoreGame(*saved);
@@ -194,6 +195,7 @@ void net::Client::Reconcile(const Snapshot& snap)
         mResimTicks++;
     }
     mRollbacks++;
+    engine::ApplyScores(snap);
     if (!getenv("GTA2_NET_NOEXTRAP")) // ponytail: an env switch for the comparison; cl_remote_mode comes with N5
     {
         Extrapolate(snap);
@@ -214,25 +216,11 @@ void net::Client::Extrapolate(const Snapshot& snap)
     }
 }
 
-// A simple stand-in player for tests: walks, turns now and then, shoots now and then (better bots: N6)
-uint32_t net::Client::BotButtons()
-{
-    if (mFrame % 30 == 0)
-    {
-        mBotSeed = mBotSeed * 1103515245u + 12345u;
-        const uint32_t r = mBotSeed >> 16;
-        mBotButtons = 0x1; // forward
-        mBotButtons |= (r % 4 == 0) ? 0x4 : (r % 4 == 1) ? 0x8 : 0; // left, right
-        mBotButtons |= (r % 8 == 2) ? 0x10 : 0; // attack
-    }
-    return mBotButtons;
-}
-
 void net::Client::Frame()
 {
     mFrame++;
     // This frame's input first: a restore below would overwrite the game's input buffers
-    const uint32_t local = (mConfig.bot ? BotButtons() : engine::LocalInput()) & 0x3FFFFF;
+    const uint32_t local = (mConfig.bot ? mBot.Think(mReceived[mLatestTick % kRing], mSlot, mFrame) : engine::LocalInput()) & 0x3FFFFF;
     engine::ClientModeFrame();
     if (mSaves.empty())
     {
@@ -241,6 +229,14 @@ void net::Client::Frame()
             mSaves.emplace_back(new engine::SavedWorld());
         }
         mRemote.assign(engine::PlayerCount(), 0);
+    }
+    mWasWasted.resize(mRemote.size());
+    mLocalDeaths.resize(mRemote.size());
+    for (size_t i = 0; i < mRemote.size(); i++)
+    {
+        const bool w = engine::PlayerWasted((int)i);
+        mLocalDeaths[i] += w && !mWasWasted[i];
+        mWasWasted[i] = w;
     }
     if (mSynced) // the tick that just ran
     {
@@ -290,6 +286,7 @@ void net::Client::Frame()
                 mSaves[i]->valid = false;
             }
             engine::Apply(snap);
+            engine::ApplyScores(snap);
         }
         else
         {
@@ -306,6 +303,12 @@ void net::Client::Frame()
                    mFrame, mTick, mLatestTick, mSlack, snap.entities.size(), cars, peds, mRollbacks,
                    mRollbacks ? (float)mResimTicks / mRollbacks : 0.0f, mMaxError,
                    mShownErrorCount ? (float)(mShownErrorSum / mShownErrorCount) : 0.0f, mShownErrorMax);
+            std::string local;
+            for (size_t i = 0; i < mLocalDeaths.size(); i++)
+            {
+                local += " " + std::to_string(mLocalDeaths[i]);
+            }
+            printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
             mRollbacks = mResimTicks = 0;
             mMaxError = 0;
             mShownErrorSum = 0;

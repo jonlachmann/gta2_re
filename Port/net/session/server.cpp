@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 namespace
 {
@@ -17,6 +19,24 @@ float Distance(const net::EntityState& e, float x, float y)
     return fabsf(dx) > fabsf(dy) ? fabsf(dx) : fabsf(dy);
 }
 } // namespace
+
+std::string net::Scoreboard(const Snapshot& snap)
+{
+    std::string out;
+    for (size_t i = 0; i < snap.entities.size(); i++)
+    {
+        int p = 0;
+        uint32_t b = 0;
+        if (engine::PlayerOf(snap.entities[i], &p, &b))
+        {
+            char one[48];
+            snprintf(one, sizeof(one), " %d:%d/%d(%d)", p, engine::PlayerFrags(snap.entities[i]), engine::PlayerDeaths(snap.entities[i]),
+                     engine::PlayerHealth(snap.entities[i]));
+            out += one;
+        }
+    }
+    return out;
+}
 
 bool net::Server::Start(const ServerConfig& config, std::string* error)
 {
@@ -215,6 +235,20 @@ void net::Server::Frame()
             }
         }
     }
+    // Tests: GTA2_NET_TESTKILL=<tick>:<victim>:<killer>[,...] kills players through the game's own death
+    if (const char* kills = getenv("GTA2_NET_TESTKILL"))
+    {
+        for (const char* k = kills; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
+        {
+            unsigned tick = 0;
+            int victim = 0, killer = -1;
+            if (sscanf(k, "%u:%d:%d", &tick, &victim, &killer) >= 2 && tick == mTick)
+            {
+                printf("net: test kill of player %d by %d at tick %u\n", victim, killer, mTick);
+                engine::DebugKill(victim, killer);
+            }
+        }
+    }
     // Inputs for the next tick: its command, or the last one again if it is late; nobody's slot stands still
     const uint32_t next = mTick + 1;
     for (size_t i = 0; i < mSlots.size(); i++)
@@ -254,8 +288,8 @@ void net::Server::Frame()
             late += mSlots[i].late;
             mSlots[i].late = 0;
         }
-        printf("net: tick %u, %d players, %zu entities, %.0f bytes per snapshot, %u late commands\n", mTick, used,
-               world.entities.size(), used ? mBytesSent / 300.0 / used : 0.0, late);
+        printf("net: tick %u, %d players, %zu entities, %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n", mTick,
+               used, world.entities.size(), used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
         mBytesSent = 0;
     }
 }

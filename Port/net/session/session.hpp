@@ -5,6 +5,7 @@
 #include "../core/snapshot.hpp"
 #include "../engine/engine.hpp"
 #include "../transport/transport.hpp"
+#include "bot.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,6 +19,9 @@ struct ServerConfig
     float interestRadius = 24.0f; // blocks around a client's player that its snapshots cover (players: always)
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
+
+// "0:3/1 1:0/2": per player, frags/deaths (health while alive)
+std::string Scoreboard(const Snapshot& snap);
 
 class Server
 {
@@ -74,7 +78,6 @@ class Client
     void Reconcile(const Snapshot& snap);
     void Extrapolate(const Snapshot& snap);
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
-    uint32_t BotButtons();
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;
@@ -108,7 +111,8 @@ class Client
     uint32_t mRollbacks = 0, mResimTicks = 0;
     float mMaxError = 0;
 
-    uint32_t mBotSeed = 1;
-    uint32_t mBotButtons = 0;
+    Bot mBot;
+    std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
+    std::vector<int> mLocalDeaths;
 };
 } // namespace net
