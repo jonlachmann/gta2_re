@@ -9,6 +9,27 @@
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
 
+namespace
+{
+// winmain.cpp's frame loop around the tick: input buffers, network frame and time counters, pacing. The frame code
+// keeps them and a resimulation doesn't run it, so a restore must leave them alone (10.5.exe addresses).
+const unsigned kFrameLoop[] = {0x6F56B8, 0x6F56C8, 0x6F5AEC, 0x6F5A28, 0x6F5868, 0x6F593C, 0x6F57D8, 0x6F5B18, 0x6F5B28,
+                               0x6F58C0, 0x6F58C4, 0x6F5980, 0x6F573C, 0x6F5860, 0x6F58A0, 0x6F5858, 0x6F5B74, 0x6F5944,
+                               0x707098, 0x7081F0, 0x6F58D8, 0x6F5760, 0x6F56E0, 0x6F5798, 0x626A08, 0x706C50};
+
+bool FrameLoop(unsigned og)
+{
+    for (size_t i = 0; i < sizeof(kFrameLoop) / sizeof(kFrameLoop[0]); i++)
+    {
+        if (kFrameLoop[i] == og)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
 std::vector<net::engine::Block> net::engine::WorldBlocks()
 {
     std::vector<Block> blocks;
@@ -17,6 +38,10 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
     for (size_t i = 0; i < count; i++)
     {
         const PortGlobal& g = *globals[i];
+        if (FrameLoop(g.mOgAddr))
+        {
+            continue;
+        }
         Block b = {(unsigned char*)g.mVar, g.mSize, g.mName};
         blocks.push_back(b);
         if (g.mPointeeSize)
