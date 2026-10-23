@@ -209,6 +209,54 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         }
         keep = keep * 3 / 4;
     }
+    static const bool sFieldStats = getenv("GTA2_NET_FIELDSTATS") != NULL;
+    if (sFieldStats && base)
+    {
+        // Which fields change from snapshot to snapshot, per entity type (the delta's cost)
+        static std::vector<std::vector<uint32_t>> sChanges;
+        static uint32_t sSince;
+        const Schema& schema = engine::NetSchema();
+        sChanges.resize(schema.types.size());
+        const Snapshot& now = s.sent[mTick % kRing];
+        size_t j = 0;
+        for (size_t i = 0; i < now.entities.size(); i++)
+        {
+            const EntityState& e = now.entities[i];
+            while (j < base->entities.size() && base->entities[j].id < e.id)
+            {
+                j++;
+            }
+            if (j < base->entities.size() && base->entities[j].id == e.id && base->entities[j].type == e.type)
+            {
+                std::vector<uint32_t>& c = sChanges[e.type];
+                c.resize(schema.types[e.type].fields.size());
+                for (size_t f = 0; f < c.size(); f++)
+                {
+                    c[f] += e.f[f] != base->entities[j].f[f];
+                }
+            }
+        }
+        if (++sSince == 300)
+        {
+            for (size_t t = 0; t < sChanges.size(); t++)
+            {
+                std::vector<std::pair<uint32_t, size_t>> top;
+                for (size_t f = 0; f < sChanges[t].size(); f++)
+                {
+                    top.push_back(std::make_pair(sChanges[t][f], f));
+                }
+                std::sort(top.rbegin(), top.rend());
+                printf("net: fields changed most (%s):", schema.types[t].name);
+                for (size_t k = 0; k < top.size() && k < 14; k++)
+                {
+                    printf(" %s %u", schema.types[t].fields[top[k].second].name, top[k].first);
+                }
+                printf("\n");
+                sChanges[t].assign(sChanges[t].size(), 0);
+            }
+            sSince = 0;
+        }
+    }
     if (w.ByteCount() <= kMaxPayload)
     {
         mTransport->Send(s.peer, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
