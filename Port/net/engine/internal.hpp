@@ -32,6 +32,7 @@ enum PlayerField
     kPlayerAmmo0, // field_718_weapons[0..14]: the player's own weapons' ammo
     kPlayerCar = kPlayerAmmo0 + 15, // the car it drives: Car::field_6C_car_id + 1, 0 none
     kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead
+    kPlayerTarget, // the car it is going to get into (Ped::field_150_target_objective_car): car_id + 1, 0 none
     kPlayerWeapons = 15,
 };
 enum WorldField
@@ -47,6 +48,9 @@ enum CarField
     kCarRot,
     kCarModel,
     kCarDriver, // kDriverNone, kDriverTraffic (the car manager's shared spare driver), kDriverPed (sent as a ped entity)
+    kCarDamage, // Car::field_74_damage (32000 and up: exploded), the server's
+    kCarAreas, // its dented areas (Car::field_8_damaged_areas)
+    kCarWrecked, // exploded or burning out (the wreck countdown running, or a wreck)
     kCarPhysics, // then its whole CarPhysics, member by member (access.cpp's kPhysics; all 0 without physics)
 };
 enum CarDriver
@@ -76,6 +80,11 @@ bool IsSpareDriver(const Ped* ped);
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 // The physics the snapshot has for it (kCarPhysics on), set after MoveCar
 void SetCarPhysics(Car* car, const EntityState& e);
+// Whether it has exploded (or is burning out); its damage as the server has it: an explosion the server had is carried
+// out (the game's own), damage and dents are set. False: it is a wreck here and not there (it has to be made again)
+bool IsWrecked(const Car* car);
+bool SetCarDamage(Car* car, const EntityState& e);
+extern int gExplosionsCarried, gWrecksReplaced; // for the log
 // The cars and peds of Poses/SetPose (replica.cpp)
 void ReplicaPoses(std::vector<Pose>& out);
 void SetReplicaPose(const Pose& p);

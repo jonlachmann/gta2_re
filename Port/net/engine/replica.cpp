@@ -248,6 +248,16 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
                 }
             }
             SetCarPhysics(car, e); // a player's car too: its place came with the player
+            if (!SetCarDamage(car, e) && !playerIn.count(car) && !gReferenced.count(car))
+            {
+                // A wreck here that isn't one on the server can't be unexploded: it goes, and the next snapshot makes the
+                // car again as the server has it
+                RemoveCar(car);
+                gCars.erase(e.id);
+                mapped.erase(car);
+                gWrecksReplaced++;
+                continue;
+            }
         }
         else if (e.type == kEntityPed)
         {
@@ -385,6 +395,11 @@ void net::engine::PoolUse(int* pCars, int* pPeds, int* pChars)
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         ++*pPeds;
+    }
+    if (gExplosionsCarried + gWrecksReplaced)
+    {
+        printf("net: %d explosions the server had carried out, %d wrecks of this game's own made again\n", gExplosionsCarried, gWrecksReplaced);
+        gExplosionsCarried = gWrecksReplaced = 0;
     }
     if (gOccupiedKept)
     {
