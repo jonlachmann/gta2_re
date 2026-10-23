@@ -44,6 +44,8 @@
 #include "CarPhysics.hpp"
 #include "WeaponManager.hpp"
 #include "../port_globals.hpp"
+#include "../net/engine/world.hpp"
+#include "../port_rand_sound.h"
 #include <chrono>
 #if !defined(_WIN32)
     #include <cxxabi.h>
@@ -73,52 +75,15 @@ namespace
 {
 typedef std::chrono::steady_clock Clock;
 
-struct Block
-{
-    unsigned char* addr;
-    size_t size;
-    const char* name;
-};
+typedef net::engine::Block Block;
 
-// The registered globals and their pointees, as the state log sees them
+// The rollback set (Port/net/engine/world.cpp), and the bench's diagnostics on it
 std::vector<Block> WorldBlocks()
 {
-    std::vector<Block> blocks;
-    size_t count = 0;
-    const PortGlobal* const* globals = PortGlobals(&count);
-    for (size_t i = 0; i < count; i++)
-    {
-        const PortGlobal& g = *globals[i];
-        Block b = {(unsigned char*)g.mVar, g.mSize, g.mName};
-        blocks.push_back(b);
-        if (g.mPointeeSize)
-        {
-            unsigned char* p;
-            memcpy(&p, g.mVar, sizeof(p));
-            if (p)
-            {
-                Block pb = {p, g.mPointeeSize, g.mName};
-                blocks.push_back(pb);
-            }
-        }
-    }
-    // Heap objects no global points to directly: the players (Game::field_4_players)
-    for (int i = 0; i < MAX_PLAYERS && gGame_0x40_67E008; i++)
-    {
-        if (Player* p = gGame_0x40_67E008->field_4_players[i])
-        {
-            Block b = {(unsigned char*)p, sizeof(Player), "Player"};
-            blocks.push_back(b);
-        }
-    }
-    // Globals that point to an array: the registry knows one element (ponytail: found by the rollback check, add more as it finds them)
-    if (gLightGrid_6F5400)
-    {
-        Block b = {(unsigned char*)gLightGrid_6F5400, 0x1000 * sizeof(Light*), "gLightGrid_6F5400[]"};
-        blocks.push_back(b);
-    }
     if (getenv("GTA2_SIMBENCH_UNSIZED")) // pointer globals whose pointee isn't in the world (incomplete type)
     {
+        size_t count = 0;
+        const PortGlobal* const* globals = PortGlobals(&count);
         for (size_t i = 0; i < count; i++)
         {
             void* p;
@@ -128,34 +93,17 @@ std::vector<Block> WorldBlocks()
             }
         }
     }
-    return blocks;
+    return net::engine::WorldBlocks();
 }
 
 size_t Save(const std::vector<Block>& blocks, std::vector<unsigned char>& buf)
 {
-    size_t n = 0;
-    for (size_t i = 0; i < blocks.size(); i++)
-    {
-        n += blocks[i].size;
-    }
-    buf.resize(n);
-    n = 0;
-    for (size_t i = 0; i < blocks.size(); i++)
-    {
-        memcpy(&buf[n], blocks[i].addr, blocks[i].size);
-        n += blocks[i].size;
-    }
-    return n;
+    return net::engine::SaveWorld(blocks, buf);
 }
 
 void Restore(const std::vector<Block>& blocks, const std::vector<unsigned char>& buf)
 {
-    size_t n = 0;
-    for (size_t i = 0; i < blocks.size(); i++)
-    {
-        memcpy(blocks[i].addr, &buf[n], blocks[i].size);
-        n += blocks[i].size;
-    }
+    net::engine::RestoreWorld(blocks, buf);
 }
 
 const int kServices = 22;
@@ -255,15 +203,7 @@ void TimedTick()
 
 unsigned long long Hash(const std::vector<Block>& blocks)
 {
-    unsigned long long h = 1469598103934665603ull;
-    for (size_t i = 0; i < blocks.size(); i++)
-    {
-        for (size_t j = 0; j < blocks[i].size; j++)
-        {
-            h = (h ^ blocks[i].addr[j]) * 1099511628211ull;
-        }
-    }
-    return h;
+    return net::engine::HashWorld(blocks);
 }
 
 template <class T> int Used(T* pFirst)
@@ -355,7 +295,7 @@ void Fill(int targetCars)
 }
 
 
-// ---- GTA2_NETEVAL=heap,rand,churn,diverge,single,explode (docs/netcode.md, "Evaluations"): measurements for the netcode
+// ---- GTA2_NETEVAL=heap,rand,soundrollback,churn,diverge,single,explode (docs/netcode.md, "Evaluations"): measurements for the netcode
 // design, run after the fill (if any) and before the tick benchmark. GTA2_NETEVAL_OUT=<file>: per-offset churn.
 
 void Tick()
@@ -668,6 +608,43 @@ void RandUse(int ticks)
     fprintf(stderr, "neteval rand: per tick %.1f draws in the sim, %.2f in the sound service\n", (double)sim / ticks, (double)sound / ticks);
 }
 
+// Milestone S (docs/netcode.md): the same 30 ticks twice from one state, both with the sound service, with sound's
+// random numbers on their own stream: the world outside the sound layer must come out the same, and the heap intact
+void SoundRollback(const std::vector<Block>& blocks)
+{
+    PortRandSound_Separate(true);
+    std::vector<unsigned char> s0, w1, w2;
+    Save(blocks, s0);
+    for (int pass = 0; pass < 2; pass++)
+    {
+        if (pass)
+        {
+            Restore(blocks, s0);
+        }
+        for (int t = 0; t < 30; t++)
+        {
+            Tick();
+            gRoot_sound_66B038.Service_40EFA0();
+        }
+        Save(blocks, pass ? w2 : w1);
+    }
+    size_t n = 0, differ = 0;
+    std::string names;
+    for (size_t i = 0; i < blocks.size(); i++)
+    {
+        const std::string name = blocks[i].name;
+        const bool sound = name.find("ound") != std::string::npos; // gSound_obj, gRoot_sound, the SoundPosEntry pool
+        if (!sound && memcmp(&w1[n], &w2[n], blocks[i].size))
+        {
+            differ++;
+            names += " " + name;
+        }
+        n += blocks[i].size;
+    }
+    fprintf(stderr, "neteval soundrollback: 2 x 30 ticks with sound, own sound stream: %zu blocks outside sound differ%s\n", differ, names.c_str());
+    PortRandSound_Separate(false);
+}
+
 // Can one object be advanced on its own (projectile rewind)? Rockets are fired around the player; then, per moving
 // object, one full tick against that object's PoolUpdate alone, from the same state
 void Single(const std::vector<Block>& blocks)
@@ -789,6 +766,10 @@ void NetEval(const std::vector<Block>& blocks, const char* what)
     if (HAS("rand"))
     {
         RandUse(300);
+    }
+    if (HAS("soundrollback"))
+    {
+        SoundRollback(blocks);
     }
     if (HAS("diverge"))
     {
