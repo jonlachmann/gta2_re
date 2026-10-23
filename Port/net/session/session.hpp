@@ -72,6 +72,7 @@ class Client
   private:
     void OnSnapshot(BitReader& r);
     void Reconcile(const Snapshot& snap);
+    void Extrapolate(const Snapshot& snap);
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
     uint32_t BotButtons();
 
@@ -99,6 +100,10 @@ class Client
     uint32_t mHistButtons[64] = {};
     float mPredX[64] = {}, mPredY[64] = {};
     std::vector<uint32_t> mRemote; // other players' last inputs, from snapshots
+    std::vector<engine::ReplicaPos> mShown[64]; // where each tick showed the mapped cars and peds (the display error)
+    double mShownErrorSum = 0;
+    uint32_t mShownErrorCount = 0;
+    float mShownErrorMax = 0;
     // For the log
     uint32_t mRollbacks = 0, mResimTicks = 0;
     float mMaxError = 0;

@@ -251,3 +251,74 @@ void net::engine::FreeReplicas(ReplicaState* state)
 {
     delete state;
 }
+
+void net::engine::Extrapolate(const Snapshot& snap, const Snapshot& prev, int ticks)
+{
+    const int span = (int)(snap.tick - prev.tick);
+    if (span <= 0 || ticks <= 0)
+    {
+        return;
+    }
+    size_t j = 0;
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        const EntityState& e = snap.entities[k];
+        if (e.type != kEntityCar && e.type != kEntityPed)
+        {
+            continue;
+        }
+        while (j < prev.entities.size() && prev.entities[j].id < e.id)
+        {
+            j++;
+        }
+        if (j == prev.entities.size() || prev.entities[j].id != e.id)
+        {
+            continue;
+        }
+        const EntityState& p = prev.entities[j];
+        const int32_t vx = (e.f[0] - p.f[0]) / span, vy = (e.f[1] - p.f[1]) / span;
+        if (vx > 16384 || vx < -16384 || vy > 16384 || vy < -16384)
+        {
+            continue; // more than a block a tick: a jump, not a speed
+        }
+        const Fix16 x = Raw(e.f[0] + vx * ticks), y = Raw(e.f[1] + vy * ticks), z = Raw(e.f[2]);
+        if (e.type == kEntityCar)
+        {
+            auto it = gCars.find(e.id);
+            if (it != gCars.end())
+            {
+                MoveCar(it->second, x, y, z, Angle(e.f[kCarRot]));
+            }
+        }
+        else
+        {
+            auto it = gPeds.find(e.id);
+            if (it != gPeds.end() && !it->second->field_16C_car)
+            {
+                MovePed(it->second, x, y, z, Angle(e.f[kPedRot]));
+            }
+        }
+    }
+}
+
+void net::engine::ReplicaPositions(std::vector<ReplicaPos>& out)
+{
+    out.clear();
+    for (auto& c : gCars)
+    {
+        if (Sprite* s = c.second->field_50_car_sprite)
+        {
+            ReplicaPos p = {c.first, s->field_14_xy.x.ToFloat(), s->field_14_xy.y.ToFloat()};
+            out.push_back(p);
+        }
+    }
+    for (auto& q : gPeds)
+    {
+        Sprite* s = q.second->field_168_game_object ? q.second->field_168_game_object->field_80_sprite_ptr : NULL;
+        if (s)
+        {
+            ReplicaPos p = {q.first, s->field_14_xy.x.ToFloat(), s->field_14_xy.y.ToFloat()};
+            out.push_back(p);
+        }
+    }
+}

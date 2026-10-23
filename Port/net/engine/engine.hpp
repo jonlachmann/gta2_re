@@ -4,6 +4,7 @@
 #include "../core/snapshot.hpp"
 #include <stdint.h>
 #include <string>
+#include <vector>
 
 namespace net
 {
@@ -51,6 +52,9 @@ enum EntityKind : uint8_t
 void Capture(Snapshot& out);
 // Puts a snapshot's players, cars and peds into this game
 void Apply(const Snapshot& snap);
+// Dead reckoning for the cars and peds a client doesn't drive itself: each moved on from <snap> by its velocity
+// between <prev> and <snap>, over <ticks> ticks (players move by their own inputs instead)
+void Extrapolate(const Snapshot& snap, const Snapshot& prev, int ticks);
 // A player entity's player index and input bits; false for other entities
 bool PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons);
 
@@ -78,6 +82,14 @@ bool PlayerPosition(int player, float* pX, float* pY);
 // A client's replicas (replica.cpp): how many cars and peds are mapped, and how far (in blocks, the largest) the
 // mapped ones are from <snap> right now, before it is applied: the drift of one tick of the client's own sim
 void ReplicaStats(const Snapshot& snap, int* pCars, int* pPeds, float* pMaxDrift);
+
+// Where this game has its mapped cars and peds now: NetId and x, y in blocks
+struct ReplicaPos
+{
+    uint32_t id;
+    float x, y;
+};
+void ReplicaPositions(std::vector<ReplicaPos>& out);
 
 // What a client doesn't simulate (client_mode.cpp): spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
