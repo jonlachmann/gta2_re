@@ -12,7 +12,7 @@ status snapshot.
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
 | M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. Left: running on Linux. See "M1 so far" and "The Linux build". |
-| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Six divergences found; one is unfixable (the original reads stack garbage, particles only); with that left out the port matches to game frame 795 of `attr1.rep`. See "M2: the replay test". |
+| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Seven divergences found and fixed or explained; one is unfixable (the original reads stack garbage, particles only). With that cascade and two scratch values left out, the port matches **the whole first attract demo** (4,100 frames). See "M2: the replay test". |
 | M3-M6 | Not started as planned, but a **native macOS build (arm64, 64-bit) plays**: frontend, the three cities, attract demos. See "Native macOS". |
 
 Branches (local, not pushed yet):
@@ -410,8 +410,22 @@ symptom.
 5. Frame 721: the port crashed. `PedGroup::GroupAttackPed_4C9B60` has no `return` on one path (C4716 is off
    for the match); clang made that path unreachable and ran into the next function. All port builds use
    `-fno-strict-return`. Found with the call trace's stack check (`^esp` in the trace lines).
-6. Open: frame 795, `gCarInfo_48_6FE258` (the car being simulated) points to another model's info, and the
-   port stalls at frame 1040.
+6. Frame 795: `gCarInfo_48_6FE258`, the car being simulated, ends on another car. The explosion impulse
+   visits nearby cars through the sprite grid, which holds the debris particles of 4: a scratch pointer, the
+   cars themselves match. Frame 3094: the map's zone-search cursor (`field_364`/`field_368`) ends elsewhere,
+   with the same zone calls and results on both sides: scratch too.
+7. The stall at frame 1040 was an `assert` (the port didn't define `NDEBUG`; the original is a release build).
+
+**Result:** with the particle cascade of 4 and those two scratch values left out, the port matches 10.5.exe
+for the whole first attract demo (4,100 game frames):
+
+```bash
+IGNORE='gTileVerts_|gSound_obj_66F680|gSampManager_6FFF00|gParticle_4C_Pool|gSpritePool_703818|gSpriteShapePool|gGridSpriteLink_Pool|gGridCell_Pool|gSpriteTreeNodePool|gSpriteTreeStack|gParticlePos|gSpriteGrid_|gpGBH_Globals|gLight_1D4CC|gCarInfo_48_6FE258|gCarInfo_2C_6FE0E4|gMap_0x370_6F6268\+0x340' \
+  GTA2_DIR=~/Documents/GTA2 python3 Scripts/port/state_check.py 4100
+```
+
+Next: the other attract demos (state_diff.py compares the first one only), and a way to make the frame-308
+case match (it would need 10.5.exe's heap addresses).
 
 The state log also compares **pointer fields by what they point to**: layout.py marks pointer-typed fields
 (not where a union overlays something else) in the mask, and the log hashes them as (entry, offset).
