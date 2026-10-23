@@ -1,6 +1,7 @@
 // Port/net engine internals: shared by access.cpp (players, capture) and replica.cpp (a client's cars and peds).
 // Decomp types: only for engine/.
 #pragma once
+#include <unordered_map>
 #include "engine.hpp"
 #include <stddef.h>
 
@@ -10,6 +11,7 @@ class Sprite;
 class Fix16;
 class Ang16;
 
+class Object;
 namespace net
 {
 namespace engine
@@ -33,12 +35,15 @@ enum PlayerField
     kPlayerCar = kPlayerAmmo0 + 15, // the car it drives: Car::field_6C_car_id + 1, 0 none
     kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead
     kPlayerTarget, // the car it is going to get into (Ped::field_150_target_objective_car): car_id + 1, 0 none
+    kPlayerName, // its name (Player::field_83C_player_name), 4 characters a field, kPlayerNameFields of them
+    kPlayerNameEnd = kPlayerName + 4,
     kPlayerWeapons = 15,
 };
 enum WorldField
 {
     kWorldCycle, // the game's tick counter (gpRng_67AB34's field_0_rng): timers are stamped with it (a car's damage, a ped's voice...)
     kWorldRand, // the game's random state (rand(), Port/port_rand.cpp): a resimulation draws what the server drew
+    kWorldReach, // how far this client's snapshot reaches (blocks x 16): the farthest it kept, the rest cut for size
     kWorldZoneTurn, // which restart zone is next (Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0): a respawn here goes where the server's does
 };
 enum CarField
@@ -74,6 +79,16 @@ enum PedField
 
 const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
 const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
+const uint32_t kObjIdBase = 0x03000000; // + Object::field_14_id
+enum ObjectField
+{
+    kObjX,
+    kObjY,
+    kObjZ,
+    kObjRot,
+    kObjModel, // Object::field_18_model (objects::)
+    kObjIdx, // Object::field_26_ped_ref_idx (what kind, for some)
+};
 
 Sprite* PedSprite(Ped* ped); // its car's when it is in one
 // The one dummy ped every traffic car shares as its driver (Car::SpawnDriverPed, CarManager::field_4_spare_driver): no
@@ -113,8 +128,14 @@ Ped* ReplicaPed(uint32_t netId); // and ped
 void PedStateFields(std::vector<FieldDesc>& out);
 void CapturePedState(const Ped* p, EntityState& e);
 bool ApplyPedState(Ped* p, const EntityState& e);
+void ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityState*>>& peds); // once the snapshot's peds are here
 bool DebugGridOk(const char* where, Car* car); // GTA2_NET_CHECKGRID: the collision grid has no freed sprites
 // The replica mapping, saved and restored with the world (rollback.cpp): an opaque copy
+// Pickups (pickups.cpp): the server's in a snapshot, and a client's made to match
+void CapturePickups(Snapshot& out);
+void ApplyPickups(const Snapshot& snap);
+std::unordered_map<uint32_t, Object*>& PickupMap(); // for the rollback (ReplicaState)
+extern int gPickupsMade, gPickupsRemoved; // for the log
 struct ReplicaState;
 ReplicaState* SaveReplicas(ReplicaState* reuse);
 void RestoreReplicas(const ReplicaState* state);

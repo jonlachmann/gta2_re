@@ -9,9 +9,15 @@
 #include "Source/Gang.hpp"
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
+#include "Source/char.hpp"
+#include "Source/PedGroup.hpp"
 #include "Source/Game.hpp"
 #include <stddef.h>
 #include <string.h>
+#include <algorithm>
+#include <map>
+#include <set>
+#include <vector>
 
 namespace
 {
@@ -90,10 +96,19 @@ const int kStates = kHealth + 1;
 const int kPedRefs = kStates + kStateCount;
 const int kCarRefs = kPedRefs + kPedRefCount;
 const int kGangs = kCarRefs + kCarRefCount; // its gang, a dummy's gang
-const int kEnd = kGangs + 2;
+const int kChar = kGangs + 2; // its char's movement and animation (0 without a char)
+#define CM(member, sz, sg) {#member, offsetof(Char, member), sz, sg}
+const Member kCharValues[] = {CM(field_10_char_state, 4, true),      CM(field_14_target_rotation, 2, true),  CM(field_38_velocity, 4, true),
+                              CM(field_3C_run_or_jump_speed, 4, true), CM(field_98_velocity_vector.x, 4, true), CM(field_98_velocity_vector.y, 4, true),
+                              CM(field_6C_animation_state, 4, true), CM(field_68_animation_frame, 1, false), CM(field_70_frame_timer, 1, true),
+                              CM(field_71_frame_delay, 1, true)};
+#undef CM
+const size_t kCharCount = sizeof(kCharValues) / sizeof(kCharValues[0]);
+const int kGroup = kChar + (int)kCharCount; // its group: leader (net id), its index (99: the leader), type, counts
+const int kEnd = kGroup + 5;
 static_assert(kEnd <= net::kMaxFields, "a ped's fields");
 
-int32_t Get(const Ped* p, const Member& d)
+int32_t Get(const void* p, const Member& d)
 {
     const unsigned char* a = (const unsigned char*)p + d.offset;
     if (d.size == 1)
@@ -113,7 +128,7 @@ int32_t Get(const Ped* p, const Member& d)
     return v;
 }
 
-void Set(Ped* p, const Member& d, int32_t v)
+void Set(void* p, const Member& d, int32_t v)
 {
     unsigned char* a = (unsigned char*)p + d.offset;
     if (d.size == 1)
@@ -204,6 +219,15 @@ void net::engine::PedStateFields(std::vector<FieldDesc>& out)
     }
     out.push_back(FieldDesc{"gang", 4, false});
     out.push_back(FieldDesc{"dummy_gang", 4, false});
+    for (size_t i = 0; i < kCharCount; i++)
+    {
+        out.push_back(FieldDesc{kCharValues[i].name, (uint8_t)(kCharValues[i].size * 8), kCharValues[i].isSigned});
+    }
+    out.push_back(FieldDesc{"group_leader", 32, false});
+    out.push_back(FieldDesc{"group_idx", 8, false});
+    out.push_back(FieldDesc{"group_type", 8, true});
+    out.push_back(FieldDesc{"group_count", 8, false});
+    out.push_back(FieldDesc{"group_count2", 8, false});
 }
 
 void net::engine::CapturePedState(const Ped* p, EntityState& e)
@@ -232,6 +256,97 @@ void net::engine::CapturePedState(const Ped* p, EntityState& e)
     e.f[kCarRefs + kRefEscapeCar] = (int32_t)CarId(p->field_158_escape_car);
     e.f[kGangs] = GangIdx(p->field_17C_pGang);
     e.f[kGangs + 1] = GangIdx(p->field_19C_dummy_gang);
+    if (const Char* c = p->field_168_game_object)
+    {
+        for (size_t i = 0; i < kCharCount; i++)
+        {
+            e.f[kChar + i] = Get(c, kCharValues[i]);
+        }
+    }
+    if (const PedGroup* g = p->field_164_ped_group)
+    {
+        e.f[kGroup] = (int32_t)PedId(g->field_2C_ped_leader);
+        e.f[kGroup + 1] = p->field_23C_group_idx;
+        e.f[kGroup + 2] = g->field_38_group_type;
+        e.f[kGroup + 3] = g->field_34_count;
+        e.f[kGroup + 4] = (u8)g->field_36_count;
+    }
+}
+
+namespace
+{
+Ped* LocalPed(uint32_t id, bool* pResolved); // below
+} // namespace
+
+void net::engine::ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityState*>>& peds)
+{
+    // The members each leader has here, in the server's order: the game walks a group's list up to its count
+    // (field_34_count) without looking for gaps, so it is made dense with only the members that are here
+    std::map<Ped*, std::vector<std::pair<int, Ped*>>> byLeader;
+    std::set<Ped*> placed;
+    for (size_t k = 0; k < peds.size(); k++)
+    {
+        Ped* p = peds[k].first;
+        const EntityState& e = *peds[k].second;
+        bool ok;
+        Ped* leader = e.f[kGroup] ? LocalPed((uint32_t)e.f[kGroup], &ok) : NULL;
+        const int idx = e.f[kGroup + 1];
+        if (leader && leader != p && idx != 99 && !p->isDead_403B60() && !leader->isDead_403B60() && !p->field_16C_car)
+        {
+            byLeader[leader].push_back(std::make_pair(idx, p));
+            placed.insert(p);
+        }
+        else if (p->field_164_ped_group && p->field_164_ped_group->field_2C_ped_leader != p && !p->field_16C_car)
+        {
+            p->field_164_ped_group->RemovePed_4C9970(p); // in no group there (or its leader isn't here)
+        }
+    }
+    for (auto& g : byLeader)
+    {
+        Ped* leader = g.first;
+        std::vector<std::pair<int, Ped*>>& members = g.second;
+        std::sort(members.begin(), members.end());
+        PedGroup* group = leader->field_164_ped_group;
+        if (!group)
+        {
+            group = PedGroup::New_4CB0D0(); // as the game makes one (SpawnPedChainGroupAt_46DB90)
+            if (!group)
+            {
+                continue;
+            }
+            group->add_ped_leader_4C9B10(leader);
+        }
+        // Out of any other group first, then the list as it should be
+        for (size_t m = 0; m < members.size(); m++)
+        {
+            PedGroup* other = members[m].second->field_164_ped_group;
+            if (other && other != group && other->field_2C_ped_leader != members[m].second)
+            {
+                other->RemovePed_4C9970(members[m].second);
+            }
+        }
+        std::set<Ped*> now;
+        for (size_t m = 0; m < members.size(); m++)
+        {
+            now.insert(members[m].second);
+        }
+        for (int m = 0; m < 9; m++)
+        {
+            Ped* was = group->field_4_ped_list[m];
+            if (was && !now.count(was) && was->field_164_ped_group == group)
+            {
+                was->reset_ped_group(); // listed here before, not any more
+            }
+            group->field_4_ped_list[m] = NULL;
+        }
+        const size_t n = members.size() < 9 ? members.size() : 9;
+        for (size_t m = 0; m < n; m++)
+        {
+            group->add_ped_to_list_4C9B30(members[m].second, (u8)m);
+        }
+        group->field_34_count = (u8)n;
+        group->field_36_count = (char_type)n;
+    }
 }
 
 namespace
@@ -265,6 +380,14 @@ Car* LocalCar(uint32_t id, bool* pResolved)
     Car* c = net::engine::ReplicaCar(id);
     *pResolved = c && c->field_50_car_sprite;
     return *pResolved ? c : NULL;
+}
+
+// A char's states that go with those: not jumping or colliding with a car (Char_B4_state 15, 27), not jumping, at a car
+// door or falling (animations 5-8, 11, 12)
+bool CharPlain(int32_t charState, int32_t anim)
+{
+    return charState != Char_B4_state::Jumping_15 && charState != Char_B4_state::Colliding_With_Car_27 && !(anim >= 5 && anim <= 8) && anim != 11 &&
+           anim != 12;
 }
 
 // States that stand on their own: walking, running (or fleeing), standing. The others go with something only the side
@@ -342,6 +465,16 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
         p->field_27C_ped_state_2 = e.f[kStates + kState2];
         p->field_280_stored_ped_state_1 = e.f[kStates + kStored1];
         p->field_284_stored_ped_state_2 = e.f[kStates + kStored2];
+        // ... and its char's movement and animation, as the server's (with only the ped's states, a gang member could
+        // run on the spot: the char kept its own state and speed)
+        Char* c = p->field_168_game_object;
+        if (CharPlain(e.f[kChar + 0], e.f[kChar + 6]) && CharPlain(c->field_10_char_state, c->field_6C_animation_state))
+        {
+            for (size_t i = 0; i < kCharCount; i++)
+            {
+                Set(c, kCharValues[i], e.f[kChar + i]);
+            }
+        }
     }
     Ped** pedMembers[kPedRefCount] = {&p->field_144_attacker,         &p->field_148_objective_target_ped, &p->field_14C_internal_target_ped,
                                       &p->field_180_car_thief,        &p->field_188_last_char_punched,    &p->field_198_hit_target_ped,
