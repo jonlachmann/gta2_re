@@ -1,5 +1,6 @@
 // Port/net (docs/netcode.md, "Code layout"): the rollback set, see world.hpp.
 #include "world.hpp"
+#include "internal.hpp"
 #include "sound_pool.hpp"
 #include "Source/Game.hpp"
 #include "Source/Light.hpp"
@@ -71,6 +72,9 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
         Block b = {(unsigned char*)gLightGrid_6F5400, 0x1000 * sizeof(Light*), "gLightGrid_6F5400[]"};
         blocks.push_back(b);
     }
+    Block deaths = {0, 0, "net deaths"};
+    NetDeaths_Memory(&deaths.addr, &deaths.size);
+    blocks.push_back(deaths);
     Block sound = {0, 0, "SoundPosEntry pool"};
     SoundPool_Memory(&sound.addr, &sound.size);
     blocks.push_back(sound);

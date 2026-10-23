@@ -52,11 +52,16 @@ enum EntityKind : uint8_t
 void Capture(Snapshot& out);
 // Puts a snapshot's players, cars and peds into this game
 void Apply(const Snapshot& snap);
+// The scores (frags, points) of a snapshot's players: last, after a resimulation, so the server's count is shown
+void ApplyScores(const Snapshot& snap);
 // Dead reckoning for the cars and peds a client doesn't drive itself: each moved on from <snap> by its velocity
 // between <prev> and <snap>, over <ticks> ticks (players move by their own inputs instead)
 void Extrapolate(const Snapshot& snap, const Snapshot& prev, int ticks);
 // A player entity's player index and input bits; false for other entities
 bool PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons);
+int PlayerHealth(const EntityState& e); // a player entity's health
+int PlayerFrags(const EntityState& e);
+int PlayerDeaths(const EntityState& e);
 
 // Rollback (rollback.cpp): the whole game world and this client's replicas, saved after a tick and restored to
 // resimulate from there
@@ -90,6 +95,10 @@ struct ReplicaPos
     float x, y;
 };
 void ReplicaPositions(std::vector<ReplicaPos>& out);
+
+// Tests: the game's own death for a player, credited to another (-1: nobody); a server's frags follow from it
+void DebugKill(int victim, int killer);
+bool PlayerWasted(int player); // in this game: dead and waiting to respawn (Player::field_28_wasted_or_busted)
 
 // What a client doesn't simulate (client_mode.cpp): spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();

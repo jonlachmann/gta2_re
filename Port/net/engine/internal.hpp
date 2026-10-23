@@ -2,6 +2,7 @@
 // Decomp types: only for engine/.
 #pragma once
 #include "engine.hpp"
+#include <stddef.h>
 
 class Car;
 class Ped;
@@ -22,6 +23,14 @@ enum PlayerField
     kPlayerRot,
     kPlayerInCar,
     kPlayerButtons,
+    kPlayerHealth,
+    kPlayerDeaths, // how often the server's player died (wraps at 256)
+    kPlayerKiller, // who killed it last: player index + 1, 0 nobody
+    kPlayerWeapon, // Player::field_788_curr_weapon_idx + 1 (0: none)
+    kPlayerFrags,
+    kPlayerPoints,
+    kPlayerAmmo0, // field_718_weapons[0..14]: the player's own weapons' ammo
+    kPlayerWeapons = 15,
 };
 enum CarField
 {
@@ -46,6 +55,11 @@ const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
 Sprite* PedSprite(Ped* ped); // its car's when it is in one
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
+
+// The deaths a client has carried out per player (part of the rollback set: world.cpp)
+void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize);
+// Player peds take no damage on a client: their health and deaths are the server's (client_mode.cpp)
+void ProtectPlayers();
 
 // replica.cpp: a snapshot's cars and peds into a client's game (players: access.cpp)
 void ApplyCarsAndPeds(const Snapshot& snap);

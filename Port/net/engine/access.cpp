@@ -12,6 +12,8 @@
 #include "Source/char.hpp"
 #include "Source/network_data.hpp"
 #include "Source/sprite.hpp"
+#include "Source/GameSession.hpp"
+#include "Source/Weapon.hpp"
 #include <string.h>
 
 EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
@@ -24,13 +26,37 @@ using net::FieldDesc;
 net::Schema BuildSchema()
 {
     net::Schema s;
-    net::EntityType player = {"player", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"in_car", 1, false}, {"buttons", 22, false}}};
+    net::EntityType player = {"player", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"in_car", 1, false}, {"buttons", 22, false},
+                                         {"health", 10, true}, {"deaths", 8, false}, {"killer", 6, false}, {"weapon", 5, false},
+                                         {"frags", 12, true}, {"points", 32, true}}};
+    for (int i = 0; i < net::engine::kPlayerWeapons; i++)
+    {
+        static const char* const kAmmo[net::engine::kPlayerWeapons] = {"ammo0", "ammo1", "ammo2", "ammo3", "ammo4", "ammo5", "ammo6", "ammo7",
+                                                         "ammo8", "ammo9", "ammo10", "ammo11", "ammo12", "ammo13", "ammo14"};
+        player.fields.push_back(FieldDesc{kAmmo[i], 16, false});
+    }
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false}}};
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false}}};
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
     return s;
+}
+
+// The server's death count per player: one more each time Player::field_28_wasted_or_busted turns on
+uint8_t gDeaths[MAX_PLAYERS];
+uint8_t gKiller[MAX_PLAYERS];
+bool gWasDead[MAX_PLAYERS];
+// A client's: the deaths it has carried out, in the rollback set
+struct
+{
+    uint8_t mDone[MAX_PLAYERS];
+} gNetDeaths;
+
+int PlayerIndexOfPed(s32 pedId)
+{
+    Ped* killer = pedId ? gPedManager_6787BC->PedById(pedId) : NULL;
+    return killer && killer->field_15C_player ? killer->field_15C_player->field_2E_idx : -1;
 }
 
 Player* GetPlayer(int i)
@@ -171,6 +197,23 @@ void net::engine::Capture(Snapshot& out)
         PutPosition(e, s, kPlayerX, kPlayerY, kPlayerZ, kPlayerRot);
         e.f[kPlayerInCar] = ped->field_16C_car != NULL;
         e.f[kPlayerButtons] = (int32_t)(p->field_4_inputs & 0x3FFFFF);
+        e.f[kPlayerHealth] = ped->field_216_health;
+        const bool dead = p->field_28_wasted_or_busted != 0;
+        if (dead && !gWasDead[i] && i < MAX_PLAYERS)
+        {
+            gDeaths[i]++;
+            gKiller[i] = (uint8_t)(PlayerIndexOfPed(ped->field_204_killer_id) + 1);
+        }
+        gWasDead[i] = dead;
+        e.f[kPlayerDeaths] = gDeaths[i];
+        e.f[kPlayerKiller] = gKiller[i];
+        e.f[kPlayerWeapon] = p->field_788_curr_weapon_idx + 1;
+        e.f[kPlayerFrags] = gGameSession_67E8E0.field_490_frags_list[i];
+        e.f[kPlayerPoints] = gGameSession_67E8E0.field_49C_points_list[i];
+        for (int w = 0; w < kPlayerWeapons; w++)
+        {
+            e.f[kPlayerAmmo0 + w] = p->field_718_weapons[w] ? p->field_718_weapons[w]->field_0_ammo : 0;
+        }
         out.entities.push_back(e);
     }
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
@@ -208,6 +251,21 @@ bool net::engine::PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButton
     return true;
 }
 
+int net::engine::PlayerHealth(const EntityState& e)
+{
+    return e.type == kEntityPlayer ? e.f[kPlayerHealth] : 0;
+}
+
+int net::engine::PlayerFrags(const EntityState& e)
+{
+    return e.type == kEntityPlayer ? e.f[kPlayerFrags] : 0;
+}
+
+int net::engine::PlayerDeaths(const EntityState& e)
+{
+    return e.type == kEntityPlayer ? e.f[kPlayerDeaths] : 0;
+}
+
 void net::engine::Apply(const Snapshot& snap)
 {
     for (size_t k = 0; k < snap.entities.size(); k++)
@@ -223,6 +281,38 @@ void net::engine::Apply(const Snapshot& snap)
         {
             continue;
         }
+        const int i = (int)e.id - 1;
+        // Weapons and ammo are the server's
+        if (e.f[kPlayerWeapon] >= 1 && e.f[kPlayerWeapon] <= 28)
+        {
+            p->field_788_curr_weapon_idx = (s16)(e.f[kPlayerWeapon] - 1);
+        }
+        for (int w = 0; w < kPlayerWeapons; w++)
+        {
+            if (p->field_718_weapons[w])
+            {
+                p->field_718_weapons[w]->field_0_ammo = (u16)e.f[kPlayerAmmo0 + w];
+            }
+        }
+        // A death the server had and this game hasn't carried out: the game's own death, credited to the killer, where
+        // this game has the ped (the server has already respawned it: the next snapshot brings it there)
+        if (i < MAX_PLAYERS && (uint8_t)e.f[kPlayerDeaths] != gNetDeaths.mDone[i])
+        {
+            gNetDeaths.mDone[i] = (uint8_t)e.f[kPlayerDeaths];
+            if (!ped->isDead_403B60() && !p->field_28_wasted_or_busted)
+            {
+                const int k = e.f[kPlayerKiller] - 1;
+                Player* killer = GetPlayer(k);
+                ped->field_204_killer_id = killer && killer->field_2C4_player_ped ? killer->field_2C4_player_ped->field_200_id : 0;
+                ped->field_208_invulnerability = 0;
+                ped->Kill_46F9D0();
+                continue;
+            }
+        }
+        if (!ped->isDead_403B60())
+        {
+            ped->set_health_4039A0((s16)e.f[kPlayerHealth]);
+        }
         const Fix16 x(e.f[kPlayerX], 0), y(e.f[kPlayerY], 0), z(e.f[kPlayerZ], 0);
         const Ang16 rot((s16)e.f[kPlayerRot], (u8)0);
         if (ped->field_16C_car)
@@ -235,4 +325,43 @@ void net::engine::Apply(const Snapshot& snap)
         }
     }
     ApplyCarsAndPeds(snap);
+}
+
+void net::engine::ApplyScores(const Snapshot& snap)
+{
+    for (size_t k = 0; k < snap.entities.size(); k++)
+    {
+        const EntityState& e = snap.entities[k];
+        const int i = (int)e.id - 1;
+        if (e.type == kEntityPlayer && i >= 0 && i < MAX_PLAYERS)
+        {
+            gGameSession_67E8E0.field_490_frags_list[i] = (s16)e.f[kPlayerFrags];
+            gGameSession_67E8E0.field_49C_points_list[i] = e.f[kPlayerPoints];
+        }
+    }
+}
+
+void net::engine::NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize)
+{
+    *ppAddr = (unsigned char*)&gNetDeaths;
+    *pSize = sizeof(gNetDeaths);
+}
+
+void net::engine::DebugKill(int victim, int killer)
+{
+    Player* p = GetPlayer(victim);
+    Player* k = GetPlayer(killer);
+    Ped* ped = p ? p->field_2C4_player_ped : NULL;
+    if (ped && !ped->isDead_403B60())
+    {
+        ped->field_204_killer_id = k && k->field_2C4_player_ped ? k->field_2C4_player_ped->field_200_id : 0;
+        ped->field_208_invulnerability = 0;
+        ped->Kill_46F9D0();
+    }
+}
+
+bool net::engine::PlayerWasted(int player)
+{
+    Player* p = GetPlayer(player);
+    return p && p->field_28_wasted_or_busted;
 }
