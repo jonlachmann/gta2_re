@@ -254,7 +254,7 @@ char_type ScriptManager::AddCranePowerupTrigger_511B10(s16 idx)
     SCR_POINTER* pGenerator = (SCR_POINTER*)GetBasePointer_512770(pCmd->field_A_generator);
     return gCarThreadTriggers_214_705F20->AddThreadTrigger_5C86C0(1,
                                        3,
-                                       (SCR_THREAD*)pGenerator->field_8_generator,
+                                       (SCR_THREAD*)(Generator*)pGenerator->field_8_generator,
                                        Fix16(pCmd->field_C_pos.field_0_x) + kFpHalf_6F75F0,
                                        Fix16(pCmd->field_C_pos.field_1_y) + kFpHalf_6F75F0,
                                        Fix16(pCmd->field_C_pos.field_2_z),
@@ -337,7 +337,7 @@ void ScriptManager::SaveMapInfo_511D40()
 MATCH_FUNC(0x511e10)
 void ScriptManager::SaveGame_511E10(char_type* pFileName)
 {
-    unsigned short** pColData;
+    MapColumnWord* pColData;
     unsigned int colBytes;
 
     gmp_block_info* pBlockInfo;
@@ -407,7 +407,7 @@ void ScriptManager::LoadSave_511F80(char_type* pFileName)
     size_t mapSubLen;
     size_t blockInfoLen;
     size_t colDataLen;
-    u16** pColData;
+    MapColumnWord* pColData;
     gmp_block_info* pBlockInfo;
     DmapInfoList* pMapSub;
 

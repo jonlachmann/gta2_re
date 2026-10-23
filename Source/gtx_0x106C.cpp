@@ -476,7 +476,7 @@ void gtx_0x106C::SetSpriteIndexDataPtrs_5AAC40()
     {
         field_0_pData = this->field_20_sprite_index[i].field_0_pData;
         pSpriteIndex = &this->field_20_sprite_index[i];
-        pSpriteIndex->field_0_pData = &this->field_34_sprite_graphics[(u32)field_0_pData];
+        pSpriteIndex->field_0_pData = &this->field_34_sprite_graphics[(uptr)field_0_pData];
     }
 }
 
@@ -590,7 +590,11 @@ void gtx_0x106C::build_delta_container_5AAC70()
         pIter = (sprite_deltas*)((u8*)pIter + size);
     }
 
+#if defined(GTA2_PORT) && defined(__LP64__)
+    field_54_del = (delta_container*)Memory::malloc_4FE4D0(sizeof(delta_container) + sizeof(sprite_deltas*) * maxSprite); // 64-bit pointers
+#else
     field_54_del = (delta_container*)Memory::malloc_4FE4D0(4 * maxSprite + 8);
+#endif
     field_54_del->field_0_count = maxSprite + 1;
 
     for (u32 i = 0; i < field_54_del->field_0_count; i++)
@@ -721,8 +725,28 @@ void gtx_0x106C::load_map_object_info_5AAF00(u32 obji_chunk_len)
 MATCH_FUNC(0x5AAF80)
 void gtx_0x106C::load_sprite_index_5AAF80(u32 sprx_chunk_size)
 {
+#if defined(GTA2_PORT) && defined(__LP64__)
+    // Port, 64-bit: the file's records are 8 bytes (a 4-byte offset, width, height), the entries hold a pointer
+    {
+        const u32 count = sprx_chunk_size / 8;
+        field_20_sprite_index = (sprite_index*)Memory::malloc_4FE4D0((count + 1) * sizeof(sprite_index));
+        memset(field_20_sprite_index, 0, (count + 1) * sizeof(sprite_index));
+        u8* pRaw = new u8[sprx_chunk_size];
+        File::Global_Read_4A71C0(pRaw, sprx_chunk_size);
+        for (u32 i = 0; i < count; i++)
+        {
+            u32 offset;
+            memcpy(&offset, pRaw + i * 8, 4);
+            field_20_sprite_index[i].field_0_pData = (BYTE*)(uptr)offset;
+            field_20_sprite_index[i].field_4_width = pRaw[i * 8 + 4];
+            field_20_sprite_index[i].field_5_height = pRaw[i * 8 + 5];
+        }
+        delete[] pRaw;
+    }
+#else
     field_20_sprite_index = (sprite_index*)Memory::malloc_4FE4D0(sprx_chunk_size + 8);
     File::Global_Read_4A71C0(field_20_sprite_index, sprx_chunk_size);
+#endif
     if ((sprx_chunk_size & ~7u) > 524280)
     {
         FatalError_4A38C0(Gta2Error::TooManySprites, "C:\\Splitting\\Gta2\\Source\\style.cpp", 1198, (u32)sprx_chunk_size >> 3);
