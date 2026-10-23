@@ -29,9 +29,9 @@ std::string net::Scoreboard(const Snapshot& snap)
         uint32_t b = 0;
         if (engine::PlayerOf(snap.entities[i], &p, &b))
         {
-            char one[48];
-            snprintf(one, sizeof(one), " %d:%d/%d(%d)", p, engine::PlayerFrags(snap.entities[i]), engine::PlayerDeaths(snap.entities[i]),
-                     engine::PlayerHealth(snap.entities[i]));
+            char one[64];
+            snprintf(one, sizeof(one), " %d:%d/%d(%d)@%.0f,%.0f", p, engine::PlayerFrags(snap.entities[i]), engine::PlayerDeaths(snap.entities[i]),
+                     engine::PlayerHealth(snap.entities[i]), snap.entities[i].f[0] / 16384.0f, snap.entities[i].f[1] / 16384.0f);
             out += one;
         }
     }
@@ -247,6 +247,16 @@ void net::Server::Frame()
                 printf("net: test kill of player %d by %d at tick %u\n", victim, killer, mTick);
                 engine::DebugKill(victim, killer);
             }
+        }
+    }
+    // Tests: GTA2_NET_TESTARM=<weapon>:<ammo> keeps every player armed (weapon_type, 0 pistol, 1 smg, ...)
+    if (const char* arm = getenv("GTA2_NET_TESTARM"))
+    {
+        int weapon = 0, ammo = 50;
+        sscanf(arm, "%d:%d", &weapon, &ammo);
+        for (size_t i = 0; i < mSlots.size(); i++)
+        {
+            engine::DebugArm((int)i, weapon, ammo);
         }
     }
     // Inputs for the next tick: its command, or the last one again if it is late; nobody's slot stands still

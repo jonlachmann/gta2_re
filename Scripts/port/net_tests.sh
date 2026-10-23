@@ -15,3 +15,7 @@ for c in Port/net/enet/*.c; do clang -O1 -g -w -IPort/net/enet/include $ENET_DEF
 clang++ -std=c++17 -O1 -g -Wall -Wextra -fsanitize=${SAN:-undefined} -fno-sanitize-recover=undefined -IPort/net/enet/include \
     -o $OUT/test_transport Port/net/tests/test_transport.cpp Port/net/transport/*.cpp Port/net/core/*.cpp $OUT/*.o
 $OUT/test_transport
+# The bots' navigation (no game)
+clang++ -std=c++17 -O1 -g -Wall -Wextra -fsanitize=${SAN:-undefined} -fno-sanitize-recover=undefined \
+    -o $OUT/test_bot Port/net/tests/test_bot.cpp Port/net/session/bot_nav.cpp
+$OUT/test_bot

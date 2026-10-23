@@ -220,7 +220,32 @@ void net::Client::Frame()
 {
     mFrame++;
     // This frame's input first: a restore below would overwrite the game's input buffers
-    const uint32_t local = (mConfig.bot ? mBot.Think(mReceived[mLatestTick % kRing], mSlot, mFrame) : engine::LocalInput()) & 0x3FFFFF;
+    uint32_t local = engine::LocalInput();
+    if (!mConfig.bot.empty() && engine::GameRunning())
+    {
+        if (!mBot)
+        {
+            mBot = CreateBotBrain(mConfig.bot);
+            mNavMap.reset(new engine::NavMap());
+            engine::BuildNavMap(*mNavMap);
+            if (const char* dump = getenv("GTA2_NET_NAVDUMP")) // the bots' map as a picture: grey by height, black blocked
+            {
+                if (FILE* f = fopen(dump, "wb"))
+                {
+                    fprintf(f, "P5 %d %d 255\n", engine::NavMap::kSize, engine::NavMap::kSize);
+                    for (int c = 0; c < engine::NavMap::kSize * engine::NavMap::kSize; c++)
+                    {
+                        const int h = mNavMap->height[c], w = mNavMap->ways[c];
+                        fputc(h == 255 || !w ? 0 : 60 + h * 24 + (w == 15 ? 20 : 0), f);
+                    }
+                    fclose(f);
+                }
+            }
+        }
+        FillBotView(mBotView, mReceived[mLatestTick % kRing], mSlot, mFrame, mNavMap.get());
+        local = mBot ? mBot->Think(mBotView) : 0;
+    }
+    local &= 0x3FFFFF;
     engine::ClientModeFrame();
     if (mSaves.empty())
     {
@@ -309,6 +334,13 @@ void net::Client::Frame()
                 local += " " + std::to_string(mLocalDeaths[i]);
             }
             printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
+            int poolCars = 0, poolPeds = 0, poolChars = 0;
+            engine::PoolUse(&poolCars, &poolPeds, &poolChars);
+            printf("net: frame %u, this game has %d cars, %d peds, %d chars\n", mFrame, poolCars, poolPeds, poolChars);
+            if (mBot)
+            {
+                printf("net: frame %u, bot %s\n", mFrame, mBot->Describe().c_str());
+            }
             mRollbacks = mResimTicks = 0;
             mMaxError = 0;
             mShownErrorSum = 0;
