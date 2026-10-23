@@ -30,7 +30,7 @@
 #include "car_shop_event.hpp"
 #include <math.h>
 #if defined(GTA2_PORT)
-#include "Port/port_rand.h" // VC6's rand (docs/port.md)
+#include "Port/port_rand_sound.h" // VC6's rand (docs/port.md), on a stream of its own for the netcode (docs/netcode.md)
 #endif
 
 // Forward declarations: the functions below are in address order
