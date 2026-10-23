@@ -4,6 +4,7 @@
 #include "internal.hpp"
 #include "Source/Camera.hpp"
 #include "Source/Car.hpp"
+#include "Source/explosion_type.hpp"
 #include "Source/gbh_graphics.hpp"
 #include "Source/CarPhysics.hpp"
 #include "Source/Char_Pool.hpp"
@@ -115,8 +116,9 @@ net::Schema BuildSchema()
     }
     player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
     player.fields.push_back(FieldDesc{"state", 2, false}); // kPlayerState
+    player.fields.push_back(FieldDesc{"target", 25, false}); // kPlayerTarget
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
-                                   {"driver", 2, false}}};
+                                   {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false}}};
     for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
     {
         car.fields.push_back(FieldDesc{kPhysics[i].name, (uint8_t)(kPhysics[i].size * 8), kPhysics[i].isSigned});
@@ -370,6 +372,9 @@ void net::engine::Capture(Snapshot& out)
         }
         e.f[kPlayerCar] = ped->field_16C_car ? ped->field_16C_car->field_6C_car_id + 1 : 0;
         e.f[kPlayerState] = (InCarTransition(ped) ? 1 : 0) | (ped->isDead_403B60() ? 2 : 0);
+        const s32 objective = ped->get_objective_403A80();
+        Car* target = objective == objectives_enum::enter_car_as_driver_35 ? ped->field_150_target_objective_car : NULL;
+        e.f[kPlayerTarget] = target ? target->field_6C_car_id + 1 : 0;
         out.entities.push_back(e);
     }
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
@@ -380,6 +385,9 @@ void net::engine::Capture(Snapshot& out)
             PutPosition(e, c->field_50_car_sprite, kCarX, kCarY, kCarZ, kCarRot);
             e.f[kCarModel] = c->field_84_car_info_idx;
             e.f[kCarDriver] = !c->field_54_driver ? kDriverNone : IsSpareDriver(c->field_54_driver) ? kDriverTraffic : kDriverPed;
+            e.f[kCarDamage] = c->field_74_damage;
+            e.f[kCarAreas] = (int32_t)c->field_8_damaged_areas.m_var;
+            e.f[kCarWrecked] = IsWrecked(c);
             if (const CarPhysics* m = c->field_58_physics)
             {
                 for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
@@ -539,6 +547,18 @@ void net::engine::Apply(const Snapshot& snap)
         }
         const Fix16 x(e.f[kPlayerX], 0), y(e.f[kPlayerY], 0), z(e.f[kPlayerZ], 0);
         const Ang16 rot((s16)e.f[kPlayerRot], (u8)0);
+        // The car it is going to get into, as the server has it, while it is still on its way (not at the door yet): in a
+        // jam the nearest car in front (CarManager::GetNearestFrontVehicle_445210) can be another one here
+        Car* serverTarget = e.f[kPlayerTarget] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerTarget] - 1)) : NULL;
+        if (serverTarget && serverTarget->field_50_car_sprite && !ped->field_16C_car && ped->get_objective_403A80() == objectives_enum::enter_car_as_driver_35 &&
+            ped->field_150_target_objective_car != serverTarget && ped->field_278_ped_state_1 != ped_state_1::entering_car_3)
+        {
+            ped->SetObjective2_463830(objectives_enum::no_obj_0); // as Player.cpp starts it when the enter key is pressed
+            ped->SetObjective(objectives_enum::enter_car_as_driver_35, 9999);
+            ped->SetTargetObjectiveCar(serverTarget);
+            ped->set_enter_car_as_passenger_4039B0(0);
+            ped->set_target_car_door_403A70(0);
+        }
         // In the server's car, or on foot as the server has it: predicted by this game's own input, put right here
         // when both sides have settled (neither halfway into or out of a car, nobody dead)
         const bool settled = !(e.f[kPlayerState] & 3) && !InCarTransition(ped) && !ped->isDead_403B60();
@@ -790,4 +810,32 @@ void net::engine::DebugAnimLog(uint32_t frame)
         }
     }
     printf("net: frame %u, anim:%s\n", frame, line.c_str());
+}
+
+int net::engine::gExplosionsCarried, net::engine::gWrecksReplaced;
+
+bool net::engine::IsWrecked(const Car* car)
+{
+    return car->field_A9_wreck_countdown || car->field_74_damage >= 32000 || car->field_9C_engine_status == car_engine_status::destroyed_6;
+}
+
+bool net::engine::SetCarDamage(Car* car, const EntityState& e)
+{
+    const bool there = e.f[kCarWrecked] != 0, here = IsWrecked(car);
+    if (there && !here)
+    {
+        car->HandleCarExplosion_43D840(explosion_type::item_19); // as a car blows up from its damage (Car::AddDamage)
+        gExplosionsCarried++;
+        return true;
+    }
+    if (!there && here)
+    {
+        return false; // a wreck of this game's own (a collision predicted harder than the server's)
+    }
+    if (!there)
+    {
+        car->field_74_damage = (s16)e.f[kCarDamage];
+        car->field_8_damaged_areas.m_var = (u32)e.f[kCarAreas];
+    }
+    return true;
 }
