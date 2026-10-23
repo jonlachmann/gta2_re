@@ -132,6 +132,7 @@ net::Schema BuildSchema()
     {
         car.fields.push_back(FieldDesc{kPhysics[i].name, (uint8_t)(kPhysics[i].size * 8), kPhysics[i].isSigned});
     }
+    net::engine::CarAiFields(car.fields);
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false},
                                    {"car", 25, false}, {"state", 1, false}}};
     net::engine::PedStateFields(ped.fields);
@@ -424,6 +425,7 @@ void net::engine::Capture(Snapshot& out)
             e.f[kCarFlash] = (u8)c->field_A5_flash_phase_counter;
             e.f[kCarHorn] = c->field_A7_horn;
             e.f[kCarHornCooldown] = c->field_A8_horn_cooldown;
+            CaptureCarAi(c, e);
             if (const CarPhysics* m = c->field_58_physics)
             {
                 for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)

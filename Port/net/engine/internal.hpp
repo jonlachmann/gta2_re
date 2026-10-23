@@ -99,6 +99,10 @@ Sprite* PedSprite(Ped* ped); // its car's when it is in one
 // ped of its own, never sent, moved, forced or removed
 bool IsSpareDriver(const Ped* ped);
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
+// A car's AI (car_ai.cpp): its fields (after the physics), capture, apply
+void CarAiFields(std::vector<FieldDesc>& out);
+void CaptureCarAi(const Car* car, EntityState& e);
+void ApplyCarAi(Car* car, const EntityState& e);
 // The physics the snapshot has for it (kCarPhysics on), set after MoveCar
 void SetCarPhysics(Car* car, const EntityState& e);
 // Whether it has exploded (or is burning out); its damage as the server has it: an explosion the server had is carried
