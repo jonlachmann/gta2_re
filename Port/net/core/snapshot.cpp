@@ -1,5 +1,6 @@
-// Port/net core: see snapshot.hpp. Per entry: the id gap (VarU), an operation, then for a new entity its type and
-// a mask of its non-zero fields, for an update the mask of changed fields; the masked values at their widths.
+// Port/net core: see snapshot.hpp. Per entry: the id gap (VarU), an operation, then for a new entity its type, a mask
+// of its non-zero fields and those values at their widths; for an update its changed fields (a mask, or a list of
+// indices when shorter) and each changed value at its width or as its difference from the baseline (when shorter).
 #include "snapshot.hpp"
 #include <algorithm>
 #include <string.h>
@@ -71,31 +72,6 @@ Mask ReadMask(net::BitReader& r, int n)
     return mask;
 }
 
-void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityState& s, const Mask& mask)
-{
-    WriteMask(w, mask, (int)t.fields.size());
-    for (size_t i = 0; i < t.fields.size(); i++)
-    {
-        if (mask.Has(i))
-        {
-            WriteValue(w, t.fields[i], s.f[i]);
-        }
-    }
-}
-
-bool ReadFields(net::BitReader& r, const net::EntityType& t, net::EntityState& s)
-{
-    const Mask mask = ReadMask(r, (int)t.fields.size());
-    for (size_t i = 0; i < t.fields.size(); i++)
-    {
-        if (mask.Has(i))
-        {
-            s.f[i] = ReadValue(r, t.fields[i]);
-        }
-    }
-    return !r.Overflow();
-}
-
 // A value as it arrives: cut to its field width (and sign-extended), so sender and receiver compare the same
 int32_t Wire(const net::FieldDesc& d, int32_t v)
 {
@@ -109,6 +85,126 @@ int32_t Wire(const net::FieldDesc& d, int32_t v)
         u |= ~0u << d.bits;
     }
     return (int32_t)u;
+}
+
+int IndexBits(size_t fields)
+{
+    int b = 1;
+    while ((1u << b) < fields)
+    {
+        b++;
+    }
+    return b;
+}
+
+int VarSBits(int32_t v)
+{
+    uint32_t z = ((uint32_t)v << 1) ^ (uint32_t)(v >> 31);
+    int bits = 8;
+    while (z >= 128)
+    {
+        z >>= 7;
+        bits += 8;
+    }
+    return bits;
+}
+
+// A new entity: the mask and the values. An update (base: the client's state): the changed fields as a mask or as a
+// list of their indices, whichever is shorter, and each value as itself or as its difference from the base (zigzag
+// varint, modulo 2^32), whichever is shorter - half the bits of mask and full values, measured on Tiny Town
+void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityState& s, const Mask& mask, const net::EntityState* base)
+{
+    const size_t n = t.fields.size();
+    size_t changed = 0;
+    for (size_t i = 0; i < n; i++)
+    {
+        changed += mask.Has(i);
+    }
+    if (base)
+    {
+        const int ib = IndexBits(n);
+        const bool list = changed < 128 && 7 + changed * (size_t)ib < n;
+        w.Bits(list ? 1 : 0, 1);
+        if (list)
+        {
+            w.Bits((uint32_t)changed, 7);
+            for (size_t i = 0; i < n; i++)
+            {
+                if (mask.Has(i))
+                {
+                    w.Bits((uint32_t)i, ib);
+                }
+            }
+        }
+        else
+        {
+            WriteMask(w, mask, (int)n);
+        }
+    }
+    else
+    {
+        WriteMask(w, mask, (int)n);
+    }
+    for (size_t i = 0; i < n; i++)
+    {
+        if (!mask.Has(i))
+        {
+            continue;
+        }
+        const net::FieldDesc& d = t.fields[i];
+        if (base)
+        {
+            const int32_t diff = (int32_t)((uint32_t)Wire(d, s.f[i]) - (uint32_t)Wire(d, base->f[i]));
+            const bool small = VarSBits(diff) < d.bits;
+            w.Bits(small ? 1 : 0, 1);
+            if (small)
+            {
+                w.VarS(diff);
+                continue;
+            }
+        }
+        WriteValue(w, d, s.f[i]);
+    }
+}
+
+bool ReadFields(net::BitReader& r, const net::EntityType& t, net::EntityState& s, bool update)
+{
+    const size_t n = t.fields.size();
+    Mask mask = {};
+    if (update && r.Bits(1))
+    {
+        const uint32_t changed = r.Bits(7);
+        const int ib = IndexBits(n);
+        for (uint32_t k = 0; k < changed && !r.Overflow(); k++)
+        {
+            const uint32_t i = r.Bits(ib);
+            if (i >= n)
+            {
+                return false;
+            }
+            mask.Set(i);
+        }
+    }
+    else
+    {
+        mask = ReadMask(r, (int)n);
+    }
+    for (size_t i = 0; i < n; i++)
+    {
+        if (!mask.Has(i))
+        {
+            continue;
+        }
+        const net::FieldDesc& d = t.fields[i];
+        if (update && r.Bits(1))
+        {
+            // s holds the base's value here (ReadDelta starts an update from it)
+            s.f[i] = Wire(d, (int32_t)((uint32_t)Wire(d, s.f[i]) + (uint32_t)r.VarS()));
+            continue;
+        }
+        s.f[i] = ReadValue(r, d);
+    }
+    return !r.Overflow();
 }
 
 Mask ChangedMask(const net::EntityType& t, const net::EntityState& a, const net::EntityState& b)
@@ -139,6 +235,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         int op;
         const EntityState* now;
         Mask mask;
+        const EntityState* was; // its baseline, for an update
     };
     std::vector<Entry> entries;
     size_t i = 0, j = 0;
@@ -148,13 +245,13 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         const EntityState* b = j < to.entities.size() ? &to.entities[j] : NULL;
         if (b && (!a || b->id < a->id))
         {
-            Entry e = {b->id, kCreate, b, ChangedMask(schema.types[b->type], kZero, *b)};
+            Entry e = {b->id, kCreate, b, ChangedMask(schema.types[b->type], kZero, *b), NULL};
             entries.push_back(e);
             j++;
         }
         else if (a && (!b || a->id < b->id))
         {
-            Entry e = {a->id, kRemove, NULL, Mask()};
+            Entry e = {a->id, kRemove, NULL, Mask(), NULL};
             entries.push_back(e);
             i++;
         }
@@ -162,7 +259,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         {
             if (a->type != b->type) // the id was reused by another kind of entity: remove, then create
             {
-                Entry e = {b->id, kCreate, b, ChangedMask(schema.types[b->type], kZero, *b)};
+                Entry e = {b->id, kCreate, b, ChangedMask(schema.types[b->type], kZero, *b), NULL};
                 entries.push_back(e);
             }
             else
@@ -170,7 +267,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
                 const Mask mask = ChangedMask(schema.types[b->type], *a, *b);
                 if (mask.Any())
                 {
-                    Entry e = {b->id, kUpdate, b, mask};
+                    Entry e = {b->id, kUpdate, b, mask, a};
                     entries.push_back(e);
                 }
             }
@@ -192,7 +289,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         }
         if (e.op != kRemove)
         {
-            WriteFields(w, schema.types[e.now->type], *e.now, e.mask);
+            WriteFields(w, schema.types[e.now->type], *e.now, e.mask, e.op == kUpdate ? e.was : NULL);
         }
     }
 }
@@ -253,7 +350,7 @@ bool net::ReadDelta(BitReader& r, const Schema& schema, const Snapshot& from, Sn
             }
             s = *base;
         }
-        if (!ReadFields(r, schema.types[s.type], s))
+        if (!ReadFields(r, schema.types[s.type], s, op == kUpdate))
         {
             return false;
         }
