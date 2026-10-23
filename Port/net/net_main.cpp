@@ -6,10 +6,11 @@
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
 #include "net_main.hpp"
 #include "session/session.hpp"
-#include "../port_rand_sound.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+void PortRandSound_Separate(bool separate); // Port/port_rand.cpp (not its header: that one renames rand)
 
 namespace
 {
