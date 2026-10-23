@@ -10,6 +10,8 @@
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
 #include "Source/Weapon.hpp"
+#include "Source/sprite.hpp"
+#include "Source/Car.hpp"
 #include "Source/map_0x370.hpp"
 #include "Source/ped_graphic_type.hpp"
 
@@ -42,6 +44,19 @@ void net::engine::TakeOutOfGame(int slot)
     if (p->field_2C4_player_ped && slot < MAX_PLAYERS && !gRemap[slot])
     {
         gRemap[slot] = (u8)p->field_2C4_player_ped->field_244_remap;
+    }
+    if (Ped* ped = p->field_2C4_player_ped)
+    {
+        // Out of its car first: the ped walks on as a pedestrian, a local slot's camera follows it, and a car it sat in
+        // can be despawned under it (the sound read the freed car through the camera)
+        if (ped->field_16C_car && !InCarTransition(ped))
+        {
+            Sprite* s = ped->field_16C_car->field_50_car_sprite;
+            if (s)
+            {
+                ForceOutOfCar(ped, s->field_14_xy.x + Fix16(1), s->field_14_xy.y, s->field_1C_zpos, s->field_0_rotation);
+            }
+        }
     }
     p->Disconnect_568730(); // keeps its ped pointer, as the game does: the HUD and camera of a local slot use it
 }
