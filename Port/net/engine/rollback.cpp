@@ -4,6 +4,9 @@
 #include "world.hpp"
 #include "Source/Game.hpp"
 #include "Source/Player.hpp"
+#include "Source/sound_obj.hpp"
+#include <stddef.h>
+#include <string.h>
 
 struct net::engine::SavedWorld::Impl
 {
@@ -47,7 +50,17 @@ void net::engine::SaveGame(SavedWorld& out, uint32_t tick)
 
 void net::engine::RestoreGame(const SavedWorld& in)
 {
+    // The sound's channel bookkeeping (its sample queues and the 16 channels' samples) mirrors the mixer, which isn't
+    // rolled back (world.cpp): it stays as it is. Restored, a loop started since the snapshot's tick (a machine gun)
+    // played on with nothing left to stop it. Its audio entities, which follow game objects, are restored.
+    const size_t from = offsetof(sound_obj, field_30_sQueueSample), to = offsetof(sound_obj, field_1440_unused);
+    static unsigned char sLive[offsetof(sound_obj, field_1440_unused) - offsetof(sound_obj, field_30_sQueueSample)];
+    unsigned char* channels = (unsigned char*)&gSound_obj_66F680 + from;
+    memcpy(sLive, channels, to - from);
+    const u8 active = gSound_obj_66F680.field_10_nActiveSamples;
     RestoreWorld(Blocks(), in.mImpl->bytes);
+    memcpy(channels, sLive, to - from);
+    gSound_obj_66F680.field_10_nActiveSamples = active;
     RestoreReplicas(in.mImpl->replicas);
 }
 
