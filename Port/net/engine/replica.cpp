@@ -172,7 +172,10 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
     }
     for (auto it = gPeds.begin(); it != gPeds.end();)
     {
-        it = livePeds.count(it->second) && it->second->IsActive_433B40() ? (mapped.insert(it->second), ++it) : gPeds.erase(it);
+        // A player's ped is never a snapshot ped's: one mapped before it was reused for a player's (the pool hands
+        // the slot out again) would have the server's ped steer the player (out of its car, the car left driverless)
+        it = livePeds.count(it->second) && it->second->IsActive_433B40() && !owned.count(it->second) ? (mapped.insert(it->second), ++it)
+                                                                                                    : gPeds.erase(it);
     }
 
     std::set<uint32_t> seen;
@@ -331,7 +334,12 @@ void net::engine::ApplyCarsAndPeds(const Snapshot& snap)
         {
             if (it->second->IsActive_433B40()) // once: Deallocate_45EB60 undoes counters and groups, and marks it inactive
             {
-                it->second->Deallocate_45EB60();
+                Ped* p = it->second;
+                if (p->field_16C_car && p->field_16C_car->field_54_driver != p && !p->field_248_enter_car_as_passenger)
+                {
+                    p->field_16C_car = NULL; // not that car's driver (any more): Deallocate_45EB60 would clear whoever is (a player)
+                }
+                p->Deallocate_45EB60();
             }
             it = gPeds.erase(it);
         }
@@ -643,6 +651,21 @@ bool net::engine::DebugGridOk(const char* where, Car* car)
     return true;
 }
 
+namespace
+{
+uint32_t MappedId(const Car* car) // its net id, 0 if no snapshot car is mapped to it
+{
+    for (auto& c : gCars)
+    {
+        if (c.second == car)
+        {
+            return c.first;
+        }
+    }
+    return 0;
+}
+} // namespace
+
 bool net::engine::DebugCheckPlayerCars(const char* where)
 {
     static int sReported;
@@ -665,6 +688,20 @@ bool net::engine::DebugCheckPlayerCars(const char* where)
                 printf("net: CHECK %s: player %u's ped is in a car that is gone (state %d/%d, despawn status %d)\n", where, i,
                        (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
                        liveCars.count(ped->field_16C_car) ? (int)ped->field_16C_car->field_88_despawn_status : -1);
+            }
+            return false;
+        }
+        // Driving a car that doesn't have it as its driver (Car::ClearDriver_4407F0 reads the driver when it gets out)
+        if (ped && ped->field_16C_car && ped->field_27C_ped_state_2 == ped_state_2::ped2_driving_10 && !ped->field_248_enter_car_as_passenger &&
+            ped->field_16C_car->field_54_driver != ped)
+        {
+            static int sDriver;
+            if (sDriver++ < 10)
+            {
+                Ped* d = ped->field_16C_car->field_54_driver;
+                printf("net: CHECK %s: player %u drives car %d, which has driver %p (spare %d, player %d), mapped %d\n", where, i,
+                       (int)ped->field_16C_car->field_6C_car_id, (void*)d, (int)IsSpareDriver(d), d && d->field_15C_player ? (int)d->field_15C_player->field_2E_idx : -1,
+                       (int)(MappedId(ped->field_16C_car) != 0));
             }
             return false;
         }
@@ -717,7 +754,7 @@ void net::engine::DebugOnCrash()
         {
             fprintf(stderr, "net: crash state: car %p live %d sprite %p despawn status %d driver %p mapped %d\n", (void*)cars[k],
                     (int)liveCars.count(cars[k]), (void*)cars[k]->field_50_car_sprite, (int)cars[k]->field_88_despawn_status,
-                    (void*)cars[k]->field_54_driver, 0);
+                    (void*)cars[k]->field_54_driver, (int)(MappedId(cars[k]) != 0));
         }
     }
 }
