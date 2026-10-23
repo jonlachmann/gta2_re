@@ -250,6 +250,7 @@ void net::Client::Extrapolate(const Snapshot& snap)
 void net::Client::Frame()
 {
     mFrame++;
+    engine::DebugSetFrame(mFrame);
     // What arrives this frame: from the network, or the recording
     std::vector<TransportEvent> events;
     uint32_t recordedFrame = 0, recordedInput = 0;

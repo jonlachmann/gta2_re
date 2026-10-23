@@ -32,10 +32,7 @@ void net::engine::ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const 
         car->ClearDriver_4407F0();
     }
     ped->StartPedWalking_470200(x, y, z); // a char again, walking
-    if (ped->field_168_game_object)
-    {
-        ped->SetRotation_433C00(rot);
-    }
+    MovePed(ped, x, y, z, rot); // turned the grid-safe way (out of the collision grid and back: harmless if not in it)
 }
 
 void net::engine::ForceIntoCar(Ped* ped, Car* car)

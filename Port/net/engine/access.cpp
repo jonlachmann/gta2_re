@@ -96,17 +96,32 @@ Sprite* net::engine::PedSprite(Ped* ped)
 }
 
 // Moves a car the way Car::SetPosition_443D00 does, and turns it
+// A car or a ped moved and turned at once. The collision grid keeps a sprite in the rows of its collision rect as it
+// was added (SpriteGrid::RemoveFromRegionBuckets_477B60 takes it out of the rows of the stored rect, and
+// AddToRegionBuckets_477B20 computes a new one): so position and rotation both change between the two. Turning a
+// sprite while it is in the grid, as Car::SetPosition_443D00 followed by a turn did, left it in rows its next
+// removal missed; once it was freed and reused (a roof light, a particle), a collision query crashed on it.
+// Only a car in the collision grid is moved: one that is going away (despawning_5, despawned_6: its last update
+// left it out of the grid, and freeing it doesn't look there) or carried by something (deactivated_7: in grid 3,
+// Car::Deactivate_43AA60, its carrier moves it) would be put into the grid by the move and left there when freed.
 void net::engine::MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
-    car->SetPosition_443D00(x, y, z);
-    car->field_50_car_sprite->set_ang_lazy_420690(rot);
+    const s32 status = car->field_88_despawn_status;
+    if (status == car_despawn_status::despawning_5 || status == car_despawn_status::despawned_6 || status == car_despawn_status::deactivated_7)
+    {
+        return;
+    }
+    Sprite* s = car->field_50_car_sprite;
+    gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
+    s->set_xyz_lazy_420600(x, y, z);
+    s->set_ang_lazy_420690(rot);
     if (car->field_58_physics)
     {
-        car->field_58_physics->SetSprite_563560(car->field_50_car_sprite);
+        car->field_58_physics->SetSprite_563560(s);
     }
+    gSpriteGrid_1_679208->AddToRegionBuckets_477B20(s);
 }
 
-// Moves a ped on foot: its sprite out of the collision grid and back, as Car::SetPosition_443D00 does for cars
 void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Sprite* s = ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
@@ -116,12 +131,13 @@ void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16&
     }
     gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
     s->set_xyz_lazy_420600(x, y, z);
-    gSpriteGrid_1_679208->AddToRegionBuckets_477B20(s);
     ped->SetRotation_433C00(rot);
+    gSpriteGrid_1_679208->AddToRegionBuckets_477B20(s);
     ped->field_1AC_cam.x = x;
     ped->field_1AC_cam.y = y;
     ped->field_1AC_cam.z = z;
 }
+
 const net::Schema& net::engine::NetSchema()
 {
     static const Schema s = BuildSchema();

@@ -16,6 +16,7 @@
 #include "Source/SpriteGrid.hpp"
 #include "Source/Object_5C.hpp"
 #include "Source/ObjectPool.hpp"
+#include "Source/ObjectDefinitions.hpp"
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
@@ -470,40 +471,101 @@ namespace
 {
 // Every sprite linked into a collision grid still has its collision shape (a freed sprite left in the grid crashes the next
 // collision query: SpriteGrid::FindCollidingSpriteInRow_478880)
+uint32_t gDebugFrame;
+struct LinkWas
+{
+    int type;
+    const void* owner;
+    int carModel; // for a car owner
+    int carStatus;
+    uint32_t frame;
+};
+std::unordered_map<const void*, LinkWas> gLinkWas; // every linked sprite as the last good pass saw it
+
 bool GridsSound(const char* where)
 {
     static int sReported;
-    SpriteGrid* grids[1] = {gSpriteGrid_1_679208}; // the collision grid; 2 and 3 hold shapeless sprites from the start
-    for (int g = 0; g < 1; g++)
+    std::unordered_map<const void*, LinkWas> now;
+    // Every link in the collision grid belongs to a live owner whose sprite it is: a car in the car pool, a ped's
+    // char, an object (particles may be in the grid too and aren't checked). A freed sprite's collision shape is
+    // the pool's free list (the same field), so its shape tells nothing.
+    std::set<Car*> cars;
+    std::set<Ped*> peds;
+    Live(cars, peds);
+    std::set<Char*> chars;
+    for (Ped* p : peds)
     {
-        for (int y = 0; grids[g] && y < 256; y++)
+        if (p->field_168_game_object)
         {
-            // field_0_rows is private and the class's first member (debug only: read it as the array it is)
-            GridCell* const* rows = reinterpret_cast<GridCell* const*>(grids[g]);
-            for (GridCell* c = rows[y]; c; c = c->mpNext)
+            chars.insert(p->field_168_game_object);
+        }
+    }
+    GridCell* const* rows = reinterpret_cast<GridCell* const*>(gSpriteGrid_1_679208); // field_0_rows, private, first
+    struct Keep
+    {
+        std::unordered_map<const void*, LinkWas>& now;
+        bool ok = true;
+        ~Keep()
+        {
+            if (ok)
             {
-                for (GridSpriteLink* l = c->field_4_pSpriteLinks; l; l = l->mpNext)
+                gLinkWas.swap(now);
+            }
+        }
+    } keep{now};
+    for (int y = 0; rows && y < 256; y++)
+    {
+        for (GridCell* c = rows[y]; c; c = c->mpNext)
+        {
+            for (GridSpriteLink* l = c->field_4_pSpriteLinks; l; l = l->mpNext)
+            {
+                Sprite* sp = l->field_0_pSprite;
+                const int type = sp ? sp->GetType_416B40() : -1;
+                const char* wrong = NULL;
+                if (!sp)
                 {
-                    if (!l->field_0_pSprite || !l->field_0_pSprite->field_C_pCollisionShape) // what the queries read
+                    wrong = "no sprite";
+                }
+                else if (type == sprite_types_enum::car_2)
+                {
+                    Car* car = sp->field_8_car_bc_ptr;
+                    wrong = !cars.count(car) ? "a car that is gone" : car->field_50_car_sprite != sp ? "not its car's sprite" : NULL;
+                }
+                else if (type == sprite_types_enum::ped_3)
+                {
+                    Char* ch = sp->field_8_char_b4_ptr;
+                    wrong = !chars.count(ch) ? "a char that is gone" : ch->field_80_sprite_ptr != sp ? "not its char's sprite" : NULL;
+                }
+                else if (type == sprite_types_enum::object_1 || type == sprite_types_enum::code_obj1_4 || type == sprite_types_enum::map_obj_5)
+                {
+                    Object* o = sp->field_8_object_2C_ptr;
+                    wrong = !o                       ? "no object"
+                          : o->field_4_sprite != sp ? "not its object's sprite"
+                          : o->field_8_definition &&
+                                    o->field_8_definition->field_40_collision_bucket_category != collision_bucket_category::sprite_grid_1_region_4
+                              ? "an object that doesn't go in this grid (a link left from an earlier owner)"
+                              : NULL;
+                }
+                if (wrong && sReported++ < 4)
+                {
+                    printf("net: CHECK frame %u %s: grid 1 cell (%d, %d) links sprite %p (type %d): %s\n", gDebugFrame, where, (int)c->field_0_x, y,
+                           (void*)sp, type, wrong);
+                    auto was = gLinkWas.find(sp);
+                    if (was != gLinkWas.end())
                     {
-                        if (sReported++ < 3)
-                        {
-                            Sprite* sp = l->field_0_pSprite;
-                            Object* o = sp && sp->GetType_416B40() != sprite_types_enum::car_2 && sp->GetType_416B40() != sprite_types_enum::ped_3 ?
-                                            sp->field_8_object_2C_ptr : NULL;
-                            bool live = false;
-                            for (Object* q = gObject_2C_Pool_6F8F80->field_4_pPrev; q && !live; q = q->mpNext)
-                            {
-                                live = q == o;
-                            }
-                            printf("net: CHECK %s: grid %d cell (%d, %d) links a sprite %p without a shape (type %d), object %p (model %d, in the "
-                                   "pool's list %d, removal state %d, its sprite %p)\n",
-                                   where, g + 1, (int)c->field_0_x, y, (void*)sp, sp ? (int)sp->GetType_416B40() : -1, (void*)o,
-                                   o ? (int)o->field_18_model : -1, (int)live, o ? (int)o->field_25_removal_state : -1, o ? (void*)o->field_4_sprite : NULL);
-                        }
-                        return false;
+                        printf("net: CHECK   frame %u it was linked as type %d, owner %p (car model %d, despawn status %d)\n", was->second.frame,
+                               was->second.type, was->second.owner, was->second.carModel, was->second.carStatus);
                     }
                 }
+                if (wrong)
+                {
+                    keep.ok = false;
+                    return false;
+                }
+                LinkWas w = {type, type == sprite_types_enum::car_2 ? (const void*)sp->field_8_car_bc_ptr : (const void*)sp->field_8_object_2C_ptr,
+                             type == sprite_types_enum::car_2 ? (int)sp->field_8_car_bc_ptr->field_84_car_info_idx : -1,
+                             type == sprite_types_enum::car_2 ? (int)sp->field_8_car_bc_ptr->field_88_despawn_status : -1, gDebugFrame};
+                now[sp] = w;
             }
         }
     }
@@ -603,4 +665,9 @@ void net::engine::DebugOnCrash()
                     (void*)cars[k]->field_54_driver, 0);
         }
     }
+}
+
+void net::engine::DebugSetFrame(uint32_t frame)
+{
+    gDebugFrame = frame;
 }
