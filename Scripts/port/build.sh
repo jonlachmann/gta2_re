@@ -25,6 +25,8 @@ TESTS=(Port/tests/*.cpp)
 REN=Renderers/OpenGL
 RENSRC=($REN/core/gl_funcs.cpp $REN/core/gl_renderer.cpp $REN/core/gl_enhanced.cpp $REN/core/vid_system.cpp $REN/core/capture.cpp
         $REN/core/options.cpp $REN/core/gbh_api.cpp $REN/core/cmdlog.cpp $REN/platform/sdl_context.cpp)
+# Port/net's sources depend on its headers (the rest still needs FORCE=1 after a header change): the newest one
+NETHDR=$(ls -t $(find Port/net -name "*.hpp" -not -path "*/enet/*") | head -1)
 OBJS=()
 fail=0
 for f in "${SRC[@]}" "${RENSRC[@]}" Port/net/enet/*.c; do
@@ -32,7 +34,7 @@ for f in "${SRC[@]}" "${RENSRC[@]}" Port/net/enet/*.c; do
   case $f in Renderers/*) FL=$RENFLAGS;; *.c) CC_=$ENETCC; FL="";; *) FL=$CXXFLAGS;; esac
   o=$OUT/obj/$(echo "$f" | tr '/' '_').o
   OBJS+=("$o")
-  if [ ! -f "$o" ] || [ "$f" -nt "$o" ] || [ -n "$FORCE" ]; then
+  if [ ! -f "$o" ] || [ "$f" -nt "$o" ] || [ -n "$FORCE" ] || { [[ $f == Port/net/* ]] && [ "$NETHDR" -nt "$o" ]; }; then
     ( $CC_ $FL -c "$f" -o "$o" 2> "$o.log" || { echo "FAILED: $f"; cat "$o.log" | grep error | head -5; } ) &
   fi
   while [ "$(jobs -r | wc -l)" -ge "${JOBS:-8}" ]; do sleep 0.1; done
