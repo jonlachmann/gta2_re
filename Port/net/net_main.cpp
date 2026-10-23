@@ -1,6 +1,6 @@
 // Port/net (docs/netcode.md, "Code layout"): the command line and the session's lifetime.
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
-//   --connect host[:port] [--name <name>] [--bot]
+//   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple)
 //   either: [--lag ms] [--jitter ms] [--loss percent]  a link conditioner on this end's sends (tests)
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
 #include "net_main.hpp"
@@ -120,7 +120,12 @@ int NetMain_Init(std::vector<std::string>& args)
         }
         else if (a == "--bot")
         {
-            cc.bot = true;
+            cc.bot = more && args[i + 1].compare(0, 2, "--") != 0 ? args[++i] : "simple"; // --bot [brain]
+            if (!net::CreateBotBrain(cc.bot))
+            {
+                fprintf(stderr, "net: no bot brain called %s\n", cc.bot.c_str());
+                return -1;
+            }
         }
         else if (a == "--lag" && more)
         {
@@ -144,6 +149,7 @@ int NetMain_Init(std::vector<std::string>& args)
     {
         return 0;
     }
+    setvbuf(stdout, NULL, _IOLBF, 0); // the net: lines as they happen, also when the process is killed
     std::string error;
     if (server)
     {

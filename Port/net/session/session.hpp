@@ -60,7 +60,7 @@ struct ClientConfig
     std::string host = "127.0.0.1";
     uint16_t port = kDefaultPort;
     std::string name = "player";
-    bool bot = false; // input from a simple bot instead of the controls
+    std::string bot; // a bot brain plays instead of the controls ("simple"); empty: a person
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
 
@@ -111,7 +111,9 @@ class Client
     uint32_t mRollbacks = 0, mResimTicks = 0;
     float mMaxError = 0;
 
-    Bot mBot;
+    std::unique_ptr<BotBrain> mBot;
+    std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
+    BotView mBotView;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;
 };

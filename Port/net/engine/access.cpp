@@ -365,3 +365,28 @@ bool net::engine::PlayerWasted(int player)
     Player* p = GetPlayer(player);
     return p && p->field_28_wasted_or_busted;
 }
+
+bool net::engine::PlayerPose(int player, float* pX, float* pY, float* pZ, int* pRot)
+{
+    Player* p = GetPlayer(player);
+    Sprite* s = p && p->field_2C4_player_ped ? PedSprite(p->field_2C4_player_ped) : NULL;
+    if (!s)
+    {
+        return false;
+    }
+    *pX = s->field_14_xy.x.ToFloat();
+    *pY = s->field_14_xy.y.ToFloat();
+    *pZ = s->field_1C_zpos.ToFloat();
+    *pRot = s->field_0_rotation.rValue;
+    return true;
+}
+
+void net::engine::DebugArm(int player, int weapon, int ammo)
+{
+    Player* p = GetPlayer(player);
+    if (p && p->field_2C4_player_ped && weapon >= 0 && weapon < kPlayerWeapons && p->field_718_weapons[weapon] &&
+        p->field_718_weapons[weapon]->field_0_ammo == 0)
+    {
+        p->AddWeaponWithAmmo_564960(weapon, (u8)ammo);
+    }
+}

@@ -34,6 +34,12 @@ class SimpleBot : public net::BotBrain
   public:
     uint32_t Think(const net::BotView& v) override
     {
+        mButtons = Decide(v);
+        return mButtons;
+    }
+
+    uint32_t Decide(const net::BotView& v)
+    {
         if (!v.hasBody || v.health <= 0)
         {
             return 0;
@@ -83,12 +89,16 @@ class SimpleBot : public net::BotBrain
         {
             const int err = TurnTo(v.rot, dx, dy);
             uint32_t b = Steer(err);
-            if (best > 0.8f)
+            if (best > 1.2f)
             {
                 b |= net::kBtnForward;
                 mTrying = true;
             }
-            if ((err < 0 ? -err : err) < 100)
+            else if (best < 0.6f)
+            {
+                b |= net::kBtnBack; // too close to hit: a step back
+            }
+            if ((err < 0 ? -err : err) < 100 && v.frame % 4 < 2) // pressed and released: every press is a punch
             {
                 b |= net::kBtnAttack;
             }
@@ -133,13 +143,14 @@ class SimpleBot : public net::BotBrain
     std::string Describe() const override
     {
         char line[160];
-        snprintf(line, sizeof(line), "at (%.1f, %.1f) rot %d, target %.1f blocks away, route %zu cells%s%s", mX, mY, mRot, mTargetDist,
-                 mPath.size(), mNoRoute ? " (no route found)" : "", mStuck ? ", stuck" : "");
+        snprintf(line, sizeof(line), "at (%.1f, %.1f) rot %d, target %.1f blocks away, route %zu cells, buttons 0x%x%s%s", mX, mY, mRot,
+                 mTargetDist, mPath.size(), mButtons, mNoRoute ? " (no route found)" : "", mStuck ? ", stuck" : "");
         return line;
     }
 
   private:
     float mX = 0, mY = 0, mTargetDist = -1;
+    uint32_t mButtons = 0;
     int mRot = 0;
     bool mNoRoute = false;
     std::vector<int> mPath;
