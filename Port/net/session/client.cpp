@@ -178,8 +178,12 @@ void net::Client::Frame()
                     players += one;
                 }
             }
-            printf("net: frame %u, server tick %u, %zu entities, own player %.2f blocks from the server's; players%s\n", mFrame,
-                   mLatestTick, snap.entities.size(), d >= 0 ? sqrtf(d) : -1.0f, players.c_str());
+            int cars = 0, peds = 0;
+            float drift = 0;
+            engine::ReplicaStats(snap, &cars, &peds, &drift);
+            printf("net: frame %u, server tick %u, %zu entities (%d cars, %d peds mapped; one tick's drift up to %.2f blocks), own "
+                   "player %.2f blocks from the server's; players%s\n",
+                   mFrame, mLatestTick, snap.entities.size(), cars, peds, drift, d >= 0 ? sqrtf(d) : -1.0f, players.c_str());
         }
         engine::Apply(snap, mSlot);
         mNewSnapshot = false;
