@@ -54,6 +54,7 @@ class Server
     std::vector<Slot> mSlots;
     uint32_t mTick = 0;
     uint32_t mBytesSent = 0;
+    uint32_t mNearSum = 0, mKeptSum = 0, mCut = 0; // the size cut, for the log
     bool mStarted = false;
 };
 

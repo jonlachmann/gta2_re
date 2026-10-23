@@ -207,6 +207,9 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         WriteDelta(w, engine::NetSchema(), base ? *base : kEmpty, candidate);
         if (w.ByteCount() <= kMaxPayload || keep == 0)
         {
+            mNearSum += (uint32_t)near.size();
+            mKeptSum += (uint32_t)keep;
+            mCut += keep < near.size();
             s.sent[mTick % kRing] = candidate;
             break;
         }
@@ -368,5 +371,8 @@ void net::Server::Frame()
         printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n",
                mTick, used, world.entities.size(), sent, used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
         mBytesSent = 0;
+        printf("net: tick %u, snapshots kept %.0f%% of the entities in the clients' areas, %u of %u cut for size\n", mTick,
+               mNearSum ? 100.0 * mKeptSum / mNearSum : 100.0, mCut, used * 300);
+        mNearSum = mKeptSum = mCut = 0;
     }
 }
