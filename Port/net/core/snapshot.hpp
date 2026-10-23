@@ -8,7 +8,7 @@
 
 namespace net
 {
-const int kMaxFields = 32; // a field mask is one 32-bit word
+const int kMaxFields = 64; // a field mask is one 64-bit word
 
 struct FieldDesc
 {

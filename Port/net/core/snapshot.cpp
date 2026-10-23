@@ -28,12 +28,32 @@ int32_t ReadValue(net::BitReader& r, const net::FieldDesc& d)
     return (int32_t)v;
 }
 
-void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityState& s, uint32_t mask)
+// A field mask at the type's field count (up to 64: two words)
+void WriteMask(net::BitWriter& w, uint64_t mask, int n)
 {
-    w.Bits(mask, (int)t.fields.size());
+    w.Bits((uint32_t)mask, n < 32 ? n : 32);
+    if (n > 32)
+    {
+        w.Bits((uint32_t)(mask >> 32), n - 32);
+    }
+}
+
+uint64_t ReadMask(net::BitReader& r, int n)
+{
+    uint64_t mask = r.Bits(n < 32 ? n : 32);
+    if (n > 32)
+    {
+        mask |= (uint64_t)r.Bits(n - 32) << 32;
+    }
+    return mask;
+}
+
+void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityState& s, uint64_t mask)
+{
+    WriteMask(w, mask, (int)t.fields.size());
     for (size_t i = 0; i < t.fields.size(); i++)
     {
-        if (mask & (1u << i))
+        if (mask & (1ull << i))
         {
             WriteValue(w, t.fields[i], s.f[i]);
         }
@@ -42,10 +62,10 @@ void WriteFields(net::BitWriter& w, const net::EntityType& t, const net::EntityS
 
 bool ReadFields(net::BitReader& r, const net::EntityType& t, net::EntityState& s)
 {
-    const uint32_t mask = r.Bits((int)t.fields.size());
+    const uint64_t mask = ReadMask(r, (int)t.fields.size());
     for (size_t i = 0; i < t.fields.size(); i++)
     {
-        if (mask & (1u << i))
+        if (mask & (1ull << i))
         {
             s.f[i] = ReadValue(r, t.fields[i]);
         }
@@ -68,14 +88,14 @@ int32_t Wire(const net::FieldDesc& d, int32_t v)
     return (int32_t)u;
 }
 
-uint32_t ChangedMask(const net::EntityType& t, const net::EntityState& a, const net::EntityState& b)
+uint64_t ChangedMask(const net::EntityType& t, const net::EntityState& a, const net::EntityState& b)
 {
-    uint32_t mask = 0;
+    uint64_t mask = 0;
     for (size_t i = 0; i < t.fields.size(); i++)
     {
         if (Wire(t.fields[i], a.f[i]) != Wire(t.fields[i], b.f[i]))
         {
-            mask |= 1u << i;
+            mask |= 1ull << i;
         }
     }
     return mask;
@@ -95,7 +115,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
         uint32_t id;
         int op;
         const EntityState* now;
-        uint32_t mask;
+        uint64_t mask;
     };
     std::vector<Entry> entries;
     size_t i = 0, j = 0;
@@ -124,7 +144,7 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
             }
             else
             {
-                const uint32_t mask = ChangedMask(schema.types[b->type], *a, *b);
+                const uint64_t mask = ChangedMask(schema.types[b->type], *a, *b);
                 if (mask)
                 {
                     Entry e = {b->id, kUpdate, b, mask};
