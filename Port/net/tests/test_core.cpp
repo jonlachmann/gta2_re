@@ -78,8 +78,14 @@ net::Schema TestSchema()
     net::Schema s;
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"vx", 16, true}, {"model", 7, false}}};
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"health", 8, false}, {"raw", 32, true}}};
+    net::EntityType wide = {"wide", {}}; // more fields than a 32-bit mask
+    for (int i = 0; i < 50; i++)
+    {
+        wide.fields.push_back(net::FieldDesc{"w", (uint8_t)(i % 2 ? 9 : 32), i % 3 == 0});
+    }
     s.types.push_back(car);
     s.types.push_back(ped);
+    s.types.push_back(wide);
     return s;
 }
 
@@ -143,7 +149,7 @@ void TestDelta()
     net::Snapshot empty, a, b;
     for (uint32_t id = 1; id < 200; id += 1 + Rand() % 3)
     {
-        a.entities.push_back(Entity(id, (uint8_t)(Rand() % 2), s));
+        a.entities.push_back(Entity(id, (uint8_t)(Rand() % 3), s));
     }
     RoundTrip(s, empty, a); // everything new
     RoundTrip(s, a, a); // nothing changed
@@ -157,9 +163,18 @@ void TestDelta()
     b.entities.erase(b.entities.begin() + 10);
     b.entities[0].f[0] += 5;
     b.entities[5].f[2] ^= 1;
-    b.entities[7] = Entity(b.entities[7].id, (uint8_t)(1 - b.entities[7].type), s);
+    for (size_t k = 0; k < b.entities.size(); k++)
+    {
+        if (b.entities[k].type == 2)
+        {
+            b.entities[k].f[45] ^= 1; // a field in the mask's second word
+            break;
+        }
+    }
+    b.entities[7] = Entity(b.entities[7].id, (uint8_t)((b.entities[7].type + 1) % 3), s);
     b.entities.push_back(Entity(500, 0, s));
     b.entities.push_back(Entity(501, 1, s));
+    b.entities.push_back(Entity(502, 2, s));
     net::SortById(b);
     RoundTrip(s, a, b);
     RoundTrip(s, b, a);
@@ -173,11 +188,11 @@ void TestDelta()
         {
             if (Rand() % 3 == 0)
             {
-                x.entities.push_back(Entity(id, (uint8_t)(Rand() % 2), s));
+                x.entities.push_back(Entity(id, (uint8_t)(Rand() % 3), s));
             }
             if (Rand() % 3 == 0)
             {
-                y.entities.push_back(Entity(id, (uint8_t)(Rand() % 2), s));
+                y.entities.push_back(Entity(id, (uint8_t)(Rand() % 3), s));
             }
         }
         RoundTrip(s, x, y);
