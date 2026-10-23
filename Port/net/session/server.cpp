@@ -110,6 +110,7 @@ void net::Server::OnHello(uint32_t peer, BitReader& r)
             welcome.scr = mConfig.game.scr;
             welcome.serverTick = mTick;
             WriteWelcome(w, welcome);
+            engine::PutInGame(slot, true); // a fresh start at the next restart zone
             printf("net: %s joined as player %d\n", hello.name.c_str(), slot);
         }
     }
@@ -218,6 +219,18 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
 void net::Server::Frame()
 {
     mTick++; // the tick that just ran
+    if (!mStarted && engine::GameRunning())
+    {
+        // The map script made a ped for every slot: those without a client are out until one joins
+        for (size_t i = 0; i < mSlots.size(); i++)
+        {
+            if (!mSlots[i].used)
+            {
+                engine::TakeOutOfGame((int)i);
+            }
+        }
+        mStarted = true;
+    }
     TransportEvent e;
     while (mTransport->Poll(e))
     {
@@ -232,6 +245,7 @@ void net::Server::Frame()
             {
                 printf("net: player %d (%s) left\n", slot, mSlots[slot].name.c_str());
                 mSlots[slot] = Slot();
+                engine::TakeOutOfGame(slot);
             }
         }
     }

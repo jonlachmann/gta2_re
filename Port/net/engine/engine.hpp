@@ -116,6 +116,12 @@ void BuildNavMap(NavMap& out);
 // Where this game has a player now (x, y, z in blocks; rot 0..1439); false without a ped
 bool PlayerPose(int player, float* pX, float* pY, float* pZ, int* pRot);
 
+// Player slots in a running network game (slots.cpp): out of the game as the game handles a player who left, in
+// again with a new ped at the next restart zone (and an empty score if <freshScore>)
+bool SlotInGame(int slot);
+void TakeOutOfGame(int slot);
+void PutInGame(int slot, bool freshScore);
+
 // Tests: the game's own death for a player, credited to another (-1: nobody); a server's frags follow from it
 void DebugKill(int victim, int killer);
 bool PlayerWasted(int player);
