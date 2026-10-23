@@ -6,6 +6,7 @@
 #include "../engine/engine.hpp"
 #include "../transport/transport.hpp"
 #include "bot.hpp"
+#include "replay.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -72,10 +73,13 @@ class Client
     ~Client();
     // Connects and waits for the server's welcome (a few seconds at most): then the game to start is known
     bool Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error);
+    // No server: a recorded session (GTA2_NET_RECORD) played back frame for frame, as fast as the game runs
+    bool StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error);
     void Frame();
 
   private:
     void OnSnapshot(BitReader& r);
+    void Welcomed(const Welcome& welcome, engine::NetworkGame* pGame);
     void Reconcile(const Snapshot& snap);
     void Extrapolate(const Snapshot& snap);
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
@@ -113,6 +117,9 @@ class Client
     float mMaxError = 0;
 
     std::unique_ptr<BotBrain> mBot;
+    std::unique_ptr<ClientRecorder> mRecorder;
+    std::unique_ptr<ClientReplay> mReplay;
+    uint32_t mRtt = 0; // the round trip as the transport sees it (or the recording says)
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
     BotView mBotView;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
