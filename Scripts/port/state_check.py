@@ -128,7 +128,7 @@ def trace():
 
     def mask(line, og):
         line = line.split('|')[0]
-        f = line.split()
+        f = [w for w in line.split() if not w.startswith('^')]  # ^esp: see balance()
         if len(f) < 4:
             return line
         sig = sigs.get(f[2]) or ([4] * 4, 4)
@@ -156,6 +156,36 @@ def trace():
     if gone:
         print('only in one trace (inlined?), left out: ' + ' '.join(gone))
     a, b = [l for l in a if label(l) in both], [l for l in b if label(l) in both]
+    # Stack balance: each return must leave esp at entry + 4 + the arguments the callee pops (thiscall/stdcall),
+    # + 4 (cdecl, or a hidden return pointer). Anything else is a calling convention mismatch between caller and
+    # callee (the port crashed on one, docs/port.md).
+    def balance(lines, side):
+        stack, bad = [], {}
+        for l in lines:
+            f = l.split('|')[0].split()
+            esp = [int(w[1:], 16) for w in f if w.startswith('^')]
+            if not esp:
+                continue
+            if f[0] == 'C':
+                stack.append((f[2], esp[0]))
+            elif f[0] == 'R' and stack:
+                k = max(i for i, s in enumerate(stack) if s[0] == f[2]) if any(s[0] == f[2] for s in stack) else None
+                if k is None:
+                    continue
+                name, entry = stack[k]
+                del stack[k:]
+                sig = sigs.get(name)
+                if sig and k == len(stack):
+                    p = sum((abs(n) + 3) // 4 * 4 for n in sig[0])
+                    moved = esp[0] - entry
+                    if moved not in (4, 4 + p, 8 + p, 8):
+                        bad.setdefault(name, (moved, 4 + p))
+        for name, (moved, want) in bad.items():
+            print('%s: %s pops %d bytes with its return address, its arguments make %d' % (side, name, moved, want))
+
+    balance(b, 'port')
+    balance(a, '10.5')
+
     # Align the two (clang inlines some calls only at some call sites), then report the first difference
     # that isn't just whole calls missing on one side
     ma, mb = [mask(x, True) for x in a], [mask(y, False) for y in b]
