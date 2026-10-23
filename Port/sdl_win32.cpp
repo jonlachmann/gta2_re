@@ -169,6 +169,18 @@ BOOL Port_GetWindowRect(HWND, LPRECT pRect)
     return TRUE;
 }
 
+namespace
+{
+int gRequestedW, gRequestedH; // the size the game last asked its window to be: its resolution in windowed mode
+} // namespace
+
+bool Port_GetRequestedWindowSize(int* pW, int* pH)
+{
+    *pW = gRequestedW;
+    *pH = gRequestedH;
+    return gRequestedW > 0 && gRequestedH > 0;
+}
+
 BOOL Port_SetWindowPos(HWND, HWND, int x, int y, int cx, int cy, UINT flags)
 {
     if (!gWindow || (SDL_GetWindowFlags(gWindow) & SDL_WINDOW_FULLSCREEN))
@@ -179,10 +191,15 @@ BOOL Port_SetWindowPos(HWND, HWND, int x, int y, int cx, int cy, UINT flags)
     // scales the picture to the window (GLRenderer::Present), so only the first size is taken: after that the window
     // keeps the size its user gave it (set again, it and its drawable disagreed until it was resized by hand)
     static bool sSized;
-    if (!(flags & SWP_NOSIZE) && cx > 0 && cy > 0 && !sSized)
+    if (!(flags & SWP_NOSIZE) && cx > 0 && cy > 0)
     {
-        SDL_SetWindowSize(gWindow, cx, cy);
-        sSized = true;
+        gRequestedW = cx; // the game's own resolution, for Vid_SetMode (sdl_video.cpp)
+        gRequestedH = cy;
+        if (!sSized)
+        {
+            SDL_SetWindowSize(gWindow, cx, cy);
+            sSized = true;
+        }
     }
     if (!(flags & SWP_NOMOVE))
     {

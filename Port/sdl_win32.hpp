@@ -7,6 +7,9 @@
 #include <windows.h>
 
 void* Port_GetSDLWindow();
+// The size the game last asked its window to be (SetWindowPos): its resolution in windowed mode, whatever size the
+// window has (resizable: the renderer scales)
+bool Port_GetRequestedWindowSize(int* pW, int* pH);
 
 ATOM Port_RegisterClassA(const WNDCLASSA* pClass);
 HWND Port_CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD style, int x, int y, int w, int h,

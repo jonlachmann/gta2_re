@@ -96,7 +96,12 @@ EXPORT s32 __stdcall Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
     if (modeId == VidSystem::kWindowedModeId)
     {
         SDL_SetWindowFullscreen(pWindow, false);
-        SDL_GetWindowSize(pWindow, &w, &h);
+        // The game's resolution, not the window's size: after the window was resized, a mode reset (on getting focus
+        // back) made the frame the window's size while the game still drew 640x480 in a corner of it
+        if (!Port_GetRequestedWindowSize(&w, &h))
+        {
+            SDL_GetWindowSize(pWindow, &w, &h);
+        }
     }
     else
     {
