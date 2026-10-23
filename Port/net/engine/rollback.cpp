@@ -4,6 +4,8 @@
 #include "world.hpp"
 #include "Source/Game.hpp"
 #include "Source/Player.hpp"
+#include "Source/Car.hpp"
+#include "Source/Char_Pool.hpp"
 #include "Source/CollisionSoundQueue.hpp"
 #include "Source/Weapon.hpp"
 #include "Source/WeaponManager.hpp"
@@ -98,6 +100,16 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
         gCollisionSoundQueue_66AFE0->Reset_40BB90();
     }
     gSound_obj_66F680.field_544C[0].field_18 = 0; // sound_obj::PlayVocal_418C80's slot (0: none)
+    // ... and what it takes from peds and cars (all the Take* accessors sound_obj.cpp uses)
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+    {
+        p->TakeVoiceEvent_41B0B0(); // what it says next (a landing from a roof, a hit)
+    }
+    for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
+    {
+        c->TakeSoundEvent_411950();
+        c->TakeWeaponKind_4119D0();
+    }
     for (Weapon* w = gWeapon_30_Pool_707014->field_0_pool.field_4_pPrev; w; w = w->mpNext)
     {
         w->TakeF2C_41CC80();
