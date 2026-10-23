@@ -79,7 +79,7 @@ net::Schema TestSchema()
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"vx", 16, true}, {"model", 7, false}}};
     net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"health", 8, false}, {"raw", 32, true}}};
     net::EntityType wide = {"wide", {}}; // more fields than a 32-bit mask
-    for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 110; i++) // more than a 32-bit or 64-bit mask holds
     {
         wide.fields.push_back(net::FieldDesc{"w", (uint8_t)(i % 2 ? 9 : 32), i % 3 == 0});
     }
@@ -167,7 +167,8 @@ void TestDelta()
     {
         if (b.entities[k].type == 2)
         {
-            b.entities[k].f[45] ^= 1; // a field in the mask's second word
+            b.entities[k].f[45] ^= 1; // fields in the mask's second and fourth word
+            b.entities[k].f[100] ^= 1;
             break;
         }
     }
