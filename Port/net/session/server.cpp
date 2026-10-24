@@ -497,6 +497,7 @@ void net::Server::SetNextInputs(const Snapshot& world)
         else if (s.used)
         {
             s.late++;
+            s.buttons &= 0xFFF; // the last one again, its controls only: a key event (chat) happens once
         }
         engine::SetPlayerInput((int)i, s.used ? s.buttons : 0);
     }

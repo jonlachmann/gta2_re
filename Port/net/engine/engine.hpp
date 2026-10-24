@@ -110,6 +110,16 @@ float PlayerViewRadius(int player);
 // A slot's name as the game shows it (over the player, in kill messages): Player::field_83C_player_name, up to 15
 void SetPlayerName(int slot, const char* name);
 std::string PlayerName(int slot); // as the game shows it
+// The local player's chat line, kept through a restore and its resimulation (which see no key events): what this
+// player types shows at once; the others' comes with the snapshots
+struct LocalChat
+{
+    char chatting = 0;
+    int length = 0;
+    short text[79] = {};
+};
+LocalChat TakeLocalChat();
+void PutLocalChat(const LocalChat& chat);
 
 // --- Rounds (rounds.cpp, N6): the frag and time limits are the netcode's (the game gets none it would end on), a
 // round that reaches one starts the next on the same map. The server keeps the round; snapshots carry it ---

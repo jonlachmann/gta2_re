@@ -17,6 +17,7 @@
 #include "Source/sprite.hpp"
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include <string>
 
 EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
@@ -60,6 +61,44 @@ void PackName(const Player* p, net::EntityState& e)
     {
         e.f[kPlayerName + k / 4] |= (int32_t)((uint32_t)(p->field_83C_player_name[k] & 0xFF) << (8 * (k % 4)));
     }
+}
+
+// The chat line being typed, as the name: the low byte of each character, 4 a field
+void PackChat(const Player* p, net::EntityState& e)
+{
+    e.f[kPlayerChatting] = p->field_794_is_chatting != 0;
+    for (int k = 0; k < 79 && p->field_796_chat_text[k]; k++)
+    {
+        e.f[kPlayerChat + k / 4] |= (int32_t)((uint32_t)(p->field_796_chat_text[k] & 0xFF) << (8 * (k % 4)));
+    }
+}
+
+void UnpackChat(Player* p, const net::EntityState& e)
+{
+    s16 text[79];
+    int n = 0;
+    for (; n < 78; n++)
+    {
+        text[n] = (s16)(((uint32_t)e.f[kPlayerChat + n / 4] >> (8 * (n % 4))) & 0xFF);
+        if (!text[n])
+        {
+            break;
+        }
+    }
+    text[n] = 0;
+    const bool chatting = e.f[kPlayerChatting] != 0;
+    if (chatting && (n != p->field_838_chat_text_idx || memcmp(text, p->field_796_chat_text, (n + 1) * sizeof(s16))))
+    {
+        std::string line;
+        for (int k = 0; k < n; k++)
+        {
+            line += (char)text[k];
+        }
+        printf("net: chat, %s: %s\n", NarrowName(p).c_str(), line.c_str()); // the log's copy of the line as typed
+    }
+    p->field_794_is_chatting = (char_type)chatting;
+    memcpy(p->field_796_chat_text, text, (n + 1) * sizeof(s16));
+    p->field_838_chat_text_idx = n;
 }
 
 std::string UnpackName(const net::EntityState& e)
@@ -273,6 +312,7 @@ void net::engine::CapturePlayer(int i, Snapshot& out)
     e.f[kPlayerState] = (InCarTransition(ped) ? kPlayerTransition : 0) | (ped->isDead_403B60() ? kPlayerDead : 0) | (LeavingCar(ped) ? kPlayerLeaving : 0);
     e.f[kPlayerTarget] = ped->get_objective_403A80() == objectives_enum::enter_car_as_driver_35 ? CarRef(ped->field_150_target_objective_car) : 0;
     PackName(p, e);
+    PackChat(p, e);
     for (int k = 0; k < kPowerUps; k++)
     {
         e.f[kPlayerPowerUp + k] = p->field_6F4_power_up_timers[k];
@@ -338,6 +378,10 @@ void net::engine::ApplyPlayer(const EntityState& e)
     }
     ApplyWeapons(p, e);
     ApplyPowerUps(p, ped, e);
+    if (i != LocalPlayer())
+    {
+        UnpackChat(p, e); // the others' typing; ours is this game's (KeepLocalChat)
+    }
     if (CarryOutDeath(i, p, ped, e))
     {
         return;
@@ -511,6 +555,28 @@ void net::engine::ResetDeaths(int slot)
     {
         gDeaths[slot] = 0;
         gKiller[slot] = 0;
+    }
+}
+
+net::engine::LocalChat net::engine::TakeLocalChat()
+{
+    LocalChat c;
+    if (Player* p = GetPlayer(LocalPlayer()))
+    {
+        c.chatting = p->field_794_is_chatting;
+        c.length = p->field_838_chat_text_idx;
+        memcpy(c.text, p->field_796_chat_text, sizeof(c.text));
+    }
+    return c;
+}
+
+void net::engine::PutLocalChat(const LocalChat& c)
+{
+    if (Player* p = GetPlayer(LocalPlayer()))
+    {
+        p->field_794_is_chatting = c.chatting;
+        p->field_838_chat_text_idx = c.length;
+        memcpy(p->field_796_chat_text, c.text, sizeof(c.text));
     }
 }
 

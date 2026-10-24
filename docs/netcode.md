@@ -130,6 +130,10 @@ A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::C
 
 Not yet: a results screen between maps.
 
+## Chat
+
+GTA2's chat is a line typed live: F10 starts it (`Player`'s key handling, `Hud_ChatInput::StartChatting_5D1830`), each key adds to the player's line (`HandleChatInputKey_5D15E0`, from the key event in the input word), Enter ends it, and while it is typed every machine shows "name: line_" over the HUD (`DrawChatMessages_5D16B0`). There is no history. The key events reach the server in the commands (22 bits), so the server's player has the line; the player entity carries it (`chatting` and 80 characters), and a client shows the others' lines from the snapshots and its own as it types: the local player's line is kept through each restore and resimulation, which see no key events (`TakeLocalChat`, `PutLocalChat`). A late command repeated on the server keeps its controls only, or a key would type twice. Each client logs the others' lines as they change (`net: chat, <name>: <line>`).
+
 ## Checks
 
 `Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 6 minutes, and prints PASS or FAIL per step:

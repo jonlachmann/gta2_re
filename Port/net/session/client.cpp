@@ -279,6 +279,7 @@ void net::Client::Reconcile(const Snapshot& snap)
     }
     std::vector<engine::Pose> before; // what this frame would have shown, to blend the correction in
     engine::Poses(before);
+    const engine::LocalChat chat = engine::TakeLocalChat();
     engine::RestoreGame(*saved);
     engine::DebugCheckPlayerCars("after the restore");
     engine::DebugOwnCarDiff(snap);
@@ -297,6 +298,7 @@ void net::Client::Reconcile(const Snapshot& snap)
         engine::SaveGame(*mSaves[t % kSaves], t);
         mStats.resimTicks++;
     }
+    engine::PutLocalChat(chat);
     mStats.rollbacks++;
     engine::ApplyScores(snap);
     Blend(before);

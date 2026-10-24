@@ -37,6 +37,8 @@ net::Schema BuildSchema()
     player.fields.push_back(FieldDesc{"target", 25, false}); // kPlayerTarget
     AppendNumbered(player.fields, "name", kPlayerNameEnd - kPlayerName, 32);
     AppendNumbered(player.fields, "power", kPowerUps, 16);
+    player.fields.push_back(FieldDesc{"chatting", 1, false});
+    AppendNumbered(player.fields, "chat", kPlayerChatEnd - kPlayerChat, 32);
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
                                    {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false},
                                    {"lights", 8, false}, {"flash", 8, false}, {"horn", 8, false}, {"horn_cooldown", 8, false}, {"remap", 16, true}}};

@@ -42,6 +42,9 @@ enum PlayerField
     kPlayerNameEnd = kPlayerName + 4,
     kPlayerPowerUp = kPlayerNameEnd, // the power-up timers
     kPlayerPowerUpEnd = kPlayerPowerUp + kPowerUps,
+    kPlayerChatting = kPlayerPowerUpEnd, // typing a chat line (Player::field_794_is_chatting, Hud_ChatInput)
+    kPlayerChat, // the line so far (field_796_chat_text), 4 characters a field
+    kPlayerChatEnd = kPlayerChat + 20,
 };
 enum PlayerState
 {
