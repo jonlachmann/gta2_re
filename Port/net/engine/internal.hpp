@@ -31,20 +31,24 @@ enum PlayerField
     kPlayerWeapon, // Player::field_788_curr_weapon_idx + 1 (0: none)
     kPlayerFrags,
     kPlayerPoints,
-    kPlayerAmmo0, // field_718_weapons[0..14]: the player's own weapons' ammo
-    kPlayerCar = kPlayerAmmo0 + 15, // the car it drives: Car::field_6C_car_id + 1, 0 none
+    kPlayerAmmo0, // field_718_weapons[0..27]: the ammo of its own weapons (0..14) and its car weapons (15..27)
+    kPlayerCar = kPlayerAmmo0 + 28, // the car it drives: Car::field_6C_car_id + 1, 0 none
     kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead
     kPlayerTarget, // the car it is going to get into (Ped::field_150_target_objective_car): car_id + 1, 0 none
     kPlayerName, // its name (Player::field_83C_player_name), 4 characters a field, kPlayerNameFields of them
     kPlayerNameEnd = kPlayerName + 4,
-    kPlayerWeapons = 15,
+    kPlayerPowerUp = kPlayerNameEnd, // Player::field_6F4_power_up_timers[0..16]
+    kPlayerPowerUpEnd = kPlayerPowerUp + 17,
+    kPlayerWeapons = 28,
 };
 enum WorldField
 {
     kWorldCycle, // the game's tick counter (gpRng_67AB34's field_0_rng): timers are stamped with it (a car's damage, a ped's voice...)
     kWorldRand, // the game's random state (rand(), Port/port_rand.cpp): a resimulation draws what the server drew
     kWorldReach, // how far this client's snapshot reaches (blocks x 16): the farthest it kept, the rest cut for size
-    kWorldZoneTurn, // which restart zone is next (Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0): a respawn here goes where the server's does
+    kWorldIt, // the tag game's "it" (TagGame::field_0_fugitive): player index + 1, 0 nobody
+    kWorldItTime, // and the seconds each player has been it (field_4_it_time_secs), MAX_PLAYERS of them
+    kWorldZoneTurn = kWorldItTime + 6, // which restart zone is next (Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0): a respawn here goes where the server's does
 };
 enum CarField
 {

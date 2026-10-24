@@ -111,10 +111,12 @@ net::Schema BuildSchema()
     net::EntityType player = {"player", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"in_car", 1, false}, {"buttons", 22, false},
                                          {"health", 10, true}, {"deaths", 8, false}, {"killer", 6, false}, {"weapon", 5, false},
                                          {"frags", 12, true}, {"points", 32, true}}};
+    static const char* const kAmmo[net::engine::kPlayerWeapons] = {"ammo0",  "ammo1",  "ammo2",  "ammo3",  "ammo4",  "ammo5",  "ammo6",
+                                                                   "ammo7",  "ammo8",  "ammo9",  "ammo10", "ammo11", "ammo12", "ammo13",
+                                                                   "ammo14", "ammo15", "ammo16", "ammo17", "ammo18", "ammo19", "ammo20",
+                                                                   "ammo21", "ammo22", "ammo23", "ammo24", "ammo25", "ammo26", "ammo27"};
     for (int i = 0; i < net::engine::kPlayerWeapons; i++)
     {
-        static const char* const kAmmo[net::engine::kPlayerWeapons] = {"ammo0", "ammo1", "ammo2", "ammo3", "ammo4", "ammo5", "ammo6", "ammo7",
-                                                         "ammo8", "ammo9", "ammo10", "ammo11", "ammo12", "ammo13", "ammo14"};
         player.fields.push_back(FieldDesc{kAmmo[i], 16, false});
     }
     player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
@@ -124,6 +126,12 @@ net::Schema BuildSchema()
     for (int i = 0; i < 4; i++)
     {
         player.fields.push_back(FieldDesc{kNames[i], 32, false}); // kPlayerName...
+    }
+    static const char* const kPowerUps[17] = {"power0", "power1", "power2",  "power3",  "power4",  "power5",  "power6",  "power7", "power8",
+                                              "power9", "power10", "power11", "power12", "power13", "power14", "power15", "power16"};
+    for (int i = 0; i < 17; i++)
+    {
+        player.fields.push_back(FieldDesc{kPowerUps[i], 16, false}); // kPlayerPowerUp...
     }
     net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
                                    {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false},
@@ -143,7 +151,9 @@ net::Schema BuildSchema()
     s.types.push_back(player); // kEntityPlayer
     s.types.push_back(car); // kEntityCar
     s.types.push_back(ped); // kEntityPed
-    net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"reach", 10, false}, {"zone_turn", 16, true}}};
+    net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"reach", 10, false}, {"it", 3, false},
+                                       {"it_time0", 16, false}, {"it_time1", 16, false}, {"it_time2", 16, false}, {"it_time3", 16, false},
+                                       {"it_time4", 16, false}, {"it_time5", 16, false}, {"zone_turn", 16, true}}};
     s.types.push_back(world); // kEntityWorld
     net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false},
                                          {"age", 6, false}}};
@@ -366,6 +376,11 @@ void net::engine::Capture(Snapshot& out)
     w.f[kWorldCycle] = gpRng_67AB34->get_cur_rng_41CFE0();
     w.f[kWorldZoneTurn] = gPortZoneRoundRobin;
     w.f[kWorldRand] = (int32_t)PortRandState();
+    w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_idx + 1 : 0;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        w.f[kWorldItTime + i] = gTagGame_6F8450.field_4_it_time_secs[i];
+    }
     out.entities.push_back(w);
     for (int i = 0; i < PlayerCount(); i++)
     {
@@ -407,6 +422,10 @@ void net::engine::Capture(Snapshot& out)
         for (int k = 0; k < 16; k++) // 4 characters a field
         {
             e.f[kPlayerName + k / 4] |= (int32_t)((uint32_t)(p->field_83C_player_name[k] & 0xFF) << (8 * (k % 4)));
+        }
+        for (int k = 0; k < kPlayerPowerUpEnd - kPlayerPowerUp; k++)
+        {
+            e.f[kPlayerPowerUp + k] = p->field_6F4_power_up_timers[k];
         }
         out.entities.push_back(e);
     }
@@ -508,6 +527,16 @@ void net::engine::Apply(const Snapshot& snap)
         {
             gpRng_67AB34->field_0_rng = snap.entities[k].f[kWorldCycle];
             gPortZoneRoundRobin = (short)snap.entities[k].f[kWorldZoneTurn];
+            // The tag game's "it" is the server's, made the game's way (its weapons off, the arrow, "you're it")
+            Player* it = GetPlayer(snap.entities[k].f[kWorldIt] - 1);
+            if (it && it != gTagGame_6F8450.field_0_fugitive && gTagGame_6F8450.IsTagGame_434B20())
+            {
+                gTagGame_6F8450.SetNewFugitive_516590(it);
+            }
+            for (int i = 0; i < MAX_PLAYERS; i++)
+            {
+                gTagGame_6F8450.field_4_it_time_secs[i] = snap.entities[k].f[kWorldItTime + i];
+            }
             if (!getenv("GTA2_NET_NORANDSYNC"))
             {
                 PortRandSetState((unsigned int)snap.entities[k].f[kWorldRand]);
@@ -570,6 +599,24 @@ void net::engine::Apply(const Snapshot& snap)
             {
                 p->field_718_weapons[w]->field_0_ammo = (u16)e.f[kPlayerAmmo0 + w];
             }
+        }
+        // Power-ups too (one collected here in a prediction the server didn't have ends here), with what they switch on
+        // the ped (Player::CollectPowerUp_564D60, tick_down_powerups_565070); invulnerability is the client's anyway
+        for (int k = 0; k < kPlayerPowerUpEnd - kPlayerPowerUp; k++)
+        {
+            const u16 now = (u16)e.f[kPlayerPowerUp + k];
+            if (!p->field_6F4_power_up_timers[k] != !now)
+            {
+                if (k == power_up_indices::Electrofingers_9)
+                {
+                    now ? ped->SetElectrofingers_4A5060() : ped->ClearElectrofingers_482080();
+                }
+                else if (k == power_up_indices::Invisibility_11)
+                {
+                    now ? ped->SetInvisible() : ped->SetVisible();
+                }
+            }
+            p->field_6F4_power_up_timers[k] = now;
         }
         // A death the server had and this game hasn't carried out: the game's own death, credited to the killer, where
         // this game has the ped (the server has already respawned it: the next snapshot brings it there)
