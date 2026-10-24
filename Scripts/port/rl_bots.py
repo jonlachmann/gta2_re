@@ -4,7 +4,7 @@
 Headless arena servers (--arena remote:<port>,...) connect to this script; every 3 ticks each sends what its remote
 bots see and the reward since (Port/net/session/arena.cpp) and gets their buttons back. One policy plays all
 learner slots; some matches put earlier versions of it (the pool) in two of them, and the scripted "simple" bot
-always plays the sixth slot as a yardstick. No pistols: weapons come from the map's pickups.
+always plays the sixth slot as a yardstick. Weapons come from the map's pickups (--armed: pistols for all, a start).
 
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py [--updates N] [--envs N] [--spectate K]
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py --watch [file.nn]   a match in a window
@@ -39,8 +39,9 @@ RESULT = re.compile(r"net: arena (\d+) (\S+) frags (-?\d+) deaths (\d+) near ([\
 HIDDEN = 128
 
 
-def buttons(choice):
-    return TURN[choice[0]] | MOVE[choice[1]] | sum(PRESS[g - 2] for g in range(2, 6) if choice[g])
+def buttons(a):
+    """Per row of choices (n x 6), its buttons"""
+    return np.array(TURN)[a[:, 0]] | np.array(MOVE)[a[:, 1]] | (a[:, 2:] * np.array(PRESS)).sum(axis=1)
 
 
 class Policy(nn.Module):
@@ -86,6 +87,8 @@ class Match:
         self.pool = random.random() < args.pool_share and bool(glob.glob(os.path.join(OUT, "pool", "*.pt")))
         brains = ",".join(["remote:%d" % port] * args.remote + ["simple"])
         env = dict(os.environ, GTA2_HEADLESS="1", GTA2_SPEED="1000")
+        if args.armed:
+            env["GTA2_NET_TESTARM"] = "0:99"  # a pistol each, kept loaded
         cmd = [BIN, "--server", "--port", str(7000 + idx % 500), "--map", MAP, "--players", str(args.remote + 1), "--arena", brains, "--ticks",
                str(args.ticks), "--seed", str(random.randrange(1, 1 << 31))]
         self.proc = subprocess.Popen(cmd, cwd=GAME, env=env, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
@@ -242,12 +245,13 @@ def train(args):
         for who in {id(b[3]): b[3] for b in batch}.values():
             rows = [b for b in batch if b[3] is who]
             net = who or policy
-            obs = torch.from_numpy(np.stack([b[2] for b in rows]))
-            a, logp, v = net.act(obs)
+            obs = np.stack([b[2] for b in rows])
+            a, logp, v = (t.numpy() for t in net.act(torch.from_numpy(obs)))
+            btn = buttons(a)
             for i, (key, slot, o, opp, alive) in enumerate(rows):
-                replies.setdefault(key, {})[slot] = buttons(a[i].tolist()) if alive else 0
+                replies.setdefault(key, {})[slot] = int(btn[i]) if alive else 0
                 if opp is None and alive:
-                    pending[(key, slot)] = [obs[i], a[i], logp[i].item(), v[i].item(), 0.0]
+                    pending[(key, slot)] = [obs[i], a[i], float(logp[i]), float(v[i]), 0.0]
         for key, by_slot in replies.items():
             order = [b[1] for b in batch if b[0] == key]
             try:
@@ -260,14 +264,15 @@ def train(args):
             with torch.no_grad():
                 for k, traj in trajs.items():
                     p = pending.get(k)
-                    boot = policy.critic(p[0][None]).item() if p is not None else 0.0
+                    boot = policy.critic(torch.from_numpy(p[0][None])).item() if p is not None else 0.0
                     a_, r_ = gae(traj, boot, args.gamma, args.lam)
                     obs += [t[0] for t in traj]
                     act += [t[1] for t in traj]
                     logp += [t[2] for t in traj]
                     adv += a_
                     ret += r_
-            batch_t = (torch.stack(obs), torch.stack(act), torch.tensor(logp), torch.tensor(adv), torch.tensor(ret))
+            batch_t = (torch.from_numpy(np.stack(obs)), torch.from_numpy(np.stack(act)).long(), torch.tensor(logp), torch.tensor(adv, dtype=torch.float32),
+                       torch.tensor(ret, dtype=torch.float32))
             pg, ent = ppo_update(policy, opt, batch_t, args)
             mean_r = sum(t[4] for tr in trajs.values() for t in tr) / max(1, stored)
             trajs.clear()
@@ -315,7 +320,7 @@ def watch_match(nn_path, wait=True, ticks=0):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--updates", type=int, default=500)
-    ap.add_argument("--envs", type=int, default=max(1, (os.cpu_count() or 2) - 4), help="games at once")
+    ap.add_argument("--envs", type=int, default=32, help="games at once (the trainer, not the games, is the limit: more fill its batches)")
     ap.add_argument("--remote", type=int, default=5, help="slots the trainer plays per game (the last is the scripted bot)")
     ap.add_argument("--ticks", type=int, default=4500, help="per match (30 per second of game time)")
     ap.add_argument("--port", type=int, default=7700)
@@ -329,6 +334,7 @@ def main():
     ap.add_argument("--entropy", type=float, default=0.01)
     ap.add_argument("--pool-every", type=int, default=10, help="updates between copies of the policy kept as opponents")
     ap.add_argument("--pool-share", type=float, default=0.5, help="the matches with two pool opponents")
+    ap.add_argument("--armed", action="store_true", help="pistols kept loaded (a start: fights happen sooner), not only the pickups")
     ap.add_argument("--spectate", type=int, default=0, metavar="K", help="a windowed match of the policy every K updates")
     ap.add_argument("--watch", nargs="?", const=os.path.join(OUT, "latest.nn"), metavar="NN", help="watch a match in a window instead")
     args = ap.parse_args()
