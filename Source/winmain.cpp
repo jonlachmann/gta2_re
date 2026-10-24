@@ -64,8 +64,6 @@
 #include "TextTable.hpp"
 #if defined(GTA2_PORT)
 #include "Port/sdl_win32.hpp" // the window and its messages on SDL3 (docs/port.md)
-#endif
-#if defined(GTA2_PORT)
 #include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
 #endif
 
