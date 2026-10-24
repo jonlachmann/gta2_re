@@ -24,14 +24,18 @@ mingw_includes() {
     grep -Ev '/lib/gcc/[^/]+/[^/]+/include(-fixed)?$' | sed 's/^ */-isystem /'
 }
 
-# compile <object dir> <sources...>: the objects into OBJS, each compiled when it is missing or older than its source
-# (FORCE=1: all; JOBS, default 8, at a time). Port/net's sources also depend on its headers: they are rebuilt when the
-# newest one is newer (anything else needs FORCE=1 after a header change). Flags: RENFLAGS for Renderers/, ENETCC (the
-# whole command) for *.c, CXXFLAGS for the rest (bink.cpp with -DBUILD_BINK). Exits when an object is missing.
+# compile <object dir> <sources...>: the objects into OBJS, each compiled when it is missing, or older than its source
+# or any header it includes (the compiler's dependency file, <object>.d), or has no dependency file yet (FORCE=1: all;
+# JOBS, default 8, at a time). Flags: RENFLAGS for Renderers/, ENETCC (the whole command) for *.c, CXXFLAGS for the
+# rest (bink.cpp with -DBUILD_BINK). Exits when an object is missing.
+# stale <object>: a header in its dependency file is newer than it
+stale() {
+  [ -n "$(find $(sed -e 's/^[^:]*://' -e 's/\\$//' "$1.d") -newer "$1" 2>/dev/null | head -1)" ]
+}
+
 compile() {
-  local dir=$1 f o cc fl nethdr
+  local dir=$1 f o cc fl
   shift
-  nethdr=$(ls -t $(find Port/net -name "*.hpp" -not -path "*/enet/*") | head -1)
   OBJS=()
   for f in "$@"; do
     cc=clang++
@@ -43,8 +47,8 @@ compile() {
     esac
     o=$dir/$(echo "$f" | tr '/' '_').o
     OBJS+=("$o")
-    if [ ! -f "$o" ] || [ "$f" -nt "$o" ] || [ -n "$FORCE" ] || { [[ $f == Port/net/* ]] && [ "$nethdr" -nt "$o" ]; }; then
-      ( $cc $fl -c "$f" -o "$o" 2> "$o.log" || { echo "FAILED: $f"; grep error "$o.log" | head -5; } ) &
+    if [ ! -f "$o" ] || [ ! -f "$o.d" ] || [ "$f" -nt "$o" ] || [ -n "$FORCE" ] || stale "$o"; then
+      ( $cc $fl -MMD -MF "$o.d" -c "$f" -o "$o" 2> "$o.log" || { echo "FAILED: $f"; grep error "$o.log" | head -5; } ) &
     fi
     while [ "$(jobs -r | wc -l)" -ge "${JOBS:-8}" ]; do sleep 0.1; done
   done
