@@ -53,16 +53,7 @@ if [ -n "$GTA2_LOCKSTEP" ]; then
 fi
 # GTA2_DEBUG="log_random do_show_ids ...": debug settings for this run, for both kinds of exe
 for flag in $GTA2_DEBUG; do wine reg add "$D" /reg:32 /f /v $flag /t REG_DWORD /d 1 > /dev/null; done
-# gta2_port.exe keeps its settings in gta2.ini (Port/registry_ini.cpp): the install's (gta2_install.reg, as
-# 10.5.exe gets them in the registry) and then the same few overrides as below, rewritten every run
-{ [ -f "$GAME/gta2_install.reg" ] && python3 "$(dirname "$0")/reg2ini.py" "$GAME/gta2_install.reg"
-  printf '[screen]\nstart_mode=dword:0\nwindow_width=dword:640\nwindow_height=dword:480\nfull_width=dword:640\nfull_height=dword:480\ndo_play_movie=dword:0\n'
-  [ -n "$GTA2_LOCKSTEP" ] && printf 'max_frame_rate=dword:0\nmin_frame_rate=dword:0\n'
-  printf '\n[software\\freeloader.com\\gta2]\ncityinstalled=dword:3\n' # the installer's: every area playable, no CD check (FreeLoader::CheckCityInstalled_4AE1F0)
-  printf '\n[debug]\n'
-  [ -n "$MAP" ] && printf 'skip_frontend=dword:1\nmapname=str:%s.gmp\nstylename=str:%s.sty\nscriptname=str:%s.scr\n' "$MAP" "$MAP" "$MAP"
-  for flag in $GTA2_DEBUG; do printf '%s=dword:1\n' $flag; done
-  [ -n "$GTA2_INI_EXTRA" ] && printf '%b\n' "$GTA2_INI_EXTRA" # more sections, e.g. '[control]\n0=dword:32994'
-} > "$GAME/gta2.ini"
+# gta2_port.exe keeps its settings in gta2.ini (Port/registry_ini.cpp): the same, rewritten every run
+"$(dirname "$0")/make_ini.sh" "$GAME" "$MAP"
 [ -n "$GTA2GL_CAPTURE" ] && mkdir -p "$GAME/${GTA2GL_CAPTURE%%,*}"
 cd "$GAME" && exec wine $WINE_LAUNCHER "${WINE_LAUNCHER:+./}$(basename "$EXE")" # WINE_LAUNCHER=winedbg: under the debugger
