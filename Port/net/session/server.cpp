@@ -528,6 +528,23 @@ void net::Server::Frame()
     Snapshot world;
     engine::Capture(world);
     world.tick = mTick;
+    static const bool sJerkLog = getenv("GTA2_NET_JERKLOG") != NULL;
+    if (sJerkLog) // the same measure as the clients', on the server's own state (players in cars aren't counted there)
+    {
+        std::vector<engine::Pose> poses;
+        for (const EntityState& e : world.entities)
+        {
+            if ((e.type == engine::kEntityPlayer && !e.f[4]) || e.type == engine::kEntityCar || e.type == engine::kEntityPed)
+            {
+                poses.push_back(engine::Pose{e.id, e.f[0], e.f[1], e.f[2], e.f[3]});
+            }
+        }
+        mJerk.Feed(mTick, poses);
+        if (mTick % 900 == 0)
+        {
+            mJerk.Report("server", mTick);
+        }
+    }
     for (size_t i = 0; i < mSlots.size(); i++)
     {
         if (mSlots[i].used)

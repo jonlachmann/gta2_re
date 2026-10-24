@@ -573,6 +573,17 @@ void net::Client::Frame()
             mShownErrorMax = 0;
         }
     }
+    static const bool sJerkLog = getenv("GTA2_NET_JERKLOG") != NULL;
+    if (sJerkLog && mSynced)
+    {
+        std::vector<engine::Pose> shown;
+        engine::Poses(shown);
+        mJerk.Feed(mFrame, shown, (uint32_t)mSlot + 1);
+        if (mFrame % 900 == 0)
+        {
+            mJerk.Report("client", mFrame);
+        }
+    }
     // Keep our commands about two ticks early: a little faster when they are late, slower when far ahead
     if (mSynced)
     {

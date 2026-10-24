@@ -6,6 +6,7 @@
 #include "../engine/engine.hpp"
 #include "../transport/transport.hpp"
 #include "bot.hpp"
+#include "jerk.hpp"
 #include "replay.hpp"
 #include <memory>
 #include <string>
@@ -55,6 +56,7 @@ class Server
     std::vector<Slot> mSlots;
     uint32_t mTick = 0;
     uint32_t mBytesSent = 0;
+    JerkMeter mJerk;
     uint32_t mNearSum = 0, mKeptSum = 0, mCut = 0; // the size cut, for the log
     uint32_t mPartsSent = 0;
     bool mStarted = false;
@@ -98,6 +100,7 @@ class Client
     uint32_t mPlayerCorrections = 0, mPlayerSnaps = 0;
     float mPlayerCorrectionSum = 0, mPlayerCorrectionMax = 0;
     uint32_t mCarCorrections = 0, mCarSnaps = 0;
+    JerkMeter mJerk;
     float mCarCorrectionSum = 0, mCarCorrectionMax = 0;
 
     ClientConfig mConfig;
