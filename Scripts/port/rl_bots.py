@@ -9,7 +9,8 @@ learner slots; some matches put earlier versions of it (the pool) in two of them
 close and drives at people, and fights on foot otherwise. Weapons come from the map's pickups (--armed: pistols for all, a start).
 
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py [--updates N] [--envs N] [--spectate K]
-  build_port/rlvenv/bin/python Scripts/port/rl_bots.py --watch [file.nn]   a match in a window
+  build_port/rlvenv/bin/python Scripts/port/rl_bots.py --watch [file.nn] [--scripted hunter,hunter,hunter]
+                                                       a match in a window, against those scripted bots
 
 Out: build_port/rl/ (latest.nn for the game's nn: brain, policy.pt to continue, pool/, log.csv).
 Setup: python3.12 -m venv build_port/rlvenv && build_port/rlvenv/bin/pip install torch numpy
@@ -319,9 +320,10 @@ def log_update(update, finished, mean_r, ent, args):
                                                            mean(learner, "pickups"), mean(simple, "frags")))
 
 
-def watch_match(nn_path, wait=True, ticks=0):
-    """Five copies of the policy and the scripted bot, in a window at normal speed, following player 0"""
-    brains = ",".join(["nn:" + os.path.abspath(nn_path)] * 5 + ["simple"])
+def watch_match(nn_path, wait=True, ticks=0, scripted="simple"):
+    """The policy against scripted bots (six in all), in a window at normal speed, following player 0 (the policy)"""
+    others = scripted.split(",") if scripted else []
+    brains = ",".join(["nn:" + os.path.abspath(nn_path)] * (6 - len(others)) + others)
     cmd = [BIN, "--server", "--port", "7699", "--map", MAP, "--players", "6", "--arena", brains, "--seed", str(random.randrange(1, 1 << 31))]
     if ticks:
         cmd += ["--ticks", str(ticks)]
@@ -359,7 +361,7 @@ def main():
     if not os.path.exists(os.path.join(GAME, "data")):
         sys.exit("no game in %s: run Scripts/port/run_mac.sh once" % GAME)
     if args.watch:
-        watch_match(args.watch)
+        watch_match(args.watch, scripted=args.scripted)
         return
     train(args)
 
