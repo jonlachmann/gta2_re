@@ -281,6 +281,10 @@ void net::Client::Reconcile(const Snapshot& snap)
     engine::RestoreGame(*saved);
     engine::DebugCheckPlayerCars("after the restore");
     engine::DebugOwnCarDiff(snap);
+    if (Env().compare)
+    {
+        engine::ComparePrediction(snap);
+    }
     engine::Apply(snap);
     engine::DebugCheckPlayerCars("after the apply");
     std::vector<uint32_t> buttons(mRemote);
@@ -519,6 +523,10 @@ void net::Client::TakeSnapshot()
 
 void net::Client::PrintStats(const Snapshot& snap)
 {
+    if (Env().compare)
+    {
+        engine::PrintPredictionStats(mFrame);
+    }
     int cars = 0, peds = 0;
     float drift = 0;
     engine::ReplicaStats(snap, &cars, &peds, &drift);

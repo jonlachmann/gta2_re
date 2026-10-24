@@ -195,6 +195,10 @@ void TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSame);
 // GTA2_NET_CARDIFF: where this game's prediction of the local player's car differs from the snapshot's (call after
 // restoring the snapshot's tick, before applying it)
 void DebugOwnCarDiff(const Snapshot& snap);
+// GTA2_NET_COMPARE (the comparison check): the game restored to the snapshot's tick, its fields against the snapshot's,
+// tallied; printed (the fields that differ most) and cleared by PrintPredictionStats
+void ComparePrediction(const Snapshot& snap);
+void PrintPredictionStats(uint32_t frame);
 void DebugSoundChannels(uint32_t frame); // GTA2_NET_SOUNDLOG: the sound's playing channels, printed when they change
 void DebugAnimLog(uint32_t frame); // GTA2_NET_ANIMLOG: the other players' inputs, states and walking animation, every third frame
 void DebugSelfLog(uint32_t frame); // GTA2_NET_SELFLOG: the local player around a death (position, states, the death fields)

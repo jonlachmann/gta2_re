@@ -21,7 +21,9 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
 #include <set>
+#include <string.h>
 #include <string>
 #include <unordered_map>
 
@@ -561,4 +563,133 @@ void net::engine::TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSam
             *pSame += car && IsSpareDriver(car->field_54_driver);
         }
     }
+}
+
+// --- The comparison check (docs/netcode.md, "Checks"): the client's prediction for a tick against the server's state
+// at it, field by field. Called with the game restored to the snapshot's tick, before the snapshot is applied ---
+
+namespace
+{
+struct FieldTally
+{
+    uint64_t compared = 0, differ = 0;
+    double absSum = 0;
+};
+std::vector<std::vector<FieldTally>> gTally; // [type][field]
+uint64_t gMissing[8]; // per type: in the snapshot, mapped, but not captured here
+
+// A car reference of this game's (CarRef) as the server's
+int32_t ServerCarRef(int32_t ref, const std::unordered_map<int32_t, int32_t>& toServer)
+{
+    auto it = toServer.find(ref);
+    return it != toServer.end() ? it->second : ref ? -1 : 0;
+}
+} // namespace
+
+void net::engine::ComparePrediction(const Snapshot& snap)
+{
+    const Schema& schema = NetSchema();
+    if (gTally.empty())
+    {
+        gTally.resize(schema.types.size());
+        for (size_t t = 0; t < schema.types.size(); t++)
+        {
+            gTally[t].resize(schema.types[t].fields.size());
+        }
+    }
+    Snapshot here;
+    Capture(here);
+    std::unordered_map<uint32_t, const EntityState*> byId;
+    for (const EntityState& e : here.entities)
+    {
+        byId[e.id] = &e;
+    }
+    std::unordered_map<int32_t, int32_t> carToServer; // this game's CarRef -> the server's
+    for (const auto& kv : ReplicaCars())
+    {
+        carToServer[CarRef(kv.second)] = (int32_t)(kv.first - kCarIdBase) + 1;
+    }
+    for (const EntityState& s : snap.entities)
+    {
+        uint32_t local = s.id; // the world and players: the same ids
+        if (s.type == kEntityCar)
+        {
+            Car* c = ReplicaCar(s.id);
+            local = c ? kCarIdBase + (uint32_t)c->field_6C_car_id : 0;
+        }
+        else if (s.type == kEntityPed)
+        {
+            Ped* p = ReplicaPed(s.id);
+            local = p ? kPedIdBase + p->field_200_id : 0;
+        }
+        else if (s.type == kEntityObject)
+        {
+            continue; // ponytail: pickups are matched by place (pickups.cpp), not compared here
+        }
+        if (!local)
+        {
+            continue; // not mapped (yet): nothing to compare
+        }
+        auto it = byId.find(local);
+        if (it == byId.end())
+        {
+            gMissing[s.type]++;
+            continue;
+        }
+        EntityState h = *it->second;
+        // References to cars: this game's ids into the server's
+        if (s.type == kEntityPlayer)
+        {
+            h.f[kPlayerCar] = ServerCarRef(h.f[kPlayerCar], carToServer);
+            h.f[kPlayerTarget] = ServerCarRef(h.f[kPlayerTarget], carToServer);
+        }
+        else if (s.type == kEntityPed)
+        {
+            h.f[kPedCar] = ServerCarRef(h.f[kPedCar], carToServer);
+        }
+        std::vector<FieldTally>& tally = gTally[s.type];
+        for (size_t f = 0; f < tally.size(); f++)
+        {
+            tally[f].compared++;
+            if (h.f[f] != s.f[f])
+            {
+                tally[f].differ++;
+                tally[f].absSum += fabs((double)h.f[f] - (double)s.f[f]);
+            }
+        }
+    }
+}
+
+void net::engine::PrintPredictionStats(uint32_t frame)
+{
+    const Schema& schema = NetSchema();
+    struct Row
+    {
+        double share;
+        std::string line;
+    };
+    std::vector<Row> rows;
+    for (size_t t = 0; t < gTally.size(); t++)
+    {
+        for (size_t f = 0; f < gTally[t].size(); f++)
+        {
+            const FieldTally& x = gTally[t][f];
+            if (x.differ)
+            {
+                char line[160];
+                snprintf(line, sizeof(line), "%s.%s %.1f%% (%llu of %llu, %.1f off on average)", schema.types[t].name, schema.types[t].fields[f].name,
+                         100.0 * x.differ / x.compared, (unsigned long long)x.differ, (unsigned long long)x.compared, x.absSum / x.differ);
+                rows.push_back(Row{(double)x.differ / x.compared, line});
+            }
+        }
+    }
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.share > b.share; });
+    printf("net: frame %u, prediction against the server, the fields that differ most:", frame);
+    for (size_t i = 0; i < rows.size() && i < 12; i++)
+    {
+        printf("%s %s", i ? ";" : "", rows[i].line.c_str());
+    }
+    printf("%s; not captured here: %llu cars, %llu peds\n", rows.empty() ? " none" : "", (unsigned long long)gMissing[kEntityCar], (unsigned long long)gMissing[kEntityPed]);
+    gTally.clear();
+    memset(gMissing, 0, sizeof(gMissing));
 }

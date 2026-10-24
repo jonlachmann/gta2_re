@@ -22,6 +22,7 @@ struct SessionEnv
     const char* record; // a file to record the client's session to
     bool marker; // the server's position of the local player drawn
     bool corrLog, animLog, inputLog;
+    bool compare; // the comparison check: the prediction against each snapshot, field by field
     int jerkLog; // 1: the jerk statistics, 2: and each jump
     float blend; // how far a correction is blended in each frame (0.2; 1: at once)
     const char* navDump; // the bots' map as a picture
