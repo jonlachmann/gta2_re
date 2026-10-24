@@ -37,7 +37,7 @@ arena() {
   for m in "${maps[@]}"; do
     for s in $(seq 1 $seeds); do
       n=$((n + 1))
-      (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=1000  exec "$BIN" --server --port $((BASE + n)) --map $m --players 6 --seed $s \
+      (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=1000 exec "$BIN" --server --port $((BASE + n)) --map $m --players 6 --seed $s \
         --arena rammer,hunter,soldier,simple,carhop,rammer --ticks 9000 > "$OUT/arena_${m}_$s.log" 2>&1
        echo $? > "$OUT/arena_${m}_$s.exit") &
     done
@@ -56,11 +56,11 @@ live() {
   local secs=45 p=$((BASE + 200))
   [ -n "$QUICK" ] && secs=20
   rm -f "$OUT"/live_*.log
-  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1  exec "$BIN" --server --port $p --map mp1-6p --players 6 --police \
+  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 exec "$BIN" --server --port $p --map mp1-6p --players 6 --police \
     --arena hunter,soldier,rammer,simple > "$OUT/live_server.log" 2>&1) &
   sleep 3
   for b in rammer soldier; do
-    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 GTA2_NET_JERKLOG=1  exec "$BIN" --connect 127.0.0.1:$p --name c_$b --bot $b \
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 GTA2_NET_JERKLOG=1 GTA2_NET_COMPARE=1 exec "$BIN" --connect 127.0.0.1:$p --name c_$b --bot $b \
       --lag 100 --jitter 10 --loss 2 > "$OUT/live_$b.log" 2>&1) &
   done
   sleep $secs
@@ -71,6 +71,7 @@ live() {
   checks=$(cat "$OUT"/live_*.log | grep -c "net: CHECK")
   joined=$(grep -c "joined as player" "$OUT/live_server.log")
   echo "  $(grep "players' corrections" "$OUT/live_rammer.log" | tail -1 | sed 's/^net: //')"
+  echo "  $(grep "prediction against the server" "$OUT/live_rammer.log" | tail -1 | sed 's/^net: //' | cut -d';' -f1-4)"
   if [ "$crashes" != 0 ] || [ "$checks" != 0 ] || [ "$joined" != 2 ]; then
     fail "live: $joined of 2 clients joined, $crashes crashed, $checks CHECK lines (build_port/net_check/live_*.log)"
   else
@@ -81,11 +82,11 @@ live() {
 record() {
   local p=$((BASE + 201))
   rm -f "$OUT"/fixture_*.rec
-  (cd "$GAME" && GTA2_HEADLESS=1  exec "$BIN" --server --port $p --map mp1-6p --players 6 --police --arena hunter,soldier,rammer \
+  (cd "$GAME" && GTA2_HEADLESS=1 exec "$BIN" --server --port $p --map mp1-6p --players 6 --police --arena hunter,soldier,rammer \
     > "$OUT/record_server.log" 2>&1) &
   sleep 3
   for b in rammer soldier carhop; do
-    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_RECORD="$OUT/fixture_$b.rec"  exec "$BIN" --connect 127.0.0.1:$p --name f_$b --bot $b \
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_RECORD="$OUT/fixture_$b.rec" exec "$BIN" --connect 127.0.0.1:$p --name f_$b --bot $b \
       --lag 100 --jitter 10 > /dev/null 2>&1) &
   done
   sleep 60
@@ -97,7 +98,7 @@ record() {
 
 # A replay's log without what changes from run to run by itself (pointers)
 replay_log() {
-  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 GTA2_NET_CORRLOG=1  exec "$BIN" --replay "$1" 2>&1) | grep "^net:" | sed -E 's/0x[0-9a-f]+/PTR/g'
+  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 GTA2_NET_CORRLOG=1 exec "$BIN" --replay "$1" 2>&1) | grep "^net:" | sed -E 's/0x[0-9a-f]+/PTR/g'
 }
 
 replay() {

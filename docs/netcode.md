@@ -127,6 +127,8 @@ Either end: `--lag`, `--jitter`, `--loss` (the link conditioner).
 - **live:** a server and two bot clients at 100 ms, jitter and 2% loss, police on, with `GTA2_NET_CHECKGRID`: no crash and no `net: CHECK` line.
 - **replay:** recorded sessions (`--record` makes three, 60 s each) replayed with every correction logged, against their saved logs. A replay that differs from itself on a second run is reported as nondeterministic, not as a regression. `--save` takes the current build's logs as the baseline, after an intended change.
 
+**The comparison check** (N2, `GTA2_NET_COMPARE=1` on a client): on each snapshot, with the game restored to the snapshot's tick and before the snapshot is applied, every mapped entity is captured here and compared with the server's, field by field (car references translated to the server's ids). Every 300 frames the client prints the fields that differ most and how often. It is a measure, not a pass/fail: remote players and AI peds are predicted, so they differ. First run (a rammer client, 100 ms): the players' points half the time (predicted, then set from the server), the physics of about a third of the cars all at once (asleep on one side, awake on the other), and the peds' animation, char state and velocity a third to a half of the time. Nothing mapped was missing.
+
 Fixtures and logs are in `build_port/net_check/`. Each test game is the shell job itself (`exec`), so the script's exit ends them all.
 
 ## Decisions
