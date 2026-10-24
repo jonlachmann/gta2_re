@@ -75,7 +75,8 @@ With the fixture, a client crash after 1-4 minutes of car hopping turned out to 
 Usage and test switches:
 - `--bot [brain]` (`simple`, the default; `carhop`, which gets into the nearest car, drives, gets out, again);
 - `GTA2_NET_NAVDUMP=<file.pgm>` writes the map as a picture;
-- `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server.
+- `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server;
+- `GTA2_NET_TESTPOWERUP=<tick>:<player>:<power-up>[,...]` gives players power-ups there (12: an instant gang).
 
 **Trained bots.** `--bot nn:<file>` is a multilayer perceptron (`session/bot_nn.cpp`). Its 62 inputs (`BotFeatures`) are its health, car, speed, weapon and ammo; the nearest 3 players, 2 cars, a ped, 2 weapon pickups and a power-up relative to where it faces; how far it can walk in 8 directions; a compass, the way along its own route (`BotRoute`) to the nearest player and to the nearest weapon; its last buttons; and whether the nearest players drive. New inputs go at the end: `rl_bots.py` gives a trained policy zero weights for them, so it plays on as before. Its 14 outputs are a choice in each of six groups (turn, move, attack, enter/exit, jump, next weapon), the best one or a sample. Two trainers make the files:
 - **The arena:** `--server --arena <brain>,<brain>,... --ticks N [--seed S]` plays bots on the server itself, in the first slots, with no clients (`session/arena.cpp`). At tick N it prints a result line per bot (frags, deaths, damage dealt, cars entered, pickups taken) and ends. The other slots stay open, so people can join and play against the bots. The game is deterministic: without another seed every match from the same start is the same.
