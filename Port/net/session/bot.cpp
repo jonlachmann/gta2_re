@@ -309,6 +309,10 @@ std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
     {
         return std::unique_ptr<BotBrain>(new RamBot());
     }
+    if (kind.compare(0, 3, "nn:") == 0)
+    {
+        return CreateNeuralBrain(kind.substr(3));
+    }
     if (kind.empty() || kind == "simple")
     {
         return std::unique_ptr<BotBrain>(new SimpleBot());
@@ -326,9 +330,9 @@ void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t fr
     for (size_t i = 0; i < snap.entities.size(); i++)
     {
         const EntityState& e = snap.entities[i];
-        if (e.type == engine::kEntityWorld || e.type == engine::kEntityObject)
+        if (e.type == engine::kEntityWorld)
         {
-            continue; // no position, or a pickup (bots don't go for them yet)
+            continue; // no position
         }
         BotView::Seen s;
         s.id = e.id;
@@ -352,7 +356,7 @@ void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t fr
         }
         else
         {
-            s.kind = e.type == engine::kEntityCar ? BotView::Seen::kCar : BotView::Seen::kPed;
+            s.kind = e.type == engine::kEntityCar ? BotView::Seen::kCar : e.type == engine::kEntityObject ? BotView::Seen::kPickup : BotView::Seen::kPed;
         }
         view.seen.push_back(s);
     }

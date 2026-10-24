@@ -41,6 +41,7 @@ struct BotView
             kPlayer,
             kCar,
             kPed,
+            kPickup, // a weapon, power-up or token
         } kind;
         uint32_t id;
         int player; // for kPlayer
@@ -68,7 +69,9 @@ class BotBrain
 // "simple": walks to the nearest player along its own route and shoots when close and facing it
 // "carhop": walks to the nearest car, gets in, drives a while, gets out, again (tests players in cars)
 // "rammer": gets into the nearest car and drives at the nearest player to hit it
+// "nn:<file>": a neural network's (bot_nn.cpp), its weights from the file (Scripts/port/train_bots.py)
 std::unique_ptr<BotBrain> CreateBotBrain(const std::string& kind);
+std::unique_ptr<BotBrain> CreateNeuralBrain(const std::string& path); // NULL if the file is no network of this shape
 
 // The view a client gives its bot (bot.cpp)
 void FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t frame, const engine::NavMap* map);
