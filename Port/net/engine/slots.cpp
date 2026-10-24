@@ -67,6 +67,10 @@ void net::engine::PutInGame(int slot, bool freshScore)
     if (p->field_8E_in_use && p->field_2C4_player_ped)
     {
         p->field_2C4_player_ped->RespawnPed_45C350(zone); // still in: a fresh start where the others respawn
+        // Its camera there too, not panning over for seconds: until it sees the ped, the ped counts as off screen, and
+        // a dead player ped off screen for 200 ticks is freed as a corpse (Ped::PoolUpdate), with the player still
+        // pointing at it (a crash at its respawn, or once the memory is another ped)
+        SnapCamera(p);
         return;
     }
     const Fix16 x = Fix16(zone->field_1_x + zone->field_3_w / 2), y = Fix16(zone->field_2_y + zone->field_4_h / 2);
