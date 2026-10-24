@@ -60,7 +60,7 @@ live() {
     --arena hunter,soldier,rammer,simple > "$OUT/live_server.log" 2>&1) &
   sleep 3
   for b in rammer soldier; do
-    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 GTA2_NET_JERKLOG=1 GTA2_NET_COMPARE=1 exec "$BIN" --connect 127.0.0.1:$p --name c_$b --bot $b \
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 GTA2_NET_JERKLOG=1 GTA2_NET_COMPARE=1 GTA2_NET_CORRLOG=1 exec "$BIN" --connect 127.0.0.1:$p --name c_$b --bot $b \
       --lag 100 --jitter 10 --loss 2 > "$OUT/live_$b.log" 2>&1) &
   done
   sleep $secs
