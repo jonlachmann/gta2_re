@@ -85,8 +85,15 @@ void net::engine::ClientModeFrame()
     bSkip_mission_67D4E5 = true; // scripts run on the server only (they set up the level before the first frame)
     bSkip_police_67D4F9 = true;
     bSkip_ambulance_67D6C9 = true;
-    // Everything counts as seen: a client never removes peds or corpses off its screen (Ped::StateMachineTick_4626B0,
-    // Ped::PoolUpdate) or cars (Car::ManageDespawning_442310); the server does
+    SeenByAll();
+}
+
+// Everything counts as seen: a client never removes peds or corpses off its screen (Ped::StateMachineTick_4626B0,
+// Ped::PoolUpdate) or cars (Car::ManageDespawning_442310); the server does. Before each resimulated tick too: the
+// saves keep the counters, so once a frame wasn't enough (they went on counting along the saves, and a dead player's
+// ped off screen 200 ticks was freed as a corpse: a crash at its respawn)
+void net::engine::SeenByAll()
+{
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         p->field_20E_offscreen_counter = 0;

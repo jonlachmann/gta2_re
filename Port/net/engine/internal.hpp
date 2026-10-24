@@ -165,6 +165,7 @@ void KillCredited(Ped* ped, int killerSlot); // the game's own death, credited t
 void SnapCamera(Player* p); // the camera at its ped at once, not panning there
 // Player peds take no damage on a client: their health and deaths are the server's (client_mode.cpp)
 void ProtectPlayers();
+void SeenByAll(); // every ped and car counts as seen (client_mode.cpp): no removal off screen on a client
 // Before and after every tick (client_mode.cpp): what the server's game never has, this one can't run (a ped's on-foot
 // order in a car)
 
