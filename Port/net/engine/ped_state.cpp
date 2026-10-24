@@ -468,7 +468,8 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     // replica.cpp's): a chasing driver followed its own objectives here
     const bool driving = p->field_16C_car && e.f[kPedCar] && !e.f[kPedState] && !InCarTransition(p) &&
                          ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPedCar] - 1)) == p->field_16C_car &&
-                         p->field_278_ped_state_1 == ped_state_1::in_car_10;
+                         p->field_278_ped_state_1 == ped_state_1::in_car_10 &&
+                         p->field_16C_car->field_5C_AI; // its objectives drive through the car's AI (ApplyCarAi gives it one)
     if (!driving && (p->field_16C_car || InCarTransition(p) || e.f[kPedCar] || e.f[kPedState]))
     {
         // In a car, or on its way into or out of one, on either side: that is replica.cpp's (ForceIntoCar, ForceOutOfCar

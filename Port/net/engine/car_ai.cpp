@@ -100,11 +100,22 @@ void net::engine::CaptureCarAi(const Car* car, EntityState& e)
 
 void net::engine::ApplyCarAi(Car* car, const EntityState& e)
 {
-    CarAI* a = car->field_5C_AI;
-    if (!a || gFirst < 0 || !e.f[gFirst])
+    if (gFirst < 0 || !e.f[gFirst])
     {
-        return; // an AI on one side only: each drives its own (a player's car has none)
+        return; // none on the server (a player's car): one here drives its own
     }
+    if (!car->field_5C_AI)
+    {
+        // The server's has one (a cop got in: Car::InitCarAIControl_440590), so this one gets one too: its driver's
+        // objective drives through it (Ped::SetupCarFollowTargetPed_469E50)
+        car->field_5C_AI = gCarAI_78_Pool_677CF8->Allocate();
+        if (!car->field_5C_AI)
+        {
+            return;
+        }
+        car->field_5C_AI->SetCar_453BF0(car);
+    }
+    CarAI* a = car->field_5C_AI;
     // Its references first: one this game doesn't have keeps the AI as it is here, whole
     Car* refs[2] = {NULL, NULL};
     for (int k = 0; k < 2; k++)
