@@ -7,27 +7,10 @@
 #include "state_log.hpp"
 #include <windows.h>
 
-#define EXPORT extern "C" __declspec(dllexport)
+#define VID_EXPORTS_NAME "headless video"
+#include "../../Renderers/OpenGL/core/vid_exports.inl"
 
-static void* gVidFuncs;
 static unsigned gFlips;
-
-static VidSystem* Sys(SVideo* pVideo)
-{
-    return VidSystem::FromVideo(pVideo);
-}
-
-EXPORT SVidVersion* __stdcall Vid_GetVersion()
-{
-    static SVidVersion version = {0x3FE7AE14, "headless video"};
-    return &version;
-}
-
-EXPORT s32 __stdcall Vid_InitDLL(HINSTANCE, void* pFuncs)
-{
-    gVidFuncs = pFuncs;
-    return 0;
-}
 
 EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
 {
@@ -36,45 +19,6 @@ EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
     VidSystem* pSys = new VidSystem();
     pSys->Init(hInstance, flags, gVidFuncs, "gta2gl.ini");
     return pSys->Video();
-}
-
-EXPORT s32 __stdcall Vid_CheckMode(SVideo* pVideo, s32 width, s32 height, s32 bpp)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->CheckMode(width, height, bpp) : 0;
-}
-
-EXPORT SDisplayMode* __stdcall Vid_FindMode(SVideo* pVideo, s32 modeId)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindMode(modeId) : 0;
-}
-
-EXPORT s32 __stdcall Vid_FindFirstMode(SVideo* pVideo, s32 bpp)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindFirstMode(bpp) : 0;
-}
-
-EXPORT s32 __stdcall Vid_FindNextMode(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindNextMode() : 0;
-}
-
-EXPORT SDevice* __stdcall Vid_FindDevice(SVideo* pVideo, s32 deviceId)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindDevice(deviceId) : 0;
-}
-
-EXPORT s32 __stdcall Vid_SetDevice(SVideo*, s32)
-{
-    return 0;
-}
-
-EXPORT void __stdcall Vid_CloseScreen(SVideo*)
-{
 }
 
 // No GL context: the mode only sets the logical size the game and the gbh_* layer work with.
@@ -114,64 +58,6 @@ EXPORT s32 __stdcall Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
 EXPORT void __stdcall Vid_FlipBuffers(SVideo*)
 {
     StateLog_Frame(++gFlips);
-}
-
-EXPORT void __stdcall Vid_ReleaseSurface(SVideo*)
-{
-}
-
-EXPORT void __stdcall Vid_GrabSurface(SVideo*)
-{
-}
-
-EXPORT void __stdcall Vid_ShutDown_SYS(SVideo* pVideo)
-{
-    delete Sys(pVideo);
-}
-
-EXPORT s32 __stdcall Vid_EnableWrites(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->GetSurface();
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_DisableWrites(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->FreeSurface();
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_GetSurface(SVideo* pVideo)
-{
-    return Vid_EnableWrites(pVideo);
-}
-
-EXPORT s32 __stdcall Vid_FreeSurface(SVideo* pVideo)
-{
-    return Vid_DisableWrites(pVideo);
-}
-
-EXPORT s32 __stdcall Vid_ClearScreen(SVideo*, u8, u8, u8, s32, s32, s32, s32)
-{
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_SetGamma(SVideo*, f32, f32, f32)
-{
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_WindowProc(SVideo*, HWND, DWORD, WPARAM, LPARAM)
-{
-    return 0;
 }
 
 BOOL WINAPI DllMain(HINSTANCE, DWORD, LPVOID)

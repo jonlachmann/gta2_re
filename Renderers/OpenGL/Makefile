@@ -9,7 +9,7 @@ CORE = core/gl_funcs.cpp core/gl_renderer.cpp core/gl_enhanced.cpp core/vid_syst
 VIDEO_SRC = dll/glvideo.cpp dll/dinput_hook.cpp platform/wgl_context.cpp $(CORE)
 RENDER_SRC = dll/glrender.cpp core/gbh_api.cpp core/cmdlog.cpp core/capture.cpp
 CAPVIDEO_SRC = tools/capvideo.cpp tools/d3dlog.cpp dll/dinput_hook.cpp core/capture.cpp core/cmdlog.cpp
-HEADERS = $(wildcard core/*.hpp platform/*.hpp dll/*.hpp tools/*.hpp)
+HEADERS = $(wildcard core/*.hpp core/*.inl platform/*.hpp dll/*.hpp tools/*.hpp)
 
 all: $(OUT)/glvideo.dll $(OUT)/glrender.dll $(OUT)/capvideo.dll
 

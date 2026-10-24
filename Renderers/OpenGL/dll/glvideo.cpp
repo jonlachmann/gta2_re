@@ -7,10 +7,8 @@
 #include <string.h>
 #include <windows.h>
 
-#define EXPORT extern "C" __declspec(dllexport)
-
-static HINSTANCE gDllInstance;
-static void* gVidFuncs;
+#define VID_EXPORTS_NAME "OpenGL 3.3 video"
+#include "../core/vid_exports.inl"
 
 static void Log(const char* fmt, ...)
 {
@@ -20,24 +18,6 @@ static void Log(const char* fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     OutputDebugStringA(buf);
-}
-
-static VidSystem* Sys(SVideo* pVideo)
-{
-    return VidSystem::FromVideo(pVideo);
-}
-
-EXPORT SVidVersion* __stdcall Vid_GetVersion()
-{
-    static SVidVersion version = {0x3FE7AE14, "OpenGL 3.3 video"};
-    return &version;
-}
-
-EXPORT s32 __stdcall Vid_InitDLL(HINSTANCE hInstance, void* pFuncs)
-{
-    gDllInstance = hInstance;
-    gVidFuncs = pFuncs;
-    return 0;
 }
 
 EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
@@ -54,45 +34,6 @@ EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
     Log("glvideo: Vid_Init_SYS flags=%x\n", flags);
     InstallDInputHook(pSys->FrameCounter());
     return pSys->Video();
-}
-
-EXPORT s32 __stdcall Vid_CheckMode(SVideo* pVideo, s32 width, s32 height, s32 bpp)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->CheckMode(width, height, bpp) : 0;
-}
-
-EXPORT SDisplayMode* __stdcall Vid_FindMode(SVideo* pVideo, s32 modeId)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindMode(modeId) : 0;
-}
-
-EXPORT s32 __stdcall Vid_FindFirstMode(SVideo* pVideo, s32 bpp)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindFirstMode(bpp) : 0;
-}
-
-EXPORT s32 __stdcall Vid_FindNextMode(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindNextMode() : 0;
-}
-
-EXPORT SDevice* __stdcall Vid_FindDevice(SVideo* pVideo, s32 deviceId)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->FindDevice(deviceId) : 0;
-}
-
-EXPORT s32 __stdcall Vid_SetDevice(SVideo*, s32)
-{
-    return 0;
-}
-
-EXPORT void __stdcall Vid_CloseScreen(SVideo*)
-{
 }
 
 // Returns 0 on success (the game treats 1 as failure for windowed mode, non zero for full screen).
@@ -165,80 +106,6 @@ EXPORT void __stdcall Vid_FlipBuffers(SVideo* pVideo)
         PollToggleKey(pSys, (HWND)pVideo->field_4C0_hwnd);
         pSys->Flip();
     }
-}
-
-EXPORT void __stdcall Vid_ReleaseSurface(SVideo*)
-{
-}
-
-EXPORT void __stdcall Vid_GrabSurface(SVideo*)
-{
-}
-
-EXPORT void __stdcall Vid_ShutDown_SYS(SVideo* pVideo)
-{
-    delete Sys(pVideo);
-}
-
-EXPORT s32 __stdcall Vid_EnableWrites(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->GetSurface();
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_DisableWrites(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->FreeSurface();
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_GetSurface(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->GetSurface();
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_FreeSurface(SVideo* pVideo)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->FreeSurface();
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_ClearScreen(SVideo* pVideo, u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 bottom)
-{
-    VidSystem* pSys = Sys(pVideo);
-    if (pSys)
-    {
-        pSys->Clear(r, g, b, left, top, right, bottom);
-    }
-    return 0;
-}
-
-EXPORT s32 __stdcall Vid_SetGamma(SVideo* pVideo, f32 r, f32 g, f32 b)
-{
-    VidSystem* pSys = Sys(pVideo);
-    return pSys ? pSys->SetGamma(r, g, b) : 0;
-}
-
-EXPORT s32 __stdcall Vid_WindowProc(SVideo*, HWND, DWORD, WPARAM, LPARAM)
-{
-    return 0;
 }
 
 BOOL WINAPI DllMain(HINSTANCE, DWORD, LPVOID)
