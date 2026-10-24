@@ -3,8 +3,8 @@
 
 Headless arena servers (--arena remote:<port>,...) connect to this script; every 3 ticks each sends what its remote
 bots see and the reward since (Port/net/session/arena.cpp) and gets their buttons back. One policy plays all
-learner slots; some matches put earlier versions of it (the pool) in two of them, and the scripted "simple" bot
-always plays the sixth slot as a yardstick. At first the policy also learns to press what a scripted bot would
+learner slots; some matches put earlier versions of it (the pool) in two of them, and scripted bots (--scripted,
+"simple" by default) play the others, as opponents and a yardstick. At first the policy also learns to press what a scripted bot would
 (kickstarting, --teach), less with each update. The teacher, "hunter", takes a car when one is near and nobody is
 close and drives at people, and fights on foot otherwise. Weapons come from the map's pickups (--armed: pistols for all, a start).
 
@@ -96,11 +96,12 @@ class Match:
     def __init__(self, args, port, idx):
         self.log = os.path.join(OUT, "logs", "match_%d.log" % idx)
         self.pool = random.random() < args.pool_share and bool(glob.glob(os.path.join(OUT, "pool", "*.pt")))
-        brains = ",".join(["remote:%d:%s" % (port, args.teacher)] * args.remote + ["simple"])
+        scripted = args.scripted.split(",") if args.scripted else []
+        brains = ",".join(["remote:%d:%s" % (port, args.teacher)] * args.remote + scripted)
         env = dict(os.environ, GTA2_HEADLESS="1", GTA2_SPEED="1000")
         if args.armed:
             env["GTA2_NET_TESTARM"] = "0:99"  # a pistol each, kept loaded
-        cmd = [BIN, "--server", "--port", str(20000 + idx % 20000), "--map", MAP, "--players", str(args.remote + 1), "--arena", brains, "--ticks",
+        cmd = [BIN, "--server", "--port", str(20000 + idx % 20000), "--map", MAP, "--players", str(len(brains.split(","))), "--arena", brains, "--ticks",
                str(args.ticks), "--seed", str(random.randrange(1, 1 << 31))]
         self.proc = subprocess.Popen(cmd, cwd=GAME, env=env, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         self.sock = None
@@ -304,12 +305,12 @@ def log_update(update, finished, mean_r, ent, args):
     learner, simple = [], []
     for res in finished:
         for r in res.values():
-            (simple if r["brain"] == "simple" else learner).append(r)
+            (learner if r["brain"].startswith("remote:") else simple).append(r)
 
     def mean(rs, f):
         return sum(r[f] for r in rs) / len(rs) if rs else float("nan")
 
-    line = "update %d: reward/step %.4f, entropy %.2f; per match, the policy's bots: frags %.2f deaths %.2f cars %.2f pickups %.2f; the scripted bot: frags %.2f deaths %.2f (%d matches)" % (
+    line = "update %d: reward/step %.4f, entropy %.2f; per match, the policy's bots: frags %.2f deaths %.2f cars %.2f pickups %.2f; the scripted bots: frags %.2f deaths %.2f (%d matches)" % (
         update, mean_r, ent, mean(learner, "frags"), mean(learner, "deaths"), mean(learner, "cars"), mean(learner, "pickups"), mean(simple, "frags"),
         mean(simple, "deaths"), len(finished))
     print(line, flush=True)
@@ -334,7 +335,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--updates", type=int, default=500)
     ap.add_argument("--envs", type=int, default=32, help="games at once (the trainer, not the games, is the limit: more fill its batches)")
-    ap.add_argument("--remote", type=int, default=5, help="slots the trainer plays per game (the last is the scripted bot)")
+    ap.add_argument("--remote", type=int, default=5, help="slots the trainer plays per game")
+    ap.add_argument("--scripted", default="simple", help="the scripted brains in the other slots (a yardstick and opponents), comma separated")
     ap.add_argument("--ticks", type=int, default=4500, help="per match (30 per second of game time)")
     ap.add_argument("--port", type=int, default=7700)
     ap.add_argument("--steps", type=int, default=16384, help="decisions per update")
