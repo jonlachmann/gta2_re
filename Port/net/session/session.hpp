@@ -189,6 +189,7 @@ class Client
     // No server: a recorded session (GTA2_NET_RECORD) played back frame for frame, as fast as the game runs
     bool StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error);
     void Frame();
+    void Leave(); // tells the server at once (a quit, a signal), not by its timeout seconds later
 
   private:
     struct Parts

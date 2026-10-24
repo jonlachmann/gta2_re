@@ -14,6 +14,7 @@
 #include "net_main.hpp"
 #include "Port/port_hooks.hpp" // the hooks defined here, as the game declares them
 #include "session/session.hpp"
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +49,22 @@ void OnFrame(void*)
     {
         gClient->Frame();
     }
+}
+
+// A client that quits, or is stopped, leaves the server at once: else its slot stays taken until the server's timeout
+// (5-10 s), and a player joining meanwhile finds the server full
+void LeaveServer()
+{
+    if (gClient)
+    {
+        gClient->Leave();
+    }
+}
+
+void OnStopSignal(int)
+{
+    LeaveServer();
+    _Exit(0);
 }
 
 // data/<name>.mmp: [MapFiles] GMPFile, STYFile, SCRFile
@@ -252,6 +269,12 @@ int NetMain_Init(std::vector<std::string>& args)
             fprintf(stderr, "net: %s\n", error.c_str());
             return -1;
         }
+        atexit(LeaveServer);
+        signal(SIGTERM, OnStopSignal);
+        signal(SIGINT, OnStopSignal);
+#if !defined(_WIN32)
+        signal(SIGHUP, OnStopSignal);
+#endif
         net::engine::StartNetworkGame(game);
         gTickMs = game.tickMs;
     }

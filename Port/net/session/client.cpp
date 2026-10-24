@@ -659,6 +659,11 @@ void net::Client::SendCommands()
     }
 }
 
+void net::Client::Leave()
+{
+    mTransport.reset(); // its destructor disconnects (enet_peer_disconnect_now)
+}
+
 void net::Client::Frame()
 {
     mFrame++;
