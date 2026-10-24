@@ -177,21 +177,31 @@ Port/net/
                entity states and their delta coding, input commands
   transport/   the network: an interface (hosts, peers, channels, events) and its ENet implementation,
                plus a link conditioner (delay, jitter, loss) for tests
-  engine/      the bridge to the decomp, the only code that knows its types:
+  engine/      the bridge to the decomp, the only code that knows its types (engine.hpp: what the session sees;
+               internal.hpp: what the engine's files share):
                world.cpp     the rollback set (every global, what it points to, players, light grid, sound pool)
+               rollback.cpp  saving, restoring and resimulating a tick (the sound's mailboxes emptied)
                netplay.cpp   the game's network layer (NetPlay/NetUi) for the port: how the game loop and the
                              netcode meet, and the offline multiplayer start
-               access.cpp    players, inputs, entities as plain data (capture and apply, the net schema)
-               client_mode.cpp  what a client doesn't simulate (spawning, despawning, scripts)
+               schema.cpp    the net schema: every entity type's fields
+               access.cpp    a snapshot captured and applied as a whole, the game's queries, shared helpers
+               players.cpp   players as entities: health, deaths, weapons, power-ups, names, their cars
+               cars.cpp      cars as entities: place, physics, damage, lights, colour
+               car_ai.cpp, ped_state.cpp  a car's and a ped's AI state (members.hpp: member tables by name)
+               replica.cpp   a client's cars and peds: adopted, made, moved, removed
+               vehicles.cpp  getting into and out of cars at once, or started as the enter key starts it
+               pickups.cpp, slots.cpp  pickups; slots joining and leaving a running game
+               client_mode.cpp  what a client doesn't simulate (spawning, despawning, scripts, police)
                sound_pool.cpp   SoundPosEntry from a pool in the rollback set (milestone S)
-  session/     server, client and bot logic on top of core, transport and the engine interface
-  mode/        game modes (frags first): join, spawn, scoring, win condition
+               navmap.cpp    the static map for bots
+               debug.cpp     checks, logs and statistics (the GTA2_NET_* switches)
+  session/     server, client, bots, the recording and replay, the jerk measure (env.cpp: the switches)
   enet/        ENet 1.3.18, vendored (MIT)
   tests/       core tests (Scripts/port/net_tests.sh)
   net_main.cpp the command line (--server, --connect, --bot) and the session's lifetime
 ```
 
-Dependencies only go one way: `session` and `mode` use `core`, `transport` and the engine interface (`engine/engine.hpp`, plain types only); `engine` uses the decomp and `core`'s data types.
+Dependencies only go one way: `session` uses `core`, `transport` and the engine interface (`engine/engine.hpp`, plain types only); `engine` uses the decomp and `core`'s data types.
 
 **How the game and the netcode meet.** The game's network game loop already has the boundary we need: the DirectPlay layer, `NetPlay`. Every network frame, `RunGameFrame_4DA850` runs:
 1. the tick (`ExecuteGame_4DA780`);
