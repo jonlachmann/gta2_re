@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <thread>
 #include <unordered_map>
 
