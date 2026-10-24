@@ -177,6 +177,10 @@ class NeuralBot : public net::BotBrain
             mMemory = net::BotMemory();
             return 0;
         }
+        if (v.frame % net::kBotDecisionTicks != 0)
+        {
+            return mMemory.lastButtons; // held, as in training
+        }
         std::vector<float> in(net::kBotFeatures), out;
         net::BotFeatures(v, mMemory, in.data());
         for (size_t l = 0; l < mWeights.size(); l++)

@@ -88,6 +88,10 @@ struct BotRoute
     void Next(const BotView& v, float goalX, float goalY, float* pX, float* pY);
 };
 
+// The network bots decide every this many ticks and hold their buttons in between, in training (arena.cpp) and
+// in play (bot_nn.cpp) alike: their features (speed, last buttons) are per decision
+const uint32_t kBotDecisionTicks = 3;
+
 // What the network bots see (bot_nn.cpp): a BotView as numbers, about -1..1, relative to where it faces
 const int kBotFeatures = 59;
 struct BotMemory // what the features remember between ticks

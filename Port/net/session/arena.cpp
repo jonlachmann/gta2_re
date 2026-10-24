@@ -3,7 +3,7 @@
 // result line; a windowed server shows one of them.
 //
 // "remote:<port>[:<teacher>]" slots are played by a trainer (Scripts/port/rl_bots.py) over a local TCP connection, one round trip
-// every kSkip ticks for all of them. The game sends (native byte order, all 32-bit):
+// every kBotDecisionTicks for all of them. The game sends (native byte order, all 32-bit):
 //   count, done, kBotFeatures, then per remote slot: slot, alive, reward since the last message, the buttons its
 //   teacher would press (a scripted brain, "hunter" by default: for kickstarting), its features
 // and the trainer answers each slot's buttons. With done (the last message, at --ticks) there is no answer.
@@ -24,7 +24,6 @@ namespace
 {
 const float kNear = 50; // blocks: closer than this to the nearest other player counts towards "near"
 const uint32_t kRemoteHead = 4; // slot, alive, reward, teacher
-const uint32_t kSkip = 3; // ticks per remote decision (10 a second): the buttons are held in between
 
 // The trainer's reward: frags and deaths most, then damage, pickups and being near someone to fight
 const float kFragReward = 1, kDeathReward = -1, kDamageReward = 0.01f, kPickupReward = 0.3f, kNearReward = 0.001f;
@@ -138,7 +137,7 @@ void net::Arena::Think(const Snapshot& world, uint32_t tick)
     for (size_t i = 0; i < mBots.size(); i++)
     {
         Bot& bot = mBots[i];
-        if (bot.brain || tick % kSkip == 0)
+        if (bot.brain || tick % kBotDecisionTicks == 0)
         {
             FillBotView(mView, world, (int)i, tick, mNavMap.get());
         }
@@ -146,7 +145,7 @@ void net::Arena::Think(const Snapshot& world, uint32_t tick)
         {
             bot.buttons = bot.brain->Think(mView);
         }
-        else if (tick % kSkip == 0)
+        else if (tick % kBotDecisionTicks == 0)
         {
             AddRemote((int)i, message);
         }
