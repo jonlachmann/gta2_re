@@ -86,6 +86,7 @@ Used to compare with DMA's renderer; all inactive unless their variable is set.
 | variable | effect |
 |---|---|
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames (Vid_FlipBuffers count) as BMP |
+| (a file `capture_now` in the working directory) | the next frame (checked every 30) written to `capture.bmp`, and the file removed: a look at a running game |
 | `GTA2GL_CMDLOG=<dir>,<frames>` | log every gbh call and the primitives it produced |
 | `GTA2GL_INPUT=<frame>:<dik>[:<held>],...` | feed DirectInput key events at fixed frames |
 | `GTA2GL_TOGGLE_AT=<frame>,...` | press the F12 switch at those frames |

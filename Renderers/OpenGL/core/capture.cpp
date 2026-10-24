@@ -40,6 +40,11 @@ void FrameCapture::InitFromEnv(const char* envName, const char* prefix)
     }
 }
 
+bool FrameCapture::WantNow(u32 frame)
+{
+    return frame % 30 == 0 && remove("capture_now") == 0;
+}
+
 bool FrameCapture::WantFrame(u32 frame) const
 {
     for (size_t i = 0; i < mFrames.size(); i++)

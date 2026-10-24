@@ -1,4 +1,5 @@
-// Frame capture to BMP, driven by GTA2GL_CAPTURE=<dir>,<frame>,<first>-<last>,...
+// Frame capture to BMP, driven by GTA2GL_CAPTURE=<dir>,<frame>,<first>-<last>,..., or on demand: a file capture_now
+// in the working directory (checked every 30 frames) has the next frame written to capture.bmp, and is removed
 #pragma once
 
 #include "gta2_api.hpp"
@@ -19,6 +20,7 @@ class FrameCapture
         return !mFrames.empty();
     }
     bool WantFrame(u32 frame) const;
+    static bool WantNow(u32 frame); // capture_now is there (removed): this frame to capture.bmp
     std::string PathFor(u32 frame) const;
 
     // rgba: width*height pixels, top row first.

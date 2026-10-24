@@ -264,11 +264,12 @@ void VidSystem::Flip()
 
     const double t0 = mStatsInterval ? Now() : 0.0;
     mRenderer.FinishFrame();
-    if (mCapture.WantFrame(mFrame))
+    const bool listed = mCapture.WantFrame(mFrame), now = FrameCapture::WantNow(mFrame);
+    if (listed || now)
     {
         std::vector<u8> rgba;
         mRenderer.ReadLogical(rgba);
-        FrameCapture::WriteBmp(mCapture.PathFor(mFrame), &rgba[0], mRenderer.LogicalWidth(), mRenderer.LogicalHeight(), false);
+        FrameCapture::WriteBmp(listed ? mCapture.PathFor(mFrame) : std::string("capture.bmp"), &rgba[0], mRenderer.LogicalWidth(), mRenderer.LogicalHeight(), false);
     }
 
     int w = 0, h = 0;
