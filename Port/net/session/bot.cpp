@@ -284,6 +284,32 @@ class RamBot : public DecidingBot
     float mLastX = 0, mLastY = 0;
     uint32_t mBackUntil = 0;
 };
+// The fighter on foot and the rammer in a car: takes a car when one is near and nobody is close, drives at people,
+// and fights on foot otherwise (a teacher for the trained bots: one brain, so what it shows is consistent)
+class HunterBot : public DecidingBot
+{
+  public:
+    std::string Describe() const override
+    {
+        return (mDriving ? "driving: " + mCar.Describe() : "on foot: " + mFoot.Describe());
+    }
+
+  private:
+    uint32_t Decide(const net::BotView& v) override
+    {
+        float enemy = 0, car = 0;
+        Nearest(v, net::BotView::Seen::kPlayer, &enemy);
+        Nearest(v, net::BotView::Seen::kCar, &car);
+        mDriving = v.car != 0 || (car < 10 && enemy > 8);
+        // Both see every tick, so their timers and stuck checks stay right whichever decides
+        const uint32_t foot = mFoot.Think(v), drive = mCar.Think(v);
+        return mDriving ? drive : foot;
+    }
+
+    SimpleBot mFoot;
+    RamBot mCar;
+    bool mDriving = false;
+};
 } // namespace
 
 std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
@@ -291,6 +317,10 @@ std::unique_ptr<net::BotBrain> net::CreateBotBrain(const std::string& kind)
     if (kind == "carhop")
     {
         return std::unique_ptr<BotBrain>(new CarHopBot());
+    }
+    if (kind == "hunter")
+    {
+        return std::unique_ptr<BotBrain>(new HunterBot());
     }
     if (kind == "rammer")
     {
