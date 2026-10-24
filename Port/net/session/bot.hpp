@@ -76,12 +76,24 @@ class BotBrain
 std::unique_ptr<BotBrain> CreateBotBrain(const std::string& kind);
 std::unique_ptr<BotBrain> CreateNeuralBrain(const std::string& path); // NULL if the file is no network of this shape
 
+// A way to a goal (bot_nav.cpp), replanned every second or when the goal moves to another cell
+struct BotRoute
+{
+    std::vector<int> path; // the cells (y * 256 + x) still to go
+    int goal = -1;
+    uint32_t replanAt = 0;
+    bool none = false; // no way found: straight at it
+    // The point to head for: a few cells ahead on the route (smoother than cell by cell), or the goal
+    void Next(const BotView& v, float goalX, float goalY, float* pX, float* pY);
+};
+
 // What the network bots see (bot_nn.cpp): a BotView as numbers, about -1..1, relative to where it faces
-const int kBotFeatures = 53;
+const int kBotFeatures = 59;
 struct BotMemory // what the features remember between ticks
 {
     float lastX = -1, lastY = 0;
     uint32_t lastButtons = 0;
+    BotRoute toPlayer, toWeapon; // the ways to the nearest player and weapon, as a compass
 };
 void BotFeatures(const BotView& view, BotMemory& memory, float* out);
 // What they do: a choice in each group (turn left/no/right, forward/no/back, then attack, enter/exit, jump and next

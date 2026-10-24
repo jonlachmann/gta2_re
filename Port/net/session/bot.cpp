@@ -90,7 +90,7 @@ class SimpleBot : public DecidingBot
     {
         char line[160];
         snprintf(line, sizeof(line), "at (%.1f, %.1f) rot %d, target %.1f blocks away, route %zu cells, buttons 0x%x%s%s", mX, mY, mRot,
-                 mTargetDist, mPath.size(), mButtons, mNoRoute ? " (no route found)" : "", mStuck ? ", stuck" : "");
+                 mTargetDist, mRoute.path.size(), mButtons, mRoute.none ? " (no route found)" : "", mStuck ? ", stuck" : "");
         return line;
     }
 
@@ -115,7 +115,7 @@ class SimpleBot : public DecidingBot
             if (mStuck)
             {
                 mUnstickUntil = v.frame + 15;
-                mPath.clear();
+                mRoute.path.clear();
             }
         }
         if (v.frame < mUnstickUntil)
@@ -161,31 +161,8 @@ class SimpleBot : public DecidingBot
     // To (tx, ty) along the route
     uint32_t Along(const net::BotView& v, float tx, float ty)
     {
-        const int N = net::engine::NavMap::kSize;
-        const int cx = (int)v.x, cy = (int)v.y, gx = (int)tx, gy = (int)ty;
-        if (v.map && (mPath.empty() || v.frame >= mReplanAt || gy * N + gx != mGoal))
-        {
-            mGoal = gy * N + gx;
-            mReplanAt = v.frame + 30;
-            mNoRoute = !net::FindPath(*v.map, cx, cy, gx, gy, mPath);
-        }
-        // Drop the waypoints up to the one we are on, if it is among the next few (cutting a corner skips some)
-        for (size_t i = 0; i < mPath.size() && i < 6; i++)
-        {
-            if (mPath[i] == cy * N + cx)
-            {
-                mPath.erase(mPath.begin(), mPath.begin() + i + 1);
-                break;
-            }
-        }
-        float wx = tx, wy = ty; // no route: straight at it
-        if (!mPath.empty())
-        {
-            // Aim a few cells ahead where the route is straight: smoother than cell by cell
-            const size_t ahead = mPath.size() < 3 ? mPath.size() - 1 : 2;
-            wx = mPath[ahead] % N + 0.5f;
-            wy = mPath[ahead] / N + 0.5f;
-        }
+        float wx = 0, wy = 0;
+        mRoute.Next(v, tx, ty, &wx, &wy);
         const int err = TurnTo(v.rot, wx - v.x, wy - v.y);
         uint32_t b = Steer(err);
         if (abs(err) < 300) // walk while roughly facing the way
@@ -198,10 +175,7 @@ class SimpleBot : public DecidingBot
 
     float mX = 0, mY = 0, mTargetDist = -1;
     int mRot = 0;
-    bool mNoRoute = false;
-    std::vector<int> mPath;
-    int mGoal = -1;
-    uint32_t mReplanAt = 0;
+    net::BotRoute mRoute;
     float mLastX = 0, mLastY = 0;
     bool mTrying = false, mStuck = false;
     uint32_t mUnstickUntil = 0;

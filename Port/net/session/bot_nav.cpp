@@ -66,3 +66,31 @@ bool net::FindPath(const engine::NavMap& map, int sx, int sy, int gx, int gy, st
     }
     return false;
 }
+
+void net::BotRoute::Next(const BotView& v, float goalX, float goalY, float* pX, float* pY)
+{
+    const int N = engine::NavMap::kSize;
+    const int cx = (int)v.x, cy = (int)v.y, gx = (int)goalX, gy = (int)goalY;
+    if (v.map && (path.empty() || v.frame >= replanAt || gy * N + gx != goal))
+    {
+        goal = gy * N + gx;
+        replanAt = v.frame + 30;
+        none = !FindPath(*v.map, cx, cy, gx, gy, path);
+    }
+    // Drop the waypoints up to the one we are on, if it is among the next few (cutting a corner skips some)
+    for (size_t i = 0; i < path.size() && i < 6; i++)
+    {
+        if (path[i] == cy * N + cx)
+        {
+            path.erase(path.begin(), path.begin() + i + 1);
+            break;
+        }
+    }
+    *pX = goalX, *pY = goalY;
+    if (!path.empty())
+    {
+        const size_t ahead = path.size() < 3 ? path.size() - 1 : 2;
+        *pX = path[ahead] % N + 0.5f;
+        *pY = path[ahead] / N + 0.5f;
+    }
+}
