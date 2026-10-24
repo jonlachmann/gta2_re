@@ -144,15 +144,29 @@ void SDLCALL Mix(void*, SDL_AudioStream* stream, int additional, int)
     }
 }
 
-Voice* NewVoice(bool isStream)
+// Miles' defaults for a new or re-initialised sample: stopped, no data, mono 16-bit at 22 kHz, full volume,
+// centred, played once.
+void ResetVoice(Voice* v)
 {
-    Voice* v = new Voice();
-    v->used = true;
-    v->isStream = isStream;
+    v->playing = false;
+    v->data = NULL;
+    v->len = 0;
+    v->format = DIG_F_MONO_16;
+    v->sign = false;
+    v->rate = 22050;
     v->volume = 127;
     v->pan = 64;
     v->loops = 1;
-    v->rate = 22050;
+    v->loopStart = v->loopEnd = 0;
+    v->pos = 0;
+}
+
+Voice* NewVoice(bool isStream)
+{
+    Voice* v = new Voice();
+    ResetVoice(v);
+    v->used = true;
+    v->isStream = isStream;
     SDL_LockMutex(gLock);
     gVoices.push_back(v);
     SDL_UnlockMutex(gLock);
@@ -293,18 +307,7 @@ DXDEC void AILCALL AIL_release_sample_handle(HSAMPLE S)
 DXDEC void AILCALL AIL_init_sample(HSAMPLE S)
 {
     Locked l;
-    Voice* v = V(S);
-    v->playing = false;
-    v->data = NULL;
-    v->len = 0;
-    v->format = DIG_F_MONO_16;
-    v->sign = false;
-    v->rate = 22050;
-    v->volume = 127;
-    v->pan = 64;
-    v->loops = 1;
-    v->loopStart = v->loopEnd = 0;
-    v->pos = 0;
+    ResetVoice(V(S));
 }
 
 DXDEC void AILCALL AIL_set_sample_address(HSAMPLE S, void FAR* start, U32 len)
