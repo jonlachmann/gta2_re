@@ -29,12 +29,16 @@ namespace
 // The rollback set, asked once per game (its pointees are fixed once a map is loaded)
 const std::vector<net::engine::Block>& RollbackSet()
 {
+    // Again for every game: a map change's new Game can come at the old one's address, with its pools elsewhere (the
+    // old blocks then wrote over freed memory: crashes all over after the second map change)
     static std::vector<net::engine::Block> sBlocks;
     static Game* sFor;
-    if (sFor != gGame_0x40_67E008 || sBlocks.empty())
+    static int sGeneration = -1;
+    if (sFor != gGame_0x40_67E008 || sGeneration != net::engine::GameGeneration() || sBlocks.empty())
     {
         sBlocks = net::engine::WorldBlocks();
         sFor = gGame_0x40_67E008;
+        sGeneration = net::engine::GameGeneration();
     }
     return sBlocks;
 }
