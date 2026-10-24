@@ -22,7 +22,7 @@ A client starts the server's network game. The server takes every player's input
 **Prediction (N4).** The client:
 - saves the game after every tick (`engine/rollback.cpp`);
 - on a snapshot of tick S: restores S, applies the server's state, and resimulates up to its own tick with its own inputs (other players: their last input);
-- then moves the cars and peds it doesn't drive on by their speed (dead reckoning).
+- everything else moves on by the game's own simulation in the resimulated ticks (the extra dead reckoning step was worse without it, and is gone).
 
 Commands carry the server tick they are for. The server buffers them per tick and repeats the last one when one is late. It reports the newest command tick it got, and the client keeps two ticks of lead by that: a jump when far off, a 10% faster or slower tick otherwise.
 
@@ -100,8 +100,6 @@ Usage and test switches:
 
 **Not yet:**
 - passengers;
-- bots that fight well (they find each other, but often stand next to each other without hitting);
-- ped state beyond position (cars have their whole physics now);
 - interpolation;
 - the comparison check;
 - modes beyond the game's own frags;
