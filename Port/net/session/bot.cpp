@@ -22,9 +22,11 @@ int TurnTo(int rot, float dx, float dy)
     return err;
 }
 
+// 20 degrees either way is straight on: with less, one tick's turn overshot and the bot pressed left and right in
+// turn, every tick, as no person does (a client predicting it from its last input was then wrong every tick)
 uint32_t Steer(int err)
 {
-    return err > 30 ? net::kBtnLeft : err < -30 ? net::kBtnRight : 0;
+    return err > 80 ? net::kBtnLeft : err < -80 ? net::kBtnRight : 0;
 }
 
 // Walks to the nearest player along its own route (replanned every second, or when the target moves to another

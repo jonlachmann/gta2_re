@@ -5,6 +5,7 @@
 #include "../engine/engine.hpp"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unordered_map>
 #include <vector>
 
@@ -40,6 +41,12 @@ class JerkMeter
                     k.over[0] += a > 0.05f;
                     k.over[1] += a > 0.15f;
                     k.over[2] += a > 0.4f;
+                    static const bool sEach = getenv("GTA2_NET_JERKLOG") && atoi(getenv("GTA2_NET_JERKLOG")) >= 2;
+                    if (sEach && a > 0.4f)
+                    {
+                        printf("net: frame %u, jerk of %u: %.2f, step (%.2f, %.2f) after (%.2f, %.2f) at (%.2f, %.2f)\n", frame, p.id, a, t.vx, t.vy,
+                               o.vx, o.vy, t.x, t.y);
+                    }
                     k.sum += a;
                 }
             }

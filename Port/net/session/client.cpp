@@ -282,11 +282,11 @@ void net::Client::Reconcile(const Snapshot& snap)
 }
 
 // The correction in steps: what is shown moves from where it was a part of the way to the corrected state each frame
-// (GTA2_NET_BLEND, 0.3; 1: at once). The saves keep the corrected state, so the blend only touches the live tick
+// (GTA2_NET_BLEND, 0.2; 1: at once). The saves keep the corrected state, so the blend only touches the live tick
 // before the next snapshot's resimulation; more than 2 blocks off (a respawn, a car entered) jumps.
 void net::Client::Blend(const std::vector<engine::Pose>& shown)
 {
-    static const float alpha = getenv("GTA2_NET_BLEND") ? (float)atof(getenv("GTA2_NET_BLEND")) : 0.3f;
+    static const float alpha = getenv("GTA2_NET_BLEND") ? (float)atof(getenv("GTA2_NET_BLEND")) : 0.2f; // 0.3: remote players a fifth jerkier (GTA2_NET_JERKLOG)
     if (alpha >= 1 || alpha <= 0)
     {
         return;
