@@ -130,7 +130,7 @@ void net::WriteSnapshotHeader(BitWriter& w, const SnapshotHeader& h)
 {
     w.Bits(kMsgSnapshot, 8);
     w.VarU(h.tick);
-    w.VarU(h.tick - h.baseTick); // 0..: how far back the baseline is (h.tick: none)
+    w.VarU(h.tick - h.baseTick); // 0..: how far back the baseline is (0: none)
     w.VarU(h.lastCmdTick);
 }
 

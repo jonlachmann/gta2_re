@@ -27,9 +27,7 @@ enum BotButton : uint32_t
 
 struct BotView
 {
-    uint32_t tick = 0;
     uint32_t frame = 0;
-    int self = 0; // player index
     // Its own body: x, y, z in blocks, rot 0..1439 (walking while facing rot moves along (sin, cos): measured)
     bool hasBody = false;
     float x = 0, y = 0, z = 0;

@@ -1,4 +1,5 @@
 // Port/net transport test (Scripts/port/net_tests.sh): a server and a client in one process over loopback.
+#include "check.hpp"
 #include "../core/protocol.hpp"
 #include "../transport/transport.hpp"
 #include <chrono>
@@ -7,15 +8,6 @@
 #include <string.h>
 #include <thread>
 
-#define CHECK(c) \
-    do \
-    { \
-        if (!(c)) \
-        { \
-            printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); \
-            exit(1); \
-        } \
-    } while (0)
 
 namespace
 {

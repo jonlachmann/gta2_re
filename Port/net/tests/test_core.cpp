@@ -1,4 +1,5 @@
 // Port/net core tests (Scripts/port/net_tests.sh): no game, no network; a failed CHECK prints and exits 1.
+#include "check.hpp"
 #include "../core/bitstream.hpp"
 #include "../core/protocol.hpp"
 #include "../core/snapshot.hpp"
@@ -7,15 +8,6 @@
 #include <string.h>
 #include <vector>
 
-#define CHECK(c) \
-    do \
-    { \
-        if (!(c)) \
-        { \
-            printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); \
-            exit(1); \
-        } \
-    } while (0)
 
 namespace
 {

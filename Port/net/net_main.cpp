@@ -17,8 +17,9 @@ int gPortTrafficCap = 16; // Source/Car.cpp, CarManager::CanAllocateCarOfKind_44
 void (*gPortDrawOverlay)() = NULL; // Source/Game.cpp, Game::Draw_4B92D0
 short gPortZoneRoundRobin; // Source/map_0x370.cpp, Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0 (respawn zones)
 
+// Port/port_rand.cpp, Port/port_rand_particle.cpp (not their headers: those rename rand and gRng_6F6784)
 void PortRandSound_Separate(bool separate);
-void PortRandParticle_Separate(bool separate); // Port/port_rand_particle.h (it renames gRng_6F6784) // Port/port_rand.cpp (not its header: that one renames rand)
+void PortRandParticle_Separate(bool separate);
 
 namespace
 {
@@ -80,7 +81,7 @@ bool ReadMmp(const std::string& name, net::engine::NetworkGame& g)
 int NetMain_Init(std::vector<std::string>& args)
 {
     bool server = false;
-    std::string connect, map = "downtown-6p", name = "player", replay;
+    std::string connect, map = "downtown-6p", replay;
     net::ServerConfig sc;
     net::ClientConfig cc;
     sc.game.players = 6;

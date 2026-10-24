@@ -70,7 +70,7 @@ bool ReadReject(BitReader& r, Reject& m);
 void WriteCommands(BitWriter& w, uint32_t ackTick, const InputCmd* cmds, int count);
 int ReadCommands(BitReader& r, uint32_t* pAckTick, InputCmd* cmds, int max); // -1 if malformed
 
-// Snapshot header: its tick, the tick of the baseline it is a delta to (0: none), and the newest command tick
+// Snapshot header: its tick, the tick of the baseline it is a delta to (its own tick: none, a full snapshot), and the newest command tick
 // the server has applied for this client; the delta (snapshot.hpp) follows
 struct SnapshotHeader
 {

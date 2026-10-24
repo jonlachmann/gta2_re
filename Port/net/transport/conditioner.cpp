@@ -1,6 +1,7 @@
 // Port/net transport (docs/netcode.md, N3): a link conditioner for tests. It wraps a transport and holds every
 // send back by a delay with jitter, and drops some unreliable ones. On both ends, a round trip gets twice the delay.
 #include "transport.hpp"
+#include "../core/protocol.hpp"
 #include <chrono>
 #include <deque>
 
@@ -26,7 +27,7 @@ class Conditioner : public net::Transport
 
     bool Send(uint32_t peer, uint8_t channel, const void* data, size_t size, bool reliable) override
     {
-        if (!reliable && size > 1372)
+        if (!reliable && size > net::kMaxPayload)
         {
             return false; // the same refusal as the real one
         }

@@ -1,24 +1,16 @@
 // Port/net bot navigation test (Scripts/port/net_tests.sh): FindPath on made-up maps, no game.
+#include "check.hpp"
 #include "../session/bot.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define CHECK(c) \
-    do \
-    { \
-        if (!(c)) \
-        { \
-            printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); \
-            exit(1); \
-        } \
-    } while (0)
 
 namespace
 {
 const int N = net::engine::NavMap::kSize;
 
-// Every cell walkable at height 2, every way open, except what <blocked> closes (both sides of each wall)
+// Every cell walkable at height 2, every way open
 void Open(net::engine::NavMap& m)
 {
     memset(m.height, 2, sizeof(m.height));
