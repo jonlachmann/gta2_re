@@ -60,7 +60,7 @@ class Arena
         std::string kind;
         std::unique_ptr<BotBrain> brain;
         uint32_t buttons = 0;
-        double near = 0; // summed per tick: 1 - distance / 50 blocks to the nearest other player
+        double closeness = 0; // summed per tick: 1 - distance / 50 blocks to the nearest other player
         int dealt = 0, health = 0;
     };
     void Score(const Snapshot& world);

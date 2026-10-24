@@ -116,22 +116,22 @@ class NeuralBot : public net::BotBrain
     // The <n> nearest of a kind, 3 values each (and the player's health): none is far ahead
     float* Nearest(const net::BotView& v, net::BotView::Seen::Kind kind, int n, float* out) const
     {
-        std::vector<std::pair<float, const net::BotView::Seen*>> near;
+        std::vector<std::pair<float, const net::BotView::Seen*>> sorted;
         for (const net::BotView::Seen& s : v.seen)
         {
             if (s.kind == kind && (kind != net::BotView::Seen::kPlayer || s.health > 0))
             {
-                near.push_back(std::make_pair(hypotf(s.x - v.x, s.y - v.y), &s));
+                sorted.push_back(std::make_pair(hypotf(s.x - v.x, s.y - v.y), &s));
             }
         }
-        std::sort(near.begin(), near.end(), [](const std::pair<float, const net::BotView::Seen*>& a, const std::pair<float, const net::BotView::Seen*>& b) {
+        std::sort(sorted.begin(), sorted.end(), [](const std::pair<float, const net::BotView::Seen*>& a, const std::pair<float, const net::BotView::Seen*>& b) {
             return a.first < b.first;
         });
         for (int i = 0; i < n; i++)
         {
-            if (i < (int)near.size())
+            if (i < (int)sorted.size())
             {
-                Relative(v, near[i].second->x, near[i].second->y, out);
+                Relative(v, sorted[i].second->x, sorted[i].second->y, out);
             }
             else
             {
@@ -140,7 +140,7 @@ class NeuralBot : public net::BotBrain
             out += 3;
             if (kind == net::BotView::Seen::kPlayer)
             {
-                *out++ = i < (int)near.size() ? near[i].second->health / 100.0f : 0;
+                *out++ = i < (int)sorted.size() ? sorted[i].second->health / 100.0f : 0;
             }
         }
         return out;

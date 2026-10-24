@@ -86,7 +86,7 @@ void net::Arena::Score(const Snapshot& world)
         }
         if (me.health > 0 && nearest < kNear)
         {
-            mBots[i].near += 1 - nearest / kNear;
+            mBots[i].closeness += 1 - nearest / kNear;
         }
         const int lost = mBots[i].health - me.health;
         if (lost > 0 && me.health >= 0 && shooter >= 0 && mBots[i].health > 0)
@@ -113,7 +113,7 @@ void net::Arena::PrintResult(const Snapshot& world) const
         {
             const Bot& bot = mBots[p];
             printf("net: arena %d %s frags %d deaths %d near %.3f dealt %d\n", p, bot.kind.c_str(), engine::PlayerFrags(e), engine::PlayerDeaths(e),
-                   mTicks ? bot.near / mTicks : 0.0, bot.dealt);
+                   mTicks ? bot.closeness / mTicks : 0.0, bot.dealt);
         }
     }
 }
