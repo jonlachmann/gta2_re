@@ -99,6 +99,40 @@ float Ray(const net::BotView& v, int dir)
     return 1;
 }
 
+const net::BotView::Seen* NearestOf(const net::BotView& v, net::BotView::Seen::Kind kind, bool weapons)
+{
+    const net::BotView::Seen* best = NULL;
+    float dist = 1e9f;
+    for (const net::BotView::Seen& s : v.seen)
+    {
+        const float d = hypotf(s.x - v.x, s.y - v.y);
+        if (s.kind == kind && d < dist && (kind != net::BotView::Seen::kPlayer || s.health > 0) && (kind != net::BotView::Seen::kPickup || s.weapon == weapons))
+        {
+            dist = d;
+            best = &s;
+        }
+    }
+    return best;
+}
+
+// Which way its route to <goal> goes next (ahead, left: a unit vector) and how long it is (0..1 of 2 * kRange
+// cells); no goal: far ahead
+float* Compass(const net::BotView& v, net::BotRoute& route, const net::BotView::Seen* goal, float* out)
+{
+    if (!goal)
+    {
+        out[0] = 1, out[1] = 0, out[2] = 1;
+        return out + 3;
+    }
+    float wx = 0, wy = 0;
+    route.Next(v, goal->x, goal->y, &wx, &wy);
+    Relative(v, wx, wy, out);
+    const float len = hypotf(out[0], out[1]);
+    out[0] = len > 0 ? out[0] / len : 1, out[1] = len > 0 ? out[1] / len : 0; // the way, not how far the waypoint is
+    out[2] = Clamp(route.path.size() / (2 * kRange));
+    return out + 3;
+}
+
 class NeuralBot : public net::BotBrain
 {
   public:
@@ -225,6 +259,8 @@ void net::BotFeatures(const BotView& v, BotMemory& m, float* out)
     {
         *p++ = Ray(v, r);
     }
+    p = Compass(v, m.toPlayer, NearestOf(v, BotView::Seen::kPlayer, false), p);
+    p = Compass(v, m.toWeapon, NearestOf(v, BotView::Seen::kPickup, true), p);
     for (uint32_t bit : kActionBits)
     {
         *p++ = (m.lastButtons & bit) != 0; // what it did last
