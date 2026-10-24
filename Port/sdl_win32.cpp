@@ -75,9 +75,14 @@ ATOM Port_RegisterClassA(const WNDCLASSA* pClass)
     return 1;
 }
 
+bool Port_IsHeadless()
+{
+    return SDL_getenv("GTA2_HEADLESS") != NULL;
+}
+
 HWND Port_CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD, int, int, int w, int h, HWND, HMENU, HINSTANCE, LPVOID)
 {
-    const bool headless = SDL_getenv("GTA2_HEADLESS") != NULL; // no window content, no sound (docs/port.md, M2)
+    const bool headless = Port_IsHeadless(); // no window content, no sound
     if (headless)
     {
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");

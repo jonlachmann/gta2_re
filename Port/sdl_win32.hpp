@@ -7,6 +7,9 @@
 #include <windows.h>
 
 void* Port_GetSDLWindow();
+// GTA2_HEADLESS=1 (docs/port.md, M2): SDL's dummy video and audio drivers, no GL context and no drawing; the gbh_*
+// layer still runs
+bool Port_IsHeadless();
 // The size the game last asked its window to be (SetWindowPos): its resolution in windowed mode, whatever size the
 // window has (resizable: the renderer scales)
 bool Port_GetRequestedWindowSize(int* pW, int* pH);

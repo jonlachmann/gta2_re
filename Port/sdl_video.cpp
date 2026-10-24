@@ -14,12 +14,6 @@
 
 static unsigned gFlips;
 
-// GTA2_HEADLESS=1: no GL context and no drawing; the gbh_* layer still runs (docs/port.md, M2)
-static bool Headless()
-{
-    return SDL_getenv("GTA2_HEADLESS") != NULL;
-}
-
 EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
 {
     StateLog_Init();
@@ -65,7 +59,7 @@ EXPORT s32 __stdcall Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
         return 1;
     }
     pVideo->field_4C0_hwnd = hWnd;
-    if (!pSys->HasContext() && !Headless())
+    if (!pSys->HasContext() && !Port_IsHeadless())
     {
         const char* pError = "";
         IGLContext* pCtx = CreateGLContextForSDLWindow(pWindow, &pError);
