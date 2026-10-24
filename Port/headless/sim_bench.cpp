@@ -47,6 +47,7 @@
 #include "../net/engine/world.hpp"
 #include "../port_rand_sound.h"
 #include "../port_rand_state.h"
+#include "sim_bench.hpp"
 #include <chrono>
 #if !defined(_WIN32)
     #include <cxxabi.h>

@@ -6,11 +6,9 @@
 // d-pad drive the axes. Bindings to the pad are set in the game's Controls menu, as in the original.
 // ponytail: no mouse data (the game doesn't use the mouse for play); one pad.
 #define DIRECTINPUT_VERSION 0x0700
-#include <SDL3/SDL.h>
+#include "sdl_dinput.hpp"
 #include <deque>
 #include <dinput.h>
-
-void Port_DInputOnEvent(const SDL_Event& e);
 
 namespace
 {

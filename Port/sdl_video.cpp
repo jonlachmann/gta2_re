@@ -4,8 +4,8 @@
 #include "Renderers/OpenGL/core/vid_system.hpp"
 #include "Renderers/OpenGL/platform/gl_context.hpp"
 #include "sdl_win32.hpp"
+#include "headless/sim_bench.hpp"
 #include "headless/state_log.hpp"
-void SimBench_Frame(unsigned flip); // headless/sim_bench.cpp
 #include <SDL3/SDL.h>
 #include <stdio.h>
 

@@ -1,9 +1,8 @@
 // Port (docs/port.md): the user32 subset of sdl_win32.hpp on SDL3, for the game's one window.
 #include "sdl_win32.hpp"
+#include "sdl_dinput.hpp"
 #include <SDL3/SDL.h>
 #include <deque>
-
-void Port_DInputOnEvent(const SDL_Event& e); // sdl_dinput.cpp
 
 namespace
 {
