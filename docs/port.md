@@ -283,7 +283,7 @@ Findings:
 ### Trig tables and gamepad
 
 - **Trig tables**: the sine, cosine and tangent tables (1440 entries each) are computed at start-up from
-  the C library. Dumped from a running `10.5.exe` (`Scripts/port/trig_check.py`, winedbg): every entry is at
+  the C library. Dumped from a running `10.5.exe` (with winedbg): every entry is at
   least 1e-6 from a truncation boundary, far more than any difference between correct `sin`/`cos`/`tan`,
   except tan(90°) and tan(270°). Those are out of `s32` range, where VC6's conversion keeps the low 32
   bits of an x87-precision value; in C++ the conversion is undefined (and traps on some targets). Under
@@ -298,14 +298,8 @@ Findings:
 GTA2 records replays of its inputs and random seeds, and attract mode plays `data\attract\attr1.rep` and
 the others after 60 s idle on the start menu. Played by two exes, they must give the same frames.
 
-```bash
-Scripts/port/build_gl_dlls_clang.sh                          # 10.5.exe renders with the port's renderer code
-python3 Scripts/port/patch_attract.py Scripts/bin_comp/10.5.exe build_port/game/gta2_105_attract.exe 3000
-GTA2_PORT_ATTRACT_MS=3000 FIRST=60 LAST=360 GTA2_DIR=~/Documents/GTA2 RENDERER=$PWD/build_port/gl_clang \
-  python3 Scripts/port/replay_check.py $PWD/build_port/game/gta2_105_attract.exe $PWD/build_port/gta2_port.exe
-```
-
-What it takes to compare fairly:
+The first comparisons were of frames (captured with `GTA2GL_CAPTURE` from both exes, a script since replaced by
+the state check below). What it takes to compare fairly:
 
 - **The same settings.** The first comparisons failed on configuration, not code: the port rendered at
   960x720 (frames can't match the original's 640x480), and lacked the install's `do_blood` and
@@ -440,9 +434,9 @@ Other pointer-looking values are still left out. More trace notes: a crash keeps
 `Class::*` traces a whole class; calls one side inlined are aligned away; clang's tail calls are off in the
 port build (`-fno-optimize-sibling-calls`) so every return is seen.
 
-Tools for this, all in `Scripts/port/`: `replay_check.py` (frames), `snapshot.py` (memory at a frame),
-`trig_check.py` (the tables). winedbg notes: attaching to a running 32-bit process faults under macOS
-wine's wow64 mode, so start the exe under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run_wine.sh`);
+The scripts from before the state check (frames compared, and memory at a frame and the trig tables read through
+winedbg) are gone: the state check and `GTA2_STATELOG_DUMP` do their jobs. winedbg notes: attaching to a running
+32-bit process faults under macOS wine's wow64 mode, so start the exe under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run_wine.sh`);
 `cont N` is slow per hit, so break on `RunGameFrame_4DA850` with a condition on the frame counter
 (`*(int*)(*(int*)0x67ab34)`) first; casts make dereferences work (`x /4x *(unsigned int*)0x676978`).
 
