@@ -508,7 +508,7 @@ constants and declarations only, and `port_linux.h` is force-included first in e
 | Windows paths | `posix_files.cpp` | `fopen`, `_findfirst` and friends, `_stat`, `_getcwd`: backslashes become slashes, and every path component is matched case-insensitively (the game asks for `data\audio\vocals\...`, the folder is `Vocals`). |
 | Window, input, settings, sound | `sdl_win32.cpp`, `sdl_dinput.cpp`, `registry_ini.cpp`, `miles_sdl.cpp` | the same as on Windows. |
 | The renderer's "DLLs" | `posix_win32.cpp` | `LoadLibrary`/`GetProcAddress` are `dlopen(NULL)`/`dlsym`; the program is linked with `-rdynamic`. |
-| Network | `netplay_offline.cpp`, `compat/dplay.h` | `NetPlay.cpp` and `NetUi.cpp` aren't built; a single-player `NetPlay` answers the rest of the game (no players, no messages). The network code only runs once a network game has started, which can't happen. |
+| Network | `net/engine/netplay.cpp`, `compat/dplay.h` | `NetPlay.cpp` and `NetUi.cpp` aren't built (no DirectPlay); the port's network layer stands in for them (docs/netcode.md). Without a network game it answers as a single player. |
 | Windows-only checks | `port_winmain.cpp` | DirectX and DirectMusic versions, exe version info, the GTA2 Manager launch. |
 | Movies | `Source/3rdParty/bink.cpp` | its stubs (no movies until M5). |
 | Other Win32 calls | `posix_win32.cpp` | time, mutexes (no single-instance check), CD drive type (always fixed), computer name, keyboard layout (US). |

@@ -1,5 +1,5 @@
-// Port (docs/port.md): non-Windows builds have no network game (DirectPlay is removed, see
-// Port/netplay_offline.cpp). These are the DirectPlay types NetPlay.hpp's class layout names.
+// Port (docs/port.md): non-Windows builds have no DirectPlay (NetPlay.cpp isn't built; the game's network layer
+// is Port/net/engine/netplay.cpp). These are the DirectPlay types NetPlay.hpp's class layout names.
 #pragma once
 #include "objbase.h"
 
