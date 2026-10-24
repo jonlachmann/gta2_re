@@ -20,11 +20,14 @@ bool net::engine::InCarTransition(Ped* ped)
            objective == objectives_enum::leave_car_36 || objective == objectives_enum::enter_train_37 || objective == objectives_enum::leave_train_38;
 }
 
+// entering_car_3 with ped2_following_a_car_4 is still walking: after the car while it moves, or up to it (Ped.cpp's
+// enter-car state machine); at the door it is ped2_entering_a_car_6. Corrected there, the walk no longer jumped half a
+// block when it reached the door
 bool net::engine::AtCarDoor(Ped* ped)
 {
     const s32 s1 = ped->field_278_ped_state_1, s2 = ped->field_27C_ped_state_2;
-    return s1 == ped_state_1::entering_car_3 || s1 == ped_state_1::exiting_car_4 || s2 == ped_state_2::ped2_entering_a_car_6 ||
-           s2 == ped_state_2::ped2_getting_out_a_car_7;
+    return (s1 == ped_state_1::entering_car_3 && s2 != ped_state_2::ped2_following_a_car_4) || s1 == ped_state_1::exiting_car_4 ||
+           s2 == ped_state_2::ped2_entering_a_car_6 || s2 == ped_state_2::ped2_getting_out_a_car_7;
 }
 
 bool net::engine::LeavingCar(Ped* ped)
