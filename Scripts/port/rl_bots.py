@@ -99,7 +99,7 @@ class Match:
         env = dict(os.environ, GTA2_HEADLESS="1", GTA2_SPEED="1000")
         if args.armed:
             env["GTA2_NET_TESTARM"] = "0:99"  # a pistol each, kept loaded
-        cmd = [BIN, "--server", "--port", str(7000 + idx % 500), "--map", MAP, "--players", str(args.remote + 1), "--arena", brains, "--ticks",
+        cmd = [BIN, "--server", "--port", str(20000 + idx % 20000), "--map", MAP, "--players", str(args.remote + 1), "--arena", brains, "--ticks",
                str(args.ticks), "--seed", str(random.randrange(1, 1 << 31))]
         self.proc = subprocess.Popen(cmd, cwd=GAME, env=env, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         self.sock = None
