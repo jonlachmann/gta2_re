@@ -549,7 +549,7 @@ void net::Server::Frame()
     FeedJerk(world);
     if (mConfig.endTick && mTick >= mConfig.endTick)
     {
-        mArena.PrintResult(world);
+        mArena.Finish(world);
         fflush(stdout);
         _Exit(0); // ponytail: no game shutdown; the trainer only reads the result line
     }

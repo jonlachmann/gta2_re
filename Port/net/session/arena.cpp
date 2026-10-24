@@ -1,24 +1,111 @@
 // Port/net (docs/netcode.md, "Bots"): the server's own players, a bot brain each, with no client (--arena). For
 // matches between bots without the network: Scripts/port/train_bots.py runs them headless and fast and reads the
 // result line; a windowed server shows one of them.
+//
+// "remote:<port>" slots are played by a trainer (Scripts/port/rl_bots.py) over a local TCP connection, one round trip
+// every kSkip ticks for all of them. The game sends (native byte order, all 32-bit):
+//   count, done, kBotFeatures, then per remote slot: slot, alive, reward since the last message, its features
+// and the trainer answers each slot's buttons. With done (the last message, at --ticks) there is no answer.
 #include "session.hpp"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#if !defined(_WIN32)
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 namespace
 {
 const float kNear = 50; // blocks: closer than this to the nearest other player counts towards "near"
+const uint32_t kSkip = 3; // ticks per remote decision (10 a second): the buttons are held in between
+
+// The trainer's reward: frags and deaths most, then damage, pickups and being near someone to fight
+const float kFragReward = 1, kDeathReward = -1, kDamageReward = 0.01f, kPickupReward = 0.3f, kNearReward = 0.001f;
+
+#if !defined(_WIN32)
+int Connect(int port)
+{
+    const int s = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in a = {};
+    a.sin_family = AF_INET;
+    a.sin_port = htons((uint16_t)port);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (s < 0 || connect(s, (sockaddr*)&a, sizeof(a)) != 0)
+    {
+        return -1;
+    }
+    const int one = 1;
+    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)); // a round trip per decision
+    return s;
 }
+
+bool SendAll(int s, const void* data, size_t n)
+{
+    for (const char* p = (const char*)data; n;)
+    {
+        const ssize_t k = send(s, p, n, 0);
+        if (k <= 0)
+        {
+            return false;
+        }
+        p += k, n -= (size_t)k;
+    }
+    return true;
+}
+
+bool ReceiveAll(int s, void* data, size_t n)
+{
+    for (char* p = (char*)data; n;)
+    {
+        const ssize_t k = recv(s, p, n, 0);
+        if (k <= 0)
+        {
+            return false;
+        }
+        p += k, n -= (size_t)k;
+    }
+    return true;
+}
+#else
+// ponytail: training runs on macOS and Linux; Windows has no remote slots
+int Connect(int)
+{
+    return -1;
+}
+bool SendAll(int, const void*, size_t)
+{
+    return false;
+}
+bool ReceiveAll(int, void*, size_t)
+{
+    return false;
+}
+#endif
+} // namespace
 
 bool net::Arena::Start(const std::vector<std::string>& brains, std::string* error)
 {
     for (const std::string& kind : brains)
     {
         mBots.push_back(Bot());
-        mBots.back().kind = kind;
-        mBots.back().brain = CreateBotBrain(kind);
-        if (!mBots.back().brain)
+        Bot& bot = mBots.back();
+        bot.kind = kind;
+        if (kind.compare(0, 7, "remote:") == 0)
+        {
+            if (mSocket < 0 && (mSocket = Connect(atoi(kind.c_str() + 7))) < 0)
+            {
+                *error = "no trainer at " + kind;
+                return false;
+            }
+            continue;
+        }
+        bot.brain = CreateBotBrain(kind);
+        if (!bot.brain)
         {
             *error = "no bot brain " + kind;
             return false;
@@ -34,41 +121,108 @@ void net::Arena::Think(const Snapshot& world, uint32_t tick)
         mNavMap.reset(new engine::NavMap());
         engine::BuildNavMap(*mNavMap);
     }
+    Score(world);
+    std::vector<float> message;
     for (size_t i = 0; i < mBots.size(); i++)
     {
-        FillBotView(mView, world, (int)i, tick, mNavMap.get());
-        mBots[i].buttons = mBots[i].brain->Think(mView);
+        Bot& bot = mBots[i];
+        if (bot.brain || tick % kSkip == 0)
+        {
+            FillBotView(mView, world, (int)i, tick, mNavMap.get());
+        }
+        if (bot.brain)
+        {
+            bot.buttons = bot.brain->Think(mView);
+        }
+        else if (tick % kSkip == 0)
+        {
+            AddRemote((int)i, message);
+        }
     }
-    Score(world);
+    if (!message.empty() && !Exchange(message, false))
+    {
+        fprintf(stderr, "net: the trainer is gone\n");
+        exit(1);
+    }
 }
 
-// What the result line has besides frags and deaths, for a trainer to shape its reward: how close each bot kept
-// to the nearest other player, and the health others lost while it faced them
+// A remote slot's part of the message: slot, alive, reward, features (as floats; the ints as their bits)
+void net::Arena::AddRemote(int slot, std::vector<float>& message)
+{
+    Bot& bot = mBots[slot];
+    const bool alive = mView.hasBody && mView.health > 0;
+    const uint32_t head[2] = {(uint32_t)slot, alive};
+    message.resize(message.size() + 2);
+    memcpy(&message[message.size() - 2], head, sizeof(head));
+    message.push_back(bot.reward);
+    bot.reward = 0;
+    message.resize(message.size() + kBotFeatures, 0.0f);
+    if (alive)
+    {
+        BotFeatures(mView, bot.memory, &message[message.size() - kBotFeatures]);
+    }
+    else
+    {
+        bot.memory = BotMemory();
+    }
+}
+
+bool net::Arena::Exchange(const std::vector<float>& message, bool done)
+{
+    const uint32_t per = 3 + kBotFeatures, count = (uint32_t)(message.size() / per);
+    const uint32_t head[3] = {count, done, (uint32_t)kBotFeatures};
+    std::vector<uint32_t> buttons(count);
+    if (!SendAll(mSocket, head, sizeof(head)) || !SendAll(mSocket, message.data(), message.size() * sizeof(float)))
+    {
+        return false;
+    }
+    if (done)
+    {
+        return true;
+    }
+    if (!ReceiveAll(mSocket, buttons.data(), count * sizeof(uint32_t)))
+    {
+        return false;
+    }
+    for (uint32_t k = 0; k < count; k++)
+    {
+        uint32_t slot = 0;
+        memcpy(&slot, &message[k * per], sizeof(slot));
+        mBots[slot].buttons = buttons[k];
+    }
+    return true;
+}
+
+// Per tick: the trainer's rewards, and for the result line how close each bot kept to the nearest other player, the
+// health others lost while it faced them, the cars it got into and the pickups it took
 void net::Arena::Score(const Snapshot& world)
 {
-    struct Body
-    {
-        float x, y;
-        int rot, health;
-    };
-    std::vector<Body> bodies(mBots.size(), Body{0, 0, 0, 0});
+    std::vector<Bot::Body> bodies(mBots.size());
     for (const EntityState& e : world.entities)
     {
         int p = 0;
         uint32_t b = 0;
         if (engine::PlayerOf(e, &p, &b) && p < (int)bodies.size())
         {
-            bodies[p] = Body{engine::Blocks(e.f[0]), engine::Blocks(e.f[1]), e.f[3], engine::PlayerHealth(e)};
+            Bot::Body& body = bodies[p];
+            body.x = engine::Blocks(e.f[0]), body.y = engine::Blocks(e.f[1]), body.rot = e.f[3];
+            body.health = engine::PlayerHealth(e), body.frags = engine::PlayerFrags(e), body.deaths = engine::PlayerDeaths(e);
+            body.car = engine::PlayerCarId(e);
+            for (int w = 0; w < 15; w++)
+            {
+                body.ammo += engine::PlayerAmmo(e, w);
+            }
         }
     }
     for (size_t i = 0; i < mBots.size(); i++)
     {
-        const Body& me = bodies[i];
+        const Bot::Body& me = bodies[i];
+        Bot& bot = mBots[i];
         float nearest = 1e9f, shooterDist = 1e9f;
         int shooter = -1;
         for (size_t j = 0; j < mBots.size(); j++)
         {
-            const Body& other = bodies[j];
+            const Bot::Body& other = bodies[j];
             const float dx = me.x - other.x, dy = me.y - other.y, d = hypotf(dx, dy);
             if (j == i || other.health <= 0)
             {
@@ -86,14 +240,24 @@ void net::Arena::Score(const Snapshot& world)
         }
         if (me.health > 0 && nearest < kNear)
         {
-            mBots[i].closeness += 1 - nearest / kNear;
+            bot.closeness += 1 - nearest / kNear;
+            bot.reward += kNearReward * (1 - nearest / kNear);
         }
-        const int lost = mBots[i].health - me.health;
-        if (lost > 0 && me.health >= 0 && shooter >= 0 && mBots[i].health > 0)
+        const int lost = bot.last.health - me.health;
+        if (lost > 0 && shooter >= 0 && bot.last.health > 0)
         {
             mBots[shooter].dealt += lost;
+            mBots[shooter].reward += kDamageReward * lost;
         }
-        mBots[i].health = me.health;
+        if (mTicks > 0)
+        {
+            bot.reward += kFragReward * (me.frags - bot.last.frags) + kDeathReward * (me.deaths - bot.last.deaths);
+            const bool took = me.ammo > bot.last.ammo && me.health > 0 && bot.last.health > 0; // not a respawn's
+            bot.pickups += took;
+            bot.reward += took ? kPickupReward : 0;
+            bot.cars += me.car && !bot.last.car;
+        }
+        bot.last = me;
     }
     mTicks++;
 }
@@ -103,7 +267,7 @@ uint32_t net::Arena::Buttons(int slot) const
     return mBots[slot].buttons;
 }
 
-void net::Arena::PrintResult(const Snapshot& world) const
+void net::Arena::Finish(const Snapshot& world)
 {
     for (const EntityState& e : world.entities)
     {
@@ -112,8 +276,21 @@ void net::Arena::PrintResult(const Snapshot& world) const
         if (engine::PlayerOf(e, &p, &b) && p < (int)mBots.size())
         {
             const Bot& bot = mBots[p];
-            printf("net: arena %d %s frags %d deaths %d near %.3f dealt %d\n", p, bot.kind.c_str(), engine::PlayerFrags(e), engine::PlayerDeaths(e),
-                   mTicks ? bot.closeness / mTicks : 0.0, bot.dealt);
+            printf("net: arena %d %s frags %d deaths %d near %.3f dealt %d cars %d pickups %d\n", p, bot.kind.c_str(), engine::PlayerFrags(e),
+                   engine::PlayerDeaths(e), mTicks ? bot.closeness / mTicks : 0.0, bot.dealt, bot.cars, bot.pickups);
         }
+    }
+    if (mSocket >= 0)
+    {
+        std::vector<float> message;
+        for (size_t i = 0; i < mBots.size(); i++)
+        {
+            if (!mBots[i].brain)
+            {
+                mView = BotView(); // its last reward; no features
+                AddRemote((int)i, message);
+            }
+        }
+        Exchange(message, true);
     }
 }
