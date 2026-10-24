@@ -145,30 +145,6 @@ int WINAPI ReleaseDC(HWND, HDC)
     return 1;
 }
 
-char* _itoa(int value, char* buf, int radix)
-{
-    if (radix == 10)
-    {
-        sprintf(buf, "%d", value);
-        return buf;
-    }
-    unsigned int v = (unsigned int)value;
-    char tmp[40];
-    int len = 0;
-    do
-    {
-        const int d = v % radix;
-        tmp[len++] = (char)(d < 10 ? '0' + d : 'a' + d - 10);
-        v /= radix;
-    } while (v);
-    for (int i = 0; i < len; i++)
-    {
-        buf[i] = tmp[len - 1 - i];
-    }
-    buf[len] = 0;
-    return buf;
-}
-
 char* _strupr(char* s)
 {
     for (char* p = s; *p; p++)
@@ -178,7 +154,7 @@ char* _strupr(char* s)
     return s;
 }
 
-// Latin-1 narrowing, like port_wcstombs (the game's text is 8-bit)
+// Latin-1 narrowing, like port_wcstombs
 int WINAPI WideCharToMultiByte(UINT, DWORD, LPCWSTR src, int srcLen, LPSTR dst, int dstLen, LPCSTR, LPBOOL)
 {
     int n = 0;
@@ -186,7 +162,7 @@ int WINAPI WideCharToMultiByte(UINT, DWORD, LPCWSTR src, int srcLen, LPSTR dst, 
     {
         if (n < dstLen)
         {
-            dst[n] = (unsigned short)src[i] < 0x100 ? (char)src[i] : '?';
+            dst[n] = port_narrow(src[i]);
         }
         n++;
         if (srcLen < 0 && !src[i])

@@ -35,7 +35,6 @@ HICON WINAPI LoadIconA(HINSTANCE hInstance, LPCSTR name);
 HCURSOR WINAPI LoadCursorA(HINSTANCE hInstance, LPCSTR name);
 HDC WINAPI GetDC(HWND hWnd);
 int WINAPI ReleaseDC(HWND hWnd, HDC hdc);
-char* _itoa(int value, char* buf, int radix);
 char* _strupr(char* s);
 int WINAPI WideCharToMultiByte(UINT codePage, DWORD flags, LPCWSTR src, int srcLen, LPSTR dst, int dstLen, LPCSTR defChar,
                                LPBOOL usedDefChar);

@@ -20,9 +20,17 @@ int port_wcscmp(const wchar_t* a, const wchar_t* b);
 size_t port_wcstombs(char* dst, const wchar_t* src, size_t n);
 size_t port_mbstowcs(wchar_t* dst, const char* src, size_t n);
 wchar_t* port_itow(int value, wchar_t* buf, int radix);
+char* _itoa(int value, char* buf, int radix); // _itow's narrow twin, in port_wchar.cpp with it
 #ifdef __cplusplus
 }
 #endif
+
+// Latin-1 narrowing (the game's text is 8-bit): characters above 0xFF become '?'. port_wcstombs and
+// WideCharToMultiByte (posix_win32.cpp).
+static inline char port_narrow(wchar_t c)
+{
+    return (unsigned short)c < 0x100 ? (char)c : '?';
+}
 
 #define swprintf port_swprintf
 #define vswprintf port_vswprintf

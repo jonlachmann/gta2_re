@@ -81,7 +81,7 @@ size_t port_wcstombs(char* dst, const wchar_t* src, size_t n)
             {
                 return i;
             }
-            dst[i] = (unsigned short)src[i] < 0x100 ? (char)src[i] : '?';
+            dst[i] = port_narrow(src[i]);
         }
     }
     if (dst && i < n)
@@ -112,33 +112,35 @@ size_t port_mbstowcs(wchar_t* dst, const char* src, size_t n)
     return i;
 }
 
+// Other radixes print the value as unsigned, as Microsoft's does (and so _itow)
+char* _itoa(int value, char* buf, int radix)
+{
+    if (radix == 10)
+    {
+        snprintf(buf, 12, "%d", value); // the longest int is 11 characters
+        return buf;
+    }
+    unsigned int v = (unsigned int)value;
+    char tmp[40];
+    int len = 0;
+    do
+    {
+        const int d = v % radix;
+        tmp[len++] = (char)(d < 10 ? '0' + d : 'a' + d - 10);
+        v /= radix;
+    } while (v);
+    for (int i = 0; i < len; i++)
+    {
+        buf[i] = tmp[len - 1 - i];
+    }
+    buf[len] = 0;
+    return buf;
+}
+
 wchar_t* port_itow(int value, wchar_t* buf, int radix)
 {
     char tmp[40];
-    if (radix == 10)
-    {
-        snprintf(tmp, sizeof(tmp), "%d", value);
-    }
-    else
-    {
-        // Other radixes print the value as unsigned, as _itoa does
-        unsigned int v = (unsigned int)value;
-        int len = 0;
-        do
-        {
-            const int d = v % radix;
-            tmp[len++] = (char)(d < 10 ? '0' + d : 'a' + d - 10);
-            v /= radix;
-        } while (v);
-        for (int i = 0; i < len / 2; i++)
-        {
-            const char c = tmp[i];
-            tmp[i] = tmp[len - 1 - i];
-            tmp[len - 1 - i] = c;
-        }
-        tmp[len] = 0;
-    }
-    port_mbstowcs(buf, tmp, 40);
+    port_mbstowcs(buf, _itoa(value, tmp, radix), 40);
     return buf;
 }
 
