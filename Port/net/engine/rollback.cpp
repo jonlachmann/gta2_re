@@ -106,6 +106,14 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         p->TakeVoiceEvent_41B0B0(); // what it says next (a landing from a roof, a hit)
+        // Its weapons, which aren't on the weapon pool's list (an instant gang's dual pistols heard for ever)
+        for (Weapon* w : {p->field_170_selected_weapon, p->field_174_pWeapon})
+        {
+            if (w)
+            {
+                w->TakeShotFired_41CC80();
+            }
+        }
     }
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
     {
