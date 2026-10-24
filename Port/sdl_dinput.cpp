@@ -505,7 +505,10 @@ void Port_DInputOnEvent(const SDL_Event& e)
 
 HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE, DWORD, LPDIRECTINPUTA* ppDI, LPUNKNOWN)
 {
-    SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    if (!Port_IsHeadless())
+    {
+        SDL_InitSubSystem(SDL_INIT_GAMEPAD); // headless: none, as its every event poll asks the system for new ones
+    }
     gScriptedPad = SDL_getenv("GTA2_PORT_PAD") != NULL;
     *ppDI = &gDInput;
     return DI_OK;
