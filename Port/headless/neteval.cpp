@@ -17,6 +17,7 @@
 #include "explosion_type.hpp"
 #include "root_sound.hpp"
 #include "../port_rand_sound.h"
+#include "../port_hooks.hpp"
 #include "../port_rand_state.h"
 #if !defined(_WIN32)
     #include <cxxabi.h>
@@ -29,11 +30,6 @@
 #include <string.h>
 #include <string>
 #include <vector>
-
-namespace crt
-{
-extern void (*gPortHeapHook)(size_t size); // Source/crt_stubs.cpp
-}
 
 using net::engine::Block;
 using net::engine::RestoreWorld;

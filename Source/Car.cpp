@@ -41,6 +41,9 @@
 #include "ScriptManager.hpp"
 #include "gtx_0x106C.hpp"
 #include "map_0x370.hpp"
+#if defined(GTA2_PORT)
+    #include "Port/port_hooks.hpp"
+#endif
 #include "rng.hpp"
 #include "root_sound.hpp"
 #include "sprite.hpp"
@@ -1668,10 +1671,6 @@ bool CarManager::CanAllocateCarOfKindWithSpare_446870(s32 type) const
             return false;
     }
 }
-
-#if defined(GTA2_PORT)
-extern s32 gPortTrafficCap; // the ambient traffic cars for the whole game: 16, or a network server's --traffic (Port/net/net_main.cpp)
-#endif
 
 MATCH_FUNC(0x446930)
 bool CarManager::CanAllocateCarOfKind_446930(s32 type) const

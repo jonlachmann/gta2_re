@@ -24,6 +24,9 @@
 #include "CollisionSoundQueue.hpp"
 #include "block_face.hpp"
 #include "car_surface_type_more.hpp"
+#if defined(GTA2_PORT)
+    #include "Port/port_hooks.hpp"
+#endif
 
 DEFINE_GLOBAL(Map_0x370*, gMap_0x370_6F6268, 0x6F6268);
 DEFINE_GLOBAL(gmp_block_info*, gBlockInfo0_6F5EB0, 0x6F5EB0);
@@ -266,9 +269,6 @@ s32 Map_0x370::FindZoneIdxByName_4DF050(const char_type* pZoneName, u8 zone_name
 }
 
 MATCH_FUNC(0x4DF0F0)
-#if defined(GTA2_PORT)
-extern s16 gPortZoneRoundRobin; // Port/net/net_main.cpp: the round robin's place, rolled back and sent by a network server
-#endif
 gmp_map_zone* Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0(u8 zone_type)
 {
 #if defined(GTA2_PORT)

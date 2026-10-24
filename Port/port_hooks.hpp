@@ -1,0 +1,21 @@
+// Port (docs/port.md): the port's hooks in the game's code, declared once. The Source/ files that use them include
+// this under #if defined(GTA2_PORT), so VC6 never sees it; Port/ defines and sets them.
+#pragma once
+#include "Source/types.hpp"
+#include <stddef.h>
+#include <windows.h>
+
+// DirectInput on SDL3 (Port/sdl_dinput.cpp), for input.cpp and InputRecorder_67F8B0.cpp
+HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE hinst, DWORD dwVersion, struct IDirectInputA** ppDI, struct IUnknown* punkOuter);
+
+namespace crt
+{
+// Source/crt_stubs.cpp calls it on every allocation (size) and free (0) when set: the sim bench lists heap use during
+// ticks (Port/headless/neteval.cpp)
+extern void (*gPortHeapHook)(size_t size);
+} // namespace crt
+
+// Port/net/net_main.cpp's
+extern s32 gPortTrafficCap; // the ambient traffic cars for the whole game (Car.cpp): 16, or a network server's --traffic
+extern void (*gPortDrawOverlay)(); // drawn last in Game::Draw_4B92D0; NULL unless a debug overlay is on
+extern s16 gPortZoneRoundRobin; // Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0's place, rolled back and sent by a network server

@@ -66,6 +66,9 @@
 #include "sprite.hpp"
 #include "TextTable.hpp"
 #include "winmain.hpp"
+#if defined(GTA2_PORT)
+    #include "Port/port_hooks.hpp"
+#endif
 
 DEFINE_GLOBAL_INIT(Fix16, kFpFive_67DECC, Fix16(5), 0x67DECC);
 DEFINE_GLOBAL_INIT(Fix16, kFpFive_67DFB4, kFpFive_67DECC, 0x67DFB4);
@@ -384,10 +387,6 @@ void Game::ShowDebugOverlay_4B9270()
         pTextEntry->SetDrawKind8_45AFD0(6);
     }
 }
-
-#if defined(GTA2_PORT)
-extern void (*gPortDrawOverlay)(); // Port/net/net_main.cpp: NULL unless a debug overlay is on
-#endif
 
 MATCH_FUNC(0x4B92D0)
 void Game::Draw_4B92D0()

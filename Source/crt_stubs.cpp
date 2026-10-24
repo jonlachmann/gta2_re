@@ -1,12 +1,14 @@
 #include "crt_stubs.hpp"
 #include "Function.hpp"
 #include <memory>
+#if defined(GTA2_PORT)
+    #include "Port/port_hooks.hpp"
+#endif
 
 namespace crt
 {
 #if defined(GTA2_PORT)
-// Port: called on every allocation (size) and free (0) when set; the sim bench lists heap use during ticks
-void (*gPortHeapHook)(size_t size) = 0;
+void (*gPortHeapHook)(size_t size) = 0; // Port/port_hooks.hpp
 #endif
 
 STUB_FUNC(0x5ED3BB)

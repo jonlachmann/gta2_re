@@ -7,6 +7,7 @@
 // ponytail: no mouse data (the game doesn't use the mouse for play); one pad.
 #define DIRECTINPUT_VERSION 0x0700
 #include "sdl_dinput.hpp"
+#include "port_hooks.hpp"
 #include <deque>
 #include <dinput.h>
 

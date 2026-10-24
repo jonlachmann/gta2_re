@@ -10,7 +10,7 @@ DEFINE_GLOBAL(LPDIRECTINPUTDEVICEA, gKeyboardDevice_67B5C0, 0x67B5C0);
 DEFINE_GLOBAL(LPDIRECTINPUTDEVICEA, gGamePadDevice_67B6C0, 0x67B6C0);
 
 #if defined(GTA2_PORT)
-HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE hinst, DWORD dwVersion, LPDIRECTINPUTA* ppDI, LPUNKNOWN punkOuter);
+    #include "Port/port_hooks.hpp"
 #endif
 
 #if !defined(_MSC_VER) || _MSC_VER > 1200
