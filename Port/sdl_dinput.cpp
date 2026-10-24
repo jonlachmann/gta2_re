@@ -47,22 +47,28 @@ void AddPadEvent(DWORD ofs, DWORD data)
     }
 }
 
+// The test hooks' lists, <ms>:<what>:<value>,...: hands each entry whose time has come to add, and keeps the rest.
+void QueueScripted(const char*& pNext, void (*add)(unsigned ms, unsigned what, int value))
+{
+    while (pNext && *pNext)
+    {
+        unsigned ms = 0, what = 0;
+        int value = 0;
+        if (SDL_sscanf(pNext, "%u:%u:%d", &ms, &what, &value) != 3 || ms > SDL_GetTicks())
+        {
+            return;
+        }
+        add(ms, what, value);
+        pNext = SDL_strchr(pNext, ',');
+        pNext = pNext ? pNext + 1 : NULL;
+    }
+}
+
 // Test hook: GTA2_PORT_PAD=<ms>:<offset>:<value>,... queues pad events (and makes the game see a pad).
 void QueueScriptedPad()
 {
     static const char* pNext = SDL_getenv("GTA2_PORT_PAD");
-    while (pNext && *pNext)
-    {
-        unsigned ms = 0, ofs = 0;
-        int value = 0;
-        if (SDL_sscanf(pNext, "%u:%u:%d", &ms, &ofs, &value) != 3 || ms > SDL_GetTicks())
-        {
-            return;
-        }
-        AddPadEvent(ofs, (DWORD)value);
-        pNext = SDL_strchr(pNext, ',');
-        pNext = pNext ? pNext + 1 : NULL;
-    }
+    QueueScripted(pNext, [](unsigned, unsigned ofs, int value) { AddPadEvent(ofs, (DWORD)value); });
 }
 
 // Stick to the game's range, with the 25% dead zone it sets (DIPROP_DEADZONE 2500 of 10000)
@@ -106,17 +112,7 @@ int PadButton(int b)
 void QueueScriptedKeys()
 {
     static const char* pNext = SDL_getenv("GTA2_PORT_KEYS");
-    while (pNext && *pNext)
-    {
-        unsigned ms = 0, dik = 0, down = 0;
-        if (SDL_sscanf(pNext, "%u:%u:%u", &ms, &dik, &down) != 3 || ms > SDL_GetTicks())
-        {
-            return;
-        }
-        AddKeyEvent(dik, down != 0, ms);
-        pNext = SDL_strchr(pNext, ',');
-        pNext = pNext ? pNext + 1 : NULL;
-    }
+    QueueScripted(pNext, [](unsigned ms, unsigned dik, int down) { AddKeyEvent(dik, down != 0, ms); });
 }
 
 // SDL scancodes (USB HID) to DirectInput key codes (PC set 1 scancodes).
@@ -200,11 +196,18 @@ DWORD ToDik(SDL_Scancode sc)
     }
 }
 
-// One device class for the keyboard, the joystick and the mouse (which has no data).
+enum DeviceKind
+{
+    kKeyboard,
+    kPad,
+    kMouse, // no data
+};
+
+// One device class for the keyboard, the joystick and the mouse.
 class Device : public IDirectInputDevice2A
 {
   public:
-    Device(bool keyboard, bool pad) : mRefs(1), mKeyboard(keyboard), mPad(pad)
+    explicit Device(DeviceKind kind) : mRefs(1), mKind(kind)
     {
     }
 
@@ -254,7 +257,7 @@ class Device : public IDirectInputDevice2A
     STDMETHOD(GetDeviceState)(DWORD cb, LPVOID pData)
     {
         memset(pData, 0, cb);
-        if (mKeyboard)
+        if (mKind == kKeyboard)
         {
             QueueScriptedKeys();
             memcpy(pData, gKeyState, cb < sizeof(gKeyState) ? cb : sizeof(gKeyState));
@@ -264,13 +267,13 @@ class Device : public IDirectInputDevice2A
     // Buffered events: rgdod NULL with *pdwInOut = INFINITE flushes; DIGDD_PEEK leaves them queued.
     STDMETHOD(GetDeviceData)(DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD flags)
     {
-        if (!mKeyboard && !mPad)
+        if (mKind == kMouse)
         {
             *pdwInOut = 0;
             return DI_OK;
         }
-        mKeyboard ? QueueScriptedKeys() : QueueScriptedPad();
-        std::deque<KeyEvent>& events = mKeyboard ? gKeyEvents : gPadEvents;
+        mKind == kKeyboard ? QueueScriptedKeys() : QueueScriptedPad();
+        std::deque<KeyEvent>& events = mKind == kKeyboard ? gKeyEvents : gPadEvents;
         DWORD n = events.size() < *pdwInOut ? (DWORD)events.size() : *pdwInOut;
         for (DWORD i = 0; rgdod && i < n; i++)
         {
@@ -354,8 +357,7 @@ class Device : public IDirectInputDevice2A
 
   private:
     ULONG mRefs;
-    bool mKeyboard;
-    bool mPad;
+    DeviceKind mKind;
 };
 
 class DInput : public IDirectInputA
@@ -376,7 +378,7 @@ class DInput : public IDirectInputA
     }
     STDMETHOD(CreateDevice)(REFGUID guid, LPDIRECTINPUTDEVICEA* ppDevice, LPUNKNOWN)
     {
-        *ppDevice = new Device(IsEqualGUID(guid, GUID_SysKeyboard), IsEqualGUID(guid, kPadGuid));
+        *ppDevice = new Device(IsEqualGUID(guid, GUID_SysKeyboard) ? kKeyboard : IsEqualGUID(guid, kPadGuid) ? kPad : kMouse);
         return DI_OK;
     }
     // Joysticks: the first SDL gamepad, if one is connected at start-up (as DirectInput saw it)
@@ -423,64 +425,80 @@ class DInput : public IDirectInputA
     }
 };
 DInput gDInput;
+
+// The first pad's stick, d-pad and buttons
+void OnPadEvent(const SDL_Event& e)
+{
+    if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
+    {
+        if (e.gaxis.which != SDL_GetGamepadID(gPad))
+        {
+            return;
+        }
+        if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
+        {
+            gStickX = ScaleAxis(e.gaxis.value);
+        }
+        else if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
+        {
+            gStickY = ScaleAxis(e.gaxis.value);
+        }
+    }
+    else
+    {
+        if (e.gbutton.which != SDL_GetGamepadID(gPad))
+        {
+            return;
+        }
+        const bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+        switch (e.gbutton.button)
+        {
+            case SDL_GAMEPAD_BUTTON_DPAD_LEFT: gDpadX = down ? -1000 : 0; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: gDpadX = down ? 1000 : 0; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_UP: gDpadY = down ? -1000 : 0; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_DOWN: gDpadY = down ? 1000 : 0; break;
+            default:
+            {
+                const int n = PadButton(e.gbutton.button);
+                if (n >= 0)
+                {
+                    AddPadEvent(48 + n, down ? 0x80 : 0);
+                }
+                break;
+            }
+        }
+    }
+    UpdateAxis(0, gStickX, gDpadX, gLastX);
+    UpdateAxis(4, gStickY, gDpadY, gLastY);
+}
+
+void OnKeyEvent(const SDL_Event& e)
+{
+    const DWORD dik = e.key.repeat ? 0 : ToDik(e.key.scancode);
+    if (dik)
+    {
+        AddKeyEvent(dik, e.type == SDL_EVENT_KEY_DOWN, (DWORD)SDL_GetTicks());
+    }
+}
 } // namespace
 
 // Called with every SDL event the window loop sees (sdl_win32.cpp).
 void Port_DInputOnEvent(const SDL_Event& e)
 {
-    if (gPad && (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION || e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
-                 e.type == SDL_EVENT_GAMEPAD_BUTTON_UP))
+    switch (e.type)
     {
-        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
-        {
-            if (e.gaxis.which != SDL_GetGamepadID(gPad))
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+            if (gPad)
             {
-                return;
+                OnPadEvent(e);
             }
-            if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
-            {
-                gStickX = ScaleAxis(e.gaxis.value);
-            }
-            else if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
-            {
-                gStickY = ScaleAxis(e.gaxis.value);
-            }
-        }
-        else
-        {
-            if (e.gbutton.which != SDL_GetGamepadID(gPad))
-            {
-                return;
-            }
-            const bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
-            switch (e.gbutton.button)
-            {
-                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: gDpadX = down ? -1000 : 0; break;
-                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: gDpadX = down ? 1000 : 0; break;
-                case SDL_GAMEPAD_BUTTON_DPAD_UP: gDpadY = down ? -1000 : 0; break;
-                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: gDpadY = down ? 1000 : 0; break;
-                default:
-                {
-                    const int n = PadButton(e.gbutton.button);
-                    if (n >= 0)
-                    {
-                        AddPadEvent(48 + n, down ? 0x80 : 0);
-                    }
-                    break;
-                }
-            }
-        }
-        UpdateAxis(0, gStickX, gDpadX, gLastX);
-        UpdateAxis(4, gStickY, gDpadY, gLastY);
-        return;
-    }
-    if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
-    {
-        const DWORD dik = ToDik(e.key.scancode);
-        if (dik)
-        {
-            AddKeyEvent(dik, e.type == SDL_EVENT_KEY_DOWN, (DWORD)SDL_GetTicks());
-        }
+            break;
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+            OnKeyEvent(e);
+            break;
     }
 }
 
