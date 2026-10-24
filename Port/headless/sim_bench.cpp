@@ -46,6 +46,7 @@
 #include "../port_globals.hpp"
 #include "../net/engine/world.hpp"
 #include "../port_rand_sound.h"
+#include "../port_rand_state.h"
 #include <chrono>
 #if !defined(_WIN32)
     #include <cxxabi.h>
@@ -62,7 +63,6 @@
 void StateLog_Frame(unsigned flip);
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
-extern unsigned int gPortRandCalls; // port_rand.cpp
 namespace crt
 {
 extern void (*gPortHeapHook)(size_t size); // Source/crt_stubs.cpp

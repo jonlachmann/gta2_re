@@ -1,6 +1,7 @@
 // Port (docs/port.md): VC6's rand()/srand(), see port_rand.h.
 #include "port_rand.h"
 #include "port_rand_sound.h"
+#include "port_rand_state.h"
 #include "port_globals.hpp"
 
 // 10.5.exe keeps it at 0x626FE0 (a single-threaded CRT): registered, so the state log compares it
@@ -12,7 +13,6 @@ void port_srand_5EDED7(unsigned int seed)
     sState = seed;
 }
 
-// The netcode sends the server's state to clients (Port/net/engine/access.cpp), declared there
 unsigned int PortRandState()
 {
     return sState;
@@ -23,13 +23,12 @@ void PortRandSetState(unsigned int state)
     sState = state;
 }
 
-unsigned int gPortRandCalls; // for the sim bench (Port/headless/sim_bench.cpp): who draws how many
+unsigned int gPortRandCalls;
 
 int port_rand_5EDEE1()
 {
     gPortRandCalls++;
-    sState = sState * 214013u + 2531011u;
-    return (int)((sState >> 16) & 0x7FFF);
+    return PortRandStep(sState);
 }
 
 // sound_obj's own stream (port_rand_sound.h), the same generator
@@ -47,7 +46,6 @@ int port_rand_sound()
     {
         return port_rand_5EDEE1();
     }
-    sSoundState = sSoundState * 214013u + 2531011u;
-    return (int)((sSoundState >> 16) & 0x7FFF);
+    return PortRandStep(sSoundState);
 }
 
