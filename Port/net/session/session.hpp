@@ -37,6 +37,38 @@ struct ServerConfig
     float interestRadius = 24.0f; // blocks around a client's player that its snapshots cover (players: always)
     int packets = 4; // a snapshot's packets at most (--packets, 1..8): a busy area's goes in parts
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
+    std::vector<std::string> arena; // bot brains playing the first slots on the server itself (--arena)
+    uint32_t endTick = 0; // the arena's result printed and the server ended at this tick (--ticks; 0: never)
+};
+
+// The server's own bot players (arena.cpp), slots 0..n-1
+class Arena
+{
+  public:
+    bool Start(const std::vector<std::string>& brains, std::string* error);
+    int Count() const
+    {
+        return (int)mBots.size();
+    }
+    void Think(const Snapshot& world, uint32_t tick); // each bot's buttons for the next tick
+    uint32_t Buttons(int slot) const;
+    void PrintResult(const Snapshot& world) const; // "net: arena <slot> <brain> frags F deaths D near N dealt H"
+
+  private:
+    struct Bot
+    {
+        std::string kind;
+        std::unique_ptr<BotBrain> brain;
+        uint32_t buttons = 0;
+        double near = 0; // summed per tick: 1 - distance / 50 blocks to the nearest other player
+        int dealt = 0, health = 0;
+    };
+    void Score(const Snapshot& world);
+
+    std::vector<Bot> mBots;
+    std::unique_ptr<engine::NavMap> mNavMap;
+    BotView mView;
+    uint32_t mTicks = 0;
 };
 
 // " p:f/d(h)@x,y": per player, frags/deaths (health) and where
@@ -85,7 +117,7 @@ class Server
     void StartGameOnce();
     void PollTransport();
     void RunTestHooks();
-    void SetNextInputs();
+    void SetNextInputs(const Snapshot& world);
     void FeedJerk(const Snapshot& world);
     void PrintStats(const Snapshot& world);
     void SendSnapshot(int slot, Slot& s, const Snapshot& world);
@@ -101,6 +133,7 @@ class Server
     bool mStarted = false;
     Stats mStats;
     JerkMeter mJerk;
+    Arena mArena;
 };
 
 struct ClientConfig

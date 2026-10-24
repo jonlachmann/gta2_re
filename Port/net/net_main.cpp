@@ -3,7 +3,9 @@
 //            [--police]  (police on, as the lobby's box; off by default as there)
 //            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)
-//   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple, carhop, rammer)
+//            [--arena brain,brain,...]  (bots on the server itself in the first slots, e.g. nn:best.nn,simple)
+//            [--ticks N]  (prints the arena's result and ends at tick N: Scripts/port/train_bots.py)
+//   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple, carhop, rammer, nn:<file>)
 //   either: [--lag ms] [--jitter ms] [--loss percent]  a link conditioner on this end's sends (tests)
 //   --replay <file>  a client session recorded with GTA2_NET_RECORD=<file>, played back without a server
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
@@ -138,6 +140,19 @@ int NetMain_Init(std::vector<std::string>& args)
         else if (a == "--packets" && more)
         {
             sc.packets = atoi(args[++i].c_str());
+        }
+        else if (a == "--arena" && more)
+        {
+            for (size_t at = 0, end = 0; end != std::string::npos; at = end + 1)
+            {
+                end = args[i + 1].find(',', at);
+                sc.arena.push_back(args[i + 1].substr(at, end == std::string::npos ? end : end - at));
+            }
+            i++;
+        }
+        else if (a == "--ticks" && more)
+        {
+            sc.endTick = (uint32_t)atoi(args[++i].c_str());
         }
         else if (a == "--name" && more)
         {

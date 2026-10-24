@@ -10,6 +10,8 @@
 
 namespace
 {
+const uint32_t kArenaPeer = ~0u; // an arena bot's slot (no transport peer has it)
+
 float Distance(const net::EntityState& e, float x, float y)
 {
     // Every schema type with a place starts with x and y
@@ -80,6 +82,21 @@ bool net::Server::Start(const ServerConfig& config, std::string* error)
     if (config.lagMs || config.jitterMs || config.lossPercent)
     {
         mTransport.reset(CreateConditioner(mTransport.release(), config.lagMs, config.jitterMs, config.lossPercent));
+    }
+    if (config.arena.size() > mSlots.size())
+    {
+        *error = "more arena bots than player slots";
+        return false;
+    }
+    if (!mArena.Start(config.arena, error))
+    {
+        return false;
+    }
+    for (int i = 0; i < mArena.Count(); i++)
+    {
+        mSlots[i].used = true; // no peer: the arena's
+        mSlots[i].peer = kArenaPeer;
+        mSlots[i].name = "bot" + std::to_string(i);
     }
     mJerk.PrintJumps(Env().jerkLog >= 2);
     printf("net: server on port %u, %d player slots, %s\n", config.port, config.game.players, config.game.scr.c_str());
@@ -383,6 +400,11 @@ void net::Server::StartGameOnce()
         {
             engine::TakeOutOfGame((int)i);
         }
+        else if (mSlots[i].peer == kArenaPeer)
+        {
+            engine::PutInGame((int)i, true);
+            engine::SetPlayerName((int)i, mSlots[i].name.c_str());
+        }
     }
     mStarted = true;
 }
@@ -432,14 +454,23 @@ void net::Server::RunTestHooks()
     }
 }
 
-// Inputs for the next tick: its command, or the last one again if it is late; nobody's slot stands still
-void net::Server::SetNextInputs()
+// Inputs for the next tick: its command, or the last one again if it is late, or the arena bot's; nobody's slot
+// stands still
+void net::Server::SetNextInputs(const Snapshot& world)
 {
     const uint32_t next = mTick + 1;
+    if (mArena.Count() && mStarted)
+    {
+        mArena.Think(world, mTick);
+    }
     for (size_t i = 0; i < mSlots.size(); i++)
     {
         Slot& s = mSlots[i];
-        if (s.used && s.cmdTick[next % kRing] == next)
+        if (s.peer == kArenaPeer)
+        {
+            s.buttons = mStarted ? mArena.Buttons((int)i) : 0;
+        }
+        else if (s.used && s.cmdTick[next % kRing] == next)
         {
             s.buttons = s.cmdButtons[next % kRing];
         }
@@ -507,14 +538,20 @@ void net::Server::Frame()
     StartGameOnce();
     PollTransport();
     RunTestHooks();
-    SetNextInputs();
     Snapshot world;
     engine::Capture(world);
     world.tick = mTick;
+    SetNextInputs(world);
     FeedJerk(world);
+    if (mConfig.endTick && mTick >= mConfig.endTick)
+    {
+        mArena.PrintResult(world);
+        fflush(stdout);
+        _Exit(0); // ponytail: no game shutdown; the trainer only reads the result line
+    }
     for (size_t i = 0; i < mSlots.size(); i++)
     {
-        if (mSlots[i].used)
+        if (mSlots[i].used && mSlots[i].peer != kArenaPeer)
         {
             SendSnapshot((int)i, mSlots[i], world);
         }
