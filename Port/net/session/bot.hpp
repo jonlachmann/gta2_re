@@ -51,6 +51,7 @@ struct BotView
         int rot;
         int health; // for kPlayer
         bool weapon; // for kPickup: a weapon (else a power-up)
+        bool inCar; // for kPlayer: it drives
     };
     std::vector<Seen> seen; // what the client's snapshot has, others only
     const engine::NavMap* map = nullptr;
@@ -94,7 +95,7 @@ struct BotRoute
 const uint32_t kBotDecisionTicks = 3;
 
 // What the network bots see (bot_nn.cpp): a BotView as numbers, about -1..1, relative to where it faces
-const int kBotFeatures = 59;
+const int kBotFeatures = 62;
 struct BotMemory // what the features remember between ticks
 {
     float lastX = -1, lastY = 0;

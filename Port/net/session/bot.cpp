@@ -311,8 +311,9 @@ class HunterBot : public DecidingBot
     bool mDriving = false;
 };
 // The whole round: a weapon first, then a car, then along its route to the nearest player, and there whatever suits:
-// runs it over when coming at it fast and head on, else gets out and shoots. On foot with a gun it closes in and
-// fires while facing it. It doesn't punch.
+// runs it over when coming at it fast and head on, else gets out and shoots. Pinned against someone in a car, it gets
+// out too. On foot with a gun it closes in and fires while facing it (a car from 3 blocks); without one, it takes the
+// car of someone driving near, else fetches a weapon. It doesn't punch.
 class SoldierBot : public DecidingBot
 {
   public:
@@ -361,6 +362,11 @@ class SoldierBot : public DecidingBot
         {
             return net::kBtnBack | net::kBtnLeft;
         }
+        // Unarmed and someone drives near: its car, with it pulled out (the game does that on enter)
+        if (target && target->inCar && !v.guns && d < 8)
+        {
+            return d < 2.5f ? Press(v, net::kBtnEnterExit) : Walk(v, target->x, target->y);
+        }
         // Unarmed: to a weapon whatever happens (fistfights between players get stuck, with no harm done)
         float far = 0;
         const net::BotView::Seen* weapon = v.guns ? NULL : Nearest(v, net::BotView::Seen::kPickup, &far, true);
@@ -405,7 +411,9 @@ class SoldierBot : public DecidingBot
         }
         // Rockets, molotovs and grenades (Source/enums.hpp, weapon_type) blow it up too up close: those from afar
         const bool blast = v.weapon == 2 || v.weapon == 4 || v.weapon == 5;
-        b |= d > (blast ? 7 : 1.5f) ? net::kBtnForward : d < (blast ? 4 : 0.8f) ? net::kBtnBack : 0;
+        // A car under fire burns and blows up: from 3 blocks
+        const float nearest = blast ? 4 : target.inCar ? 3 : 0.8f, farthest = blast ? 7 : target.inCar ? 4 : 1.5f;
+        b |= d > farthest ? net::kBtnForward : d < nearest ? net::kBtnBack : 0;
         if (v.weapon < 0)
         {
             return b | Press(v, net::kBtnNextWeapon); // fists in hand: a gun out
@@ -431,6 +439,14 @@ class SoldierBot : public DecidingBot
             return net::kBtnForward | (v.frame / 60 % 2 ? net::kBtnLeft : net::kBtnRight); // nobody in sight: about
         }
         const int direct = TurnTo(v.rot, target->x - v.x, target->y - v.y);
+        // Pinned against someone (hardly moving for 1.5 s with it near): out, to shoot it or take its car
+        const uint32_t step = v.frame - mDriveFrame <= net::kBotDecisionTicks ? v.frame - mDriveFrame : 0; // 0 on a new drive
+        mSlowFor = mSpeed < 0.04f ? mSlowFor + step : 0;
+        mDriveFrame = v.frame;
+        if (d < 8 && mSlowFor >= 45)
+        {
+            return Press(v, net::kBtnEnterExit);
+        }
         if (v.frame < mBackUntil)
         {
             return mStuckTimes >= 3 ? Press(v, net::kBtnEnterExit) : net::kBtnBack | (direct > 0 ? net::kBtnRight : net::kBtnLeft);
@@ -452,7 +468,7 @@ class SoldierBot : public DecidingBot
     bool mInCar = false;
     int mEntered = 0, mLeft = 0;
     float mTargetDist = -1, mSpeed = 0, mLastX = 0, mLastY = 0, mStuckX = 0, mStuckY = 0;
-    uint32_t mLastFrame = 0, mStuckCheck = 0, mBackUntil = 0, mFootCheck = 0, mUnstickUntil = 0;
+    uint32_t mLastFrame = 0, mStuckCheck = 0, mBackUntil = 0, mFootCheck = 0, mUnstickUntil = 0, mSlowFor = 0, mDriveFrame = 0;
     float mFootX = 0, mFootY = 0;
     bool mFootStuck = false;
     int mStuckTimes = 0;
@@ -510,12 +526,14 @@ void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t fr
         s.z = engine::Blocks(e.f[2]);
         s.rot = e.f[3];
         s.health = 0;
+        s.inCar = false;
         s.weapon = engine::PickupModel(e) >= 200 && engine::PickupModel(e) <= 227; // Ped::HandlePickupCollision_45DE80
         uint32_t buttons = 0;
         if (engine::PlayerOf(e, &s.player, &buttons))
         {
             s.kind = BotView::Seen::kPlayer;
             s.health = engine::PlayerHealth(e);
+            s.inCar = engine::PlayerCarId(e) != 0;
             if (s.player == self)
             {
                 view.health = s.health;
