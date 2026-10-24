@@ -416,6 +416,16 @@ uint32_t net::engine::PlayerCarId(const EntityState& e)
     return e.type == kEntityPlayer ? CarRefNetId(e.f[kPlayerCar]) : 0;
 }
 
+int net::engine::PlayerWeapon(const EntityState& e)
+{
+    return e.type == kEntityPlayer ? e.f[kPlayerWeapon] - 1 : -1;
+}
+
+int net::engine::PlayerAmmo(const EntityState& e, int weapon)
+{
+    return e.type == kEntityPlayer && weapon >= 0 && weapon < kPlayerWeapons ? e.f[kPlayerAmmo0 + weapon] : 0;
+}
+
 int net::engine::PlayerDeaths(const EntityState& e)
 {
     return e.type == kEntityPlayer ? e.f[kPlayerDeaths] : 0;
