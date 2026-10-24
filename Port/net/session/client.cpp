@@ -327,10 +327,11 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
             mPlayerSnaps += abs(dx) > kFar || abs(dy) > kFar;
         }
         static const bool sCorrLog = getenv("GTA2_NET_CORRLOG") != NULL;
-        if (sCorrLog && (abs(dx) > 8192 || abs(dy) > 8192 || abs(dr) > 180)) // over half a block or 45 degrees
+        if (sCorrLog && (abs(dx) > 8192 || abs(dy) > 8192 || abs(dr) > 180 || (n.id < 0x01000000u && (abs(dx) > 4096 || abs(dy) > 4096)))) // over half a block or 45 degrees
         {
-            printf("net: frame %u, correction of %u: %.2f blocks, %d degrees%s\n", mFrame, n.id, sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f,
-                   dr / 4, abs(dx) > kFar || abs(dy) > kFar ? " (jumped)" : "");
+            printf("net: frame %u, correction of %u: %.2f blocks, %d degrees%s%s\n", mFrame, n.id, sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f,
+                   dr / 4, abs(dx) > kFar || abs(dy) > kFar ? " (jumped)" : "",
+                   n.id < 0x01000000u ? ("; " + engine::DebugPlayerCar((int)n.id - 1, mReceived[mLatestTick % kRing])).c_str() : "");
         }
         if (abs(dx) > kFar || abs(dy) > kFar || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
         {
@@ -576,8 +577,18 @@ void net::Client::Frame()
     static const bool sJerkLog = getenv("GTA2_NET_JERKLOG") != NULL;
     if (sJerkLog && mSynced)
     {
-        std::vector<engine::Pose> shown;
-        engine::Poses(shown);
+        std::vector<engine::Pose> all, shown;
+        engine::Poses(all);
+        float lx = 0, ly = 0;
+        engine::PlayerPosition(mSlot, &lx, &ly);
+        for (const engine::Pose& q : all) // what can be seen: within 12 blocks (a camera shows 6 to 8)
+        {
+            const float dx = q.x / 16384.0f - lx, dy = q.y / 16384.0f - ly;
+            if (dx * dx + dy * dy < 12 * 12)
+            {
+                shown.push_back(q);
+            }
+        }
         mJerk.Feed(mFrame, shown, (uint32_t)mSlot + 1);
         if (mFrame % 900 == 0)
         {
