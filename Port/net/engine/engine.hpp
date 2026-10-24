@@ -123,6 +123,16 @@ struct Round
 Round& CurrentRound();
 void NewRound(); // every slot in the game respawned with no score, weapons or power-ups
 void ShowHudMessage(const char* text); // the game's message line, over the HUD
+// The next map: the game ends after <pauseTicks> and the next starts at once on it, without the frontend
+// (winmain.cpp, gPortNextNetworkGame); KeepMapChange every frame until then. GameGeneration counts the games, for
+// the session to start over when it changes
+void ChangeMap(const std::string& gmp, const std::string& sty, const std::string& scr, int pauseTicks);
+void KeepMapChange();
+int GameGeneration();
+int SnapshotGame(const Snapshot& snap); // the server's GameGeneration at it (-1: no world in it)
+void ResetForNewGame(); // what the engine keeps of a game: the replicas, pickups, death counts
+void SetNextMap(const std::string& gmp, const std::string& sty, const std::string& scr); // netplay.cpp: the next game's
+bool MapChangePending();
 // Player slots in a running network game (slots.cpp): out of the game as the game handles a player who left, in
 // again with a new ped at the next restart zone (and an empty score if <freshScore>)
 bool SlotInGame(int slot);

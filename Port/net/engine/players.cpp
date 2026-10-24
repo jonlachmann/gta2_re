@@ -409,6 +409,12 @@ int net::engine::PlayerHealth(const EntityState& e)
     return e.type == kEntityPlayer ? e.f[kPlayerHealth] : 0;
 }
 
+int net::engine::SnapshotGame(const Snapshot& snap)
+{
+    const EntityState* w = FindWorld(snap);
+    return w ? w->f[kWorldGame] : -1;
+}
+
 int net::engine::PlayerPoints(const EntityState& e)
 {
     return e.type == kEntityPlayer ? e.f[kPlayerPoints] : 0;

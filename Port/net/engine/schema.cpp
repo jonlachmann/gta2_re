@@ -55,6 +55,7 @@ net::Schema BuildSchema()
     world.fields.push_back(FieldDesc{"round", 16, false});
     world.fields.push_back(FieldDesc{"winner", 3, false});
     world.fields.push_back(FieldDesc{"seconds_left", 13, false});
+    world.fields.push_back(FieldDesc{"game", 16, false});
     net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false},
                                          {"age", 6, false}}};
     s.types.push_back(player); // kEntityPlayer

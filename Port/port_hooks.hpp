@@ -23,3 +23,6 @@ extern u32 gPortAttractIdleMs;
 extern s32 gPortTrafficCap; // the ambient traffic cars for the whole game (Car.cpp): 16, or a network server's --traffic
 extern void (*gPortDrawOverlay)(); // drawn last in Game::Draw_4B92D0; NULL unless a debug overlay is on
 extern s16 gPortZoneRoundRobin; // Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0's place, rolled back and sent by a network server
+// Port/net/engine/netplay.cpp's: asked when a network game has ended (winmain.cpp): true to start the next one at once,
+// without the frontend (a dedicated server's map change, Port/net/engine/rounds.cpp)
+extern bool (*gPortNextNetworkGame)();

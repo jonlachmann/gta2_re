@@ -496,6 +496,12 @@ Car* net::engine::ReplicaCar(uint32_t netId)
     return it != gCars.end() ? it->second : NULL;
 }
 
+void net::engine::ClearReplicas()
+{
+    gCars.clear();
+    gPeds.clear();
+}
+
 const std::unordered_map<uint32_t, Car*>& net::engine::ReplicaCars()
 {
     return gCars;

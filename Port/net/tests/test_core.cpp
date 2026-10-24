@@ -236,6 +236,18 @@ void TestMessages()
     CHECK(got.slot == 2 && got.players == 6 && got.gameType == 3 && got.fragLimit == 25 && got.gmp == w.gmp &&
           got.scr == w.scr && got.serverTick == 123456);
 
+    net::MapChange mc;
+    mc.gmp = "MP1-comp.gmp";
+    mc.sty = "wil.sty";
+    mc.scr = "MP1-6P.scr";
+    mc.game = 513;
+    net::BitWriter mw;
+    net::WriteMapChange(mw, mc);
+    net::BitReader mr(mw.Data().data(), mw.ByteCount());
+    CHECK(mr.Bits(8) == net::kMsgMapChange);
+    net::MapChange mgot;
+    CHECK(net::ReadMapChange(mr, mgot) && mgot.gmp == mc.gmp && mgot.sty == mc.sty && mgot.scr == mc.scr && mgot.game == 513);
+
     net::InputCmd cmds[5] = {{100, 1}, {101, 1}, {102, 0x10}, {103, 0x3FFFFF}, {104, 0x3FFFFF}};
     net::BitWriter cw;
     net::WriteCommands(cw, 98, cmds, 5);

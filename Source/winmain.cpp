@@ -65,6 +65,7 @@
 #if defined(GTA2_PORT)
 #include "Port/sdl_win32.hpp" // the window and its messages on SDL3 (docs/port.md)
 #include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
+#include "Port/port_hooks.hpp" // gPortNextNetworkGame
 #endif
 
 DEFINE_GLOBAL(u8, gNetDisconnectPlayersBits_6F56B8, 0x6F56B8); // TODO: move
@@ -2449,6 +2450,13 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
                         {
                             if (bStartNetworkGame_7081F0)
                             {
+#if defined(GTA2_PORT)
+                                if (gPortNextNetworkGame && gPortNextNetworkGame())
+                                {
+                                    CleanUpInputAndOthers_4DA700();
+                                    break; // go to the beginning: InitializeGame_4DA4D0, with the next map
+                                }
+#endif
                                 switch (gGame_0x40_67E008->GetExitType_4D09C0())
                                 {
                                     case GameExitType::CloseGameImmediately_1:

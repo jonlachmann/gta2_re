@@ -80,6 +80,22 @@ bool net::ReadReject(BitReader& r, Reject& m)
     return ReadString(r, m.reason) && !r.Overflow();
 }
 
+void net::WriteMapChange(BitWriter& w, const MapChange& m)
+{
+    w.Bits(kMsgMapChange, 8);
+    WriteString(w, m.gmp);
+    WriteString(w, m.sty);
+    WriteString(w, m.scr);
+    w.Bits(m.game, 16);
+}
+
+bool net::ReadMapChange(BitReader& r, MapChange& m)
+{
+    const bool ok = ReadString(r, m.gmp) && ReadString(r, m.sty) && ReadString(r, m.scr);
+    m.game = (uint16_t)r.Bits(16);
+    return ok && !r.Overflow();
+}
+
 void net::WriteCommands(BitWriter& w, uint32_t ackTick, const InputCmd* cmds, int count)
 {
     w.Bits(kMsgCommands, 8);

@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Client"): joins a server, starts the same network game, sends its input every frame
 // (repeating the last few commands), and puts the server's snapshots into its game.
 #include "session.hpp"
+#include <algorithm>
 #include <chrono>
 #include <math.h>
 #include <stdlib.h>
@@ -476,12 +477,51 @@ void net::Client::HandleEvents(const std::vector<TransportEvent>& events)
                 OnSnapshotPart(r);
             }
         }
+        else if (e.type == TransportEvent::kReceive)
+        {
+            BitReader r(e.data.data(), e.data.size());
+            if (r.Bits(8) == kMsgMapChange)
+            {
+                OnMapChange(r);
+            }
+        }
         else if (e.type == TransportEvent::kDisconnect && mConnected)
         {
             mConnected = false;
             printf("net: lost the server\n");
         }
     }
+}
+
+// The server's next map: this game ends with the server's (after the same pause) and the next starts on it
+void net::Client::OnMapChange(BitReader& r)
+{
+    MapChange m;
+    if (ReadMapChange(r, m))
+    {
+        printf("net: frame %u, the next map: %s\n", mFrame, m.scr.c_str());
+        engine::ChangeMap(m.gmp, m.sty, m.scr, 90);
+        mServerGame = m.game; // from now on: the old game's snapshots would put its things into the next map's
+    }
+}
+
+void net::Client::StartOver()
+{
+    mGeneration = engine::GameGeneration();
+    mSynced = false;
+    mNewSnapshot = false;
+    for (Snapshot& s : mReceived)
+    {
+        s = Snapshot();
+    }
+    for (Parts& p : mParts)
+    {
+        p = Parts();
+    }
+    std::fill(mRemote.begin(), mRemote.end(), 0u);
+    mBot.reset(); // and its map of the old one
+    mNavMap.reset();
+    printf("net: frame %u, a new game\n", mFrame);
 }
 
 // Not running ahead of the server (yet, or any more), or far off: jump to where we should be
@@ -525,6 +565,16 @@ void net::Client::AnnounceRound()
 void net::Client::TakeSnapshot()
 {
     const Snapshot& snap = mReceived[mLatestTick % kRing];
+    const int game = engine::SnapshotGame(snap);
+    if (mServerGame < 0)
+    {
+        mServerGame = game;
+    }
+    if (game != mServerGame || engine::MapChangePending())
+    {
+        mNewSnapshot = false; // the old map's (the server's pause, or this game ending): not for this one
+        return;
+    }
     // How far our commands are from two ticks early. ENet's round trip doesn't see a link conditioner, and the server's
     // word is better anyway: it says which tick's command it had last
     const int off = mSynced && mSlackKnown ? mSlack - 2 : 0;
@@ -667,6 +717,11 @@ void net::Client::Leave()
 void net::Client::Frame()
 {
     mFrame++;
+    engine::KeepMapChange();
+    if (engine::GameGeneration() != mGeneration)
+    {
+        StartOver();
+    }
     engine::DebugSetFrame(mFrame);
     engine::DebugSoundChannels(mFrame);
     engine::DebugAnimLog(mFrame);

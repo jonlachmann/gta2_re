@@ -8,7 +8,7 @@
 
 namespace net
 {
-const uint32_t kProtocolVersion = 8;
+const uint32_t kProtocolVersion = 9;
 const uint16_t kDefaultPort = 27920;
 const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (Evaluations, 7)
 const uint8_t kChannelUnreliable = 0; // snapshots, commands
@@ -24,6 +24,7 @@ enum MsgType : uint8_t
     kMsgCommands = 4, // client -> server, unreliable
     kMsgSnapshot = 5, // server -> client, unreliable
     kMsgSnapshotPart = 6, // server -> client, unreliable: one part of a snapshot too big for one packet
+    kMsgMapChange = 7, // server -> client, reliable: the next map, after a round (engine/rounds.cpp)
 };
 
 struct Hello
@@ -52,6 +53,12 @@ struct Reject
     std::string reason;
 };
 
+struct MapChange
+{
+    std::string gmp, sty, scr; // file names in data/
+    uint16_t game = 0; // the server's game on it (its snapshots' world.game)
+};
+
 struct InputCmd
 {
     uint32_t tick; // the server tick it is for
@@ -64,6 +71,8 @@ void WriteWelcome(BitWriter& w, const Welcome& m);
 bool ReadWelcome(BitReader& r, Welcome& m);
 void WriteReject(BitWriter& w, const Reject& m);
 bool ReadReject(BitReader& r, Reject& m);
+void WriteMapChange(BitWriter& w, const MapChange& m);
+bool ReadMapChange(BitReader& r, MapChange& m);
 
 // Commands: the newest snapshot tick the client has, then up to kMaxCmdsPerPacket commands for consecutive ticks,
 // oldest first

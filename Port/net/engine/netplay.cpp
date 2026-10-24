@@ -18,6 +18,8 @@ net::engine::NetworkGame gNetGame;
 bool gActive;
 bool gChecked;
 net::engine::FrameHook gHook;
+bool gNextPending; // a map change: the game that ends goes straight into the next (gPortNextNetworkGame)
+int gGeneration; // the games started since the boot's
 void* gHookUser;
 
 // GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>] (docs/netcode.md, "Evaluations", 4): a local
@@ -65,6 +67,42 @@ void net::engine::StartNetworkGame(const NetworkGame& game)
     gChecked = true;
     gNetPlay_7071E8.field_5D4_player_idx = game.localPlayer;
     gNetPlay_7071E8.field_758_n2.field_4_players_count = 2; // > 1: the game calls SendToAll every frame
+}
+
+namespace
+{
+// winmain.cpp, a network game over: the next at once when the netcode changed the map
+bool NextNetworkGame()
+{
+    if (!gNextPending)
+    {
+        return false;
+    }
+    gNextPending = false;
+    net::engine::ResetForNewGame();
+    gGeneration++;
+    return true;
+}
+} // namespace
+
+bool (*gPortNextNetworkGame)() = NextNetworkGame;
+
+void net::engine::SetNextMap(const std::string& gmp, const std::string& sty, const std::string& scr)
+{
+    gNetGame.gmp = gmp;
+    gNetGame.sty = sty;
+    gNetGame.scr = scr;
+    gNextPending = true;
+}
+
+bool net::engine::MapChangePending()
+{
+    return gNextPending;
+}
+
+int net::engine::GameGeneration()
+{
+    return gGeneration;
 }
 
 void net::engine::SetFrameHook(FrameHook hook, void* user)

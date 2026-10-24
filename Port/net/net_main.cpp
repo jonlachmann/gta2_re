@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Code layout"): the command line and the session's lifetime.
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
 //            (the limits end a round, and the next starts on the same map: engine/rounds.cpp)
+//            [--maps <mmp>,<mmp>,...]  (a round on each in turn, the first instead of --map)
 //            [--police]  (police on, as the lobby's box; off by default as there)
 //            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)
@@ -103,7 +104,7 @@ bool ReadMmp(const std::string& name, net::engine::NetworkGame& g)
 int NetMain_Init(std::vector<std::string>& args)
 {
     bool server = false;
-    std::string connect, map = "downtown-6p", replay;
+    std::string connect, map = "downtown-6p", replay, maps;
     net::ServerConfig sc;
     net::ClientConfig cc;
     sc.game.players = 6;
@@ -127,6 +128,10 @@ int NetMain_Init(std::vector<std::string>& args)
         else if (a == "--map" && more)
         {
             map = args[++i];
+        }
+        else if (a == "--maps" && more)
+        {
+            maps = args[++i];
         }
         else if (a == "--players" && more)
         {
@@ -226,6 +231,23 @@ int NetMain_Init(std::vector<std::string>& args)
     std::string error;
     if (server)
     {
+        // The rotation: each a map's files, the first played first
+        for (size_t at = 0, end = 0; !maps.empty() && end != std::string::npos; at = end + 1)
+        {
+            end = maps.find(',', at);
+            const std::string name = maps.substr(at, end == std::string::npos ? end : end - at);
+            net::engine::NetworkGame files;
+            if (!ReadMmp(name, files))
+            {
+                fprintf(stderr, "net: --maps: no data/%s.mmp\n", name.c_str());
+                return -1;
+            }
+            sc.maps.push_back(net::MapFiles{name, files.gmp, files.sty, files.scr});
+        }
+        if (!sc.maps.empty())
+        {
+            map = sc.maps[0].name;
+        }
         // ponytail: up to the game's 6 players until the player cap is a port setting (N6)
         if (sc.game.players < 1 || sc.game.players > 6 || !ReadMmp(map, sc.game))
         {

@@ -208,6 +208,7 @@ void net::engine::Capture(Snapshot& out)
     w.f[kWorldRound] = CurrentRound().number;
     w.f[kWorldWinner] = CurrentRound().winner;
     w.f[kWorldSecondsLeft] = CurrentRound().secondsLeft;
+    w.f[kWorldGame] = GameGeneration() & 0xFFFF;
     w.f[kWorldRand] = (int32_t)PortRandState();
     w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_idx + 1 : 0;
     for (int i = 0; i < MAX_PLAYERS; i++)

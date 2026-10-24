@@ -43,6 +43,11 @@ std::unordered_map<uint32_t, Object*>& net::engine::PickupMap()
     return gObjects;
 }
 
+void net::engine::ClearPickups()
+{
+    gObjects.clear();
+}
+
 void net::engine::CapturePickups(Snapshot& out)
 {
     for (Object* o = gObject_2C_Pool_6F8F80->field_4_pPrev; o; o = o->mpNext)

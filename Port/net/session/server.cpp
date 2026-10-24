@@ -410,6 +410,11 @@ void net::Server::StartGameOnce()
     {
         engine::SeedRandom(mConfig.seed);
     }
+    if (mGeneration > 0)
+    {
+        engine::NewRound(); // a new map: no scores, weapons or power-ups from the last
+        mRoundStart = mTick;
+    }
     mStarted = true;
 }
 
@@ -551,7 +556,7 @@ void net::Server::CheckRound(const Snapshot& world)
         }
     }
     const bool reached = limit > 0 && type != 3 && best >= 0 && bestScore >= limit;
-    if (!mStarted || !(reached || (minutes && round.secondsLeft == 0)))
+    if (!mStarted || engine::MapChangePending() || !(reached || (minutes && round.secondsLeft == 0)))
     {
         return;
     }
@@ -562,7 +567,54 @@ void net::Server::CheckRound(const Snapshot& world)
     round.number++;
     round.winner = draw ? 0 : best + 1;
     mRoundStart = mTick;
+    if (mConfig.maps.size() > 1)
+    {
+        NextMap(); // the new game starts the round (StartGameOnce)
+        return;
+    }
     engine::NewRound();
+}
+
+// The next map in turn, for everyone: after a pause (the round's winner on the HUD), the game ends here and on the
+// clients and the next starts at once on it
+void net::Server::NextMap()
+{
+    mMap = (mMap + 1) % mConfig.maps.size();
+    const MapFiles& m = mConfig.maps[mMap];
+    mConfig.game.gmp = m.gmp; // for the welcome of those joining
+    mConfig.game.sty = m.sty;
+    mConfig.game.scr = m.scr;
+    printf("net: the next map: %s\n", m.name.c_str());
+    MapChange change;
+    change.gmp = m.gmp;
+    change.sty = m.sty;
+    change.scr = m.scr;
+    change.game = (uint16_t)(engine::GameGeneration() + 1);
+    BitWriter w;
+    WriteMapChange(w, change);
+    for (const Slot& s : mSlots)
+    {
+        if (s.used && s.peer != kArenaPeer)
+        {
+            mTransport->Send(s.peer, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+        }
+    }
+    engine::ChangeMap(m.gmp, m.sty, m.scr, 90);
+}
+
+void net::Server::StartOver()
+{
+    mGeneration = engine::GameGeneration();
+    mStarted = false;
+    for (Slot& s : mSlots)
+    {
+        s.ackTick = 0; // the old game's snapshots are no baseline: full ones again
+        for (Snapshot& sent : s.sent)
+        {
+            sent = Snapshot();
+        }
+    }
+    mArena.NewMap();
 }
 
 void net::Server::PrintStats(const Snapshot& world)
@@ -595,6 +647,11 @@ void net::Server::PrintStats(const Snapshot& world)
 void net::Server::Frame()
 {
     mTick++; // the tick that just ran
+    engine::KeepMapChange();
+    if (engine::GameGeneration() != mGeneration)
+    {
+        StartOver();
+    }
     engine::GuardPeds();
     StartGameOnce();
     PollTransport();

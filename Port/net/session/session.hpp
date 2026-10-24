@@ -32,6 +32,11 @@ struct SessionEnv
 };
 const SessionEnv& Env();
 
+struct MapFiles // a multiplayer map, from its data/<name>.mmp
+{
+    std::string name, gmp, sty, scr;
+};
+
 struct ServerConfig
 {
     uint16_t port = kDefaultPort;
@@ -42,6 +47,7 @@ struct ServerConfig
     std::vector<std::string> arena; // bot brains playing the first slots on the server itself (--arena)
     uint32_t endTick = 0; // the arena's result printed and the server ended at this tick (--ticks; 0: never)
     uint32_t seed = 0; // the game's random state at the start (--seed; 0: the game's own)
+    std::vector<MapFiles> maps; // played in turn, a round each (--maps); fewer than two: the rounds stay on the map
 };
 
 // The server's own bot players (arena.cpp), slots 0..n-1: a brain each, or a trainer's ("remote:<port>[:<teacher>]")
@@ -52,6 +58,10 @@ class Arena
     int Count() const
     {
         return (int)mBots.size();
+    }
+    void NewMap()
+    {
+        mNavMap.reset(); // made again for the next one
     }
     void Think(const Snapshot& world, uint32_t tick); // each bot's buttons for the next tick
     uint32_t Buttons(int slot) const;
@@ -139,6 +149,8 @@ class Server
     void SetNextInputs(const Snapshot& world);
     void FeedJerk(const Snapshot& world);
     void CheckRound(const Snapshot& world);
+    void NextMap();
+    void StartOver(); // a new game (the next map): its start, and every client's baseline, again
     void PrintStats(const Snapshot& world);
     void SendSnapshot(int slot, Slot& s, const Snapshot& world);
     std::vector<Item> PriceArea(const std::vector<const EntityState*>& area, const Snapshot* base, float x, float y) const;
@@ -155,6 +167,8 @@ class Server
     JerkMeter mJerk;
     Arena mArena;
     uint32_t mRoundStart = 0; // the tick the round started at
+    size_t mMap = 0; // in mConfig.maps
+    int mGeneration = 0; // engine::GameGeneration's, of the game running
 };
 
 struct ClientConfig
@@ -228,6 +242,8 @@ class Client
     void HandleEvents(const std::vector<TransportEvent>& events);
     void TakeSnapshot();
     void AnnounceRound();
+    void OnMapChange(BitReader& r);
+    void StartOver(); // a new game (the next map): synced again from its first snapshot
     void Resync(const Snapshot& snap);
     void Reconcile(const Snapshot& snap);
     void MeasureShownError(const Snapshot& snap);
@@ -273,6 +289,8 @@ class Client
     uint32_t mLastInput = ~0u; // for the input log
     int mMarks = 0; // F12 presses (ChooseInput)
     engine::Round mRound; // the last one announced
+    int mGeneration = 0; // engine::GameGeneration's, of the game running
+    int mServerGame = -1; // the server's game we take snapshots of: the next after a map change (-1: the first one's)
     uint32_t mMarkFrame = 0;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;

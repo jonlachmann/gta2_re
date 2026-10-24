@@ -60,6 +60,7 @@ enum WorldField
     kWorldRound, // the round (rounds.cpp): its number, the last one's winner (player + 1) and the seconds left
     kWorldWinner,
     kWorldSecondsLeft,
+    kWorldGame, // the server's game since its start (GameGeneration): a client takes only its current one's
 };
 enum CarField
 {
@@ -204,6 +205,8 @@ void ApplyCarsAndPeds(const Snapshot& snap);
 Car* ReplicaCar(uint32_t netId); // this game's car for a server car, if it has one
 Ped* ReplicaPed(uint32_t netId); // and ped
 const std::unordered_map<uint32_t, Car*>& ReplicaCars();
+void ClearReplicas(); // a new game: nothing mapped (rounds.cpp)
+void ClearPickups();
 const std::unordered_map<uint32_t, Ped*>& ReplicaPeds();
 void ReplicaPoses(std::vector<Pose>& out); // the cars and peds of Poses/SetPose
 void SetReplicaPose(const Pose& p);
