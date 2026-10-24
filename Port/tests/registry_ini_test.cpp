@@ -3,9 +3,7 @@
 #include "../registry_ini.hpp"
 #include <stdio.h>
 #include <string.h>
-
-static int gFailures;
-#define CHECK(x) ((x) ? (void)0 : (void)(printf("FAILED line %d: %s\n", __LINE__, #x), gFailures++))
+#include "check.h"
 
 int main()
 {
@@ -49,6 +47,5 @@ int main()
     CHECK(strstr(text, "[screen]\nrendername=str:glrender.dll\nstart_mode=dword:1\n") != NULL);
     CHECK(strstr(text, "mapname") == NULL);
 
-    printf(gFailures ? "registry_ini_test: %d failures\n" : "registry_ini_test: OK\n", gFailures);
-    return gFailures != 0;
+    return CheckReport("registry_ini_test");
 }

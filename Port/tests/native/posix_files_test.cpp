@@ -4,9 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-
-static int gFailures;
-#define CHECK(x) ((x) ? (void)0 : (void)(printf("FAILED line %d: %s\n", __LINE__, #x), gFailures++))
+#include "../check.h"
 
 int main()
 {
@@ -36,6 +34,5 @@ int main()
     struct _stat st;
     CHECK(_stat("data\\AUDIO\\test1.seq", &st) == 0 && st.st_size == 5);
 
-    printf(gFailures ? "posix_files_test: %d failures\n" : "posix_files_test: OK\n", gFailures);
-    return gFailures != 0;
+    return CheckReport("posix_files_test");
 }

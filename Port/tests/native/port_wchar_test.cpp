@@ -2,9 +2,7 @@
 //   clang++ -fshort-wchar -std=c++17 -IPort Port/tests/native/port_wchar_test.cpp Port/port_wchar.cpp && ./a.out
 #include "compat/port_wchar.h"
 #include <stdio.h>
-
-static int gFailures;
-#define CHECK(x) ((x) ? (void)0 : (void)(printf("FAILED line %d: %s\n", __LINE__, #x), gFailures++))
+#include "../check.h"
 
 static bool Eq(const wchar_t* a, const char* b)
 {
@@ -42,6 +40,5 @@ int main()
     CHECK(mbstowcs(a, "hey", 8) == 3 && Eq(a, "hey"));
     CHECK(Eq(_itow(-120, a, 10), "-120") && Eq(_itow(255, a, 16), "ff"));
 
-    printf(gFailures ? "port_wchar_test: %d failures\n" : "port_wchar_test: OK\n", gFailures);
-    return gFailures != 0;
+    return CheckReport("port_wchar_test");
 }

@@ -3,11 +3,10 @@
 #include "Source/3rdParty/mss.h"
 #include <math.h>
 #include <stdio.h>
+#include "check.h"
 
 void Port_MilesMix(float* out, int frames);
 
-static int gFailures;
-#define CHECK(x) ((x) ? (void)0 : (void)(printf("FAILED line %d: %s\n", __LINE__, #x), gFailures++))
 #define NEAR(a, b) (fabsf((a) - (b)) < 0.01f)
 
 int main(int, char**)
@@ -55,6 +54,5 @@ int main(int, char**)
     CHECK(NEAR(out[2 * 3], 0.5f) && NEAR(out[2 * 4], -0.5f) && NEAR(out[2 * 7], -0.5f));
 
     AIL_release_sample_handle(s);
-    printf(gFailures ? "miles_sdl_test: %d failures\n" : "miles_sdl_test: OK\n", gFailures);
-    return gFailures != 0;
+    return CheckReport("miles_sdl_test");
 }
