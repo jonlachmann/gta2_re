@@ -153,7 +153,7 @@ void net::Arena::Think(const Snapshot& world, uint32_t tick)
     if (!message.empty() && !Exchange(message, false))
     {
         fprintf(stderr, "net: the trainer is gone\n");
-        exit(1);
+        _Exit(1); // not exit(): the game's shutdown from here never ended, and the orphans took the trainer's CPU
     }
 }
 
