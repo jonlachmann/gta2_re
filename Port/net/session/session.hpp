@@ -63,6 +63,7 @@ class Arena
         {
             float x = 0, y = 0;
             int rot = 0, health = 0, frags = 0, deaths = 0, guns = 0; // guns: the weapons with ammo
+            float nearest = 0; // blocks to the nearest other player alive
             uint32_t car = 0;
         };
         std::string kind;
@@ -73,6 +74,7 @@ class Arena
         int dealt = 0, cars = 0, pickups = 0;
         float reward = 0; // since the last message (remote)
         BotMemory memory; // its features' (remote)
+        std::unique_ptr<BotBrain> teacher; // the scripted bot on the same view (remote): what it would press
     };
     void Score(const Snapshot& world);
     void AddRemote(int slot, std::vector<float>& message);

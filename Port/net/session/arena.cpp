@@ -4,7 +4,8 @@
 //
 // "remote:<port>" slots are played by a trainer (Scripts/port/rl_bots.py) over a local TCP connection, one round trip
 // every kSkip ticks for all of them. The game sends (native byte order, all 32-bit):
-//   count, done, kBotFeatures, then per remote slot: slot, alive, reward since the last message, its features
+//   count, done, kBotFeatures, then per remote slot: slot, alive, reward since the last message, the buttons the
+//   scripted bot would press (a teacher, for kickstarting), its features
 // and the trainer answers each slot's buttons. With done (the last message, at --ticks) there is no answer.
 #include "session.hpp"
 #include <math.h>
@@ -22,10 +23,12 @@
 namespace
 {
 const float kNear = 50; // blocks: closer than this to the nearest other player counts towards "near"
+const uint32_t kRemoteHead = 4; // slot, alive, reward, teacher
 const uint32_t kSkip = 3; // ticks per remote decision (10 a second): the buttons are held in between
 
 // The trainer's reward: frags and deaths most, then damage, pickups and being near someone to fight
 const float kFragReward = 1, kDeathReward = -1, kDamageReward = 0.01f, kPickupReward = 0.3f, kNearReward = 0.001f;
+const float kApproachReward = 0.01f; // per block nearer the nearest other player (and as much off going away)
 
 #if !defined(_WIN32)
 int Connect(int port)
@@ -102,6 +105,7 @@ bool net::Arena::Start(const std::vector<std::string>& brains, std::string* erro
                 *error = "no trainer at " + kind;
                 return false;
             }
+            bot.teacher = CreateBotBrain("simple");
             continue;
         }
         bot.brain = CreateBotBrain(kind);
@@ -146,15 +150,17 @@ void net::Arena::Think(const Snapshot& world, uint32_t tick)
     }
 }
 
-// A remote slot's part of the message: slot, alive, reward, features (as floats; the ints as their bits)
+// A remote slot's part of the message: slot, alive, reward, teacher, features (as floats; the ints as their bits)
 void net::Arena::AddRemote(int slot, std::vector<float>& message)
 {
     Bot& bot = mBots[slot];
     const bool alive = mView.hasBody && mView.health > 0;
-    const uint32_t head[2] = {(uint32_t)slot, alive};
+    const uint32_t head[2] = {(uint32_t)slot, alive}, teacher = alive ? bot.teacher->Think(mView) : 0;
     message.resize(message.size() + 2);
     memcpy(&message[message.size() - 2], head, sizeof(head));
     message.push_back(bot.reward);
+    message.push_back(0);
+    memcpy(&message.back(), &teacher, sizeof(teacher));
     bot.reward = 0;
     message.resize(message.size() + kBotFeatures, 0.0f);
     if (alive)
@@ -169,7 +175,7 @@ void net::Arena::AddRemote(int slot, std::vector<float>& message)
 
 bool net::Arena::Exchange(const std::vector<float>& message, bool done)
 {
-    const uint32_t per = 3 + kBotFeatures, count = (uint32_t)(message.size() / per);
+    const uint32_t per = kRemoteHead + kBotFeatures, count = (uint32_t)(message.size() / per);
     const uint32_t head[3] = {count, done, (uint32_t)kBotFeatures};
     std::vector<uint32_t> buttons(count);
     if (!SendAll(mSocket, head, sizeof(head)) || !SendAll(mSocket, message.data(), message.size() * sizeof(float)))
@@ -242,6 +248,8 @@ void net::Arena::Score(const Snapshot& world)
         {
             bot.closeness += 1 - nearest / kNear;
             bot.reward += kNearReward * (1 - nearest / kNear);
+            const float closer = bot.last.nearest - nearest; // ponytail: the nearest one may be another than last tick's
+            bot.reward += bot.last.health > 0 && fabsf(closer) < 1 ? kApproachReward * closer : 0;
         }
         const int lost = bot.last.health - me.health;
         if (lost > 0 && shooter >= 0 && bot.last.health > 0)
@@ -259,6 +267,7 @@ void net::Arena::Score(const Snapshot& world)
             bot.cars += me.car && !bot.last.car;
         }
         bot.last = me;
+        bot.last.nearest = nearest;
     }
     mTicks++;
 }
