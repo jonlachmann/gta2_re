@@ -1,6 +1,8 @@
 // Port/net (docs/netcode.md, "Health, deaths, weapons, scores", "Players in cars"): the players as snapshot entities,
 // and the server's put into a client's game: health, deaths, weapons, power-ups, its car, its place.
 #include "internal.hpp"
+#include "Port/port_hooks.hpp"
+#include "Port/port_rand_state.h"
 #include "Source/Camera.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
@@ -18,9 +20,6 @@
 #include <string>
 
 EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
-extern short gPortZoneRoundRobin; // Port/net/net_main.cpp
-unsigned int PortRandState(); // Port/port_rand.cpp (its header renames rand)
-void PortRandSetState(unsigned int state);
 
 namespace
 {

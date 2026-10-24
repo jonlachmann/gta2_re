@@ -66,7 +66,7 @@ class Server
     struct Stats
     {
         uint32_t bytes = 0, parts = 0;
-        uint32_t near = 0, fresh = 0, cut = 0; // entities in the areas, with new state, snapshots without it for all
+        uint32_t inArea = 0, fresh = 0, cut = 0; // entities in the areas, with new state, snapshots without it for all
         uint32_t unsent = 0; // snapshots that fit no budget
     };
     // A nearby entity, for filling a snapshot by priority
@@ -89,7 +89,7 @@ class Server
     void FeedJerk(const Snapshot& world);
     void PrintStats(const Snapshot& world);
     void SendSnapshot(int slot, Slot& s, const Snapshot& world);
-    std::vector<Item> PriceArea(const std::vector<const EntityState*>& near, const Snapshot* base, float x, float y) const;
+    std::vector<Item> PriceArea(const std::vector<const EntityState*>& area, const Snapshot* base, float x, float y) const;
     bool Fill(Slot& s, const Snapshot& fixed, std::vector<Item>& items, const Snapshot* base, BitWriter& w);
     void Transmit(const Slot& s, const BitWriter& w);
     int SlotOfPeer(uint32_t peer) const;

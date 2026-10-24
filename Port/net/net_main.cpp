@@ -8,6 +8,7 @@
 //   --replay <file>  a client session recorded with GTA2_NET_RECORD=<file>, played back without a server
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
 #include "net_main.hpp"
+#include "Port/port_hooks.hpp" // the hooks defined here, as the game declares them
 #include "session/session.hpp"
 #include <stdio.h>
 #include <stdlib.h>

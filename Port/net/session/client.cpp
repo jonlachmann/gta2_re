@@ -330,17 +330,17 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
         const engine::Pose& b = *it->second;
         const int32_t dx = n.x - b.x, dy = n.y - b.y, dz = n.z - b.z;
         const int32_t dr = ((n.rot - b.rot) % 1440 + 1440 + 720) % 1440 - 720; // the short way round
-        const bool far = abs(dx) > kFar || abs(dy) > kFar;
+        const bool jumped = abs(dx) > kFar || abs(dy) > kFar;
         if (dx || dy)
         {
             CorrectionStats* stats = engine::IsPlayerId(n.id) ? &mStats.players : engine::IsCarId(n.id) ? &mStats.cars : NULL;
             if (stats)
             {
-                stats->Add(sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f, far);
+                stats->Add(sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f, jumped);
             }
         }
         LogCorrection(n, dx, dy, dr);
-        if (far || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
+        if (jumped || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
         {
             continue;
         }

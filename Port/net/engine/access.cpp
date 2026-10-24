@@ -2,6 +2,8 @@
 // the game here; the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
 // (pickups.cpp) do the parts. Also the helpers the engine's files share.
 #include "internal.hpp"
+#include "Port/port_hooks.hpp"
+#include "Port/port_rand_state.h"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"
@@ -19,8 +21,6 @@
 
 EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
 EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
-extern short gPortZoneRoundRobin; // Port/net/net_main.cpp
-unsigned int PortRandState(); // Port/port_rand.cpp (its header renames rand)
 
 // --- Shared helpers ---
 

@@ -408,7 +408,7 @@ Steps 1, 3 and 5 make the modes work; 2 makes "none" safe; 4 keeps the traffic a
 
 ## Evaluations (before building)
 
-Measured with `Port/headless/sim_bench.cpp` (`GTA2_NETEVAL=heap,rand,churn,diverge,single,explode`), the offline multiplayer experiment in `Port/netplay_offline.cpp` (`GTA2_OFFLINE_MP`) and an ENet probe. The probe was built in a scratch folder and is not in the repo. None of this is netcode; it is what the design rests on. Native macOS, busy attract demo or Wil unless noted.
+Measured with `Port/headless/neteval.cpp` (`GTA2_NETEVAL=heap,rand,churn,diverge,single,explode`), the offline multiplayer experiment in `Port/net/engine/netplay.cpp` (`GTA2_OFFLINE_MP`) and an ENet probe. The probe was built in a scratch folder and is not in the repo. None of this is netcode; it is what the design rests on. Native macOS, busy attract demo or Wil unless noted.
 
 ### 1. What changes per tick (schema and snapshot size)
 

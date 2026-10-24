@@ -200,15 +200,15 @@ void net::Server::OnReceive(const TransportEvent& e)
 
 // Each nearby entity with what it costs new and aged, and its priority: the age plus one, over one plus a sixth of the
 // distance (an entity new to the client counts as 8 ticks old: one near comes soon)
-std::vector<net::Server::Item> net::Server::PriceArea(const std::vector<const EntityState*>& near, const Snapshot* base, float x, float y) const
+std::vector<net::Server::Item> net::Server::PriceArea(const std::vector<const EntityState*>& area, const Snapshot* base, float x, float y) const
 {
     const Schema& schema = engine::NetSchema();
-    std::vector<Item> items(near.size());
-    for (size_t i = 0; i < near.size(); i++)
+    std::vector<Item> items(area.size());
+    for (size_t i = 0; i < area.size(); i++)
     {
         Item& it = items[i];
-        it.now = near[i];
-        it.had = InBase(base, *near[i]);
+        it.now = area[i];
+        it.had = InBase(base, *area[i]);
         it.freshBits = EntryBits(schema, it.had, *it.now);
         it.pick = 0;
         it.agedBits = 0;
@@ -294,7 +294,7 @@ bool net::Server::Fill(Slot& s, const Snapshot& fixed, std::vector<Item>& items,
         WriteDelta(w, schema, base ? *base : kEmpty, candidate);
         if (w.ByteCount() <= room || budget < 2048)
         {
-            mStats.near += (uint32_t)items.size();
+            mStats.inArea += (uint32_t)items.size();
             mStats.fresh += (uint32_t)fresh;
             mStats.cut += fresh < items.size();
             s.sent[mTick % kRing] = candidate;
@@ -342,7 +342,7 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
     }
     Snapshot fixed;
     fixed.tick = mTick;
-    std::vector<const EntityState*> near;
+    std::vector<const EntityState*> area;
     for (const EntityState& e : world.entities)
     {
         const bool playersCar = std::find(playersCars.begin(), playersCars.end(), e.id) != playersCars.end();
@@ -352,13 +352,13 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         }
         else if (located && Distance(e, x, y) <= mConfig.interestRadius)
         {
-            near.push_back(&e);
+            area.push_back(&e);
         }
     }
-    std::sort(near.begin(), near.end(), [&](const EntityState* a, const EntityState* b) { return Distance(*a, x, y) < Distance(*b, x, y); });
+    std::sort(area.begin(), area.end(), [&](const EntityState* a, const EntityState* b) { return Distance(*a, x, y) < Distance(*b, x, y); });
     const Snapshot& acked = s.sent[s.ackTick % kRing];
     const Snapshot* base = s.ackTick && acked.tick == s.ackTick && mTick - s.ackTick < (uint32_t)kRing ? &acked : NULL;
-    std::vector<Item> items = PriceArea(near, base, x, y);
+    std::vector<Item> items = PriceArea(area, base, x, y);
     BitWriter w;
     if (Fill(s, fixed, items, base, w))
     {
@@ -497,7 +497,7 @@ void net::Server::PrintStats(const Snapshot& world)
         }
     }
     printf("net: tick %u, snapshots had new state for %.0f%% of the entities in the clients' areas (%u of %u not for all)%s\n", mTick,
-           mStats.near ? 100.0 * mStats.fresh / mStats.near : 100.0, mStats.cut, used * 300, mStats.unsent ? "; some didn't fit at all" : "");
+           mStats.inArea ? 100.0 * mStats.fresh / mStats.inArea : 100.0, mStats.cut, used * 300, mStats.unsent ? "; some didn't fit at all" : "");
     mStats = Stats();
 }
 
