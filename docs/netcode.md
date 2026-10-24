@@ -77,6 +77,12 @@ Usage and test switches:
 - `GTA2_NET_NAVDUMP=<file.pgm>` writes the map as a picture;
 - `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server.
 
+**Trained bots.** `--bot nn:<file>` is a small neural network (`session/bot_nn.cpp`): 49 inputs (its health, car and speed; the nearest 3 players, 2 cars, a ped and 2 pickups relative to where it faces; how far it can walk in 8 directions; its last outputs), 32 hidden, 10 outputs (turn, move, attack, enter/exit, jump, next weapon). `Scripts/port/train_bots.py` evolves the weights by self-play:
+- **The arena:** `--server --arena <brain>,<brain>,... --ticks N` plays bots on the server itself, in the first slots, with no clients (`session/arena.cpp`). At tick N it prints a result line per bot and ends. The other slots stay open, so people can join and play against the bots.
+- **Fast:** `GTA2_SPEED=<k>` speeds up the clock on macOS and Linux too (`Port/posix_win32.cpp`); headless at k = 1000 a match runs at about 11,000 ticks/s, a 150 s match in under half a second.
+- **Training:** each generation, five networks and the scripted bot per match on Tiny Town, pistols kept loaded (`GTA2_NET_TESTARM`). Fitness: 10 per frag, -5 per death, 0.1 per point of damage dealt (to a player it faced, within 10 blocks), and how close it kept to the others. The best 8 of 40 survive, the rest are their mutated copies. Out: `build_port/train/` (`best.nn`, a population per generation, `log.csv`); a run continues from the newest generation.
+- **Watching:** `train_bots.py --watch [files]` plays a match of the newest elites in a window, at normal speed, following player 0 (the best). `--spectate K` opens one every K generations during training.
+
 **Measured** (bots on Downtown, 60 s):
 
 | Link | Result |
