@@ -126,6 +126,8 @@ void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang
 void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize);
 // Player peds take no damage on a client: their health and deaths are the server's (client_mode.cpp)
 void ProtectPlayers();
+// Before every tick (client_mode.cpp): what the server's game never has, this one can't run (a ped's on-foot order in a car)
+void GuardPeds();
 
 // vehicles.cpp: a ped into or out of a car at once, ending as the game's own entering and leaving do
 bool InCarTransition(Ped* ped); // on its way into or out of a car: states, or an objective to do it

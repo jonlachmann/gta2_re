@@ -86,11 +86,13 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
         }
     }
     ProtectPlayers();
+    GuardPeds();
     g->UpdateAllPlayersControls_4B9380();
     if (g->field_0_game_state == GameState::Running_1)
     {
         g->UpdateGame_4B9410(); // the tick without the sound service (Game::ExecuteGame_4B9640 without sound)
     }
+    GuardPeds(); // after it too: the live tick follows the last one without a frame in between
     // What the sound service takes from the sim each tick, taken here as it doesn't run: a resimulated sound was heard
     // when it was predicted. Left there, it went into the saves and every restore played it again (a gun that went on
     // firing, a laugh or a step heard over and over). The sim's word to the sound: a weapon's shot, the impacts of the

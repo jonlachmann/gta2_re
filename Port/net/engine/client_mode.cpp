@@ -10,6 +10,22 @@
 #include "Source/Ped.hpp"
 #include "Source/debug.hpp"
 
+// Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
+// given that order through its group here (PedGroup::PromoteMemberToLeader_4C9680) and sat in a car since (the
+// server's ped was there: the snapshot, or its own car-jack predicted differently) kept it, and crashed on it
+void net::engine::GuardPeds()
+{
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+    {
+        if (p->field_16C_car && !p->field_168_game_object &&
+            (p->field_258_objective == objectives_enum::objective_32 || p->field_25C_internal_objective == objectives_enum::objective_32))
+        {
+            p->field_258_objective = objectives_enum::no_obj_0;
+            p->field_25C_internal_objective = objectives_enum::no_obj_0;
+        }
+    }
+}
+
 void net::engine::ProtectPlayers()
 {
     Game* g = gGame_0x40_67E008;
@@ -37,6 +53,7 @@ void net::engine::ProtectPlayers()
 void net::engine::ClientModeFrame()
 {
     ProtectPlayers();
+    GuardPeds();
     bSkip_recycling_67D575 = true; // no traffic generation, no car despawning (TrafficSpawner::GenerateTraffic_583670)
     bSkip_dummies_67D4EF = true; // no ambient peds (PedManager::Dummies_470330)
     bSkip_mission_67D4E5 = true; // scripts run on the server only (they set up the level before the first frame)

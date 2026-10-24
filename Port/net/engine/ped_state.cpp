@@ -54,6 +54,18 @@ const Member kValues[] = {
 #undef PM
 const size_t kValueCount = sizeof(kValues) / sizeof(kValues[0]);
 
+int ValueIndex(size_t offset)
+{
+    for (size_t i = 0; i < kValueCount; i++)
+    {
+        if (kValues[i].offset == offset)
+        {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 // The flags that are the ped's own behaviour; the others say where it is in this game's structures (active, scheduled for
 // removal, in the pathfinder's list, on fire with a flame object of this game's)
 const u32 kFlagsSent = ~((1u << 0) | (1u << 10) | (1u << 14) | (1u << 24));
@@ -469,7 +481,9 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     const bool driving = p->field_16C_car && e.f[kPedCar] && !e.f[kPedState] && !InCarTransition(p) &&
                          ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPedCar] - 1)) == p->field_16C_car &&
                          p->field_278_ped_state_1 == ped_state_1::in_car_10 &&
-                         p->field_16C_car->field_5C_AI; // its objectives drive through the car's AI (ApplyCarAi gives it one)
+                         p->field_16C_car->field_5C_AI && // its objectives drive through the car's AI (ApplyCarAi gives it one)
+                         e.f[kStates + kState1] == ped_state_1::in_car_10 && // driving there too, not on its way out
+                         e.f[kFirst + ValueIndex(offsetof(Ped, field_258_objective))] != objectives_enum::objective_32; // an on-foot one
     if (!driving && (p->field_16C_car || InCarTransition(p) || e.f[kPedCar] || e.f[kPedState]))
     {
         // In a car, or on its way into or out of one, on either side: that is replica.cpp's (ForceIntoCar, ForceOutOfCar
