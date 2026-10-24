@@ -112,7 +112,7 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
     }
     for (Weapon* w = gWeapon_30_Pool_707014->field_0_pool.field_4_pPrev; w; w = w->mpNext)
     {
-        w->TakeF2C_41CC80();
+        w->TakeShotFired_41CC80();
     }
     for (int i = 0; i < (int)g->field_23_num_players; i++) // the players' own weapons aren't on the pool's list
     {
@@ -122,7 +122,7 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
             {
                 if (p->field_718_weapons[w])
                 {
-                    p->field_718_weapons[w]->TakeF2C_41CC80();
+                    p->field_718_weapons[w]->TakeShotFired_41CC80();
                 }
             }
         }

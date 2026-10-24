@@ -50,7 +50,7 @@ struct PhysicsMember
 #define PM(member, sz, sg) {#member, offsetof(CarPhysics, member), sz, sg}
 #define PM_POINT(member) PM(member.x, 4, true), PM(member.y, 4, true)
 const PhysicsMember kPhysics[] = {
-    PM_POINT(field_0_vel_read_only), PM(field_8_total_damage_q, 4, false), PM_POINT(field_10_last_skid_pos[0]),
+    PM_POINT(field_0_vel_read_only), PM(field_8_damaged_until_cycle, 4, false), PM_POINT(field_10_last_skid_pos[0]),
     PM_POINT(field_10_last_skid_pos[1]), PM_POINT(field_10_last_skid_pos[2]), PM_POINT(field_10_last_skid_pos[3]),
     PM_POINT(field_30_cm1), PM_POINT(field_38_cp1), PM_POINT(field_40_linvel_1), PM_POINT(field_48_force_accum),
     PM_POINT(field_50_linear_accel), PM(field_58_theta, 2, true), PM(field_60_gas_pedal, 4, true),
