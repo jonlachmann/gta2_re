@@ -52,6 +52,23 @@ enum EntityKind : uint8_t
     kEntityObject = 4, // a pickup (pickups.cpp)
 };
 const uint32_t kWorldId = 0;
+// NetIds: a player's is its slot + 1; cars, peds and pickups have theirs from these on
+const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
+const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
+const uint32_t kObjIdBase = 0x03000000; // + Object::field_14_id
+inline bool IsPlayerId(uint32_t id)
+{
+    return id < kCarIdBase;
+}
+inline bool IsCarId(uint32_t id)
+{
+    return id >= kCarIdBase && id < kPedIdBase;
+}
+// A position field (Fix16 raw: 14 fraction bits) in blocks
+inline float Blocks(int32_t raw)
+{
+    return raw / 16384.0f;
+}
 // Every player, car, ped and pickup
 void Capture(Snapshot& out);
 // Puts a snapshot's players, cars, peds and pickups into this game
@@ -130,6 +147,7 @@ struct Pose
 };
 void Poses(std::vector<Pose>& out);
 void SetPose(const Pose& p);
+bool PoseOf(const EntityState& e, Pose* out); // a snapshot entity's, as Poses has them (players on foot, cars, peds)
 
 // --- Bots (navmap.cpp): the static map as a bot may know it. For every cell the height a walker is at, and which of
 // its four neighbours it can walk to. Plain data, built once per map, so a bot plans its own way without the game's
@@ -149,6 +167,7 @@ struct NavMap
     uint8_t ways[kSize * kSize];
 };
 void BuildNavMap(NavMap& out);
+void DumpNavMap(const NavMap& map, const char* path); // as a picture (PGM): grey by height, black blocked
 
 // --- Tests, statistics and debugging (debug.cpp, players.cpp) ---
 

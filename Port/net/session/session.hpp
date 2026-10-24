@@ -14,6 +14,22 @@
 
 namespace net
 {
+const int kRing = 64; // ticks of snapshots, commands and baselines kept (by tick % kRing)
+
+// The session's GTA2_NET_* switches (docs/netcode.md), read once
+struct SessionEnv
+{
+    const char* record; // a file to record the client's session to
+    bool marker; // the server's position of the local player drawn
+    bool corrLog, animLog, inputLog;
+    int jerkLog; // 1: the jerk statistics, 2: and each jump
+    float blend; // how far a correction is blended in each frame (0.2; 1: at once)
+    const char* navDump; // the bots' map as a picture
+    const char* testKill; // <tick>:<victim>:<killer>[,...]: server test kills
+    const char* testArm; // <weapon>:<ammo>: every player kept armed on the server
+};
+const SessionEnv& Env();
+
 struct ServerConfig
 {
     uint16_t port = kDefaultPort;
@@ -23,7 +39,7 @@ struct ServerConfig
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
 
-// "0:3/1 1:0/2": per player, frags/deaths (health while alive)
+// " p:f/d(h)@x,y": per player, frags/deaths (health) and where
 std::string Scoreboard(const Snapshot& snap);
 
 class Server
@@ -39,27 +55,52 @@ class Server
         uint32_t peer = 0;
         std::string name;
         uint32_t lastCmdTick = 0; // the newest command tick received (late ones too)
-        uint32_t cmdTick[64] = {}; // received commands by tick % 64
-        uint32_t cmdButtons[64] = {};
+        uint32_t cmdTick[kRing] = {}; // received commands by tick % kRing
+        uint32_t cmdButtons[kRing] = {};
         uint32_t buttons = 0; // the input applied last (repeated while commands are late)
         uint32_t late = 0; // ticks without their command (counted for the log)
         uint32_t ackTick = 0; // the newest snapshot the client has
-        Snapshot sent[64]; // what was sent, by tick % 64: the baselines
+        Snapshot sent[kRing]; // what was sent, by tick % kRing: the baselines
+    };
+    // For the log, every 300 ticks
+    struct Stats
+    {
+        uint32_t bytes = 0, parts = 0;
+        uint32_t near = 0, fresh = 0, cut = 0; // entities in the areas, with new state, snapshots without it for all
+        uint32_t unsent = 0; // snapshots that fit no budget
+    };
+    // A nearby entity, for filling a snapshot by priority
+    struct Item
+    {
+        const EntityState* now;
+        const EntityState* had; // in the client's baseline
+        EntityState aged; // what it has, with its age
+        size_t freshBits, agedBits;
+        float priority;
+        int pick; // 0: not sent (new, no room), 1: aged, 2: this tick's
     };
     void OnReceive(const TransportEvent& e);
     void OnHello(uint32_t peer, BitReader& r);
+    void OnCommands(int slot, BitReader& r);
+    void StartGameOnce();
+    void PollTransport();
+    void RunTestHooks();
+    void SetNextInputs();
+    void FeedJerk(const Snapshot& world);
+    void PrintStats(const Snapshot& world);
     void SendSnapshot(int slot, Slot& s, const Snapshot& world);
+    std::vector<Item> PriceArea(const std::vector<const EntityState*>& near, const Snapshot* base, float x, float y) const;
+    bool Fill(Slot& s, const Snapshot& fixed, std::vector<Item>& items, const Snapshot* base, BitWriter& w);
+    void Transmit(const Slot& s, const BitWriter& w);
     int SlotOfPeer(uint32_t peer) const;
 
     ServerConfig mConfig;
     std::unique_ptr<Transport> mTransport;
     std::vector<Slot> mSlots;
     uint32_t mTick = 0;
-    uint32_t mBytesSent = 0;
-    JerkMeter mJerk;
-    uint32_t mNearSum = 0, mKeptSum = 0, mCut = 0; // the size cut, for the log
-    uint32_t mPartsSent = 0;
     bool mStarted = false;
+    Stats mStats;
+    JerkMeter mJerk;
 };
 
 struct ClientConfig
@@ -71,11 +112,24 @@ struct ClientConfig
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
 };
 
+// Corrections of what is shown, for the log
+struct CorrectionStats
+{
+    uint32_t count = 0, jumps = 0;
+    float sum = 0, max = 0;
+    void Add(float blocks, bool jumped)
+    {
+        count++;
+        sum += blocks;
+        max = blocks > max ? blocks : max;
+        jumps += jumped;
+    }
+    void Print(uint32_t frame, const char* what) const;
+};
+
 class Client
 {
   public:
-    Client();
-    ~Client();
     // Connects and waits for the server's welcome (a few seconds at most): then the game to start is known
     bool Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error);
     // No server: a recorded session (GTA2_NET_RECORD) played back frame for frame, as fast as the game runs
@@ -83,24 +137,53 @@ class Client
     void Frame();
 
   private:
-    void OnSnapshot(BitReader& r);
-    void OnSnapshotPart(BitReader& r);
     struct Parts
     {
         uint32_t tick = 0;
         int count = 0, have = 0;
         std::vector<std::vector<uint8_t>> pieces;
     };
-    Parts mParts[4]; // snapshots coming in parts, by tick % 4
+    // What this client did and saw at a tick (by tick % kRing)
+    struct TickRecord
+    {
+        uint32_t tick = 0, buttons = 0; // the input used for the tick (tick: 0 until there is one)
+        uint32_t shownTick = 0; // the tick <predX>, <predY> and <shown> are for (0: none)
+        float predX = 0, predY = 0; // where the local player was predicted to be
+        std::vector<engine::ReplicaPos> shown; // where the mapped cars and peds were shown (the display error)
+    };
+    // For the log, every 300 frames
+    struct Stats
+    {
+        CorrectionStats players, cars;
+        uint32_t rollbacks = 0, resimTicks = 0;
+        float maxError = 0; // the prediction error
+        double shownErrorSum = 0;
+        uint32_t shownErrorCount = 0;
+        float shownErrorMax = 0;
+        uint32_t carFrames = 0, carMismatch = 0; // frames x players, and those where in-car differs from the snapshot
+    };
     void Welcomed(const Welcome& welcome, engine::NetworkGame* pGame);
+    void OnSnapshot(BitReader& r);
+    void OnSnapshotPart(BitReader& r);
+    bool TakeEvents(std::vector<TransportEvent>& events, uint32_t* pRecordedInput);
+    uint32_t ChooseInput(uint32_t recordedInput);
+    void StartBot();
+    void CountTestStats();
+    void RecordTick();
+    void HandleEvents(const std::vector<TransportEvent>& events);
+    void TakeSnapshot();
+    void Resync(const Snapshot& snap);
     void Reconcile(const Snapshot& snap);
-    uint32_t Lead() const; // ticks to run ahead of the newest snapshot
+    void MeasureShownError(const Snapshot& snap);
+    void TakePlayerStates(const Snapshot& snap);
     void Blend(const std::vector<engine::Pose>& shown);
-    uint32_t mPlayerCorrections = 0, mPlayerSnaps = 0;
-    float mPlayerCorrectionSum = 0, mPlayerCorrectionMax = 0;
-    uint32_t mCarCorrections = 0, mCarSnaps = 0;
-    JerkMeter mJerk;
-    float mCarCorrectionSum = 0, mCarCorrectionMax = 0;
+    void LogCorrection(const engine::Pose& n, int32_t dx, int32_t dy, int32_t dr) const;
+    void PrintStats(const Snapshot& snap);
+    void FeedJerk();
+    int PacedTickMs() const;
+    void SetNextInputs(uint32_t local);
+    void SendCommands();
+    uint32_t Lead() const; // ticks to run ahead of the newest snapshot
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;
@@ -109,30 +192,21 @@ class Client
     int mTickMs = 33;
     uint32_t mFrame = 0;
 
-    // Snapshots by tick % 64: the baselines
-    Snapshot mReceived[64];
+    // Snapshots by tick % kRing: the baselines
+    Snapshot mReceived[kRing];
+    Parts mParts[4]; // snapshots coming in parts, by tick % 4
     uint32_t mLatestTick = 0;
     int mSlack = 0; // how many ticks early our commands reach the server (newest command - next tick)
     bool mSlackKnown = false;
     uint32_t mJumpTick = 0; // our tick at the last jump
     bool mNewSnapshot = false;
 
-    // Prediction: this game's tick (the server tick it is predicting), the game saved after each tick, the inputs
-    // used for each tick, and where the local player was predicted to be
+    // Prediction: this game's tick (the server tick it is predicting) and the game saved after each tick
     bool mSynced = false;
     uint32_t mTick = 0;
     std::vector<std::unique_ptr<engine::SavedWorld>> mSaves;
-    uint32_t mHistTick[64] = {};
-    uint32_t mHistButtons[64] = {};
-    float mPredX[64] = {}, mPredY[64] = {};
+    TickRecord mHist[kRing];
     std::vector<uint32_t> mRemote; // other players' last inputs, from snapshots
-    std::vector<engine::ReplicaPos> mShown[64]; // where each tick showed the mapped cars and peds (the display error)
-    double mShownErrorSum = 0;
-    uint32_t mShownErrorCount = 0;
-    float mShownErrorMax = 0;
-    // For the log
-    uint32_t mRollbacks = 0, mResimTicks = 0;
-    float mMaxError = 0;
 
     std::unique_ptr<BotBrain> mBot;
     std::unique_ptr<ClientRecorder> mRecorder;
@@ -140,8 +214,10 @@ class Client
     uint32_t mRtt = 0; // the round trip as the transport sees it (or the recording says)
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
     BotView mBotView;
+    uint32_t mLastInput = ~0u; // for the input log
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;
-    uint32_t mCarFrames = 0, mCarMismatch = 0; // frames x players, and those where in-car differs from the snapshot
+    Stats mStats;
+    JerkMeter mJerk;
 };
 } // namespace net

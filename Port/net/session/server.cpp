@@ -10,28 +10,57 @@
 
 namespace
 {
-const int kRing = 64;
-
 float Distance(const net::EntityState& e, float x, float y)
 {
-    // Every schema type starts with x and y (Fix16 raw: 14 fraction bits)
-    const float dx = e.f[0] / 16384.0f - x, dy = e.f[1] / 16384.0f - y;
+    // Every schema type with a place starts with x and y
+    const float dx = net::engine::Blocks(e.f[0]) - x, dy = net::engine::Blocks(e.f[1]) - y;
     return fabsf(dx) > fabsf(dy) ? fabsf(dx) : fabsf(dy);
+}
+
+// Its state in the client's baseline (NULL: new to it)
+const net::EntityState* InBase(const net::Snapshot* base, const net::EntityState& e)
+{
+    if (!base)
+    {
+        return NULL;
+    }
+    auto it = std::lower_bound(base->entities.begin(), base->entities.end(), e.id, [](const net::EntityState& b, uint32_t id) { return b.id < id; });
+    return it != base->entities.end() && it->id == e.id && it->type == e.type ? &*it : NULL;
+}
+
+// Tests: GTA2_NET_TESTKILL=<tick>:<victim>:<killer>[,...] kills players through the game's own death
+struct TestKill
+{
+    unsigned tick;
+    int victim, killer;
+};
+std::vector<TestKill> TestKills()
+{
+    std::vector<TestKill> out;
+    for (const char* k = net::Env().testKill; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
+    {
+        TestKill t = {0, 0, -1};
+        if (sscanf(k, "%u:%d:%d", &t.tick, &t.victim, &t.killer) >= 2)
+        {
+            out.push_back(t);
+        }
+    }
+    return out;
 }
 } // namespace
 
 std::string net::Scoreboard(const Snapshot& snap)
 {
     std::string out;
-    for (size_t i = 0; i < snap.entities.size(); i++)
+    for (const EntityState& e : snap.entities)
     {
         int p = 0;
         uint32_t b = 0;
-        if (engine::PlayerOf(snap.entities[i], &p, &b))
+        if (engine::PlayerOf(e, &p, &b))
         {
             char one[64];
-            snprintf(one, sizeof(one), " %d:%d/%d(%d)@%.0f,%.0f", p, engine::PlayerFrags(snap.entities[i]), engine::PlayerDeaths(snap.entities[i]),
-                     engine::PlayerHealth(snap.entities[i]), snap.entities[i].f[0] / 16384.0f, snap.entities[i].f[1] / 16384.0f);
+            snprintf(one, sizeof(one), " %d:%d/%d(%d)@%.0f,%.0f", p, engine::PlayerFrags(e), engine::PlayerDeaths(e), engine::PlayerHealth(e),
+                     engine::Blocks(e.f[0]), engine::Blocks(e.f[1]));
             out += one;
         }
     }
@@ -41,6 +70,7 @@ std::string net::Scoreboard(const Snapshot& snap)
 bool net::Server::Start(const ServerConfig& config, std::string* error)
 {
     mConfig = config;
+    mConfig.packets = config.packets < 1 ? 1 : config.packets > kMaxParts ? kMaxParts : config.packets;
     mSlots.assign(config.game.players, Slot());
     mTransport.reset(CreateServerTransport(config.port, (uint32_t)config.game.players + 4, error));
     if (!mTransport)
@@ -51,6 +81,7 @@ bool net::Server::Start(const ServerConfig& config, std::string* error)
     {
         mTransport.reset(CreateConditioner(mTransport.release(), config.lagMs, config.jitterMs, config.lossPercent));
     }
+    mJerk.PrintJumps(Env().jerkLog >= 2);
     printf("net: server on port %u, %d player slots, %s\n", config.port, config.game.players, config.game.scr.c_str());
     return true;
 }
@@ -115,23 +146,14 @@ void net::Server::OnHello(uint32_t peer, BitReader& r)
             printf("net: %s joined as player %d\n", hello.name.c_str(), slot);
         }
     }
-    mTransport->Send(peer, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+    if (w.ByteCount()) // a second hello from a client already in: nothing to say
+    {
+        mTransport->Send(peer, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+    }
 }
 
-void net::Server::OnReceive(const TransportEvent& e)
+void net::Server::OnCommands(int slot, BitReader& r)
 {
-    BitReader r(e.data.data(), e.data.size());
-    const uint32_t type = r.Bits(8);
-    if (type == kMsgHello)
-    {
-        OnHello(e.peer, r);
-        return;
-    }
-    const int slot = SlotOfPeer(e.peer);
-    if (slot < 0 || type != kMsgCommands)
-    {
-        return; // not joined, or nothing a client sends
-    }
     Slot& s = mSlots[slot];
     uint32_t ack = 0;
     InputCmd cmds[kMaxCmdsPerPacket];
@@ -160,87 +182,36 @@ void net::Server::OnReceive(const TransportEvent& e)
     }
 }
 
-void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
+void net::Server::OnReceive(const TransportEvent& e)
 {
-    // The client's area: every player and the cars they sit in, and the cars, peds and pickups near its own
-    float x = 0, y = 0;
-    const bool located = engine::PlayerPosition(slot, &x, &y);
-    std::vector<const EntityState*> near;
-    Snapshot snap;
-    snap.tick = mTick;
-    std::vector<uint32_t> playersCars;
-    for (size_t i = 0; i < world.entities.size(); i++)
+    BitReader r(e.data.data(), e.data.size());
+    const uint32_t type = r.Bits(8);
+    if (type == kMsgHello)
     {
-        if (world.entities[i].type == engine::kEntityPlayer && engine::PlayerCarId(world.entities[i]))
-        {
-            playersCars.push_back(engine::PlayerCarId(world.entities[i]));
-        }
+        OnHello(e.peer, r);
+        return;
     }
-    for (size_t i = 0; i < world.entities.size(); i++)
+    const int slot = SlotOfPeer(e.peer);
+    if (slot >= 0 && type == kMsgCommands) // else: not joined, or nothing a client sends
     {
-        const EntityState& e = world.entities[i];
-        const bool playersCar = std::find(playersCars.begin(), playersCars.end(), e.id) != playersCars.end();
-        if (e.type == engine::kEntityPlayer || e.type == engine::kEntityWorld || playersCar)
-        {
-            snap.entities.push_back(e); // wherever they are: a player far off isn't a ped without its car
-        }
-        else if (located && Distance(e, x, y) <= mConfig.interestRadius)
-        {
-            near.push_back(&e);
-        }
+        OnCommands(slot, r);
     }
-    std::sort(near.begin(), near.end(), [&](const EntityState* a, const EntityState* b) { return Distance(*a, x, y) < Distance(*b, x, y); });
-    const Snapshot* base = NULL;
-    const Snapshot& acked = s.sent[s.ackTick % kRing];
-    if (s.ackTick && acked.tick == s.ackTick && mTick - s.ackTick < (uint32_t)kRing)
-    {
-        base = &acked;
-    }
-    static const Snapshot kEmpty;
+}
+
+// Each nearby entity with what it costs new and aged, and its priority: the age plus one, over one plus a sixth of the
+// distance (an entity new to the client counts as 8 ticks old: one near comes soon)
+std::vector<net::Server::Item> net::Server::PriceArea(const std::vector<const EntityState*>& near, const Snapshot* base, float x, float y) const
+{
     const Schema& schema = engine::NetSchema();
-    // Fit kMaxPayload by priority, as Quake 3's successors do. The entities the client has stay in every snapshot: one
-    // left out would be removed there (and cost a whole new one later). Each gets this tick's state, or, when there is
-    // no room, the state the client already has with its age (the ticks since it was new) - a few bits; the client
-    // applies only new state and predicts the rest on. Who gets new state: the highest priority, which grows with
-    // the age and falls with the distance. New entities come after, nearest first, as room allows.
-    auto inBase = [&](const EntityState& e) -> const EntityState* {
-        if (!base)
-        {
-            return NULL;
-        }
-        auto it = std::lower_bound(base->entities.begin(), base->entities.end(), e.id, [](const EntityState& b, uint32_t id) { return b.id < id; });
-        return it != base->entities.end() && it->id == e.id && it->type == e.type ? &*it : NULL;
-    };
-    auto cost = [&](const EntityState* from, const EntityState& to) -> size_t { // bits, as one entry of a delta
-        Snapshot a, b;
-        if (from)
-        {
-            a.entities.push_back(*from);
-        }
-        b.entities.push_back(to);
-        BitWriter t;
-        WriteDelta(t, schema, a, b);
-        return t.BitCount();
-    };
-    struct Item
-    {
-        const EntityState* now;
-        const EntityState* had; // in the client's baseline
-        EntityState aged; // what it has, with its age
-        size_t freshBits, agedBits;
-        float priority;
-        int pick; // 0: not sent (new, no room), 1: aged, 2: this tick's
-    };
     std::vector<Item> items(near.size());
     for (size_t i = 0; i < near.size(); i++)
     {
         Item& it = items[i];
         it.now = near[i];
-        it.had = inBase(*near[i]);
-        it.freshBits = cost(it.had, *it.now);
+        it.had = InBase(base, *near[i]);
+        it.freshBits = EntryBits(schema, it.had, *it.now);
         it.pick = 0;
         it.agedBits = 0;
-        it.priority = 0;
         if (it.had)
         {
             it.aged = *it.had;
@@ -250,18 +221,30 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
             {
                 it.aged.f[f] = age < 1 ? 1 : age > 63 ? 63 : age;
             }
-            it.agedBits = cost(it.had, it.aged);
+            it.agedBits = EntryBits(schema, it.had, it.aged);
             it.priority = (float)(age + 1) / (1.0f + Distance(*it.now, x, y) / 6.0f);
         }
         else
         {
-            it.priority = 9.0f / (1.0f + Distance(*it.now, x, y) / 6.0f); // new: as if 8 ticks old (one near comes soon)
+            it.priority = 9.0f / (1.0f + Distance(*it.now, x, y) / 6.0f);
         }
     }
+    return items;
+}
+
+// Fit the snapshot into its packets by priority, as Quake 3's successors do. The entities the client has stay in every
+// snapshot: one left out would be removed there (and cost a whole new one later). Each gets this tick's state, or, when
+// there is no room, the state the client already has with its age (the ticks since it was new) - a few bits; the
+// client applies only new state and predicts the rest on. Who gets new state: the highest priority. New entities come
+// after, as room allows. False: it fits no budget (nothing to send)
+bool net::Server::Fill(Slot& s, const Snapshot& fixed, std::vector<Item>& items, const Snapshot* base, BitWriter& w)
+{
+    static const Snapshot kEmpty;
+    const Schema& schema = engine::NetSchema();
     size_t fixedBits = 0;
-    for (size_t i = 0; i < snap.entities.size(); i++)
+    for (const EntityState& e : fixed.entities)
     {
-        fixedBits += cost(inBase(snap.entities[i]), snap.entities[i]);
+        fixedBits += EntryBits(schema, InBase(base, e), e);
     }
     std::vector<size_t> order(items.size());
     for (size_t i = 0; i < items.size(); i++)
@@ -269,17 +252,15 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         order[i] = i;
     }
     std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return items[a].priority > items[b].priority; });
-    BitWriter w;
-    const int packets = mConfig.packets < 1 ? 1 : mConfig.packets > kMaxParts ? kMaxParts : mConfig.packets;
-    const size_t room = packets == 1 ? kMaxPayload : (size_t)packets * (kMaxPayload - kPartHeader); // bytes
+    const size_t room = mConfig.packets == 1 ? kMaxPayload : (size_t)mConfig.packets * (kMaxPayload - kPartHeader); // bytes
     size_t budget = room * 8 - 96; // the header, the entry count, a margin
     for (;;)
     {
         size_t bits = fixedBits;
-        for (size_t i = 0; i < items.size(); i++) // what the client has stays, aged
+        for (Item& it : items) // what the client has stays, aged
         {
-            items[i].pick = items[i].had ? 1 : 0;
-            bits += items[i].had ? items[i].agedBits : 0;
+            it.pick = it.had ? 1 : 0;
+            bits += it.had ? it.agedBits : 0;
         }
         for (size_t k = 0; k < order.size(); k++) // then new state, by priority, as room allows
         {
@@ -291,18 +272,18 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
                 it.pick = 2;
             }
         }
-        Snapshot candidate = snap;
+        Snapshot candidate = fixed;
         size_t fresh = 0;
-        for (size_t i = 0; i < items.size(); i++)
+        for (const Item& it : items)
         {
-            if (items[i].pick == 2)
+            if (it.pick == 2)
             {
-                candidate.entities.push_back(*items[i].now);
+                candidate.entities.push_back(*it.now);
                 fresh++;
             }
-            else if (items[i].pick == 1)
+            else if (it.pick == 1)
             {
-                candidate.entities.push_back(items[i].aged);
+                candidate.entities.push_back(it.aged);
             }
         }
         engine::SetSnapshotReach(candidate, mConfig.interestRadius); // nothing it has goes missing
@@ -313,128 +294,21 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         WriteDelta(w, schema, base ? *base : kEmpty, candidate);
         if (w.ByteCount() <= room || budget < 2048)
         {
-            mNearSum += (uint32_t)items.size();
-            mKeptSum += (uint32_t)fresh;
-            mCut += fresh < items.size();
+            mStats.near += (uint32_t)items.size();
+            mStats.fresh += (uint32_t)fresh;
+            mStats.cut += fresh < items.size();
             s.sent[mTick % kRing] = candidate;
-            break;
+            return w.ByteCount() <= room;
         }
         budget -= budget / 8; // the estimate was off (ids' gaps): a little less
     }
-    static const bool sDeltaStats = getenv("GTA2_NET_DELTASTATS") != NULL;
-    if (sDeltaStats && base)
+}
+
+// One packet, or parts of at most kMaxPayload each: the client puts them together before reading it
+void net::Server::Transmit(const Slot& s, const BitWriter& w)
+{
+    if (w.ByteCount() > kMaxPayload)
     {
-        // What the updates cost now, and with two changes: the changed fields as a list of indices when that is
-        // shorter than the mask, and each changed value as the difference from the client's (zigzag, varint by 7 bits)
-        static double sNow, sList, sDiff, sBoth;
-        static uint32_t sUpdates, sSince;
-        const Snapshot& now = s.sent[mTick % kRing];
-        const Schema& sc = engine::NetSchema();
-        for (size_t i = 0; i < now.entities.size(); i++)
-        {
-            const EntityState& e = now.entities[i];
-            auto it = std::lower_bound(base->entities.begin(), base->entities.end(), e.id, [](const EntityState& b, uint32_t id) { return b.id < id; });
-            if (it == base->entities.end() || it->id != e.id || it->type != e.type)
-            {
-                continue;
-            }
-            const std::vector<FieldDesc>& fd = sc.types[e.type].fields;
-            int changed = 0;
-            double full = 0, diff = 0;
-            for (size_t f = 0; f < fd.size(); f++)
-            {
-                const uint32_t mask = fd[f].bits >= 32 ? 0xFFFFFFFFu : (1u << fd[f].bits) - 1;
-                if ((uint32_t)(e.f[f] ^ it->f[f]) & mask)
-                {
-                    changed++;
-                    full += fd[f].bits;
-                    int64_t d = (int64_t)e.f[f] - (int64_t)it->f[f];
-                    uint64_t z = d < 0 ? (uint64_t)(-2 * d - 1) : (uint64_t)(2 * d);
-                    int vb = 8;
-                    while (z >= 128)
-                    {
-                        z >>= 7;
-                        vb += 8;
-                    }
-                    diff += vb < fd[f].bits ? vb : fd[f].bits + 1; // a flag bit picks the shorter
-                }
-            }
-            if (!changed)
-            {
-                continue;
-            }
-            int idxBits = 1;
-            while ((1u << idxBits) < fd.size())
-            {
-                idxBits++;
-            }
-            const double maskBits = (double)fd.size(), listBits = 1 + 7 + changed * idxBits;
-            const double sel = maskBits < listBits ? maskBits : listBits;
-            sNow += maskBits + full;
-            sList += sel + full;
-            sDiff += maskBits + diff;
-            sBoth += sel + diff;
-            sUpdates++;
-        }
-        if (++sSince == 300 * (uint32_t)mSlots.size())
-        {
-            printf("net: delta updates: %u, bits each now %.0f, with index lists %.0f, with value differences %.0f, both %.0f\n", sUpdates,
-                   sUpdates ? sNow / sUpdates : 0, sUpdates ? sList / sUpdates : 0, sUpdates ? sDiff / sUpdates : 0, sUpdates ? sBoth / sUpdates : 0);
-            sNow = sList = sDiff = sBoth = 0;
-            sUpdates = sSince = 0;
-        }
-    }
-    static const bool sFieldStats = getenv("GTA2_NET_FIELDSTATS") != NULL;
-    if (sFieldStats && base)
-    {
-        // Which fields change from snapshot to snapshot, per entity type (the delta's cost)
-        static std::vector<std::vector<uint32_t>> sChanges;
-        static uint32_t sSince;
-        const Schema& schema = engine::NetSchema();
-        sChanges.resize(schema.types.size());
-        const Snapshot& now = s.sent[mTick % kRing];
-        size_t j = 0;
-        for (size_t i = 0; i < now.entities.size(); i++)
-        {
-            const EntityState& e = now.entities[i];
-            while (j < base->entities.size() && base->entities[j].id < e.id)
-            {
-                j++;
-            }
-            if (j < base->entities.size() && base->entities[j].id == e.id && base->entities[j].type == e.type)
-            {
-                std::vector<uint32_t>& c = sChanges[e.type];
-                c.resize(schema.types[e.type].fields.size());
-                for (size_t f = 0; f < c.size(); f++)
-                {
-                    c[f] += e.f[f] != base->entities[j].f[f];
-                }
-            }
-        }
-        if (++sSince == 300)
-        {
-            for (size_t t = 0; t < sChanges.size(); t++)
-            {
-                std::vector<std::pair<uint32_t, size_t>> top;
-                for (size_t f = 0; f < sChanges[t].size(); f++)
-                {
-                    top.push_back(std::make_pair(sChanges[t][f], f));
-                }
-                std::sort(top.rbegin(), top.rend());
-                printf("net: fields changed most (%s):", schema.types[t].name);
-                for (size_t k = 0; k < top.size() && k < 14; k++)
-                {
-                    printf(" %s %u", schema.types[t].fields[top[k].second].name, top[k].first);
-                }
-                printf("\n");
-                sChanges[t].assign(sChanges[t].size(), 0);
-            }
-            sSince = 0;
-        }
-    }
-    if (w.ByteCount() > kMaxPayload && w.ByteCount() <= room)
-    {
-        // In parts (each at most kMaxPayload): the client puts them together before reading it
         std::vector<uint8_t> message(w.Data().begin(), w.Data().begin() + w.ByteCount());
         std::vector<std::vector<uint8_t>> parts;
         WriteSnapshotParts(message, mTick, parts);
@@ -442,32 +316,79 @@ void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
         {
             mTransport->Send(s.peer, kChannelUnreliable, parts[k].data(), parts[k].size(), false);
         }
-        mBytesSent += (uint32_t)w.ByteCount();
-        mPartsSent += (uint32_t)parts.size();
+        mStats.parts += (uint32_t)parts.size();
     }
-    else if (w.ByteCount() <= kMaxPayload)
+    else
     {
         mTransport->Send(s.peer, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
-        mPartsSent++;
-        mBytesSent += (uint32_t)w.ByteCount();
+        mStats.parts++;
+    }
+    mStats.bytes += (uint32_t)w.ByteCount();
+}
+
+// The client's area: every player and the cars they sit in (wherever they are: a player far off isn't a ped without its
+// car), and the cars, peds and pickups near its own, nearest first
+void net::Server::SendSnapshot(int slot, Slot& s, const Snapshot& world)
+{
+    float x = 0, y = 0;
+    const bool located = engine::PlayerPosition(slot, &x, &y);
+    std::vector<uint32_t> playersCars;
+    for (const EntityState& e : world.entities)
+    {
+        if (engine::PlayerCarId(e))
+        {
+            playersCars.push_back(engine::PlayerCarId(e));
+        }
+    }
+    Snapshot fixed;
+    fixed.tick = mTick;
+    std::vector<const EntityState*> near;
+    for (const EntityState& e : world.entities)
+    {
+        const bool playersCar = std::find(playersCars.begin(), playersCars.end(), e.id) != playersCars.end();
+        if (e.type == engine::kEntityPlayer || e.type == engine::kEntityWorld || playersCar)
+        {
+            fixed.entities.push_back(e);
+        }
+        else if (located && Distance(e, x, y) <= mConfig.interestRadius)
+        {
+            near.push_back(&e);
+        }
+    }
+    std::sort(near.begin(), near.end(), [&](const EntityState* a, const EntityState* b) { return Distance(*a, x, y) < Distance(*b, x, y); });
+    const Snapshot& acked = s.sent[s.ackTick % kRing];
+    const Snapshot* base = s.ackTick && acked.tick == s.ackTick && mTick - s.ackTick < (uint32_t)kRing ? &acked : NULL;
+    std::vector<Item> items = PriceArea(near, base, x, y);
+    BitWriter w;
+    if (Fill(s, fixed, items, base, w))
+    {
+        Transmit(s, w);
+    }
+    else
+    {
+        mStats.unsent++;
     }
 }
 
-void net::Server::Frame()
+void net::Server::StartGameOnce()
 {
-    mTick++; // the tick that just ran
-    if (!mStarted && engine::GameRunning())
+    if (mStarted || !engine::GameRunning())
     {
-        // The map script made a ped for every slot: those without a client are out until one joins
-        for (size_t i = 0; i < mSlots.size(); i++)
-        {
-            if (!mSlots[i].used)
-            {
-                engine::TakeOutOfGame((int)i);
-            }
-        }
-        mStarted = true;
+        return;
     }
+    // The map script made a ped for every slot: those without a client are out until one joins
+    for (size_t i = 0; i < mSlots.size(); i++)
+    {
+        if (!mSlots[i].used)
+        {
+            engine::TakeOutOfGame((int)i);
+        }
+    }
+    mStarted = true;
+}
+
+void net::Server::PollTransport()
+{
     TransportEvent e;
     while (mTransport->Poll(e))
     {
@@ -486,22 +407,21 @@ void net::Server::Frame()
             }
         }
     }
-    // Tests: GTA2_NET_TESTKILL=<tick>:<victim>:<killer>[,...] kills players through the game's own death
-    if (const char* kills = getenv("GTA2_NET_TESTKILL"))
+}
+
+void net::Server::RunTestHooks()
+{
+    static const std::vector<TestKill> sKills = TestKills();
+    for (const TestKill& k : sKills)
     {
-        for (const char* k = kills; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
+        if (k.tick == mTick)
         {
-            unsigned tick = 0;
-            int victim = 0, killer = -1;
-            if (sscanf(k, "%u:%d:%d", &tick, &victim, &killer) >= 2 && tick == mTick)
-            {
-                printf("net: test kill of player %d by %d at tick %u\n", victim, killer, mTick);
-                engine::DebugKill(victim, killer);
-            }
+            printf("net: test kill of player %d by %d at tick %u\n", k.victim, k.killer, mTick);
+            engine::DebugKill(k.victim, k.killer);
         }
     }
-    // Tests: GTA2_NET_TESTARM=<weapon>:<ammo> keeps every player armed (weapon_type, 0 pistol, 1 smg, ...)
-    if (const char* arm = getenv("GTA2_NET_TESTARM"))
+    // GTA2_NET_TESTARM=<weapon>:<ammo> keeps every player armed (weapon_type, 0 pistol, 1 smg, ...)
+    if (const char* arm = Env().testArm)
     {
         int weapon = 0, ammo = 50;
         sscanf(arm, "%d:%d", &weapon, &ammo);
@@ -510,7 +430,11 @@ void net::Server::Frame()
             engine::DebugArm((int)i, weapon, ammo);
         }
     }
-    // Inputs for the next tick: its command, or the last one again if it is late; nobody's slot stands still
+}
+
+// Inputs for the next tick: its command, or the last one again if it is late; nobody's slot stands still
+void net::Server::SetNextInputs()
+{
     const uint32_t next = mTick + 1;
     for (size_t i = 0; i < mSlots.size(); i++)
     {
@@ -525,26 +449,69 @@ void net::Server::Frame()
         }
         engine::SetPlayerInput((int)i, s.used ? s.buttons : 0);
     }
+}
+
+// GTA2_NET_JERKLOG: the same measure as the clients', on the server's own state
+void net::Server::FeedJerk(const Snapshot& world)
+{
+    if (!Env().jerkLog)
+    {
+        return;
+    }
+    std::vector<engine::Pose> poses;
+    for (const EntityState& e : world.entities)
+    {
+        engine::Pose p;
+        if (engine::PoseOf(e, &p))
+        {
+            poses.push_back(p);
+        }
+    }
+    mJerk.Feed(mTick, poses);
+    if (mTick % 900 == 0)
+    {
+        mJerk.Report("server", mTick);
+    }
+}
+
+void net::Server::PrintStats(const Snapshot& world)
+{
+    int used = 0;
+    uint32_t late = 0;
+    for (Slot& s : mSlots)
+    {
+        used += s.used;
+        late += s.late;
+        s.late = 0;
+    }
+    int sent = 0, driven = 0, same = 0;
+    engine::DriverStats(world, &sent, &driven, &same);
+    printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n", mTick, used,
+           world.entities.size(), sent, used ? mStats.bytes / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
+    printf("net: tick %u, %.2f packets per snapshot\n", mTick, used ? mStats.parts / 300.0 / used : 0.0);
+    for (size_t i = 0; i < mSlots.size(); i++)
+    {
+        if (mSlots[i].used)
+        {
+            printf("net: tick %u, player %zu sees %.1f blocks (centre to corner)\n", mTick, i, engine::PlayerViewRadius((int)i));
+        }
+    }
+    printf("net: tick %u, snapshots had new state for %.0f%% of the entities in the clients' areas (%u of %u not for all)%s\n", mTick,
+           mStats.near ? 100.0 * mStats.fresh / mStats.near : 100.0, mStats.cut, used * 300, mStats.unsent ? "; some didn't fit at all" : "");
+    mStats = Stats();
+}
+
+void net::Server::Frame()
+{
+    mTick++; // the tick that just ran
+    StartGameOnce();
+    PollTransport();
+    RunTestHooks();
+    SetNextInputs();
     Snapshot world;
     engine::Capture(world);
     world.tick = mTick;
-    static const bool sJerkLog = getenv("GTA2_NET_JERKLOG") != NULL;
-    if (sJerkLog) // the same measure as the clients', on the server's own state (players in cars aren't counted there)
-    {
-        std::vector<engine::Pose> poses;
-        for (const EntityState& e : world.entities)
-        {
-            if ((e.type == engine::kEntityPlayer && !e.f[4]) || e.type == engine::kEntityCar || e.type == engine::kEntityPed)
-            {
-                poses.push_back(engine::Pose{e.id, e.f[0], e.f[1], e.f[2], e.f[3]});
-            }
-        }
-        mJerk.Feed(mTick, poses);
-        if (mTick % 900 == 0)
-        {
-            mJerk.Report("server", mTick);
-        }
-    }
+    FeedJerk(world);
     for (size_t i = 0; i < mSlots.size(); i++)
     {
         if (mSlots[i].used)
@@ -555,33 +522,6 @@ void net::Server::Frame()
     mTransport->Flush();
     if (mTick % 300 == 0)
     {
-        int used = 0;
-        for (size_t i = 0; i < mSlots.size(); i++)
-        {
-            used += mSlots[i].used;
-        }
-        uint32_t late = 0;
-        for (size_t i = 0; i < mSlots.size(); i++)
-        {
-            late += mSlots[i].late;
-            mSlots[i].late = 0;
-        }
-        int sent = 0, driven = 0, same = 0;
-        engine::DriverStats(world, &sent, &driven, &same);
-        printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n",
-               mTick, used, world.entities.size(), sent, used ? mBytesSent / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
-        mBytesSent = 0;
-        printf("net: tick %u, %.2f packets per snapshot\n", mTick, used ? mPartsSent / 300.0 / used : 0.0);
-        mPartsSent = 0;
-        for (size_t i = 0; i < mSlots.size(); i++)
-        {
-            if (mSlots[i].used)
-            {
-                printf("net: tick %u, player %zu sees %.1f blocks (centre to corner)\n", mTick, i, engine::PlayerViewRadius((int)i));
-            }
-        }
-        printf("net: tick %u, snapshots had new state for %.0f%% of the entities in the clients' areas (%u of %u not for all)\n", mTick,
-               mNearSum ? 100.0 * mKeptSum / mNearSum : 100.0, mCut, used * 300);
-        mNearSum = mKeptSum = mCut = 0;
+        PrintStats(world);
     }
 }

@@ -5,7 +5,6 @@
 #include "../engine/engine.hpp"
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unordered_map>
 #include <vector>
 
@@ -14,12 +13,16 @@ namespace net
 class JerkMeter
 {
   public:
+    void PrintJumps(bool on) // each change over 0.4 blocks, as it happens
+    {
+        mPrintJumps = on;
+    }
     void Feed(uint32_t frame, const std::vector<engine::Pose>& poses, uint32_t localId = 0) // localId: the client's own player
     {
         std::unordered_map<uint32_t, Track> next;
         for (const engine::Pose& p : poses)
         {
-            Track t = {p.x / 16384.0f, p.y / 16384.0f, 0, 0, frame, false};
+            Track t = {engine::Blocks(p.x), engine::Blocks(p.y), 0, 0, frame, false};
             auto it = mTracks.find(p.id);
             if (it != mTracks.end() && it->second.frame + 1 == frame)
             {
@@ -28,7 +31,7 @@ class JerkMeter
                 t.vy = t.y - o.y;
                 t.moving = true;
                 const float step = sqrtf(t.vx * t.vx + t.vy * t.vy);
-                Kind& k = mKinds[p.id == localId ? 3 : p.id < 0x01000000u ? 0 : p.id < 0x02000000u ? 1 : 2];
+                Kind& k = mKinds[p.id == localId ? 3 : engine::IsPlayerId(p.id) ? 0 : engine::IsCarId(p.id) ? 1 : 2];
                 if (step > 2)
                 {
                     k.jumps++; // a respawn, a car entered: not motion
@@ -41,8 +44,7 @@ class JerkMeter
                     k.over[0] += a > 0.05f;
                     k.over[1] += a > 0.15f;
                     k.over[2] += a > 0.4f;
-                    static const bool sEach = getenv("GTA2_NET_JERKLOG") && atoi(getenv("GTA2_NET_JERKLOG")) >= 2;
-                    if (sEach && a > 0.4f)
+                    if (mPrintJumps && a > 0.4f)
                     {
                         printf("net: frame %u, jerk of %u: %.2f, step (%.2f, %.2f) after (%.2f, %.2f) at (%.2f, %.2f)\n", frame, p.id, a, t.vx, t.vy,
                                o.vx, o.vy, t.x, t.y);
@@ -82,5 +84,6 @@ class JerkMeter
     };
     std::unordered_map<uint32_t, Track> mTracks;
     Kind mKinds[4];
+    bool mPrintJumps = false;
 };
 } // namespace net

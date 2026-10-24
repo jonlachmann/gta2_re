@@ -301,12 +301,46 @@ void TestParts()
     }
 }
 
+// EntryBits is a one-entity WriteDelta: new, unchanged, a few fields changed, another type under the id
+void TestEntryBits()
+{
+    const net::Schema s = TestSchema();
+    for (int i = 0; i < 3000; i++)
+    {
+        const uint8_t type = (uint8_t)(Rand() % 3);
+        const net::EntityState to = Entity(1 + Rand() % 100000, type, s);
+        net::EntityState from = to;
+        const int kind = (int)(Rand() % 4);
+        if (kind == 1)
+        {
+            for (int k = (int)(Rand() % 4); k >= 0; k--)
+            {
+                from.f[Rand() % s.types[type].fields.size()] ^= (int32_t)(1 + Rand() % 7);
+            }
+        }
+        else if (kind == 2)
+        {
+            from = Entity(to.id, (uint8_t)((type + 1) % 3), s);
+        }
+        net::Snapshot a, b;
+        if (kind != 3)
+        {
+            a.entities.push_back(from);
+        }
+        b.entities.push_back(to);
+        net::BitWriter w;
+        net::WriteDelta(w, s, a, b);
+        CHECK(net::EntryBits(s, kind == 3 ? NULL : &from, to) == w.BitCount());
+    }
+}
+
 int main()
 {
     TestBits();
     printf("bitstream ok\n");
     fflush(stdout);
     TestDelta();
+    TestEntryBits();
     printf("snapshot deltas ok\n");
     TestParts();
     printf("snapshot parts ok\n");

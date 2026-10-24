@@ -10,7 +10,6 @@
 
 namespace
 {
-const int kRing = 64;
 const int kSaves = 32; // ticks a snapshot may be behind and still be reconciled (about 1 s)
 
 // Polls until a message of <want> arrives on the reliable channel, a disconnect, or <ms> pass
@@ -31,12 +30,10 @@ bool WaitFor(net::Transport* t, net::TransportEvent::Type want, int ms, net::Tra
 }
 } // namespace
 
-net::Client::Client()
+void net::CorrectionStats::Print(uint32_t frame, const char* what) const
 {
-}
-
-net::Client::~Client()
-{
+    printf("net: frame %u, %s' corrections: %u, %.2f blocks on average, up to %.2f, %u over 2 blocks (jumped)\n", frame, what, count,
+           count ? sum / count : 0.0f, max, jumps);
 }
 
 void net::Client::Welcomed(const Welcome& welcome, engine::NetworkGame* pGame)
@@ -54,6 +51,7 @@ void net::Client::Welcomed(const Welcome& welcome, engine::NetworkGame* pGame)
     pGame->gmp = welcome.gmp;
     pGame->sty = welcome.sty;
     pGame->scr = welcome.scr;
+    mJerk.PrintJumps(Env().jerkLog >= 2);
 }
 
 bool net::Client::StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error)
@@ -115,7 +113,7 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
         return false;
     }
     Welcomed(welcome, pGame);
-    if (const char* path = getenv("GTA2_NET_RECORD"))
+    if (const char* path = Env().record)
     {
         mRecorder.reset(new ClientRecorder());
         if (!mRecorder->Open(path, welcome))
@@ -203,52 +201,66 @@ uint32_t net::Client::Lead() const
     return (mRtt / 2 + mTickMs - 1) / mTickMs + 2;
 }
 
+// The display error: what tick S showed of the cars and peds against the server's S
+void net::Client::MeasureShownError(const Snapshot& snap)
+{
+    const TickRecord& rec = mHist[snap.tick % kRing];
+    if (rec.shownTick != snap.tick)
+    {
+        return;
+    }
+    for (const engine::ReplicaPos& shown : rec.shown)
+    {
+        size_t j = 0;
+        while (j < snap.entities.size() && snap.entities[j].id != shown.id)
+        {
+            j++;
+        }
+        if (j < snap.entities.size())
+        {
+            const float dx = engine::Blocks(snap.entities[j].f[0]) - shown.x, dy = engine::Blocks(snap.entities[j].f[1]) - shown.y;
+            const float e = sqrtf(dx * dx + dy * dy);
+            mStats.shownErrorSum += e;
+            mStats.shownErrorCount++;
+            mStats.shownErrorMax = e > mStats.shownErrorMax ? e : mStats.shownErrorMax;
+        }
+    }
+}
+
+// The other players' inputs (we predict them with these), the marker, and the prediction error: where we had ourselves
+// at S against where the server has us
+void net::Client::TakePlayerStates(const Snapshot& snap)
+{
+    const TickRecord& rec = mHist[snap.tick % kRing];
+    for (const EntityState& e : snap.entities)
+    {
+        int player = 0;
+        uint32_t buttons = 0;
+        if (!engine::PlayerOf(e, &player, &buttons) || player < 0 || player >= (int)mRemote.size())
+        {
+            continue;
+        }
+        mRemote[player] = buttons;
+        if (player == mSlot && Env().marker)
+        {
+            engine::SetServerMarker(e.f[0], e.f[1], e.f[2]);
+        }
+        if (player == mSlot && rec.tick == snap.tick)
+        {
+            const float dx = engine::Blocks(e.f[0]) - rec.predX, dy = engine::Blocks(e.f[1]) - rec.predY;
+            const float err = sqrtf(dx * dx + dy * dy);
+            mStats.maxError = err > mStats.maxError ? err : mStats.maxError;
+        }
+    }
+}
+
 // A snapshot of tick S: back to the game as it was after S, the server's state on top, then the ticks since then
 // again with the inputs we used (other players: their last known input)
 void net::Client::Reconcile(const Snapshot& snap)
 {
     const uint32_t s = snap.tick;
-    // The display error: what tick S showed of the cars and peds against the server's S
-    const std::vector<engine::ReplicaPos>& shown = mShown[s % kRing];
-    if (!shown.empty() && shown.back().id == 0xFFFFFFFFu && (uint32_t)shown.back().x == s)
-    {
-        size_t j = 0;
-        for (size_t i = 0; i + 1 < shown.size(); i++)
-        {
-            for (j = 0; j < snap.entities.size() && snap.entities[j].id != shown[i].id; j++)
-            {
-            }
-            if (j < snap.entities.size())
-            {
-                const float dx = snap.entities[j].f[0] / 16384.0f - shown[i].x, dy = snap.entities[j].f[1] / 16384.0f - shown[i].y;
-                const float e = sqrtf(dx * dx + dy * dy);
-                mShownErrorSum += e;
-                mShownErrorCount++;
-                mShownErrorMax = e > mShownErrorMax ? e : mShownErrorMax;
-            }
-        }
-    }
-    for (size_t i = 0; i < snap.entities.size(); i++)
-    {
-        int player = 0;
-        uint32_t buttons = 0;
-        if (engine::PlayerOf(snap.entities[i], &player, &buttons) && player >= 0 && player < (int)mRemote.size())
-        {
-            mRemote[player] = buttons;
-            if (player == mSlot && getenv("GTA2_NET_MARKER"))
-            {
-                engine::SetServerMarker(snap.entities[i].f[0], snap.entities[i].f[1], snap.entities[i].f[2]);
-            }
-            if (player == mSlot && mHistTick[s % kRing] == s)
-            {
-                // The prediction error: where we had ourselves at S against where the server has us
-                const float dx = snap.entities[i].f[0] / 16384.0f - mPredX[s % kRing];
-                const float dy = snap.entities[i].f[1] / 16384.0f - mPredY[s % kRing];
-                const float e = sqrtf(dx * dx + dy * dy);
-                mMaxError = e > mMaxError ? e : mMaxError;
-            }
-        }
-    }
+    MeasureShownError(snap);
+    TakePlayerStates(snap);
     engine::SavedWorld* saved = s <= mTick && s + kSaves > mTick ? mSaves[s % kSaves].get() : NULL;
     if (!saved || !saved->valid || saved->tick != s)
     {
@@ -266,15 +278,28 @@ void net::Client::Reconcile(const Snapshot& snap)
     std::vector<uint32_t> buttons(mRemote);
     for (uint32_t t = s + 1; t <= mTick; t++)
     {
-        buttons[mSlot] = mHistTick[t % kRing] == t ? mHistButtons[t % kRing] : 0;
+        buttons[mSlot] = mHist[t % kRing].tick == t ? mHist[t % kRing].buttons : 0;
         engine::ResimTick(buttons.data(), (int)buttons.size());
         engine::DebugCheckPlayerCars("after a resimulated tick");
         engine::SaveGame(*mSaves[t % kSaves], t);
-        mResimTicks++;
+        mStats.resimTicks++;
     }
-    mRollbacks++;
+    mStats.rollbacks++;
     engine::ApplyScores(snap);
     Blend(before);
+}
+
+// GTA2_NET_CORRLOG: corrections of over half a block or 45 degrees (players: a quarter block)
+void net::Client::LogCorrection(const engine::Pose& n, int32_t dx, int32_t dy, int32_t dr) const
+{
+    const int32_t kFar = 2 << 14;
+    if (!Env().corrLog || !(abs(dx) > 8192 || abs(dy) > 8192 || abs(dr) > 180 || (engine::IsPlayerId(n.id) && (abs(dx) > 4096 || abs(dy) > 4096))))
+    {
+        return;
+    }
+    printf("net: frame %u, correction of %u: %.2f blocks, %d degrees%s%s\n", mFrame, n.id, sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f,
+           dr / 4, abs(dx) > kFar || abs(dy) > kFar ? " (jumped)" : "",
+           engine::IsPlayerId(n.id) ? ("; " + engine::DebugPlayerCar((int)n.id - 1, mReceived[mLatestTick % kRing])).c_str() : "");
 }
 
 // The correction in steps: what is shown moves from where it was a part of the way to the corrected state each frame
@@ -282,7 +307,7 @@ void net::Client::Reconcile(const Snapshot& snap)
 // before the next snapshot's resimulation; more than 2 blocks off (a respawn, a car entered) jumps.
 void net::Client::Blend(const std::vector<engine::Pose>& shown)
 {
-    static const float alpha = getenv("GTA2_NET_BLEND") ? (float)atof(getenv("GTA2_NET_BLEND")) : 0.2f; // 0.3: remote players a fifth jerkier (GTA2_NET_JERKLOG)
+    const float alpha = Env().blend;
     if (alpha >= 1 || alpha <= 0)
     {
         return;
@@ -290,14 +315,13 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
     std::vector<engine::Pose> now;
     engine::Poses(now);
     std::unordered_map<uint32_t, const engine::Pose*> before;
-    for (size_t i = 0; i < shown.size(); i++)
+    for (const engine::Pose& p : shown)
     {
-        before[shown[i].id] = &shown[i];
+        before[p.id] = &p;
     }
     const int32_t kFar = 2 << 14;
-    for (size_t i = 0; i < now.size(); i++)
+    for (const engine::Pose& n : now)
     {
-        const engine::Pose& n = now[i];
         auto it = before.find(n.id);
         if (it == before.end())
         {
@@ -305,31 +329,18 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
         }
         const engine::Pose& b = *it->second;
         const int32_t dx = n.x - b.x, dy = n.y - b.y, dz = n.z - b.z;
-        int32_t dr = ((n.rot - b.rot) % 1440 + 1440 + 720) % 1440 - 720; // the short way round
-        if (n.id >= 0x01000000u && n.id < 0x02000000u && (dx || dy)) // the cars' corrections, for the log
+        const int32_t dr = ((n.rot - b.rot) % 1440 + 1440 + 720) % 1440 - 720; // the short way round
+        const bool far = abs(dx) > kFar || abs(dy) > kFar;
+        if (dx || dy)
         {
-            const float d = sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f;
-            mCarCorrections++;
-            mCarCorrectionSum += d;
-            mCarCorrectionMax = d > mCarCorrectionMax ? d : mCarCorrectionMax;
-            mCarSnaps += abs(dx) > kFar || abs(dy) > kFar;
+            CorrectionStats* stats = engine::IsPlayerId(n.id) ? &mStats.players : engine::IsCarId(n.id) ? &mStats.cars : NULL;
+            if (stats)
+            {
+                stats->Add(sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f, far);
+            }
         }
-        if (n.id < 0x01000000u && (dx || dy)) // the players' corrections, for the log
-        {
-            const float d = sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f;
-            mPlayerCorrections++;
-            mPlayerCorrectionSum += d;
-            mPlayerCorrectionMax = d > mPlayerCorrectionMax ? d : mPlayerCorrectionMax;
-            mPlayerSnaps += abs(dx) > kFar || abs(dy) > kFar;
-        }
-        static const bool sCorrLog = getenv("GTA2_NET_CORRLOG") != NULL;
-        if (sCorrLog && (abs(dx) > 8192 || abs(dy) > 8192 || abs(dr) > 180 || (n.id < 0x01000000u && (abs(dx) > 4096 || abs(dy) > 4096)))) // over half a block or 45 degrees
-        {
-            printf("net: frame %u, correction of %u: %.2f blocks, %d degrees%s%s\n", mFrame, n.id, sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f,
-                   dr / 4, abs(dx) > kFar || abs(dy) > kFar ? " (jumped)" : "",
-                   n.id < 0x01000000u ? ("; " + engine::DebugPlayerCar((int)n.id - 1, mReceived[mLatestTick % kRing])).c_str() : "");
-        }
-        if (abs(dx) > kFar || abs(dy) > kFar || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
+        LogCorrection(n, dx, dy, dr);
+        if (far || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
         {
             continue;
         }
@@ -339,94 +350,61 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
     }
 }
 
-void net::Client::Frame()
+// What arrives this frame: from the network, or the recording (false: the recording is over)
+bool net::Client::TakeEvents(std::vector<TransportEvent>& events, uint32_t* pRecordedInput)
 {
-    mFrame++;
-    engine::DebugSetFrame(mFrame);
-    engine::DebugSoundChannels(mFrame);
-    engine::DebugAnimLog(mFrame);
-    engine::DebugSelfLog(mFrame);
-    if (getenv("GTA2_NET_ANIMLOG") && mFrame % 3 == 0)
-    {
-        printf("net: frame %u, remote buttons:", mFrame);
-        for (size_t i = 0; i < mRemote.size(); i++)
-        {
-            printf(" 0x%x", mRemote[i]);
-        }
-        printf("\n");
-    }
-    // What arrives this frame: from the network, or the recording
-    std::vector<TransportEvent> events;
-    uint32_t recordedFrame = 0, recordedInput = 0;
     if (mReplay)
     {
-        if (!mReplay->Frame(&recordedFrame, &mRtt, &recordedInput, events))
-        {
-            printf("net: the replay ends at frame %u\n", mFrame);
-            fflush(stdout);
-            exit(0);
-        }
+        uint32_t recordedFrame = 0;
+        return mReplay->Frame(&recordedFrame, &mRtt, pRecordedInput, events);
     }
-    else
+    TransportEvent e;
+    while (mTransport->Poll(e))
     {
-        TransportEvent e;
-        while (mTransport->Poll(e))
-        {
-            events.push_back(e);
-        }
-        mRtt = mTransport->RoundTripMs(0);
+        events.push_back(e);
     }
-    // This frame's input first: a restore below would overwrite the game's input buffers
-    uint32_t local = engine::LocalInput();
-    if (mReplay)
+    mRtt = mTransport->RoundTripMs(0);
+    return true;
+}
+
+void net::Client::StartBot()
+{
+    mBot = CreateBotBrain(mConfig.bot);
+    mNavMap.reset(new engine::NavMap());
+    engine::BuildNavMap(*mNavMap);
+    if (Env().navDump)
     {
-        local = recordedInput;
+        engine::DumpNavMap(*mNavMap, Env().navDump);
     }
-    static const bool sInputLog = getenv("GTA2_NET_INPUTLOG") != NULL;
-    static uint32_t sLastInput = ~0u;
-    if (sInputLog && local != sLastInput)
-    {
-        printf("net: frame %u, input 0x%x\n", mFrame, local);
-        sLastInput = local;
-    }
-    else if (!mConfig.bot.empty() && engine::GameRunning())
+}
+
+// This frame's input: the controls', the recording's, or the bot's. First thing: a restore would overwrite the game's
+// input buffers
+uint32_t net::Client::ChooseInput(uint32_t recordedInput)
+{
+    uint32_t local = mReplay ? recordedInput : engine::LocalInput();
+    if (!mConfig.bot.empty() && engine::GameRunning())
     {
         if (!mBot)
         {
-            mBot = CreateBotBrain(mConfig.bot);
-            mNavMap.reset(new engine::NavMap());
-            engine::BuildNavMap(*mNavMap);
-            if (const char* dump = getenv("GTA2_NET_NAVDUMP")) // the bots' map as a picture: grey by height, black blocked
-            {
-                if (FILE* f = fopen(dump, "wb"))
-                {
-                    fprintf(f, "P5 %d %d 255\n", engine::NavMap::kSize, engine::NavMap::kSize);
-                    for (int c = 0; c < engine::NavMap::kSize * engine::NavMap::kSize; c++)
-                    {
-                        const int h = mNavMap->height[c], w = mNavMap->ways[c];
-                        fputc(h == 255 || !w ? 0 : 60 + h * 24 + (w == 15 ? 20 : 0), f);
-                    }
-                    fclose(f);
-                }
-            }
+            StartBot();
         }
         FillBotView(mBotView, mReceived[mLatestTick % kRing], mSlot, mFrame, mNavMap.get());
         local = mBot ? mBot->Think(mBotView) : 0;
     }
     local &= 0x3FFFFF;
-    if (mRecorder)
+    if (Env().inputLog && local != mLastInput)
     {
-        mRecorder->Frame(mFrame, mRtt, local, events);
+        printf("net: frame %u, input 0x%x\n", mFrame, local);
+        mLastInput = local;
     }
-    engine::ClientModeFrame();
-    if (mSaves.empty())
-    {
-        for (int i = 0; i < kSaves; i++)
-        {
-            mSaves.emplace_back(new engine::SavedWorld());
-        }
-        mRemote.assign(engine::PlayerCount(), 0);
-    }
+    return local;
+}
+
+// For the test log: the deaths this game carried out, and how often it had a player in or out of a car otherwise than
+// the newest snapshot
+void net::Client::CountTestStats()
+{
     mWasWasted.resize(mRemote.size());
     mLocalDeaths.resize(mRemote.size());
     for (size_t i = 0; i < mRemote.size(); i++)
@@ -435,31 +413,33 @@ void net::Client::Frame()
         mLocalDeaths[i] += w && !mWasWasted[i];
         mWasWasted[i] = w;
     }
+    for (const EntityState& e : mReceived[mLatestTick % kRing].entities)
     {
-        const Snapshot& latest = mReceived[mLatestTick % kRing];
-        for (size_t i = 0; i < latest.entities.size(); i++)
+        int p = 0;
+        uint32_t b = 0;
+        if (engine::PlayerOf(e, &p, &b))
         {
-            int p = 0;
-            uint32_t b = 0;
-            if (engine::PlayerOf(latest.entities[i], &p, &b))
-            {
-                mCarFrames++;
-                mCarMismatch += (engine::PlayerCarId(latest.entities[i]) != 0) != engine::PlayerInCar(p);
-            }
+            mStats.carFrames++;
+            mStats.carMismatch += (engine::PlayerCarId(e) != 0) != engine::PlayerInCar(p);
         }
     }
-    engine::DebugCheckPlayerCars("after the frame's tick");
-    if (mSynced) // the tick that just ran
+}
+
+// The tick that just ran: saved, and what it showed
+void net::Client::RecordTick()
+{
+    mTick++;
+    engine::SaveGame(*mSaves[mTick % kSaves], mTick);
+    TickRecord& rec = mHist[mTick % kRing];
+    engine::PlayerPosition(mSlot, &rec.predX, &rec.predY);
+    engine::ReplicaPositions(rec.shown);
+    rec.shownTick = mTick;
+}
+
+void net::Client::HandleEvents(const std::vector<TransportEvent>& events)
+{
+    for (const TransportEvent& e : events)
     {
-        mTick++;
-        engine::SaveGame(*mSaves[mTick % kSaves], mTick);
-        engine::PlayerPosition(mSlot, &mPredX[mTick % kRing], &mPredY[mTick % kRing]);
-        engine::ReplicaPositions(mShown[mTick % kRing]);
-        mShown[mTick % kRing].push_back(engine::ReplicaPos{0xFFFFFFFFu, (float)mTick, 0}); // its tick, last
-    }
-    for (size_t i = 0; i < events.size(); i++)
-    {
-        const TransportEvent& e = events[i];
         if (e.type == TransportEvent::kReceive && e.channel == kChannelUnreliable)
         {
             BitReader r(e.data.data(), e.data.size());
@@ -479,132 +459,141 @@ void net::Client::Frame()
             printf("net: lost the server\n");
         }
     }
-    if (!mConnected)
+}
+
+// Not running ahead of the server (yet, or any more), or far off: jump to where we should be
+void net::Client::Resync(const Snapshot& snap)
+{
+    const int off = mSynced && mSlackKnown ? mSlack - 2 : 0;
+    mTick = !mSynced || mLatestTick > mTick ? mLatestTick + Lead() : mTick - off;
+    mSynced = true;
+    mSlackKnown = false; // until a snapshot answers commands for the new ticks
+    mJumpTick = mTick;
+    for (size_t i = 0; i < mSaves.size(); i++)
+    {
+        mSaves[i]->valid = false;
+    }
+    engine::Apply(snap);
+    engine::ApplyScores(snap);
+}
+
+void net::Client::TakeSnapshot()
+{
+    const Snapshot& snap = mReceived[mLatestTick % kRing];
+    // How far our commands are from two ticks early. ENet's round trip doesn't see a link conditioner, and the server's
+    // word is better anyway: it says which tick's command it had last
+    const int off = mSynced && mSlackKnown ? mSlack - 2 : 0;
+    if (!mSynced || mLatestTick > mTick || off < -3 || off > 12)
+    {
+        Resync(snap);
+    }
+    else
+    {
+        Reconcile(snap);
+    }
+    mNewSnapshot = false;
+    if (mFrame % 300 == 0 || mFrame < 3)
+    {
+        PrintStats(snap);
+    }
+}
+
+void net::Client::PrintStats(const Snapshot& snap)
+{
+    int cars = 0, peds = 0;
+    float drift = 0;
+    engine::ReplicaStats(snap, &cars, &peds, &drift);
+    const Stats& st = mStats;
+    printf("net: frame %u, tick %u (server %u, our commands %d ticks early), %zu entities (%d cars, %d peds), %u rollbacks, "
+           "%.1f ticks resimulated each, prediction error up to %.2f blocks, cars and peds shown %.2f blocks off (up to %.2f)\n",
+           mFrame, mTick, mLatestTick, mSlack, snap.entities.size(), cars, peds, st.rollbacks, st.rollbacks ? (float)st.resimTicks / st.rollbacks : 0.0f,
+           st.maxError, st.shownErrorCount ? (float)(st.shownErrorSum / st.shownErrorCount) : 0.0f, st.shownErrorMax);
+    std::string local;
+    for (size_t i = 0; i < mLocalDeaths.size(); i++)
+    {
+        local += " " + std::to_string(mLocalDeaths[i]);
+    }
+    printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
+    int poolCars = 0, poolPeds = 0, poolChars = 0, sent = 0, driven = 0, same = 0, traffic = 0, trafficHere = 0;
+    engine::PrintReplicaLog();
+    engine::PoolUse(&poolCars, &poolPeds, &poolChars);
+    engine::DriverStats(snap, &sent, &driven, &same);
+    engine::TrafficDriverStats(snap, &traffic, &trafficHere);
+    printf("net: frame %u, drivers: %d peds in the snapshot, %d of their cars driven here, %d by the same ped; %d traffic cars, %d "
+           "with the traffic driver here\n",
+           mFrame, sent, driven, same, traffic, trafficHere);
+    printf("net: frame %u, this game has %d cars, %d peds, %d chars; in or out of a car differently from the newest snapshot: "
+           "%.1f%% of player frames\n",
+           mFrame, poolCars, poolPeds, poolChars, st.carFrames ? 100.0 * st.carMismatch / st.carFrames : 0.0);
+    if (mBot)
+    {
+        printf("net: frame %u, bot %s\n", mFrame, mBot->Describe().c_str());
+    }
+    st.players.Print(mFrame, "players");
+    st.cars.Print(mFrame, "cars");
+    mStats = Stats();
+}
+
+// GTA2_NET_JERKLOG: what can be seen (within 12 blocks; a camera shows 6 to 8)
+void net::Client::FeedJerk()
+{
+    if (!Env().jerkLog || !mSynced)
     {
         return;
     }
-    int tickMs = mTickMs;
-    if (mNewSnapshot)
+    std::vector<engine::Pose> all, shown;
+    engine::Poses(all);
+    float lx = 0, ly = 0;
+    engine::PlayerPosition(mSlot, &lx, &ly);
+    for (const engine::Pose& q : all)
     {
-        const Snapshot& snap = mReceived[mLatestTick % kRing];
-        // How far our commands are from two ticks early. ENet's round trip doesn't see a link conditioner, and the
-        // server's word is better anyway: it says which tick's command it had last
-        const int off = mSynced && mSlackKnown ? mSlack - 2 : 0;
-        if (!mSynced || mLatestTick > mTick || off < -3 || off > 12)
+        const float dx = engine::Blocks(q.x) - lx, dy = engine::Blocks(q.y) - ly;
+        if (dx * dx + dy * dy < 12 * 12)
         {
-            // Not running ahead of the server (yet, or any more), or far off: jump to where we should be
-            mTick = !mSynced || mLatestTick > mTick ? mLatestTick + Lead() : mTick - off;
-            mSynced = true;
-            mSlackKnown = false; // until a snapshot answers commands for the new ticks
-            mJumpTick = mTick;
-            for (size_t i = 0; i < mSaves.size(); i++)
-            {
-                mSaves[i]->valid = false;
-            }
-            engine::Apply(snap);
-            engine::ApplyScores(snap);
-        }
-        else
-        {
-            Reconcile(snap);
-        }
-        mNewSnapshot = false;
-        if (mFrame % 300 == 0 || mFrame < 3)
-        {
-            int cars = 0, peds = 0;
-            float drift = 0;
-            engine::ReplicaStats(snap, &cars, &peds, &drift);
-            printf("net: frame %u, tick %u (server %u, our commands %d ticks early), %zu entities (%d cars, %d peds), %u rollbacks, "
-                   "%.1f ticks resimulated each, prediction error up to %.2f blocks, cars and peds shown %.2f blocks off (up to %.2f)\n",
-                   mFrame, mTick, mLatestTick, mSlack, snap.entities.size(), cars, peds, mRollbacks,
-                   mRollbacks ? (float)mResimTicks / mRollbacks : 0.0f, mMaxError,
-                   mShownErrorCount ? (float)(mShownErrorSum / mShownErrorCount) : 0.0f, mShownErrorMax);
-            std::string local;
-            for (size_t i = 0; i < mLocalDeaths.size(); i++)
-            {
-                local += " " + std::to_string(mLocalDeaths[i]);
-            }
-            printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
-            int poolCars = 0, poolPeds = 0, poolChars = 0, sent = 0, driven = 0, same = 0;
-            engine::PrintReplicaLog();
-            engine::PoolUse(&poolCars, &poolPeds, &poolChars);
-            engine::DriverStats(snap, &sent, &driven, &same);
-            int traffic = 0, trafficHere = 0;
-            engine::TrafficDriverStats(snap, &traffic, &trafficHere);
-            printf("net: frame %u, drivers: %d peds in the snapshot, %d of their cars driven here, %d by the same ped; %d traffic cars, %d "
-                   "with the traffic driver here\n",
-                   mFrame, sent, driven, same, traffic, trafficHere);
-            printf("net: frame %u, this game has %d cars, %d peds, %d chars; in or out of a car differently from the newest snapshot: "
-                   "%.1f%% of player frames\n",
-                   mFrame, poolCars, poolPeds, poolChars, mCarFrames ? 100.0 * mCarMismatch / mCarFrames : 0.0);
-            mCarFrames = mCarMismatch = 0;
-            if (mBot)
-            {
-                printf("net: frame %u, bot %s\n", mFrame, mBot->Describe().c_str());
-            }
-            printf("net: frame %u, players' corrections: %u, %.2f blocks on average, up to %.2f, %u over 2 blocks (jumped)\n", mFrame,
-                   mPlayerCorrections, mPlayerCorrections ? mPlayerCorrectionSum / mPlayerCorrections : 0.0f, mPlayerCorrectionMax, mPlayerSnaps);
-            printf("net: frame %u, cars' corrections: %u, %.2f blocks on average, up to %.2f, %u over 2 blocks (jumped)\n", mFrame, mCarCorrections,
-                   mCarCorrections ? mCarCorrectionSum / mCarCorrections : 0.0f, mCarCorrectionMax, mCarSnaps);
-            mCarCorrections = mCarSnaps = 0;
-            mCarCorrectionSum = mCarCorrectionMax = 0;
-            mPlayerCorrections = mPlayerSnaps = 0;
-            mPlayerCorrectionSum = mPlayerCorrectionMax = 0;
-            mRollbacks = mResimTicks = 0;
-            mMaxError = 0;
-            mShownErrorSum = 0;
-            mShownErrorCount = 0;
-            mShownErrorMax = 0;
+            shown.push_back(q);
         }
     }
-    static const bool sJerkLog = getenv("GTA2_NET_JERKLOG") != NULL;
-    if (sJerkLog && mSynced)
+    mJerk.Feed(mFrame, shown, (uint32_t)mSlot + 1);
+    if (mFrame % 900 == 0)
     {
-        std::vector<engine::Pose> all, shown;
-        engine::Poses(all);
-        float lx = 0, ly = 0;
-        engine::PlayerPosition(mSlot, &lx, &ly);
-        for (const engine::Pose& q : all) // what can be seen: within 12 blocks (a camera shows 6 to 8)
-        {
-            const float dx = q.x / 16384.0f - lx, dy = q.y / 16384.0f - ly;
-            if (dx * dx + dy * dy < 12 * 12)
-            {
-                shown.push_back(q);
-            }
-        }
-        mJerk.Feed(mFrame, shown, (uint32_t)mSlot + 1);
-        if (mFrame % 900 == 0)
-        {
-            mJerk.Report("client", mFrame);
-        }
+        mJerk.Report("client", mFrame);
     }
-    // Keep our commands about two ticks early: a little faster when they are late, slower when far ahead
-    if (mSynced)
-    {
-        tickMs = !mSlackKnown ? mTickMs : mSlack < 1 ? mTickMs - mTickMs / 10 : mSlack > 4 ? mTickMs + mTickMs / 10 : mTickMs;
-    }
-    engine::SetTickMs(mReplay ? 1 : tickMs); // every frame: a restore brings back the game's tick length too (a replay: no waiting)
+}
 
-    // The next tick's inputs: ours (predicted and sent), the others' last known
+// Keep our commands about two ticks early: a little faster when they are late, slower when far ahead
+int net::Client::PacedTickMs() const
+{
+    if (!mSynced || !mSlackKnown)
+    {
+        return mTickMs;
+    }
+    return mSlack < 1 ? mTickMs - mTickMs / 10 : mSlack > 4 ? mTickMs + mTickMs / 10 : mTickMs;
+}
+
+// The next tick's inputs: ours (predicted and sent), the others' last known
+void net::Client::SetNextInputs(uint32_t local)
+{
     const uint32_t next = mTick + 1;
-    mHistTick[next % kRing] = next;
-    mHistButtons[next % kRing] = local;
+    mHist[next % kRing].tick = next;
+    mHist[next % kRing].buttons = local;
     for (size_t i = 0; i < mRemote.size(); i++)
     {
         engine::SetPlayerInput((int)i, (int)i == mSlot ? local : mRemote[i]);
     }
-    if (!mSynced)
-    {
-        return;
-    }
+}
+
+// The commands for the last ticks, consecutive, up to the next one
+void net::Client::SendCommands()
+{
+    const uint32_t next = mTick + 1;
     InputCmd cmds[kMaxCmdsPerPacket];
     int n = 0;
     for (uint32_t t = next >= (uint32_t)kMaxCmdsPerPacket ? next - kMaxCmdsPerPacket + 1 : 1; t <= next; t++)
     {
-        if (mHistTick[t % kRing] == t)
+        if (mHist[t % kRing].tick == t)
         {
             cmds[n].tick = t;
-            cmds[n].buttons = mHistButtons[t % kRing];
+            cmds[n].buttons = mHist[t % kRing].buttons;
             n++;
         }
         else
@@ -618,5 +607,67 @@ void net::Client::Frame()
         WriteCommands(w, mLatestTick, cmds, n);
         mTransport->Send(0, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
         mTransport->Flush();
+    }
+}
+
+void net::Client::Frame()
+{
+    mFrame++;
+    engine::DebugSetFrame(mFrame);
+    engine::DebugSoundChannels(mFrame);
+    engine::DebugAnimLog(mFrame);
+    engine::DebugSelfLog(mFrame);
+    if (Env().animLog && mFrame % 3 == 0)
+    {
+        printf("net: frame %u, remote buttons:", mFrame);
+        for (size_t i = 0; i < mRemote.size(); i++)
+        {
+            printf(" 0x%x", mRemote[i]);
+        }
+        printf("\n");
+    }
+    std::vector<TransportEvent> events;
+    uint32_t recordedInput = 0;
+    if (!TakeEvents(events, &recordedInput))
+    {
+        printf("net: the replay ends at frame %u\n", mFrame);
+        fflush(stdout);
+        exit(0);
+    }
+    const uint32_t local = ChooseInput(recordedInput);
+    if (mRecorder)
+    {
+        mRecorder->Frame(mFrame, mRtt, local, events);
+    }
+    engine::ClientModeFrame();
+    if (mSaves.empty())
+    {
+        for (int i = 0; i < kSaves; i++)
+        {
+            mSaves.emplace_back(new engine::SavedWorld());
+        }
+        mRemote.assign(engine::PlayerCount(), 0);
+    }
+    CountTestStats();
+    engine::DebugCheckPlayerCars("after the frame's tick");
+    if (mSynced)
+    {
+        RecordTick();
+    }
+    HandleEvents(events);
+    if (!mConnected)
+    {
+        return;
+    }
+    if (mNewSnapshot)
+    {
+        TakeSnapshot();
+    }
+    FeedJerk();
+    engine::SetTickMs(mReplay ? 1 : PacedTickMs()); // every frame: a restore brings back the game's tick length too (a replay: no waiting)
+    SetNextInputs(local);
+    if (mSynced)
+    {
+        SendCommands();
     }
 }

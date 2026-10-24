@@ -27,7 +27,7 @@ struct net::engine::SavedWorld::Impl
 namespace
 {
 // The rollback set, asked once per game (its pointees are fixed once a map is loaded)
-const std::vector<net::engine::Block>& Blocks()
+const std::vector<net::engine::Block>& RollbackSet()
 {
     static std::vector<net::engine::Block> sBlocks;
     static Game* sFor;
@@ -52,7 +52,7 @@ net::engine::SavedWorld::~SavedWorld()
 
 void net::engine::SaveGame(SavedWorld& out, uint32_t tick)
 {
-    SaveWorld(Blocks(), out.mImpl->bytes);
+    SaveWorld(RollbackSet(), out.mImpl->bytes);
     out.mImpl->replicas = SaveReplicas(out.mImpl->replicas);
     out.tick = tick;
     out.valid = true;
@@ -68,7 +68,7 @@ void net::engine::RestoreGame(const SavedWorld& in)
     unsigned char* channels = (unsigned char*)&gSound_obj_66F680 + from;
     memcpy(sLive, channels, to - from);
     const u8 active = gSound_obj_66F680.field_10_nActiveSamples;
-    RestoreWorld(Blocks(), in.mImpl->bytes);
+    RestoreWorld(RollbackSet(), in.mImpl->bytes);
     memcpy(channels, sLive, to - from);
     gSound_obj_66F680.field_10_nActiveSamples = active;
     RestoreReplicas(in.mImpl->replicas);

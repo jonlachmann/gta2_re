@@ -294,6 +294,33 @@ void net::WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, c
     }
 }
 
+size_t net::EntryBits(const Schema& schema, const EntityState* from, const EntityState& to)
+{
+    static const EntityState kZero = {};
+    const EntityType& t = schema.types[to.type];
+    BitWriter w;
+    if (from && from->type == to.type)
+    {
+        const Mask mask = ChangedMask(t, *from, to);
+        if (!mask.Any())
+        {
+            w.VarU(0); // no entry
+            return w.BitCount();
+        }
+        w.VarU(1);
+        w.VarU(to.id);
+        w.Bits(kUpdate, 2);
+        WriteFields(w, t, to, mask, from);
+        return w.BitCount();
+    }
+    w.VarU(1); // new, or another kind under the id (removed, then made)
+    w.VarU(to.id);
+    w.Bits(kCreate, 2);
+    w.VarU(to.type);
+    WriteFields(w, t, to, ChangedMask(t, kZero, to), NULL);
+    return w.BitCount();
+}
+
 bool net::ReadDelta(BitReader& r, const Schema& schema, const Snapshot& from, Snapshot& to)
 {
     to.entities.clear();

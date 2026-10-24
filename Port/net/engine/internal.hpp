@@ -102,9 +102,6 @@ enum ObjectField
     kObjModel, // Object::field_18_model (objects::)
     kObjIdx, // Object::field_26_ped_ref_idx (what kind, for some)
 };
-const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
-const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
-const uint32_t kObjIdBase = 0x03000000; // + Object::field_14_id
 
 // Shared helpers (access.cpp)
 Player* GetPlayer(int slot); // NULL past the game's players

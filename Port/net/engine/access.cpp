@@ -241,6 +241,16 @@ void net::engine::Poses(std::vector<Pose>& out)
     ReplicaPoses(out);
 }
 
+bool net::engine::PoseOf(const EntityState& e, Pose* out)
+{
+    if ((e.type == kEntityPlayer && !e.f[kPlayerInCar]) || e.type == kEntityCar || e.type == kEntityPed)
+    {
+        *out = Pose{e.id, e.f[0], e.f[1], e.f[2], e.f[3]};
+        return true;
+    }
+    return false;
+}
+
 void net::engine::SetPose(const Pose& pose)
 {
     if (pose.id >= kCarIdBase)

@@ -47,6 +47,10 @@ void SortById(Snapshot& snap);
 // only in <to> are created with all their fields, in both are sent with the fields that changed.
 void WriteDelta(BitWriter& w, const Schema& schema, const Snapshot& from, const Snapshot& to);
 
+// What <to> costs as the one entity of a delta from <from> (NULL: new), in bits: WriteDelta of the two one-entity
+// snapshots, without making them (the server prices every entity of every snapshot this way)
+size_t EntryBits(const Schema& schema, const EntityState* from, const EntityState& to);
+
 // The receiving side: <from> must be the same baseline the sender used. False on a malformed delta.
 bool ReadDelta(BitReader& r, const Schema& schema, const Snapshot& from, Snapshot& to);
 } // namespace net

@@ -3,6 +3,7 @@
 // side is a slope, unless a wall face is in the way on the walking level or the ground block (the faces the
 // game's own collision tests: left/right for x, top/bottom for y).
 #include "internal.hpp"
+#include <stdio.h>
 #include "Source/block_face.hpp"
 #include "Source/map_0x370.hpp"
 #include <string.h>
@@ -71,5 +72,19 @@ void net::engine::BuildNavMap(NavMap& out)
             }
             out.ways[y * N + x] = ways;
         }
+    }
+}
+
+void net::engine::DumpNavMap(const NavMap& map, const char* path)
+{
+    if (FILE* f = fopen(path, "wb"))
+    {
+        fprintf(f, "P5 %d %d 255\n", NavMap::kSize, NavMap::kSize);
+        for (int c = 0; c < NavMap::kSize * NavMap::kSize; c++)
+        {
+            const int h = map.height[c], w = map.ways[c];
+            fputc(h == 255 || !w ? 0 : 60 + h * 24 + (w == 15 ? 20 : 0), f);
+        }
+        fclose(f);
     }
 }
