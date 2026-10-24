@@ -42,7 +42,7 @@ struct ServerConfig
     uint32_t seed = 0; // the game's random state at the start (--seed; 0: the game's own)
 };
 
-// The server's own bot players (arena.cpp), slots 0..n-1: a brain each, or a trainer's ("remote:<port>")
+// The server's own bot players (arena.cpp), slots 0..n-1: a brain each, or a trainer's ("remote:<port>[:<teacher>]")
 class Arena
 {
   public:
@@ -74,7 +74,7 @@ class Arena
         int dealt = 0, cars = 0, pickups = 0;
         float reward = 0; // since the last message (remote)
         BotMemory memory; // its features' (remote)
-        std::unique_ptr<BotBrain> teacher; // the scripted bot on the same view (remote): what it would press
+        std::unique_ptr<BotBrain> teacher; // a scripted brain on the same view (remote): what it would press
     };
     void Score(const Snapshot& world);
     void AddRemote(int slot, std::vector<float>& message);
