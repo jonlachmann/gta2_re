@@ -137,7 +137,8 @@ void SDLCALL Mix(void*, SDL_AudioStream* stream, int additional, int)
     const int frames = additional / (int)(2 * sizeof(float));
     if (frames > 0)
     {
-        std::vector<float> buf(frames * 2);
+        static std::vector<float> buf; // only the audio thread calls this: no allocation once it is big enough
+        buf.resize(frames * 2);
         Port_MilesMix(&buf[0], frames);
         SDL_PutAudioStreamData(stream, &buf[0], frames * 2 * sizeof(float));
     }
