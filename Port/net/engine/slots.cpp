@@ -18,17 +18,11 @@
 namespace
 {
 u8 gRemap[MAX_PLAYERS]; // a slot's look, from the ped the map script gave it
-
-Player* Slot(int slot)
-{
-    Game* g = gGame_0x40_67E008;
-    return g && slot >= 0 && slot < (int)g->field_23_num_players ? g->field_4_players[slot] : NULL;
-}
 } // namespace
 
 bool net::engine::SlotInGame(int slot)
 {
-    Player* p = Slot(slot);
+    Player* p = GetPlayer(slot);
     return p && p->field_8E_in_use && p->field_2C4_player_ped;
 }
 // (A slot out of the game keeps its last ped pointer, a pedestrian now, as after Player::Disconnect_568730; only
@@ -36,7 +30,7 @@ bool net::engine::SlotInGame(int slot)
 
 void net::engine::TakeOutOfGame(int slot)
 {
-    Player* p = Slot(slot);
+    Player* p = GetPlayer(slot);
     if (!p || !p->field_8E_in_use)
     {
         return;
@@ -51,11 +45,7 @@ void net::engine::TakeOutOfGame(int slot)
         // can be despawned under it (the sound read the freed car through the camera)
         if (ped->field_16C_car && !InCarTransition(ped))
         {
-            Sprite* s = ped->field_16C_car->field_50_car_sprite;
-            if (s)
-            {
-                ForceOutOfCar(ped, s->field_14_xy.x + Fix16(1), s->field_14_xy.y, s->field_1C_zpos, s->field_0_rotation);
-            }
+            ForceOutBesideCar(ped, ped->field_16C_car);
         }
     }
     p->Disconnect_568730(); // keeps its ped pointer, as the game does: the HUD and camera of a local slot use it
@@ -63,7 +53,7 @@ void net::engine::TakeOutOfGame(int slot)
 
 void net::engine::PutInGame(int slot, bool freshScore)
 {
-    Player* p = Slot(slot);
+    Player* p = GetPlayer(slot);
     gmp_map_zone* zone = gMap_0x370_6F6268->GetNextZoneOfTypeRoundRobin_4DF0F0(0x10); // a Restart zone, round robin
     if (!p || !zone)
     {
@@ -100,7 +90,7 @@ void net::engine::PutInGame(int slot, bool freshScore)
     p->field_682_traffic_spawn_threshold = 1000;
     ped->SetPlayer_45B560(p, 0);
     p->field_68_camera_mode = 0;
-    for (int w = 0; w < 28; w++)
+    for (int w = 0; w < kPlayerWeapons; w++)
     {
         if (Weapon* weapon = p->field_718_weapons[w])
         {
@@ -113,7 +103,5 @@ void net::engine::PutInGame(int slot, bool freshScore)
     ped->field_26C_graphic_type = ped_graphic_type::character_1;
     p->set_in_use_4A5170(1);
     ped->RespawnPed_45C350(zone); // a free spot in the zone, health, a moment of invulnerability
-    p->field_90_game_camera.UpdateFollowPedCamera_436540(ped);
-    p->field_90_game_camera.CommitPendingTarget_41E410();
-    p->field_90_game_camera.ResetCameraSmoothing_435DD0();
+    SnapCamera(p);
 }

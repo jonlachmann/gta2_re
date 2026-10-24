@@ -94,7 +94,6 @@ class Client
     Parts mParts[4]; // snapshots coming in parts, by tick % 4
     void Welcomed(const Welcome& welcome, engine::NetworkGame* pGame);
     void Reconcile(const Snapshot& snap);
-    void Extrapolate(const Snapshot& snap);
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
     void Blend(const std::vector<engine::Pose>& shown);
     uint32_t mPlayerCorrections = 0, mPlayerSnaps = 0;

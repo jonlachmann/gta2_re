@@ -4,6 +4,7 @@
 // - into a car: as Ped.cpp's UpdateCharB4 path once the entering animation is done (the char goes back to its
 //   pool, the ped is in_car_10/driving, Car::AssignDriver_4406E0);
 // - out of a car: as the script's WARP_FROM_CAR_TO_POINT (Car::ClearDriver_4407F0, Ped::StartPedWalking_470200).
+// Or it starts getting in or out the way the enter key starts it.
 #include "internal.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
@@ -50,6 +51,32 @@ void net::engine::ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const 
     MovePed(ped, x, y, z, rot); // turned the grid-safe way (out of the collision grid and back: harmless if not in it)
 }
 
+void net::engine::ForceOutBesideCar(Ped* ped, Car* car)
+{
+    if (Sprite* s = car ? car->field_50_car_sprite : NULL)
+    {
+        ForceOutOfCar(ped, s->field_14_xy.x + Fix16(1), s->field_14_xy.y, s->field_1C_zpos, s->field_0_rotation);
+    }
+}
+
+// As the enter key starts it (Player::HandleControls_5668D0): the game walks the ped to the door and in
+void net::engine::StartEntering(Ped* ped, Car* car)
+{
+    ped->SetObjective2_463830(objectives_enum::no_obj_0);
+    ped->SetObjective(car->IsTrainModel_403BA0() ? objectives_enum::enter_train_37 : objectives_enum::enter_car_as_driver_35);
+    ped->SetTargetObjectiveCar(car);
+    ped->set_enter_car_as_passenger_4039B0(0);
+    ped->set_target_car_door_403A70(0);
+}
+
+void net::engine::StartLeaving(Ped* ped)
+{
+    Car* car = ped->field_16C_car;
+    ped->SetObjective2_463830(objectives_enum::no_obj_0);
+    ped->SetObjective(car->field_84_car_info_idx == car_model_enum::TRAIN ? objectives_enum::leave_train_38 : objectives_enum::leave_car_36);
+    ped->SetTargetObjectiveCar(car);
+}
+
 void net::engine::ForceIntoCar(Ped* ped, Car* car)
 {
     if (!car || !car->field_50_car_sprite || (ped->field_16C_car == car && ped->field_278_ped_state_1 == ped_state_1::in_car_10))
@@ -87,7 +114,7 @@ void net::engine::ForceIntoCar(Ped* ped, Car* car)
         }
         else if (driver != ped)
         {
-            ForceOutOfCar(driver, cs->field_14_xy.x + Fix16(1), cs->field_14_xy.y, cs->field_1C_zpos, cs->field_0_rotation);
+            ForceOutBesideCar(driver, car);
         }
     }
     if (Char* c = ped->field_168_game_object)

@@ -1,22 +1,25 @@
-// Port/net engine internals: shared by access.cpp (players, capture) and replica.cpp (a client's cars and peds).
-// Decomp types: only for engine/.
+// Port/net engine internals, shared by the engine's files. Decomp types: only for engine/.
 #pragma once
-#include <unordered_map>
 #include "engine.hpp"
+#include "Source/ang16.hpp"
+#include "Source/fix16.hpp"
 #include <stddef.h>
+#include <unordered_map>
 
 class Car;
-class Ped;
-class Sprite;
-class Fix16;
-class Ang16;
-
 class Object;
+class Ped;
+class Player;
+class Sprite;
+
 namespace net
 {
 namespace engine
 {
-// The schema's fields (access.cpp builds the schema in this order)
+// The schema's fields (schema.cpp builds the schema in this order). Every entity with a place has x, y, z and rot
+// first (PutPosition)
+const int kPlayerWeapons = 28; // Player::field_718_weapons: its own (0..14) and its car weapons (15..27)
+const int kPowerUps = 17; // Player::field_6F4_power_up_timers
 enum PlayerField
 {
     kPlayerX,
@@ -31,15 +34,20 @@ enum PlayerField
     kPlayerWeapon, // Player::field_788_curr_weapon_idx + 1 (0: none)
     kPlayerFrags,
     kPlayerPoints,
-    kPlayerAmmo0, // field_718_weapons[0..27]: the ammo of its own weapons (0..14) and its car weapons (15..27)
-    kPlayerCar = kPlayerAmmo0 + 28, // the car it drives: Car::field_6C_car_id + 1, 0 none
-    kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead, 4: getting out (LeavingCar)
-    kPlayerTarget, // the car it is going to get into (Ped::field_150_target_objective_car): car_id + 1, 0 none
-    kPlayerName, // its name (Player::field_83C_player_name), 4 characters a field, kPlayerNameFields of them
+    kPlayerAmmo0, // each weapon's ammo
+    kPlayerCar = kPlayerAmmo0 + kPlayerWeapons, // the car it drives (CarRef)
+    kPlayerState, // kPlayerTransition | kPlayerDead | kPlayerLeaving
+    kPlayerTarget, // the car it is going to get into (Ped::field_150_target_objective_car, CarRef)
+    kPlayerName, // its name (Player::field_83C_player_name), 4 characters a field
     kPlayerNameEnd = kPlayerName + 4,
-    kPlayerPowerUp = kPlayerNameEnd, // Player::field_6F4_power_up_timers[0..16]
-    kPlayerPowerUpEnd = kPlayerPowerUp + 17,
-    kPlayerWeapons = 28,
+    kPlayerPowerUp = kPlayerNameEnd, // the power-up timers
+    kPlayerPowerUpEnd = kPlayerPowerUp + kPowerUps,
+};
+enum PlayerState
+{
+    kPlayerTransition = 1, // getting into or out of a car (InCarTransition)
+    kPlayerDead = 2,
+    kPlayerLeaving = 4, // getting out of one (LeavingCar)
 };
 enum WorldField
 {
@@ -66,7 +74,7 @@ enum CarField
     kCarHorn,
     kCarHornCooldown,
     kCarRemap, // its colour (the sprite's remap): a respray, or a car made here, had another
-    kCarPhysics, // then its whole CarPhysics, member by member (access.cpp's kPhysics; all 0 without physics)
+    kCarPhysics, // then its whole CarPhysics, member by member (cars.cpp; all 0 without physics), then its AI (car_ai.cpp)
 };
 enum CarDriver
 {
@@ -81,14 +89,10 @@ enum PedField
     kPedZ,
     kPedRot,
     kPedRemap,
-    kPedCar, // the car it drives: Car::field_6C_car_id + 1, 0 on foot (its position is the car's then)
+    kPedCar, // the car it drives (CarRef; its position is the car's then)
     kPedState, // 1: getting into or out of a car
     kPedAi, // then its AI state (ped_state.cpp)
 };
-
-const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
-const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
-const uint32_t kObjIdBase = 0x03000000; // + Object::field_14_id
 enum ObjectField
 {
     kObjX,
@@ -98,64 +102,112 @@ enum ObjectField
     kObjModel, // Object::field_18_model (objects::)
     kObjIdx, // Object::field_26_ped_ref_idx (what kind, for some)
 };
+const uint32_t kCarIdBase = 0x01000000; // + Car::field_6C_car_id
+const uint32_t kPedIdBase = 0x02000000; // + Ped::field_200_id
+const uint32_t kObjIdBase = 0x03000000; // + Object::field_14_id
 
+// Shared helpers (access.cpp)
+Player* GetPlayer(int slot); // NULL past the game's players
+Ped* InGamePed(int slot); // its ped while the slot is in the game (Player::field_8E_in_use)
+inline Fix16 Raw(int32_t v) // a field's position value
+{
+    return Fix16(v, 0);
+}
+inline Ang16 Angle(int32_t v)
+{
+    return Ang16((s16)v, (u8)0);
+}
+// A car as a field: Car::field_6C_car_id + 1, 0 none; and back to this game's car for it (NULL: none or not here)
+int32_t CarRef(const Car* car);
+uint32_t CarRefNetId(int32_t ref);
+Car* RefCar(int32_t ref);
+Sprite* CharSprite(const Ped* ped); // its char's (on foot), NULL without one
 Sprite* PedSprite(Ped* ped); // its car's when it is in one
+EntityState Entity(uint32_t id, uint8_t type);
+void PutPosition(EntityState& e, const Sprite* s); // fields 0..3
+bool Near(const Sprite* s, int32_t x, int32_t y, int32_t radius); // within <radius> (raw) on both axes
+const EntityState* FindWorld(const Snapshot& snap);
 // The one dummy ped every traffic car shares as its driver (Car::SpawnDriverPed, CarManager::field_4_spare_driver): no
 // ped of its own, never sent, moved, forced or removed
 bool IsSpareDriver(const Ped* ped);
+// Moved and turned at once, the collision grid kept right (cars.cpp, access.cpp)
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
-// A car's AI (car_ai.cpp): its fields (after the physics), capture, apply
-void CarAiFields(std::vector<FieldDesc>& out);
-void CaptureCarAi(const Car* car, EntityState& e);
-void ApplyCarAi(Car* car, const EntityState& e);
-// The physics the snapshot has for it (kCarPhysics on), set after MoveCar
-void SetCarPhysics(Car* car, const EntityState& e);
-// Whether it has exploded (or is burning out); its damage as the server has it: an explosion the server had is carried
-// out (the game's own), damage and dents are set. False: it is a wreck here and not there (it has to be made again)
-bool IsWrecked(const Car* car);
-bool SetCarDamage(Car* car, const EntityState& e);
-extern int gExplosionsCarried, gWrecksReplaced; // for the log
-// The cars and peds of Poses/SetPose (replica.cpp)
-void ReplicaPoses(std::vector<Pose>& out);
-void SetReplicaPose(const Pose& p);
-// GTA2_NET_CARDIFF: the members of a car's physics that differ here from the snapshot's, printed
-void DebugCarDiff(Car* car, const EntityState& e, uint32_t tick);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
+void CapturePed(Ped* p, Car* driving, Snapshot& out);
 
-// The deaths a client has carried out per player (part of the rollback set: world.cpp)
-void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize);
+// The debug switches (GTA2_NET_*), read once (debug.cpp)
+struct DebugFlags
+{
+    bool carDiff, selfLog, animLog, soundLog, checkGrid, pickupLog;
+};
+const DebugFlags& Debug();
+bool DebugGridOk(const char* where, Car* car); // GTA2_NET_CHECKGRID: the collision grid has no freed sprites
+void DebugCarDiff(Car* car, const EntityState& e, uint32_t tick); // GTA2_NET_CARDIFF: the physics members that differ (cars.cpp)
+
+// Players (players.cpp)
+void CapturePlayer(int slot, Snapshot& out);
+void ApplyWorld(const EntityState& w);
+void ApplySlots(const Snapshot& snap); // the slots in the game: the snapshot's
+void ApplyPlayer(const EntityState& e);
+void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize); // the deaths a client has carried out (in the rollback set: world.cpp)
+void KillCredited(Ped* ped, int killerSlot); // the game's own death, credited to a player (-1: nobody)
+void SnapCamera(Player* p); // the camera at its ped at once, not panning there
 // Player peds take no damage on a client: their health and deaths are the server's (client_mode.cpp)
 void ProtectPlayers();
-// Before every tick (client_mode.cpp): what the server's game never has, this one can't run (a ped's on-foot order in a car)
+// Before and after every tick (client_mode.cpp): what the server's game never has, this one can't run (a ped's on-foot
+// order in a car)
 void GuardPeds();
 
-// vehicles.cpp: a ped into or out of a car at once, ending as the game's own entering and leaving do
+// Cars (cars.cpp, car_ai.cpp)
+void CarPhysicsFields(std::vector<FieldDesc>& out);
+void CaptureCar(Car* c, Snapshot& out);
+void SetCarPhysics(Car* car, const EntityState& e); // the physics the snapshot has for it, after MoveCar
+// Whether it has exploded (or is burning out); its state as the server has it: an explosion the server had is carried
+// out (the game's own), damage, dents, lights, horn and colour are set. False: it is a wreck here and not there (it has
+// to be made again)
+bool IsWrecked(const Car* car);
+bool SetCarState(Car* car, const EntityState& e);
+extern int gExplosionsCarried, gWrecksReplaced; // for the log
+void CarAiFields(std::vector<FieldDesc>& out); // after the physics
+void CaptureCarAi(const Car* car, EntityState& e);
+void ApplyCarAi(Car* car, const EntityState& e);
+
+// Getting into and out of cars (vehicles.cpp): at once, ending as the game's own entering and leaving do; or started as
+// the enter key starts it
 bool InCarTransition(Ped* ped); // on its way into or out of a car: states, or an objective to do it
 bool LeavingCar(Ped* ped); // on its way out of one
-bool AtCarDoor(Ped* ped); // getting in or out at the door (InCarTransition's states, not the objective's walk there)
+bool AtCarDoor(Ped* ped); // getting in or out at the door (not the walk there)
 void ForceIntoCar(Ped* ped, Car* car);
 void ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
+void ForceOutBesideCar(Ped* ped, Car* car); // out at the car's side (a car's driver needn't point back to it)
+void StartEntering(Ped* ped, Car* car);
+void StartLeaving(Ped* ped);
 
-// replica.cpp: a snapshot's cars and peds into a client's game (players: access.cpp)
+// A client's cars and peds (replica.cpp)
 void ApplyCarsAndPeds(const Snapshot& snap);
 Car* ReplicaCar(uint32_t netId); // this game's car for a server car, if it has one
 Ped* ReplicaPed(uint32_t netId); // and ped
+const std::unordered_map<uint32_t, Car*>& ReplicaCars();
+const std::unordered_map<uint32_t, Ped*>& ReplicaPeds();
+void ReplicaPoses(std::vector<Pose>& out); // the cars and peds of Poses/SetPose
+void SetReplicaPose(const Pose& p);
+// The replica mapping, saved and restored with the world (rollback.cpp): an opaque copy
+struct ReplicaState;
+ReplicaState* SaveReplicas(ReplicaState* reuse);
+void RestoreReplicas(const ReplicaState* state);
+void FreeReplicas(ReplicaState* state);
+
 // A ped's AI state (ped_state.cpp): its fields (kPedAi on), capture, apply. Apply: false when the ped is dead here and
 // not on the server (it has to be made again)
 void PedStateFields(std::vector<FieldDesc>& out);
 void CapturePedState(const Ped* p, EntityState& e);
 bool ApplyPedState(Ped* p, const EntityState& e);
 void ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityState*>>& peds); // once the snapshot's peds are here
-bool DebugGridOk(const char* where, Car* car); // GTA2_NET_CHECKGRID: the collision grid has no freed sprites
-// The replica mapping, saved and restored with the world (rollback.cpp): an opaque copy
+
 // Pickups (pickups.cpp): the server's in a snapshot, and a client's made to match
 void CapturePickups(Snapshot& out);
 void ApplyPickups(const Snapshot& snap);
 std::unordered_map<uint32_t, Object*>& PickupMap(); // for the rollback (ReplicaState)
 extern int gPickupsMade, gPickupsRemoved; // for the log
-struct ReplicaState;
-ReplicaState* SaveReplicas(ReplicaState* reuse);
-void RestoreReplicas(const ReplicaState* state);
-void FreeReplicas(ReplicaState* state);
 } // namespace engine
 } // namespace net

@@ -67,16 +67,6 @@ void net::engine::StartNetworkGame(const NetworkGame& game)
     gNetPlay_7071E8.field_758_n2.field_4_players_count = 2; // > 1: the game calls SendToAll every frame
 }
 
-const net::engine::NetworkGame& net::engine::CurrentNetworkGame()
-{
-    return gNetGame;
-}
-
-bool net::engine::NetworkGameActive()
-{
-    return Active();
-}
-
 void net::engine::SetFrameHook(FrameHook hook, void* user)
 {
     gHook = hook;

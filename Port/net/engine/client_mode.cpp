@@ -28,11 +28,9 @@ void net::engine::GuardPeds()
 
 void net::engine::ProtectPlayers()
 {
-    Game* g = gGame_0x40_67E008;
-    for (u32 i = 0; g && i < g->field_23_num_players; i++)
+    for (int i = 0; i < PlayerCount(); i++)
     {
-        Player* p = g->field_4_players[i];
-        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+        Ped* ped = InGamePed(i);
         if (ped && ped->field_208_invulnerability < 2)
         {
             ped->field_208_invulnerability = 2; // counts down once per tick: never 0 between our frames

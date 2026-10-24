@@ -274,10 +274,6 @@ void net::Client::Reconcile(const Snapshot& snap)
     }
     mRollbacks++;
     engine::ApplyScores(snap);
-    if (getenv("GTA2_NET_EXTRAP")) // off by default: the resimulation, from the server's state, does better
-    {
-        Extrapolate(snap);
-    }
     Blend(before);
 }
 
@@ -340,20 +336,6 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
         const engine::Pose p = {n.id, b.x + (int32_t)(dx * alpha), b.y + (int32_t)(dy * alpha), b.z + (int32_t)(dz * alpha),
                                 ((b.rot + (int32_t)(dr * alpha)) % 1440 + 1440) % 1440};
         engine::SetPose(p);
-    }
-}
-
-// Cars and peds the client doesn't drive: on from S to our tick by their speed over the last snapshots
-void net::Client::Extrapolate(const Snapshot& snap)
-{
-    for (uint32_t back = 1; back <= 4 && back < snap.tick; back++)
-    {
-        const Snapshot& prev = mReceived[(snap.tick - back) % kRing];
-        if (prev.tick == snap.tick - back)
-        {
-            engine::Extrapolate(snap, prev, (int)(mTick - snap.tick));
-            return;
-        }
     }
 }
 
@@ -544,6 +526,7 @@ void net::Client::Frame()
             }
             printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
             int poolCars = 0, poolPeds = 0, poolChars = 0, sent = 0, driven = 0, same = 0;
+            engine::PrintReplicaLog();
             engine::PoolUse(&poolCars, &poolPeds, &poolChars);
             engine::DriverStats(snap, &sent, &driven, &same);
             int traffic = 0, trafficHere = 0;

@@ -1,295 +1,100 @@
-// Port/net (docs/netcode.md, "Net schema"): players, inputs and entities as plain data. Positions are Fix16 raw
-// values (14 fraction bits): x and y below 256 blocks fit 22 bits, z below 8 blocks 17 bits; angles are Ang16
-// (0..1439), 11 bits. So what a client gets is exactly the server's value.
+// Port/net (docs/netcode.md, "Net schema"): the game as the session sees it. A snapshot is captured from and applied to
+// the game here; the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
+// (pickups.cpp) do the parts. Also the helpers the engine's files share.
 #include "internal.hpp"
-#include "Source/Camera.hpp"
 #include "Source/Car.hpp"
-#include "Source/explosion_type.hpp"
-#include "Source/gbh_graphics.hpp"
-#include "Source/CarPhysics.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
 #include "Source/SpriteGrid.hpp"
 #include "Source/char.hpp"
-#include "Source/rng.hpp"
 #include "Source/network_data.hpp"
+#include "Source/rng.hpp"
 #include "Source/sprite.hpp"
 #include "Source/GameSession.hpp"
-#include "Source/Weapon.hpp"
-#include <math.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <string>
 #include <unordered_map>
 
 EXTERN_GLOBAL(u32, gNetworkPlayerIdx_6F56C8);
 EXTERN_GLOBAL(Network_PlayerInputs, gCurrentNetInputs_6F57D8);
-EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
 extern short gPortZoneRoundRobin; // Port/net/net_main.cpp
 unsigned int PortRandState(); // Port/port_rand.cpp (its header renames rand)
-void PortRandSetState(unsigned int state);
 
-namespace
-{
-using net::FieldDesc;
+// --- Shared helpers ---
 
-// A car's whole physics state on the wire: every CarPhysics member but its two pointers and the unused padding, at
-// its own size (by name: the 64-bit layout isn't the original's). Whatever acts on a car (input, collisions, slopes,
-// oil, skids) leaves its mark here, so a predicted car goes on from exactly the server's.
-struct PhysicsMember
-{
-    const char* name;
-    size_t offset;
-    uint8_t size; // bytes: 1, 2 or 4
-    bool isSigned;
-};
-#define PM(member, sz, sg) {#member, offsetof(CarPhysics, member), sz, sg}
-#define PM_POINT(member) PM(member.x, 4, true), PM(member.y, 4, true)
-const PhysicsMember kPhysics[] = {
-    PM_POINT(field_0_vel_read_only), PM(field_8_damaged_until_cycle, 4, false), PM_POINT(field_10_last_skid_pos[0]),
-    PM_POINT(field_10_last_skid_pos[1]), PM_POINT(field_10_last_skid_pos[2]), PM_POINT(field_10_last_skid_pos[3]),
-    PM_POINT(field_30_cm1), PM_POINT(field_38_cp1), PM_POINT(field_40_linvel_1), PM_POINT(field_48_force_accum),
-    PM_POINT(field_50_linear_accel), PM(field_58_theta, 2, true), PM(field_60_gas_pedal, 4, true),
-    PM(field_64_brake_pressure, 4, true), PM(field_68_air_z_vel, 4, true), PM(field_6C_cp3, 4, true), PM(field_70_z_vel, 4, true),
-    PM(field_74_ang_vel_rad, 4, true), PM(field_78_pointing_ang_rad, 4, true), PM(field_7C_torque_accum, 4, true),
-    PM(field_80_angular_accel, 4, true), PM(field_84_front_skid, 4, true), PM(field_88_rear_skid, 4, true), PM(field_8C_state, 4, true),
-    PM(field_90_timer_since_last_move, 1, false), PM(field_91_is_foot_brake_on, 1, true), PM(field_92_is_hand_brake_on, 1, true),
-    PM(field_93_is_forward_gas_on, 1, true), PM(field_94_is_backward_gas_on, 1, true), PM(field_95_is_coasting, 1, true),
-    PM(field_98_surface_type, 4, true), PM(field_9C_block_spec, 4, true), PM(field_A0_oil_spin_dir, 4, true),
-    PM(field_A4_oil_spin_timer, 1, true), PM(field_A5_current_slope_length, 1, false), PM(field_A6_current_slope_left_tiles, 1, true),
-    PM(field_A7_current_tile_z, 1, false), PM(field_A8_hand_brake_force, 1, true), PM(field_A9_car_model, 1, true),
-    PM(field_AA_sbw, 1, true), PM(field_AB_tpa, 1, true), PM(field_AC_drive_wheels_locked_q, 1, false),
-    PM(field_AD_turn_direction, 1, true)};
-#undef PM_POINT
-#undef PM
-const size_t kCp1X = 13; // kPhysics' field_38_cp1.x: 0 only for a car without physics (nobody is at x 0)
-static_assert(net::engine::kCarPhysics + sizeof(kPhysics) / sizeof(kPhysics[0]) <= net::kMaxFields, "a car's fields");
-
-int32_t GetMember(const CarPhysics* m, const PhysicsMember& d)
-{
-    const unsigned char* p = (const unsigned char*)m + d.offset;
-    if (d.size == 1)
-    {
-        return d.isSigned ? (int32_t) * (const int8_t*)p : (int32_t) * (const uint8_t*)p;
-    }
-    if (d.size == 2)
-    {
-        int16_t v;
-        memcpy(&v, p, 2);
-        return v;
-    }
-    int32_t v;
-    memcpy(&v, p, 4);
-    return v;
-}
-
-void SetMember(CarPhysics* m, const PhysicsMember& d, int32_t v)
-{
-    unsigned char* p = (unsigned char*)m + d.offset;
-    if (d.size == 1)
-    {
-        *p = (unsigned char)v;
-    }
-    else if (d.size == 2)
-    {
-        const int16_t s = (int16_t)v;
-        memcpy(p, &s, 2);
-    }
-    else
-    {
-        memcpy(p, &v, 4);
-    }
-}
-
-net::Schema BuildSchema()
-{
-    net::Schema s;
-    net::EntityType player = {"player", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"in_car", 1, false}, {"buttons", 22, false},
-                                         {"health", 10, true}, {"deaths", 8, false}, {"killer", 6, false}, {"weapon", 5, false},
-                                         {"frags", 12, true}, {"points", 32, true}}};
-    static const char* const kAmmo[net::engine::kPlayerWeapons] = {"ammo0",  "ammo1",  "ammo2",  "ammo3",  "ammo4",  "ammo5",  "ammo6",
-                                                                   "ammo7",  "ammo8",  "ammo9",  "ammo10", "ammo11", "ammo12", "ammo13",
-                                                                   "ammo14", "ammo15", "ammo16", "ammo17", "ammo18", "ammo19", "ammo20",
-                                                                   "ammo21", "ammo22", "ammo23", "ammo24", "ammo25", "ammo26", "ammo27"};
-    for (int i = 0; i < net::engine::kPlayerWeapons; i++)
-    {
-        player.fields.push_back(FieldDesc{kAmmo[i], 16, false});
-    }
-    player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
-    player.fields.push_back(FieldDesc{"state", 3, false}); // kPlayerState
-    player.fields.push_back(FieldDesc{"target", 25, false}); // kPlayerTarget
-    static const char* const kNames[4] = {"name0", "name1", "name2", "name3"};
-    for (int i = 0; i < 4; i++)
-    {
-        player.fields.push_back(FieldDesc{kNames[i], 32, false}); // kPlayerName...
-    }
-    static const char* const kPowerUps[17] = {"power0", "power1", "power2",  "power3",  "power4",  "power5",  "power6",  "power7", "power8",
-                                              "power9", "power10", "power11", "power12", "power13", "power14", "power15", "power16"};
-    for (int i = 0; i < 17; i++)
-    {
-        player.fields.push_back(FieldDesc{kPowerUps[i], 16, false}); // kPlayerPowerUp...
-    }
-    net::EntityType car = {"car", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 8, false},
-                                   {"driver", 2, false}, {"damage", 16, false}, {"areas", 32, false}, {"wrecked", 1, false},
-                                   {"lights", 8, false}, {"flash", 8, false}, {"horn", 8, false}, {"horn_cooldown", 8, false}, {"remap", 16, true}}};
-    for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
-    {
-        car.fields.push_back(FieldDesc{kPhysics[i].name, (uint8_t)(kPhysics[i].size * 8), kPhysics[i].isSigned});
-    }
-    net::engine::CarAiFields(car.fields);
-    net::EntityType ped = {"ped", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"remap", 8, false},
-                                   {"car", 25, false}, {"state", 1, false}}};
-    net::engine::PedStateFields(ped.fields);
-    // The last field of cars, peds and pickups: how many ticks old its state is (0: this snapshot's; a busy area's far
-    // entities get theirs less often, AgeField)
-    car.fields.push_back(FieldDesc{"age", 6, false});
-    ped.fields.push_back(FieldDesc{"age", 6, false});
-    s.types.push_back(player); // kEntityPlayer
-    s.types.push_back(car); // kEntityCar
-    s.types.push_back(ped); // kEntityPed
-    net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"reach", 10, false}, {"it", 3, false},
-                                       {"it_time0", 16, false}, {"it_time1", 16, false}, {"it_time2", 16, false}, {"it_time3", 16, false},
-                                       {"it_time4", 16, false}, {"it_time5", 16, false}, {"zone_turn", 16, true}}};
-    s.types.push_back(world); // kEntityWorld
-    net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false},
-                                         {"age", 6, false}}};
-    s.types.push_back(object); // kEntityObject
-    return s;
-}
-
-// The server's death count per player: one more each time Player::field_28_wasted_or_busted turns on
-uint8_t gDeaths[MAX_PLAYERS];
-uint8_t gKiller[MAX_PLAYERS];
-bool gWasDead[MAX_PLAYERS];
-// A client's: the deaths it has carried out, in the rollback set
-struct
-{
-    uint8_t mDone[MAX_PLAYERS];
-} gNetDeaths;
-
-int PlayerIndexOfPed(s32 pedId)
-{
-    Ped* killer = pedId ? gPedManager_6787BC->PedById(pedId) : NULL;
-    return killer && killer->field_15C_player ? killer->field_15C_player->field_2E_idx : -1;
-}
-
-std::string NarrowName(const Player* p)
-{
-    std::string n;
-    for (int k = 0; k < 16 && p->field_83C_player_name[k]; k++)
-    {
-        n += (char)p->field_83C_player_name[k];
-    }
-    return n;
-}
-
-Player* GetPlayer(int i)
+Player* net::engine::GetPlayer(int slot)
 {
     Game* g = gGame_0x40_67E008;
-    return g && i >= 0 && i < (int)g->field_23_num_players ? g->field_4_players[i] : NULL;
+    return g && slot >= 0 && slot < (int)g->field_23_num_players ? g->field_4_players[slot] : NULL;
 }
 
-net::EntityState Entity(uint32_t id, uint8_t type)
+Ped* net::engine::InGamePed(int slot)
 {
-    net::EntityState e;
+    Player* p = GetPlayer(slot);
+    return p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+}
+
+int32_t net::engine::CarRef(const Car* car)
+{
+    return car ? car->field_6C_car_id + 1 : 0;
+}
+
+uint32_t net::engine::CarRefNetId(int32_t ref)
+{
+    return ref ? kCarIdBase + (uint32_t)(ref - 1) : 0;
+}
+
+Car* net::engine::RefCar(int32_t ref)
+{
+    return ref ? ReplicaCar(CarRefNetId(ref)) : NULL;
+}
+
+Sprite* net::engine::CharSprite(const Ped* ped)
+{
+    return ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
+}
+
+Sprite* net::engine::PedSprite(Ped* ped)
+{
+    return ped->field_16C_car ? ped->field_16C_car->field_50_car_sprite : CharSprite(ped);
+}
+
+net::EntityState net::engine::Entity(uint32_t id, uint8_t type)
+{
+    EntityState e;
     memset(&e, 0, sizeof(e));
     e.id = id;
     e.type = type;
     return e;
 }
 
-void PutPosition(net::EntityState& e, const Sprite* s, int x, int y, int z, int rot)
+static_assert(net::engine::kPlayerX == 0 && net::engine::kCarX == 0 && net::engine::kPedX == 0 && net::engine::kObjX == 0 && net::engine::kPlayerRot == 3 &&
+                  net::engine::kCarRot == 3 && net::engine::kPedRot == 3 && net::engine::kObjRot == 3,
+              "every entity with a place has x, y, z, rot first");
+
+void net::engine::PutPosition(EntityState& e, const Sprite* s)
 {
-    e.f[x] = s->field_14_xy.x.mValue;
-    e.f[y] = s->field_14_xy.y.mValue;
-    e.f[z] = s->field_1C_zpos.mValue;
-    e.f[rot] = s->field_0_rotation.rValue;
+    e.f[0] = s->field_14_xy.x.mValue;
+    e.f[1] = s->field_14_xy.y.mValue;
+    e.f[2] = s->field_1C_zpos.mValue;
+    e.f[3] = s->field_0_rotation.rValue;
 }
 
-} // namespace
-
-Sprite* net::engine::PedSprite(Ped* ped)
+bool net::engine::Near(const Sprite* s, int32_t x, int32_t y, int32_t radius)
 {
-    if (ped->field_16C_car)
-    {
-        return ped->field_16C_car->field_50_car_sprite;
-    }
-    return ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
+    const int32_t dx = s->field_14_xy.x.mValue - x, dy = s->field_14_xy.y.mValue - y;
+    return dx < radius && dx > -radius && dy < radius && dy > -radius;
 }
 
-// Moves a car the way Car::SetPosition_443D00 does, and turns it
-// A car or a ped moved and turned at once. The collision grid keeps a sprite in the rows of its collision rect as it
-// was added (SpriteGrid::RemoveFromRegionBuckets_477B60 takes it out of the rows of the stored rect, and
-// AddToRegionBuckets_477B20 computes a new one): so position and rotation both change between the two. Turning a
-// sprite while it is in the grid, as Car::SetPosition_443D00 followed by a turn did, left it in rows its next
-// removal missed; once it was freed and reused (a roof light, a particle), a collision query crashed on it.
-// Only a car in the collision grid is moved: one that is going away (despawning_5, despawned_6: its last update
-// left it out of the grid, and freeing it doesn't look there) or carried by something (deactivated_7: in grid 3,
-// Car::Deactivate_43AA60, its carrier moves it) would be put into the grid by the move and left there when freed.
-void net::engine::MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
+bool net::engine::IsSpareDriver(const Ped* ped)
 {
-    const s32 status = car->field_88_despawn_status;
-    if (status == car_despawn_status::despawning_5 || status == car_despawn_status::despawned_6 || status == car_despawn_status::deactivated_7)
-    {
-        return;
-    }
-    Sprite* s = car->field_50_car_sprite;
-    gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
-    s->set_xyz_lazy_420600(x, y, z);
-    s->set_ang_lazy_420690(rot);
-    if (CarPhysics* m = car->field_58_physics)
-    {
-        const Fix16 steer = m->field_78_pointing_ang_rad; // SetSprite_563560 zeroes the steering
-        m->SetSprite_563560(s);
-        m->field_78_pointing_ang_rad = steer;
-    }
-    gSpriteGrid_1_679208->AddToRegionBuckets_477B20(s);
-}
-
-void net::engine::SetCarPhysics(Car* car, const EntityState& e)
-{
-    CarPhysics* m = car->field_58_physics;
-    if (!m || !e.f[kCarPhysics + kCp1X]) // no physics on the server
-    {
-        return;
-    }
-    for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
-    {
-        SetMember(m, kPhysics[i], e.f[kCarPhysics + i]);
-    }
-}
-
-void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
-{
-    static const bool on = getenv("GTA2_NET_CARDIFF") != NULL;
-    const CarPhysics* m = car ? car->field_58_physics : NULL;
-    if (!on || !m || !e.f[kCarPhysics + kCp1X])
-    {
-        return;
-    }
-    char line[2048];
-    int n = 0;
-    for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]) && n < (int)sizeof(line) - 80; i++)
-    {
-        const int32_t here = GetMember(m, kPhysics[i]), there = e.f[kCarPhysics + i];
-        if (here != there)
-        {
-            n += snprintf(line + n, sizeof(line) - n, " %s %d/%d", kPhysics[i].name, here, there);
-        }
-    }
-    if (n)
-    {
-        printf("net: tick %u, our car predicted (here/server):%s\n", tick, line);
-    }
+    return ped && gCarManager_6C_677930 && ped == gCarManager_6C_677930->GetSpareDriver_421960();
 }
 
 void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
-    Sprite* s = ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
+    Sprite* s = CharSprite(ped);
     if (!s || AtCarDoor(ped))
     {
         return; // getting in or out at the door, the game keeps its char's place in the collision grid itself: re-added, a link
@@ -304,16 +109,7 @@ void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16&
     ped->field_1AC_cam.z = z;
 }
 
-bool net::engine::IsSpareDriver(const Ped* ped)
-{
-    return ped && gCarManager_6C_677930 && ped == gCarManager_6C_677930->GetSpareDriver_421960();
-}
-
-const net::Schema& net::engine::NetSchema()
-{
-    static const Schema s = BuildSchema();
-    return s;
-}
+// --- The game ---
 
 bool net::engine::GameRunning()
 {
@@ -351,23 +147,23 @@ void net::engine::SetTickMs(int ms)
     }
 }
 
-bool net::engine::PlayerHasPed(int player)
-{
-    Player* p = GetPlayer(player);
-    return p && p->field_2C4_player_ped;
-}
+// --- Snapshots ---
 
-bool net::engine::PlayerPosition(int player, float* pX, float* pY)
+void net::engine::CapturePed(Ped* p, Car* driving, Snapshot& out)
 {
-    Player* p = GetPlayer(player);
-    Sprite* s = p && p->field_2C4_player_ped ? PedSprite(p->field_2C4_player_ped) : NULL;
-    if (!s)
+    // On foot or driving (a driver is where its car is; passengers: not yet); players are their own entities
+    Sprite* s = driving ? driving->field_50_car_sprite : !p->field_16C_car ? CharSprite(p) : NULL;
+    if (!s || p->field_238_ped_type == ped_type::player_2 || !(driving || p->IsActive_433B40()) || IsSpareDriver(p)) // (drivers aren't "active")
     {
-        return false;
+        return;
     }
-    *pX = s->field_14_xy.x.ToFloat();
-    *pY = s->field_14_xy.y.ToFloat();
-    return true;
+    EntityState e = Entity(kPedIdBase + p->field_200_id, kEntityPed);
+    PutPosition(e, s);
+    e.f[kPedRemap] = (uint8_t)p->field_244_remap;
+    e.f[kPedCar] = CarRef(driving);
+    e.f[kPedState] = InCarTransition(p) ? 1 : 0;
+    CapturePedState(p, e);
+    out.entities.push_back(e);
 }
 
 void net::engine::Capture(Snapshot& out)
@@ -385,458 +181,58 @@ void net::engine::Capture(Snapshot& out)
     out.entities.push_back(w);
     for (int i = 0; i < PlayerCount(); i++)
     {
-        Player* p = GetPlayer(i);
-        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL; // slots out of the game aren't sent
-        Sprite* s = ped ? PedSprite(ped) : NULL;
-        if (!s)
-        {
-            continue;
-        }
-        EntityState e = Entity(1 + i, kEntityPlayer);
-        PutPosition(e, s, kPlayerX, kPlayerY, kPlayerZ, kPlayerRot);
-        e.f[kPlayerInCar] = ped->field_16C_car != NULL;
-        // The controls the tick ran with (winmain.cpp's Net_Set_Local_Player_Inputs_4DAD50 takes them from here; the
-        // player's own copy, Player::field_4_inputs, is zeroed once used): what clients predict this player with
-        e.f[kPlayerButtons] = (int32_t)(gPrevNetInputs_6F5B28.field_0_inputs[i].field_0_Inputs & 0x3FFFFF);
-        e.f[kPlayerHealth] = ped->field_216_health;
-        const bool dead = p->field_28_wasted_or_busted != 0;
-        if (dead && !gWasDead[i] && i < MAX_PLAYERS)
-        {
-            gDeaths[i]++;
-            gKiller[i] = (uint8_t)(PlayerIndexOfPed(ped->field_204_killer_id) + 1);
-        }
-        gWasDead[i] = dead;
-        e.f[kPlayerDeaths] = gDeaths[i];
-        e.f[kPlayerKiller] = gKiller[i];
-        e.f[kPlayerWeapon] = p->field_788_curr_weapon_idx + 1;
-        e.f[kPlayerFrags] = gGameSession_67E8E0.field_490_frags_list[i];
-        e.f[kPlayerPoints] = gGameSession_67E8E0.field_49C_points_list[i];
-        for (int w = 0; w < kPlayerWeapons; w++)
-        {
-            e.f[kPlayerAmmo0 + w] = p->field_718_weapons[w] ? p->field_718_weapons[w]->field_0_ammo : 0;
-        }
-        e.f[kPlayerCar] = ped->field_16C_car ? ped->field_16C_car->field_6C_car_id + 1 : 0;
-        e.f[kPlayerState] = (InCarTransition(ped) ? 1 : 0) | (ped->isDead_403B60() ? 2 : 0) | (LeavingCar(ped) ? 4 : 0);
-        const s32 objective = ped->get_objective_403A80();
-        Car* target = objective == objectives_enum::enter_car_as_driver_35 ? ped->field_150_target_objective_car : NULL;
-        e.f[kPlayerTarget] = target ? target->field_6C_car_id + 1 : 0;
-        for (int k = 0; k < 16; k++) // 4 characters a field
-        {
-            e.f[kPlayerName + k / 4] |= (int32_t)((uint32_t)(p->field_83C_player_name[k] & 0xFF) << (8 * (k % 4)));
-        }
-        for (int k = 0; k < kPlayerPowerUpEnd - kPlayerPowerUp; k++)
-        {
-            e.f[kPlayerPowerUp + k] = p->field_6F4_power_up_timers[k];
-        }
-        out.entities.push_back(e);
-    }
-    for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
-    {
-        if (c->field_50_car_sprite)
-        {
-            EntityState e = Entity(kCarIdBase + (uint32_t)c->field_6C_car_id, kEntityCar);
-            PutPosition(e, c->field_50_car_sprite, kCarX, kCarY, kCarZ, kCarRot);
-            e.f[kCarModel] = c->field_84_car_info_idx;
-            e.f[kCarDriver] = !c->field_54_driver ? kDriverNone : IsSpareDriver(c->field_54_driver) ? kDriverTraffic : kDriverPed;
-            e.f[kCarDamage] = c->field_74_damage;
-            e.f[kCarAreas] = (int32_t)c->field_8_damaged_areas.m_var;
-            e.f[kCarWrecked] = IsWrecked(c);
-            e.f[kCarLights] = (u8)c->field_A4_light_flags;
-            e.f[kCarFlash] = (u8)c->field_A5_flash_phase_counter;
-            e.f[kCarHorn] = c->field_A7_horn;
-            e.f[kCarHornCooldown] = c->field_A8_horn_cooldown;
-            e.f[kCarRemap] = c->field_50_car_sprite->get_remap_41C1F0();
-            CaptureCarAi(c, e);
-            if (const CarPhysics* m = c->field_58_physics)
-            {
-                for (size_t i = 0; i < sizeof(kPhysics) / sizeof(kPhysics[0]); i++)
-                {
-                    e.f[kCarPhysics + i] = GetMember(m, kPhysics[i]);
-                }
-            }
-            out.entities.push_back(e);
-        }
+        CapturePlayer(i, out);
     }
     // Drivers by their cars: a traffic car knows its driver (Car::field_54_driver), but the driver's own field_16C_car
     // needn't point back (measured: 1 of 12 did)
     std::unordered_map<const Ped*, Car*> driving;
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
     {
-        if (c->field_54_driver && c->field_50_car_sprite && !IsSpareDriver(c->field_54_driver))
+        if (c->field_50_car_sprite)
         {
-            driving[c->field_54_driver] = c;
+            CaptureCar(c, out);
+            if (c->field_54_driver && !IsSpareDriver(c->field_54_driver))
+            {
+                driving[c->field_54_driver] = c;
+            }
         }
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
-        // On foot or driving (a driver is where its car is; passengers: not yet); players are their own entities
         auto d = driving.find(p);
-        Car* car = d != driving.end() ? d->second : NULL;
-        Sprite* s = car ? car->field_50_car_sprite
-                  : !p->field_16C_car && p->field_168_game_object ? p->field_168_game_object->field_80_sprite_ptr
-                  : NULL;
-        if (s && p->field_238_ped_type != ped_type::player_2 && (car || p->IsActive_433B40()) && !IsSpareDriver(p)) // (drivers aren't "active")
-        {
-            EntityState e = Entity(kPedIdBase + p->field_200_id, kEntityPed);
-            PutPosition(e, s, kPedX, kPedY, kPedZ, kPedRot);
-            e.f[kPedRemap] = (uint8_t)p->field_244_remap;
-            e.f[kPedCar] = car ? car->field_6C_car_id + 1 : 0;
-            e.f[kPedState] = InCarTransition(p) ? 1 : 0;
-            CapturePedState(p, e);
-            out.entities.push_back(e);
-        }
+        CapturePed(p, d != driving.end() ? d->second : NULL, out);
     }
     CapturePickups(out);
     SortById(out);
 }
 
-bool net::engine::PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons)
-{
-    if (e.type != kEntityPlayer)
-    {
-        return false;
-    }
-    *pPlayer = (int)e.id - 1;
-    *pButtons = (uint32_t)e.f[kPlayerButtons];
-    return true;
-}
-
-int net::engine::PlayerHealth(const EntityState& e)
-{
-    return e.type == kEntityPlayer ? e.f[kPlayerHealth] : 0;
-}
-
-int net::engine::PlayerFrags(const EntityState& e)
-{
-    return e.type == kEntityPlayer ? e.f[kPlayerFrags] : 0;
-}
-
-uint32_t net::engine::PlayerCarId(const EntityState& e)
-{
-    return e.type == kEntityPlayer && e.f[kPlayerCar] ? kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1) : 0;
-}
-
-int net::engine::PlayerDeaths(const EntityState& e)
-{
-    return e.type == kEntityPlayer ? e.f[kPlayerDeaths] : 0;
-}
-
 void net::engine::Apply(const Snapshot& snap)
 {
-    for (size_t k = 0; k < snap.entities.size(); k++)
+    if (const EntityState* w = FindWorld(snap))
     {
-        if (snap.entities[k].type == kEntityWorld)
-        {
-            gpRng_67AB34->field_0_rng = snap.entities[k].f[kWorldCycle];
-            gPortZoneRoundRobin = (short)snap.entities[k].f[kWorldZoneTurn];
-            // The tag game's "it" is the server's, made the game's way (its weapons off, the arrow, "you're it")
-            Player* it = GetPlayer(snap.entities[k].f[kWorldIt] - 1);
-            if (it && it != gTagGame_6F8450.field_0_fugitive && gTagGame_6F8450.IsTagGame_434B20())
-            {
-                gTagGame_6F8450.SetNewFugitive_516590(it);
-            }
-            for (int i = 0; i < MAX_PLAYERS; i++)
-            {
-                gTagGame_6F8450.field_4_it_time_secs[i] = snap.entities[k].f[kWorldItTime + i];
-            }
-            if (!getenv("GTA2_NET_NORANDSYNC"))
-            {
-                PortRandSetState((unsigned int)snap.entities[k].f[kWorldRand]);
-            }
-        }
+        ApplyWorld(*w);
     }
-    // The slots the server has in the game, and only those (a join or a leave on the server: the same here)
-    bool sent[MAX_PLAYERS] = {};
-    for (size_t k = 0; k < snap.entities.size(); k++)
+    ApplySlots(snap);
+    for (const EntityState& e : snap.entities)
     {
-        const EntityState& e = snap.entities[k];
-        if (e.type == kEntityPlayer && e.id >= 1 && e.id <= MAX_PLAYERS)
+        if (e.type == kEntityPlayer)
         {
-            sent[e.id - 1] = true;
-            if (!SlotInGame((int)e.id - 1))
-            {
-                PutInGame((int)e.id - 1, false); // its place and score follow from the snapshot
-            }
-        }
-    }
-    for (int i = 0; i < PlayerCount() && i < MAX_PLAYERS; i++)
-    {
-        if (!sent[i] && SlotInGame(i))
-        {
-            TakeOutOfGame(i);
-        }
-    }
-    for (size_t k = 0; k < snap.entities.size(); k++)
-    {
-        const EntityState& e = snap.entities[k];
-        if (e.type != kEntityPlayer)
-        {
-            continue; // cars and peds: replica.cpp
-        }
-        Player* p = GetPlayer((int)e.id - 1);
-        Ped* ped = p ? p->field_2C4_player_ped : NULL;
-        if (!ped)
-        {
-            continue;
-        }
-        const int i = (int)e.id - 1;
-        // Its name, as the server has it
-        char name[17] = {};
-        for (int k = 0; k < 16; k++)
-        {
-            name[k] = (char)(((uint32_t)e.f[kPlayerName + k / 4] >> (8 * (k % 4))) & 0xFF);
-        }
-        if (name[0] && NarrowName(p) != name)
-        {
-            SetPlayerName(i, name);
-        }
-        // Weapons and ammo are the server's
-        if (e.f[kPlayerWeapon] >= 1 && e.f[kPlayerWeapon] <= 28)
-        {
-            p->field_788_curr_weapon_idx = (s16)(e.f[kPlayerWeapon] - 1);
-        }
-        for (int w = 0; w < kPlayerWeapons; w++)
-        {
-            if (p->field_718_weapons[w])
-            {
-                p->field_718_weapons[w]->field_0_ammo = (u16)e.f[kPlayerAmmo0 + w];
-            }
-        }
-        // Power-ups too (one collected here in a prediction the server didn't have ends here), with what they switch on
-        // the ped (Player::CollectPowerUp_564D60, tick_down_powerups_565070); invulnerability is the client's anyway
-        for (int k = 0; k < kPlayerPowerUpEnd - kPlayerPowerUp; k++)
-        {
-            const u16 now = (u16)e.f[kPlayerPowerUp + k];
-            if (!p->field_6F4_power_up_timers[k] != !now)
-            {
-                if (k == power_up_indices::Electrofingers_9)
-                {
-                    now ? ped->SetElectrofingers_4A5060() : ped->ClearElectrofingers_482080();
-                }
-                else if (k == power_up_indices::Invisibility_11)
-                {
-                    now ? ped->SetInvisible() : ped->SetVisible();
-                }
-            }
-            p->field_6F4_power_up_timers[k] = now;
-        }
-        // A death the server had and this game hasn't carried out: the game's own death, credited to the killer, where
-        // this game has the ped (the server has already respawned it: the next snapshot brings it there)
-        if (i < MAX_PLAYERS && (uint8_t)e.f[kPlayerDeaths] != gNetDeaths.mDone[i])
-        {
-            gNetDeaths.mDone[i] = (uint8_t)e.f[kPlayerDeaths];
-            if (!ped->isDead_403B60() && !p->field_28_wasted_or_busted)
-            {
-                const int k = e.f[kPlayerKiller] - 1;
-                Player* killer = GetPlayer(k);
-                ped->field_204_killer_id = killer && killer->field_2C4_player_ped ? killer->field_2C4_player_ped->field_200_id : 0;
-                ped->field_208_invulnerability = 0;
-                if (ped->field_16C_car)
-                {
-                    // Out of the car first, the way leaving one ends: the game kills a player at the wheel only with its car
-                    // (and clears the driver then); killed in its seat, the car kept the respawned ped as its driver, and a
-                    // ped pulling that "driver" out gave it a second char (left in the collision grid)
-                    ForceOutOfCar(ped, Fix16(e.f[kPlayerX], 0), Fix16(e.f[kPlayerY], 0), Fix16(e.f[kPlayerZ], 0), Ang16((s16)e.f[kPlayerRot], (u8)0));
-                }
-                ped->Kill_46F9D0();
-                continue;
-            }
-        }
-        if (!ped->isDead_403B60())
-        {
-            // At least 1: a death here comes from the server's death count (above), whole; the health the server's dying
-            // ped has (0) started a death of this game's own, undone by the next restore (a flicker of dying and living)
-            ped->set_health_4039A0((s16)(e.f[kPlayerHealth] > 0 ? e.f[kPlayerHealth] : 1));
-        }
-        const Fix16 x(e.f[kPlayerX], 0), y(e.f[kPlayerY], 0), z(e.f[kPlayerZ], 0);
-        const Ang16 rot((s16)e.f[kPlayerRot], (u8)0);
-        // The car it is going to get into, as the server has it, while it is still on its way (not at the door yet): in a
-        // jam the nearest car in front (CarManager::GetNearestFrontVehicle_445210) can be another one here
-        Car* serverTarget = e.f[kPlayerTarget] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerTarget] - 1)) : NULL;
-        if (serverTarget && serverTarget->field_50_car_sprite && !ped->field_16C_car && !ped->isDead_403B60() && !(e.f[kPlayerState] & 2) &&
-            ped->get_objective_403A80() == objectives_enum::enter_car_as_driver_35 &&
-            ped->field_150_target_objective_car != serverTarget && ped->field_278_ped_state_1 != ped_state_1::entering_car_3)
-        {
-            ped->SetObjective2_463830(objectives_enum::no_obj_0); // as Player.cpp starts it when the enter key is pressed
-            ped->SetObjective(objectives_enum::enter_car_as_driver_35, 9999);
-            ped->SetTargetObjectiveCar(serverTarget);
-            ped->set_enter_car_as_passenger_4039B0(0);
-            ped->set_target_car_door_403A70(0);
-        }
-        // In the server's car, or on foot as the server has it: predicted by this game's own input, put right here
-        // when both sides have settled (neither halfway into or out of a car, nobody dead)
-        // ... and not counting down to its respawn here (wasted): the ped waits at the restart zone in a plain state, and
-        // put into the server's car (respawned there already) its char went, which the respawn reads
-        // (Ped::ResetForPlayerRespawn_45C410)
-        const bool settled = !(e.f[kPlayerState] & 3) && !InCarTransition(ped) && !ped->isDead_403B60() && !p->field_28_wasted_or_busted;
-        if (settled)
-        {
-            Car* serverCar = e.f[kPlayerCar] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) : NULL;
-            if (serverCar && ped->field_16C_car != serverCar)
-            {
-                const bool before = DebugGridOk("before forcing into a car", serverCar);
-                ForceIntoCar(ped, serverCar);
-                if (before)
-                {
-                    DebugGridOk("after forcing into a car", serverCar);
-                }
-            }
-            else if (!e.f[kPlayerCar] && ped->field_16C_car)
-            {
-                Car* was = ped->field_16C_car;
-                const bool before = DebugGridOk("before forcing out of a car", was);
-                ForceOutOfCar(ped, x, y, z, rot);
-                if (before)
-                {
-                    DebugGridOk("after forcing out of a car", was);
-                }
-            }
-        }
-        const bool before = DebugGridOk("before moving a player", ped->field_16C_car);
-        Sprite* was = PedSprite(ped);
-        // A jump of the local player (its first snapshot, a respawn): the camera goes there at once, not panning across
-        // the map, as PutInGame and the game's respawn place it
-        const bool jump = i == LocalPlayer() && was && (abs(was->field_14_xy.x.mValue - x.mValue) > (8 << 14) || abs(was->field_14_xy.y.mValue - y.mValue) > (8 << 14));
-        if (ped->field_16C_car)
-        {
-            MoveCar(ped->field_16C_car, x, y, z, rot);
-        }
-        else
-        {
-            MovePed(ped, x, y, z, rot);
-        }
-        if (before)
-        {
-            DebugGridOk("after moving a player", ped->field_16C_car);
-        }
-        // The server's player on its way into or out of a car and this game's not: another player's key press came
-        // before the ticks this game resimulates, so its ped stood by the car until the server had it inside. Started
-        // here from the server's position, as the key starts it (Player::HandleControls_5668D0)
-        if ((e.f[kPlayerState] & 3) == 1 && !InCarTransition(ped) && !ped->isDead_403B60() && !p->field_28_wasted_or_busted)
-        {
-            Car* car = ped->field_16C_car;
-            if (!car && serverTarget && serverTarget->field_50_car_sprite && !(e.f[kPlayerState] & 4) && ped->field_168_game_object)
-            {
-                ped->SetObjective2_463830(objectives_enum::no_obj_0);
-                ped->SetObjective(serverTarget->IsTrainModel_403BA0() ? objectives_enum::enter_train_37 : objectives_enum::enter_car_as_driver_35);
-                ped->SetTargetObjectiveCar(serverTarget);
-                ped->set_enter_car_as_passenger_4039B0(0);
-                ped->set_target_car_door_403A70(0);
-            }
-            else if (car && (e.f[kPlayerState] & 4) && e.f[kPlayerCar] && ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) == car &&
-                     car->CanExitCar_43AF10())
-            {
-                ped->SetObjective2_463830(objectives_enum::no_obj_0);
-                ped->SetObjective(car->field_84_car_info_idx == car_model_enum::TRAIN ? objectives_enum::leave_train_38 : objectives_enum::leave_car_36);
-                ped->SetTargetObjectiveCar(car);
-            }
-        }
-        if (jump)
-        {
-            p->field_90_game_camera.UpdateFollowPedCamera_436540(ped);
-            p->field_90_game_camera.CommitPendingTarget_41E410();
-            p->field_90_game_camera.ResetCameraSmoothing_435DD0();
+            ApplyPlayer(e);
         }
     }
     ApplyCarsAndPeds(snap);
     ApplyPickups(snap);
 }
 
-void net::engine::ApplyScores(const Snapshot& snap)
-{
-    for (size_t k = 0; k < snap.entities.size(); k++)
-    {
-        const EntityState& e = snap.entities[k];
-        const int i = (int)e.id - 1;
-        if (e.type == kEntityPlayer && i >= 0 && i < MAX_PLAYERS)
-        {
-            gGameSession_67E8E0.field_490_frags_list[i] = (s16)e.f[kPlayerFrags];
-            gGameSession_67E8E0.field_49C_points_list[i] = e.f[kPlayerPoints];
-        }
-    }
-}
-
-void net::engine::NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize)
-{
-    *ppAddr = (unsigned char*)&gNetDeaths;
-    *pSize = sizeof(gNetDeaths);
-}
-
-void net::engine::DebugKill(int victim, int killer)
-{
-    Player* p = GetPlayer(victim);
-    Player* k = GetPlayer(killer);
-    Ped* ped = p ? p->field_2C4_player_ped : NULL;
-    if (ped && !ped->isDead_403B60())
-    {
-        ped->field_204_killer_id = k && k->field_2C4_player_ped ? k->field_2C4_player_ped->field_200_id : 0;
-        ped->field_208_invulnerability = 0;
-        ped->Kill_46F9D0();
-    }
-}
-
-bool net::engine::PlayerWasted(int player)
-{
-    Player* p = GetPlayer(player);
-    return p && p->field_28_wasted_or_busted;
-}
-
-bool net::engine::PlayerPose(int player, float* pX, float* pY, float* pZ, int* pRot)
-{
-    Player* p = GetPlayer(player);
-    Sprite* s = p && p->field_2C4_player_ped ? PedSprite(p->field_2C4_player_ped) : NULL;
-    if (!s)
-    {
-        return false;
-    }
-    *pX = s->field_14_xy.x.ToFloat();
-    *pY = s->field_14_xy.y.ToFloat();
-    *pZ = s->field_1C_zpos.ToFloat();
-    *pRot = s->field_0_rotation.rValue;
-    return true;
-}
-
-void net::engine::DebugArm(int player, int weapon, int ammo)
-{
-    Player* p = GetPlayer(player);
-    if (p && p->field_2C4_player_ped && weapon >= 0 && weapon < kPlayerWeapons && p->field_718_weapons[weapon] &&
-        p->field_718_weapons[weapon]->field_0_ammo == 0)
-    {
-        p->AddWeaponWithAmmo_564960(weapon, (u8)ammo);
-    }
-}
-
-bool net::engine::PlayerInCar(int player)
-{
-    Player* p = GetPlayer(player);
-    return p && p->field_8E_in_use && p->field_2C4_player_ped && p->field_2C4_player_ped->field_16C_car;
-}
-
-void net::engine::DebugOwnCarDiff(const Snapshot& snap)
-{
-    Player* p = GetPlayer(LocalPlayer());
-    Car* car = p && p->field_2C4_player_ped ? p->field_2C4_player_ped->field_16C_car : NULL;
-    if (!car)
-    {
-        return;
-    }
-    for (size_t k = 0; k < snap.entities.size(); k++)
-    {
-        if (snap.entities[k].type == kEntityCar && ReplicaCar(snap.entities[k].id) == car)
-        {
-            DebugCarDiff(car, snap.entities[k], snap.tick);
-        }
-    }
-}
+// --- A client's view ---
 
 void net::engine::Poses(std::vector<Pose>& out)
 {
     out.clear();
     for (int i = 0; i < PlayerCount(); i++)
     {
-        Player* p = GetPlayer(i);
-        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
-        Sprite* s = ped && !ped->field_16C_car && ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
+        Ped* ped = InGamePed(i);
+        Sprite* s = ped && !ped->field_16C_car ? CharSprite(ped) : NULL;
         if (s)
         {
             out.push_back(Pose{(uint32_t)(1 + i), s->field_14_xy.x.mValue, s->field_14_xy.y.mValue, s->field_1C_zpos.mValue, s->field_0_rotation.rValue});
@@ -852,236 +248,9 @@ void net::engine::SetPose(const Pose& pose)
         SetReplicaPose(pose);
         return;
     }
-    Player* p = GetPlayer((int)pose.id - 1);
-    Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
+    Ped* ped = InGamePed((int)pose.id - 1);
     if (ped && !ped->field_16C_car && !AtCarDoor(ped) && !ped->isDead_403B60())
     {
-        MovePed(ped, Fix16(pose.x, 0), Fix16(pose.y, 0), Fix16(pose.z, 0), Ang16((s16)pose.rot, (u8)0));
+        MovePed(ped, Raw(pose.x), Raw(pose.y), Raw(pose.z), Angle(pose.rot));
     }
-}
-
-namespace
-{
-bool gMarker;
-Fix16 gMarkerX, gMarkerY, gMarkerZ;
-} // namespace
-
-void net::engine::SetServerMarker(int32_t x, int32_t y, int32_t z)
-{
-    gMarker = true;
-    gMarkerX = Fix16(x, 0);
-    gMarkerY = Fix16(y, 0);
-    gMarkerZ = Fix16(z, 0);
-}
-
-void net::engine::DrawOverlay()
-{
-    Camera* cam = gViewCamera_676978;
-    if (!gMarker || !cam)
-    {
-        return;
-    }
-    Fix16 sx, sy;
-    cam->ProjectWorldToScreen_4B90E0(gMarkerX, gMarkerY, gMarkerZ, &sx, &sy);
-    const float x = sx.ToFloat(), y = sy.ToFloat(), r = 4.0f;
-    Vert v[4] = {};
-    v[0].x = x - r, v[0].y = y - r;
-    v[1].x = x + r, v[1].y = y - r;
-    v[2].x = x + r, v[2].y = y + r;
-    v[3].x = x - r, v[3].y = y + r;
-    pgbh_DrawFlatRect(v, (s32)0xFFFF00FF); // magenta: where the server has us (a snapshot's tick, before the prediction)
-}
-
-std::string net::engine::DebugPlayerCar(int player, const Snapshot& snap)
-{
-    Player* p = GetPlayer(player);
-    Ped* ped = p ? p->field_2C4_player_ped : NULL;
-    if (!ped)
-    {
-        return "";
-    }
-    char line[256];
-    int n = snprintf(line, sizeof(line), "here: states %d/%d objective %d car %p%s%s", (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
-                     (int)ped->get_objective_403A80(), (void*)ped->field_16C_car, InCarTransition(ped) ? " (transition)" : "",
-                     ped->field_150_target_objective_car ? " (target car)" : "");
-    for (const EntityState& e : snap.entities)
-    {
-        if (e.type == kEntityPlayer && e.id == (uint32_t)player + 1)
-        {
-            Car* c = e.f[kPlayerCar] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) : NULL;
-            float lx = 0, ly = 0, lz = 0;
-            int lr = 0;
-            PlayerPose(LocalPlayer(), &lx, &ly, &lz, &lr);
-            const float dx = e.f[kPlayerX] / 16384.0f - lx, dy = e.f[kPlayerY] / 16384.0f - ly;
-            snprintf(line + n, sizeof(line) - n, "; tick %u there: car %d (%p here) state %d target %d at (%.2f, %.2f), %.1f blocks from us", snap.tick,
-                     e.f[kPlayerCar], (void*)c, e.f[kPlayerState], e.f[kPlayerTarget], e.f[kPlayerX] / 16384.0f, e.f[kPlayerY] / 16384.0f,
-                     sqrtf(dx * dx + dy * dy));
-        }
-    }
-    return line;
-}
-
-void net::engine::DebugSelfLog(uint32_t frame)
-{
-    static const bool on = getenv("GTA2_NET_SELFLOG") != NULL;
-    static uint32_t sUntil;
-    Player* p = on ? GetPlayer(LocalPlayer()) : NULL;
-    Ped* ped = p ? p->field_2C4_player_ped : NULL;
-    if (!ped)
-    {
-        return;
-    }
-    if (p->field_28_wasted_or_busted || ped->isDead_403B60())
-    {
-        sUntil = frame + 30;
-    }
-    if (frame > sUntil)
-    {
-        return;
-    }
-    Sprite* s = PedSprite(ped);
-    printf("net: frame %u, self: at (%.2f, %.2f) states %d/%d dead %d wasted %d countdown %d aux %p camera mode %d health %d char %p car %p "
-           "objective %d\n", frame,
-           s ? s->field_14_xy.x.ToFloat() : -1.0f, s ? s->field_14_xy.y.ToFloat() : -1.0f, (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
-           (int)ped->isDead_403B60(), (int)p->field_28_wasted_or_busted, (int)p->field_2C_death_countdown, (void*)p->field_2C8_aux_ped,
-           (int)p->field_68_camera_mode, (int)ped->field_216_health, (void*)ped->field_168_game_object, (void*)ped->field_16C_car,
-           (int)ped->get_objective_403A80());
-}
-
-void net::engine::DebugAnimLog(uint32_t frame)
-{
-    static const bool on = getenv("GTA2_NET_ANIMLOG") != NULL;
-    if (!on || frame % 3)
-    {
-        return;
-    }
-    std::string line;
-    char buf[160];
-    for (int i = 0; i < PlayerCount(); i++)
-    {
-        Player* p = GetPlayer(i);
-        Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
-        Char* c = ped ? ped->field_168_game_object : NULL;
-        if (c && i != LocalPlayer())
-        {
-            snprintf(buf, sizeof(buf), " p%d[in 0x%x ped %d/%d char %d anim %d frame %d timer %d]", i, (unsigned)p->field_4_inputs,
-                     (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2, (int)c->field_10_char_state, (int)c->field_6C_animation_state,
-                     (int)c->field_68_animation_frame, (int)c->field_70_frame_timer);
-            line += buf;
-        }
-    }
-    printf("net: frame %u, anim:%s\n", frame, line.c_str());
-}
-
-int net::engine::gExplosionsCarried, net::engine::gWrecksReplaced;
-
-bool net::engine::IsWrecked(const Car* car)
-{
-    return car->field_A9_wreck_countdown || car->field_74_damage >= 32000 || car->field_9C_engine_status == car_engine_status::destroyed_6;
-}
-
-bool net::engine::SetCarDamage(Car* car, const EntityState& e)
-{
-    const bool there = e.f[kCarWrecked] != 0, here = IsWrecked(car);
-    if (there && !here)
-    {
-        car->HandleCarExplosion_43D840(explosion_type::item_19); // as a car blows up from its damage (Car::AddDamage)
-        gExplosionsCarried++;
-        return true;
-    }
-    if (!there && here)
-    {
-        return false; // a wreck of this game's own (a collision predicted harder than the server's)
-    }
-    if (!there)
-    {
-        car->field_74_damage = (s16)e.f[kCarDamage];
-        car->field_8_damaged_areas.m_var = (u32)e.f[kCarAreas];
-    }
-    // Its lights and horn: a siren switched with the horn key (Car::HandleSpecialInput_441800 counts the horn down) came
-    // on again here after the server had it off
-    car->field_A4_light_flags = (char_type)e.f[kCarLights];
-    car->field_A5_flash_phase_counter = (char_type)e.f[kCarFlash];
-    car->field_A7_horn = (u8)e.f[kCarHorn];
-    car->field_A8_horn_cooldown = (u8)e.f[kCarHornCooldown];
-    if (e.f[kCarRemap] >= 0 && e.f[kCarRemap] < 256)
-    {
-        car->SetCarRemap((u8)e.f[kCarRemap]); // only a model with remaps, only when it differs (and its trailer)
-    }
-    return true;
-}
-
-void net::engine::SetPlayerName(int slot, const char* name)
-{
-    Player* p = GetPlayer(slot);
-    if (!p)
-    {
-        return;
-    }
-    int k = 0;
-    for (; k < 15 && name[k]; k++)
-    {
-        p->field_83C_player_name[k] = (wchar_t)(unsigned char)name[k];
-    }
-    p->field_83C_player_name[k] = 0;
-    gGameSession_67E8E0.SetPlayerName_4C5C30((u16)slot, p->field_83C_player_name); // as Player.cpp sets it up
-}
-
-float net::engine::SnapshotReach(const Snapshot& snap)
-{
-    for (size_t k = 0; k < snap.entities.size(); k++)
-    {
-        if (snap.entities[k].type == kEntityWorld)
-        {
-            return snap.entities[k].f[kWorldReach] / 16.0f;
-        }
-    }
-    return 0;
-}
-
-void net::engine::SetSnapshotReach(Snapshot& snap, float blocks)
-{
-    for (size_t k = 0; k < snap.entities.size(); k++)
-    {
-        if (snap.entities[k].type == kEntityWorld)
-        {
-            const int v = (int)(blocks * 16);
-            snap.entities[k].f[kWorldReach] = v < 0 ? 0 : v > 1023 ? 1023 : v;
-        }
-    }
-}
-
-float net::engine::PlayerViewRadius(int player)
-{
-    // How far its camera shows, centre to corner, at ground level (the inverse of Camera::ProjectWorldToScreen_4B90E0;
-    // the camera rises as the player drives faster)
-    Player* p = GetPlayer(player);
-    if (!p)
-    {
-        return 0;
-    }
-    const Camera& c = p->field_90_game_camera;
-    const float scale = c.field_60_screen_scale.x.ToFloat();
-    if (scale <= 0)
-    {
-        return 0;
-    }
-    const float depth = 8.0f + c.field_98_cur_pos.field_8_z.ToFloat(); // (8 - z) + camera z, at z 0
-    const float hw = c.field_70_screen_px_center_x * depth / scale, hh = c.field_74_screen_px_center_y * depth / scale;
-    return sqrtf(hw * hw + hh * hh);
-}
-
-int net::engine::AgeField(uint8_t type)
-{
-    if (type != kEntityCar && type != kEntityPed && type != kEntityObject)
-    {
-        return -1;
-    }
-    return (int)NetSchema().types[type].fields.size() - 1;
-}
-
-int net::engine::EntityAge(const EntityState& e)
-{
-    const int f = AgeField(e.type);
-    return f < 0 ? 0 : e.f[f];
 }

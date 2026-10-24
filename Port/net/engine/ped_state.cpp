@@ -5,6 +5,7 @@
 // is after, its gang), as net ids. Local to each side and left alone: group, patrol route, pathfinder list, the ped
 // reference table, weapons and objects (not synced).
 #include "internal.hpp"
+#include "members.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Gang.hpp"
@@ -23,14 +24,8 @@
 
 namespace
 {
-struct Member
-{
-    const char* name;
-    size_t offset;
-    uint8_t size; // bytes: 1, 2 or 4
-    bool isSigned;
-};
-#define PM(member, sz, sg) {#member, offsetof(Ped, member), sz, sg}
+using net::engine::Member;
+#define PM(member, sz, sg) NET_MEMBER(Ped, member, sz, sg)
 const Member kValues[] = {
     PM(field_12C_facing_angle, 2, true), PM(field_12E_aim_angle, 2, true), PM(field_130_target_facing_angle, 2, true),
     PM(field_132_follow_car_offset_angle, 2, true), PM(field_134_rotation, 2, true), PM(field_1B8_target_x, 4, true),
@@ -54,17 +49,7 @@ const Member kValues[] = {
 #undef PM
 const size_t kValueCount = sizeof(kValues) / sizeof(kValues[0]);
 
-int ValueIndex(size_t offset)
-{
-    for (size_t i = 0; i < kValueCount; i++)
-    {
-        if (kValues[i].offset == offset)
-        {
-            return (int)i;
-        }
-    }
-    return -1;
-}
+const int kObjective = net::engine::MemberIndex(kValues, kValueCount, offsetof(Ped, field_258_objective));
 
 // The flags that are the ped's own behaviour; the others say where it is in this game's structures (active, scheduled for
 // removal, in the pathfinder's list, on fire with a flame object of this game's)
@@ -111,60 +96,23 @@ const int kPedRefs = kStates + kStateCount;
 const int kCarRefs = kPedRefs + kPedRefCount;
 const int kGangs = kCarRefs + kCarRefCount; // its gang, a dummy's gang
 const int kChar = kGangs + 2; // its char's movement and animation (0 without a char)
-#define CM(member, sz, sg) {#member, offsetof(Char, member), sz, sg}
+#define CM(member, sz, sg) NET_MEMBER(Char, member, sz, sg)
 const Member kCharValues[] = {CM(field_10_char_state, 4, true),      CM(field_14_target_rotation, 2, true),  CM(field_38_velocity, 4, true),
                               CM(field_3C_run_or_jump_speed, 4, true), CM(field_98_velocity_vector.x, 4, true), CM(field_98_velocity_vector.y, 4, true),
                               CM(field_6C_animation_state, 4, true), CM(field_68_animation_frame, 1, false), CM(field_70_frame_timer, 1, true),
                               CM(field_71_frame_delay, 1, true)};
 #undef CM
 const size_t kCharCount = sizeof(kCharValues) / sizeof(kCharValues[0]);
+const int kCharState = net::engine::MemberIndex(kCharValues, kCharCount, offsetof(Char, field_10_char_state));
+const int kCharAnimation = net::engine::MemberIndex(kCharValues, kCharCount, offsetof(Char, field_6C_animation_state));
 const int kGroup = kChar + (int)kCharCount; // its group: leader (net id), its index (99: the leader), type, counts
 const int kWeapons = kGroup + 5; // its weapon and its second one: weapon_type + 1, 0 none
 const int kEnd = kWeapons + 2;
 static_assert(kEnd + 1 <= net::kMaxFields, "a ped's fields and its age (access.cpp)");
 
-int32_t Get(const void* p, const Member& d)
+int32_t WeaponRef(const Weapon* w) // weapon_type + 1, 0 none
 {
-    const unsigned char* a = (const unsigned char*)p + d.offset;
-    if (d.size == 1)
-    {
-        return d.isSigned ? (int32_t) * (const int8_t*)a : (int32_t) * (const uint8_t*)a;
-    }
-    if (d.size == 2)
-    {
-        int16_t s;
-        uint16_t u;
-        memcpy(&s, a, 2);
-        memcpy(&u, a, 2);
-        return d.isSigned ? s : u;
-    }
-    int32_t v;
-    memcpy(&v, a, 4);
-    return v;
-}
-
-void Set(void* p, const Member& d, int32_t v)
-{
-    unsigned char* a = (unsigned char*)p + d.offset;
-    if (d.size == 1)
-    {
-        *a = (unsigned char)v;
-    }
-    else if (d.size == 2)
-    {
-        const int16_t s = (int16_t)v;
-        memcpy(a, &s, 2);
-    }
-    else
-    {
-        memcpy(a, &v, 4);
-    }
-}
-
-Player* PlayerAt(int i)
-{
-    Game* g = gGame_0x40_67E008;
-    return g && i >= 0 && i < (int)g->field_23_num_players ? g->field_4_players[i] : NULL;
+    return w ? w->field_1C_idx + 1 : 0;
 }
 
 uint32_t PedId(const Ped* p) // the server's side
@@ -211,10 +159,7 @@ Ped* const* PedRefs(const Ped* p, Ped** out) // in kRef order
 
 void net::engine::PedStateFields(std::vector<FieldDesc>& out)
 {
-    for (size_t i = 0; i < kValueCount; i++)
-    {
-        out.push_back(FieldDesc{kValues[i].name, (uint8_t)(kValues[i].size * 8), kValues[i].isSigned});
-    }
+    AppendFields(kValues, kValueCount, out);
     out.push_back(FieldDesc{"flags", 32, false});
     out.push_back(FieldDesc{"health", 16, true});
     static const char* const kStateNames[kStateCount] = {"state1", "state2", "stored1", "stored2"};
@@ -234,10 +179,7 @@ void net::engine::PedStateFields(std::vector<FieldDesc>& out)
     }
     out.push_back(FieldDesc{"gang", 4, false});
     out.push_back(FieldDesc{"dummy_gang", 4, false});
-    for (size_t i = 0; i < kCharCount; i++)
-    {
-        out.push_back(FieldDesc{kCharValues[i].name, (uint8_t)(kCharValues[i].size * 8), kCharValues[i].isSigned});
-    }
+    AppendFields(kCharValues, kCharCount, out);
     out.push_back(FieldDesc{"group_leader", 32, false});
     out.push_back(FieldDesc{"group_idx", 8, false});
     out.push_back(FieldDesc{"group_type", 8, true});
@@ -249,10 +191,7 @@ void net::engine::PedStateFields(std::vector<FieldDesc>& out)
 
 void net::engine::CapturePedState(const Ped* p, EntityState& e)
 {
-    for (size_t i = 0; i < kValueCount; i++)
-    {
-        e.f[kFirst + i] = Get(p, kValues[i]);
-    }
+    CaptureMembers(p, kValues, kValueCount, e, kFirst);
     u32 flags;
     memcpy(&flags, &p->field_21C_bf, sizeof(flags));
     e.f[kFlags] = (int32_t)(flags & kFlagsSent);
@@ -275,13 +214,10 @@ void net::engine::CapturePedState(const Ped* p, EntityState& e)
     e.f[kGangs + 1] = GangIdx(p->field_19C_dummy_gang);
     if (const Char* c = p->field_168_game_object)
     {
-        for (size_t i = 0; i < kCharCount; i++)
-        {
-            e.f[kChar + i] = Get(c, kCharValues[i]);
-        }
+        CaptureMembers(c, kCharValues, kCharCount, e, kChar);
     }
-    e.f[kWeapons] = p->field_170_selected_weapon ? p->field_170_selected_weapon->field_1C_idx + 1 : 0;
-    e.f[kWeapons + 1] = p->field_174_pWeapon ? p->field_174_pWeapon->field_1C_idx + 1 : 0;
+    e.f[kWeapons] = WeaponRef(p->field_170_selected_weapon);
+    e.f[kWeapons + 1] = WeaponRef(p->field_174_pWeapon);
     if (const PedGroup* g = p->field_164_ped_group)
     {
         e.f[kGroup] = (int32_t)PedId(g->field_2C_ped_leader);
@@ -294,7 +230,79 @@ void net::engine::CapturePedState(const Ped* p, EntityState& e)
 
 namespace
 {
-Ped* LocalPed(uint32_t id, bool* pResolved); // below
+Ped* LocalPed(uint32_t id, bool* pResolved) // the client's side: a net id to this game's ped
+{
+    *pResolved = true;
+    if (!id)
+    {
+        return NULL;
+    }
+    if (id < net::engine::kCarIdBase)
+    {
+        Ped* p = net::engine::InGamePed((int)id - 1);
+        *pResolved = p != NULL;
+        return p;
+    }
+    Ped* p = net::engine::ReplicaPed(id);
+    *pResolved = p != NULL;
+    return p;
+}
+
+Car* LocalCar(uint32_t id, bool* pResolved)
+{
+    *pResolved = true;
+    if (!id)
+    {
+        return NULL;
+    }
+    Car* c = net::engine::ReplicaCar(id);
+    *pResolved = c && c->field_50_car_sprite;
+    return *pResolved ? c : NULL;
+}
+
+// A char's states that go with those: not jumping or colliding with a car (Char_B4_state 15, 27), not jumping, at a car
+// door or falling (animations 5-8, 11, 12)
+bool CharPlain(int32_t charState, int32_t anim)
+{
+    return charState != Char_B4_state::Jumping_15 && charState != Char_B4_state::Colliding_With_Car_27 && !(anim >= 5 && anim <= 8) && anim != 11 &&
+           anim != 12;
+}
+
+// States that stand on their own: walking, running (or fleeing), standing. The others go with something only the side
+// that played them has (a ped pulled out of a car, 8/17, uses its char's car: Char::state_8_5520A0), so they stay here
+bool Plain(int32_t state1, int32_t state2)
+{
+    return (state1 == ped_state_1::walking_0 || state1 == ped_state_1::flee_or_running_1 || state1 == ped_state_1::standing_still_7) &&
+           (state2 == ped_state_2::ped2_walking_0 || state2 == ped_state_2::ped2_staying_14);
+}
+
+// Its weapons, the game's way of arming a ped (Ped::ForceWeapon_46F600 drops the one it had): a gang member here had
+// none and never showed the shots the server's fired
+void ApplyWeapons(Ped* p, const net::EntityState& e)
+{
+    if (WeaponRef(p->field_170_selected_weapon) != e.f[kWeapons])
+    {
+        if (e.f[kWeapons])
+        {
+            p->ForceWeapon_46F600(e.f[kWeapons] - 1);
+        }
+        else
+        {
+            p->RemovePedWeapons_462510();
+        }
+    }
+    if (WeaponRef(p->field_174_pWeapon) != e.f[kWeapons + 1])
+    {
+        if (e.f[kWeapons + 1])
+        {
+            p->GiveWeapon_46F650(e.f[kWeapons + 1] - 1);
+        }
+        else
+        {
+            p->RemoveSecondaryWeapon_462550();
+        }
+    }
+}
 } // namespace
 
 void net::engine::ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityState*>>& peds)
@@ -379,55 +387,6 @@ void net::engine::ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityS
     }
 }
 
-namespace
-{
-Ped* LocalPed(uint32_t id, bool* pResolved) // the client's side: a net id to this game's ped
-{
-    *pResolved = true;
-    if (!id)
-    {
-        return NULL;
-    }
-    if (id < net::engine::kCarIdBase)
-    {
-        Player* pl = PlayerAt((int)id - 1);
-        Ped* p = pl && pl->field_8E_in_use ? pl->field_2C4_player_ped : NULL;
-        *pResolved = p != NULL;
-        return p;
-    }
-    Ped* p = net::engine::ReplicaPed(id);
-    *pResolved = p != NULL;
-    return p;
-}
-
-Car* LocalCar(uint32_t id, bool* pResolved)
-{
-    *pResolved = true;
-    if (!id)
-    {
-        return NULL;
-    }
-    Car* c = net::engine::ReplicaCar(id);
-    *pResolved = c && c->field_50_car_sprite;
-    return *pResolved ? c : NULL;
-}
-
-// A char's states that go with those: not jumping or colliding with a car (Char_B4_state 15, 27), not jumping, at a car
-// door or falling (animations 5-8, 11, 12)
-bool CharPlain(int32_t charState, int32_t anim)
-{
-    return charState != Char_B4_state::Jumping_15 && charState != Char_B4_state::Colliding_With_Car_27 && !(anim >= 5 && anim <= 8) && anim != 11 &&
-           anim != 12;
-}
-
-// States that stand on their own: walking, running (or fleeing), standing. The others go with something only the side
-// that played them has (a ped pulled out of a car, 8/17, uses its char's car: Char::state_8_5520A0), so they stay here
-bool Plain(int32_t state1, int32_t state2)
-{
-    return (state1 == ped_state_1::walking_0 || state1 == ped_state_1::flee_or_running_1 || state1 == ped_state_1::standing_still_7) &&
-           (state2 == ped_state_2::ped2_walking_0 || state2 == ped_state_2::ped2_staying_14);
-}
-} // namespace
 
 bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
 {
@@ -437,7 +396,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     {
         if (p->field_16C_car && !p->field_248_enter_car_as_passenger)
         {
-            ForceOutOfCar(p, Fix16(e.f[kPedX], 0), Fix16(e.f[kPedY], 0), Fix16(e.f[kPedZ], 0), Ang16((s16)e.f[kPedRot], (u8)0));
+            ForceOutOfCar(p, Raw(e.f[kPedX]), Raw(e.f[kPedY]), Raw(e.f[kPedZ]), Angle(e.f[kPedRot]));
         }
         p->Kill_46F9D0(); // the server's death, the game's own way (as a player's, access.cpp)
         return true;
@@ -450,40 +409,16 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     {
         return true; // a corpse on both sides
     }
-    // Its weapons, the game's way of arming a ped (Ped::ForceWeapon_46F600 drops the one it had): a gang member here
-    // had none and never showed the shots the server's fired
-    const int32_t has = p->field_170_selected_weapon ? p->field_170_selected_weapon->field_1C_idx + 1 : 0;
-    if (has != e.f[kWeapons])
-    {
-        if (e.f[kWeapons])
-        {
-            p->ForceWeapon_46F600(e.f[kWeapons] - 1);
-        }
-        else
-        {
-            p->RemovePedWeapons_462510();
-        }
-    }
-    if ((p->field_174_pWeapon ? p->field_174_pWeapon->field_1C_idx + 1 : 0) != e.f[kWeapons + 1])
-    {
-        if (e.f[kWeapons + 1])
-        {
-            p->GiveWeapon_46F650(e.f[kWeapons + 1] - 1);
-        }
-        else
-        {
-            p->RemoveSecondaryWeapon_462550();
-        }
-    }
+    ApplyWeapons(p, e);
 
     // Sitting in the same car on both sides (a driver), its AI goes too, but not its states (in and out of cars are
     // replica.cpp's): a chasing driver followed its own objectives here
     const bool driving = p->field_16C_car && e.f[kPedCar] && !e.f[kPedState] && !InCarTransition(p) &&
-                         ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPedCar] - 1)) == p->field_16C_car &&
+                         RefCar(e.f[kPedCar]) == p->field_16C_car &&
                          p->field_278_ped_state_1 == ped_state_1::in_car_10 &&
                          p->field_16C_car->field_5C_AI && // its objectives drive through the car's AI (ApplyCarAi gives it one)
                          e.f[kStates + kState1] == ped_state_1::in_car_10 && // driving there too, not on its way out
-                         e.f[kFirst + ValueIndex(offsetof(Ped, field_258_objective))] != objectives_enum::objective_32; // an on-foot one
+                         e.f[kFirst + kObjective] != objectives_enum::objective_32; // an on-foot one
     if (!driving && (p->field_16C_car || InCarTransition(p) || e.f[kPedCar] || e.f[kPedState]))
     {
         // In a car, or on its way into or out of one, on either side: that is replica.cpp's (ForceIntoCar, ForceOutOfCar
@@ -513,10 +448,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
             return true;
         }
     }
-    for (size_t i = 0; i < kValueCount; i++)
-    {
-        Set(p, kValues[i], e.f[kFirst + i]);
-    }
+    ApplyMembers(p, kValues, kValueCount, e, kFirst);
     u32 flags;
     memcpy(&flags, &p->field_21C_bf, sizeof(flags));
     flags = (flags & ~kFlagsSent) | ((u32)e.f[kFlags] & kFlagsSent);
@@ -532,12 +464,9 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
         // ... and its char's movement and animation, as the server's (with only the ped's states, a gang member could
         // run on the spot: the char kept its own state and speed)
         Char* c = p->field_168_game_object;
-        if (CharPlain(e.f[kChar + 0], e.f[kChar + 6]) && CharPlain(c->field_10_char_state, c->field_6C_animation_state))
+        if (CharPlain(e.f[kChar + kCharState], e.f[kChar + kCharAnimation]) && CharPlain(c->field_10_char_state, c->field_6C_animation_state))
         {
-            for (size_t i = 0; i < kCharCount; i++)
-            {
-                Set(c, kCharValues[i], e.f[kChar + i]);
-            }
+            ApplyMembers(c, kCharValues, kCharCount, e, kChar);
         }
     }
     Ped** pedMembers[kPedRefCount] = {&p->field_144_attacker,         &p->field_148_objective_target_ped, &p->field_14C_internal_target_ped,

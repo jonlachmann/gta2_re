@@ -35,11 +35,7 @@ std::set<Object*> LivePickups()
     return out;
 }
 
-bool Near(const Sprite* s, int32_t x, int32_t y)
-{
-    const int32_t dx = s->field_14_xy.x.mValue - x, dy = s->field_14_xy.y.mValue - y;
-    return dx < 16384 && dx > -16384 && dy < 16384 && dy > -16384; // within a block
-}
+const int32_t kSamePlace = 16384; // within a block: the same pickup as the server's
 } // namespace
 
 std::unordered_map<uint32_t, Object*>& net::engine::PickupMap()
@@ -55,15 +51,8 @@ void net::engine::CapturePickups(Snapshot& out)
         {
             continue;
         }
-        EntityState e;
-        memset(&e, 0, sizeof(e));
-        e.id = kObjIdBase + (uint32_t)o->field_14_id;
-        e.type = kEntityObject;
-        const Sprite* s = o->field_4_sprite;
-        e.f[kObjX] = s->field_14_xy.x.mValue;
-        e.f[kObjY] = s->field_14_xy.y.mValue;
-        e.f[kObjZ] = s->field_1C_zpos.mValue;
-        e.f[kObjRot] = s->field_0_rotation.rValue;
+        EntityState e = Entity(kObjIdBase + (uint32_t)o->field_14_id, kEntityObject);
+        PutPosition(e, o->field_4_sprite);
         e.f[kObjModel] = o->field_18_model;
         e.f[kObjIdx] = o->field_26_ped_ref_idx;
         out.entities.push_back(e);
@@ -79,7 +68,7 @@ void net::engine::ApplyPickups(const Snapshot& snap)
     for (auto it = gObjects.begin(); it != gObjects.end();)
     {
         // Gone, or its pool slot another object's now
-        if (!live.count(it->second) && getenv("GTA2_NET_PICKUPLOG"))
+        if (!live.count(it->second) && Debug().pickupLog)
         {
             static int sDropped;
             const Object* o = it->second;
@@ -107,10 +96,10 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         {
             continue; // the state the client already has
         }
-        if (o && (o->field_18_model != e.f[kObjModel] || !Near(o->field_4_sprite, e.f[kObjX], e.f[kObjY])))
+        if (o && (o->field_18_model != e.f[kObjModel] || !Near(o->field_4_sprite, e.f[kObjX], e.f[kObjY], kSamePlace)))
         {
             static int sLogged;
-            if (getenv("GTA2_NET_PICKUPLOG") && sLogged++ < 20)
+            if (Debug().pickupLog && sLogged++ < 20)
             {
                 printf("net: pickup %u remade: model here %d there %d, at (%.2f, %.2f) here, (%.2f, %.2f) there\n", e.id, (int)o->field_18_model,
                        e.f[kObjModel], o->field_4_sprite->field_14_xy.x.ToFloat(), o->field_4_sprite->field_14_xy.y.ToFloat(), e.f[kObjX] / 16384.0f,
@@ -127,14 +116,14 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         {
             for (Object* c : live)
             {
-                if (!mapped.count(c) && !remade.count(c) && c->field_18_model == e.f[kObjModel] && Near(c->field_4_sprite, e.f[kObjX], e.f[kObjY]))
+                if (!mapped.count(c) && !remade.count(c) && c->field_18_model == e.f[kObjModel] && Near(c->field_4_sprite, e.f[kObjX], e.f[kObjY], kSamePlace))
                 {
                     o = c; // this game's own, the same one
                     break;
                 }
             }
         }
-        if (!o && getenv("GTA2_NET_PICKUPLOG"))
+        if (!o && Debug().pickupLog)
         {
             static int sMade;
             if (sMade++ < 20)
@@ -145,8 +134,7 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         }
         if (!o)
         {
-            o = gObject_5C_6F8F84->NewPhysicsObj_5299B0(e.f[kObjModel], Fix16(e.f[kObjX], 0), Fix16(e.f[kObjY], 0), Fix16(e.f[kObjZ], 0),
-                                                        Ang16((s16)e.f[kObjRot], (u8)0));
+            o = gObject_5C_6F8F84->NewPhysicsObj_5299B0(e.f[kObjModel], Raw(e.f[kObjX]), Raw(e.f[kObjY]), Raw(e.f[kObjZ]), Angle(e.f[kObjRot]));
             if (!o)
             {
                 continue;
@@ -170,7 +158,7 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         const float dx = sp->field_14_xy.x.ToFloat() - px, dy = sp->field_14_xy.y.ToFloat() - py;
         if (!seen.count(it->first) && located && dx * dx + dy * dy < kSure * kSure)
         {
-            if (getenv("GTA2_NET_PICKUPLOG"))
+            if (Debug().pickupLog)
             {
                 printf("net: pickup %u removed: not in the snapshot, %.1f blocks away, model %d\n", it->first, sqrtf(dx * dx + dy * dy),
                        (int)it->second->field_18_model);
@@ -191,7 +179,7 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         const float dx = c->field_4_sprite->field_14_xy.x.ToFloat() - px, dy = c->field_4_sprite->field_14_xy.y.ToFloat() - py;
         if (!mapped.count(c) && !gone.count(c) && !remade.count(c) && located && dx * dx + dy * dy < kSure * kSure)
         {
-            if (getenv("GTA2_NET_PICKUPLOG"))
+            if (Debug().pickupLog)
             {
                 printf("net: pickup of this game's own removed: model %d id %d at (%.2f, %.2f)\n", (int)c->field_18_model, (int)c->field_14_id,
                        c->field_4_sprite->field_14_xy.x.ToFloat(), c->field_4_sprite->field_14_xy.y.ToFloat());
