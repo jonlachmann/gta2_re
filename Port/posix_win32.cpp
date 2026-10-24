@@ -33,19 +33,27 @@ BOOL WINAPI FreeLibrary(HMODULE)
     return TRUE;
 }
 
+// GTA2_SPEED=<k>: the game's clock k times faster (as Port/headless/fast_clock.cpp on Windows); a large k runs a
+// network game's ticks back to back (the bots' training, Port/net/session/server.cpp)
+static double ClockSpeed()
+{
+    static const double speed = getenv("GTA2_SPEED") ? atof(getenv("GTA2_SPEED")) : 1.0;
+    return speed > 0 ? speed : 1.0;
+}
+
 DWORD WINAPI timeGetTime(void)
 {
-    return (DWORD)SDL_GetTicks();
+    return (DWORD)(Uint64)(SDL_GetTicksNS() / 1e6 * ClockSpeed()); // ns: at a large k a millisecond holds many ticks. ponytail: wraps after 49 days / k (71 minutes at k = 1000): fine for a match
 }
 
 DWORD WINAPI GetTickCount(void)
 {
-    return (DWORD)SDL_GetTicks();
+    return timeGetTime();
 }
 
 void WINAPI Sleep(DWORD ms)
 {
-    SDL_Delay(ms);
+    SDL_Delay((Uint32)(ms / ClockSpeed()));
 }
 
 void WINAPI OutputDebugStringA(LPCSTR text)
