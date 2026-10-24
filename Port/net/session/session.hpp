@@ -62,7 +62,7 @@ class Arena
         struct Body // a tick's state, as Score reads it
         {
             float x = 0, y = 0;
-            int rot = 0, health = 0, frags = 0, deaths = 0, ammo = 0;
+            int rot = 0, health = 0, frags = 0, deaths = 0, guns = 0; // guns: the weapons with ammo
             uint32_t car = 0;
         };
         std::string kind;

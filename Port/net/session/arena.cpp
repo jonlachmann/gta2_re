@@ -210,7 +210,7 @@ void net::Arena::Score(const Snapshot& world)
             body.car = engine::PlayerCarId(e);
             for (int w = 0; w < 15; w++)
             {
-                body.ammo += engine::PlayerAmmo(e, w);
+                body.guns += engine::PlayerAmmo(e, w) > 0;
             }
         }
     }
@@ -252,7 +252,8 @@ void net::Arena::Score(const Snapshot& world)
         if (mTicks > 0)
         {
             bot.reward += kFragReward * (me.frags - bot.last.frags) + kDeathReward * (me.deaths - bot.last.deaths);
-            const bool took = me.ammo > bot.last.ammo && me.health > 0 && bot.last.health > 0; // not a respawn's
+            // A new kind of weapon (more ammo for one it has isn't counted: GTA2_NET_TESTARM refills its own)
+            const bool took = me.guns > bot.last.guns && me.health > 0 && bot.last.health > 0;
             bot.pickups += took;
             bot.reward += took ? kPickupReward : 0;
             bot.cars += me.car && !bot.last.car;
