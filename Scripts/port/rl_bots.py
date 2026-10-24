@@ -130,9 +130,19 @@ def results(log):
     return out
 
 
+def widen(state, n_in):
+    """A policy trained with fewer inputs (features are only ever added at the end): zero weights for the new ones,
+    so it plays as before until it learns them"""
+    for key in ("actor.0.weight", "critic.0.weight"):
+        w = state[key]
+        if w.shape[1] < n_in:
+            state[key] = torch.cat([w, torch.zeros(w.shape[0], n_in - w.shape[1])], dim=1)
+    return state
+
+
 def load_opponent(n_in):
     p = Policy(n_in)
-    p.load_state_dict(torch.load(random.choice(glob.glob(os.path.join(OUT, "pool", "*.pt"))), weights_only=True))
+    p.load_state_dict(widen(torch.load(random.choice(glob.glob(os.path.join(OUT, "pool", "*.pt"))), weights_only=True), n_in))
     return p
 
 
@@ -216,7 +226,7 @@ def train(args):
                 policy = Policy(n_in)
                 if os.path.exists(os.path.join(OUT, "policy.pt")):
                     state = torch.load(os.path.join(OUT, "policy.pt"), weights_only=True)
-                    policy.load_state_dict(state["policy"])
+                    policy.load_state_dict(widen(state["policy"], n_in))
                     update = start = state["update"]
                     print("continuing from update %d" % update, flush=True)
                 opt = torch.optim.Adam(policy.parameters(), lr=args.lr)

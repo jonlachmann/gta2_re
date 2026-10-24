@@ -152,7 +152,8 @@ class NeuralBot : public net::BotBrain
         {
             ok = ok && fscanf(f, "%d", &n) == 1 && n > 0 && n <= 1024;
         }
-        ok = ok && mSizes.front() == net::kBotFeatures && mSizes.back() == net::kBotLogits;
+        // Fewer inputs: a network from before features were added at the end, which it doesn't read
+        ok = ok && mSizes.front() <= net::kBotFeatures && mSizes.back() == net::kBotLogits;
         for (int l = 0; ok && l < layers; l++)
         {
             mWeights.push_back(std::vector<float>((mSizes[l] + 1) * mSizes[l + 1]));
@@ -164,7 +165,7 @@ class NeuralBot : public net::BotBrain
         fclose(f);
         if (!ok)
         {
-            fprintf(stderr, "net: %s is no network of %d inputs and %d outputs (mlp <argmax|sample> <layers> <sizes> <weights>)\n", path,
+            fprintf(stderr, "net: %s is no network of up to %d inputs and %d outputs (mlp <argmax|sample> <layers> <sizes> <weights>)\n", path,
                     net::kBotFeatures, net::kBotLogits);
         }
         return ok;
@@ -270,6 +271,21 @@ void net::BotFeatures(const BotView& v, BotMemory& m, float* out)
         *p++ = (m.lastButtons & bit) != 0; // what it did last
     }
     *p++ = 1;
+    // Added later, so at the end (rl_bots.py widens a trained network with zero weights for them): the nearest
+    // players' cars
+    std::vector<std::pair<float, bool>> drivers;
+    for (const BotView::Seen& s : v.seen)
+    {
+        if (s.kind == BotView::Seen::kPlayer && s.health > 0)
+        {
+            drivers.push_back(std::make_pair(hypotf(s.x - v.x, s.y - v.y), s.inCar));
+        }
+    }
+    std::sort(drivers.begin(), drivers.end());
+    for (int i = 0; i < kPlayers; i++)
+    {
+        *p++ = i < (int)drivers.size() && drivers[i].second;
+    }
     if (p - out != kBotFeatures)
     {
         abort(); // kBotFeatures is out of date
