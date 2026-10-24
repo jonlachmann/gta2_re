@@ -6,7 +6,6 @@
 #include "Source/3rdParty/mss.h"
 #include <SDL3/SDL.h>
 #include <math.h>
-#include <string>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -376,15 +375,17 @@ DXDEC U32 AILCALL AIL_sample_status(HSAMPLE S)
 
 DXDEC HSTREAM AILCALL AIL_open_stream(HDIGDRIVER, char FAR* filename, S32)
 {
-    std::string path = filename;
-    for (size_t i = 0; i < path.size(); i++)
-    {
-        path[i] = path[i] == '\\' ? '/' : path[i]; // the game's paths use backslashes
-    }
+#if defined(_WIN32)
+    const char* path = filename;
+#else
+    // The game's paths use backslashes and its own letter case ("data\\audio\\vocals"): resolved as its fopen is
+    char resolved[1024];
+    const char* path = port_resolve_path(filename, resolved, sizeof(resolved));
+#endif
     SDL_AudioSpec spec;
     Uint8* buf = NULL;
     Uint32 len = 0;
-    if (!SDL_LoadWAV(path.c_str(), &spec, &buf, &len))
+    if (!SDL_LoadWAV(path, &spec, &buf, &len))
     {
         return NULL;
     }
