@@ -29,6 +29,8 @@ const uint32_t kSkip = 3; // ticks per remote decision (10 a second): the button
 // The trainer's reward: frags and deaths most, then damage, pickups and being near someone to fight
 const float kFragReward = 1, kDeathReward = -1, kDamageReward = 0.01f, kPickupReward = 0.3f, kNearReward = 0.001f;
 const float kApproachReward = 0.01f; // per block nearer the nearest other player (and as much off going away)
+const float kCarReward = 0.3f; // the first car of each life (more in one life pay nothing: no getting in and out for it)
+const float kCarFragReward = 0.5f; // on top of a frag made from a car
 
 #if !defined(_WIN32)
 int Connect(int port)
@@ -266,6 +268,13 @@ void net::Arena::Score(const Snapshot& world)
         if (mTicks > 0)
         {
             bot.reward += kFragReward * (me.frags - bot.last.frags) + kDeathReward * (me.deaths - bot.last.deaths);
+            bot.reward += me.car || bot.last.car ? kCarFragReward * (me.frags - bot.last.frags) : 0;
+            bot.droveThisLife &= me.deaths == bot.last.deaths;
+            if (me.car && !bot.droveThisLife)
+            {
+                bot.droveThisLife = true;
+                bot.reward += kCarReward;
+            }
             // A new kind of weapon (more ammo for one it has isn't counted: GTA2_NET_TESTARM refills its own)
             const bool took = me.guns > bot.last.guns && me.health > 0 && bot.last.health > 0;
             bot.pickups += took;

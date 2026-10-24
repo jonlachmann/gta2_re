@@ -73,6 +73,7 @@ class Arena
         double closeness = 0; // summed per tick: 1 - distance / 50 blocks to the nearest other player
         int dealt = 0, cars = 0, pickups = 0;
         float reward = 0; // since the last message (remote)
+        bool droveThisLife = false; // (remote) the car reward is paid once a life
         BotMemory memory; // its features' (remote)
         std::unique_ptr<BotBrain> teacher; // a scripted brain on the same view (remote): what it would press
     };
