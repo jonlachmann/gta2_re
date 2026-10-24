@@ -4,8 +4,9 @@
 Headless arena servers (--arena remote:<port>,...) connect to this script; every 3 ticks each sends what its remote
 bots see and the reward since (Port/net/session/arena.cpp) and gets their buttons back. One policy plays all
 learner slots; some matches put earlier versions of it (the pool) in two of them, and the scripted "simple" bot
-always plays the sixth slot as a yardstick. At first the policy also learns to press what the scripted bot would
-(kickstarting, --teach), less with each update. Weapons come from the map's pickups (--armed: pistols for all, a start).
+always plays the sixth slot as a yardstick. At first the policy also learns to press what a scripted bot would
+(kickstarting, --teach), less with each update: two slots per game are taught by the rammer, which gets into a car and
+drives at people (--drivers), the others by the fighter. Weapons come from the map's pickups (--armed: pistols for all, a start).
 
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py [--updates N] [--envs N] [--spectate K]
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py --watch [file.nn]   a match in a window
@@ -95,7 +96,9 @@ class Match:
     def __init__(self, args, port, idx):
         self.log = os.path.join(OUT, "logs", "match_%d.log" % idx)
         self.pool = random.random() < args.pool_share and bool(glob.glob(os.path.join(OUT, "pool", "*.pt")))
-        brains = ",".join(["remote:%d" % port] * args.remote + ["simple"])
+        teachers = ["rammer"] * args.drivers + ["simple"] * (args.remote - args.drivers)
+        random.shuffle(teachers)
+        brains = ",".join(["remote:%d:%s" % (port, t) for t in teachers] + ["simple"])
         env = dict(os.environ, GTA2_HEADLESS="1", GTA2_SPEED="1000")
         if args.armed:
             env["GTA2_NET_TESTARM"] = "0:99"  # a pistol each, kept loaded
@@ -347,6 +350,7 @@ def main():
     ap.add_argument("--pool-every", type=int, default=10, help="updates between copies of the policy kept as opponents")
     ap.add_argument("--pool-share", type=float, default=0.5, help="the matches with two pool opponents")
     ap.add_argument("--teach", type=float, default=1.0, help="the imitation loss's weight at the start (kickstarting from the scripted bot)")
+    ap.add_argument("--drivers", type=int, default=2, help="remote slots per game taught by the rammer (drives at people), the rest by the fighter")
     ap.add_argument("--teach-updates", type=int, default=150, help="updates of this run until the imitation loss is gone")
     ap.add_argument("--armed", action="store_true", help="pistols kept loaded (a start: fights happen sooner), not only the pickups")
     ap.add_argument("--spectate", type=int, default=0, metavar="K", help="a windowed match of the policy every K updates")
