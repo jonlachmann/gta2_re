@@ -313,6 +313,7 @@ void net::engine::CapturePlayer(int i, Snapshot& out)
     e.f[kPlayerTarget] = ped->get_objective_403A80() == objectives_enum::enter_car_as_driver_35 ? CarRef(ped->field_150_target_objective_car) : 0;
     PackName(p, e);
     PackChat(p, e);
+    e.f[kPlayerWanted] = ped->field_20A_wanted_points;
     for (int k = 0; k < kPowerUps; k++)
     {
         e.f[kPlayerPowerUp + k] = p->field_6F4_power_up_timers[k];
@@ -378,6 +379,7 @@ void net::engine::ApplyPlayer(const EntityState& e)
     }
     ApplyWeapons(p, e);
     ApplyPowerUps(p, ped, e);
+    ped->field_20A_wanted_points = (s16)e.f[kPlayerWanted];
     if (i != LocalPlayer())
     {
         UnpackChat(p, e); // the others' typing; ours is this game's (KeepLocalChat)

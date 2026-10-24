@@ -45,6 +45,7 @@ enum PlayerField
     kPlayerChatting = kPlayerPowerUpEnd, // typing a chat line (Player::field_794_is_chatting, Hud_ChatInput)
     kPlayerChat, // the line so far (field_796_chat_text), 4 characters a field
     kPlayerChatEnd = kPlayerChat + 20,
+    kPlayerWanted = kPlayerChatEnd, // the wanted points (Ped::field_20A_wanted_points: the HUD's cop heads, the police's chase)
 };
 enum PlayerState
 {
