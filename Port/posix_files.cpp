@@ -90,6 +90,10 @@ extern "C" {
 
 const char* port_resolve_path(const char* path, char* out, size_t outSize)
 {
+    if (outSize == 0)
+    {
+        return out;
+    }
     const std::string r = Resolve(path);
     strncpy(out, r.c_str(), outSize - 1);
     out[outSize - 1] = 0;

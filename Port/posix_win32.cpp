@@ -90,7 +90,7 @@ UINT WINAPI GetDriveTypeA(LPCSTR)
 
 BOOL WINAPI GetComputerNameA(LPSTR buf, LPDWORD size)
 {
-    if (gethostname(buf, *size) != 0)
+    if (*size == 0 || gethostname(buf, *size) != 0)
     {
         return FALSE;
     }
