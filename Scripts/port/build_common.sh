@@ -7,6 +7,7 @@
 # Source/3rdParty/bink.cpp.
 GAME_SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v 'ImGuiDebug.cpp\|NetPlay.cpp\|NetUi.cpp')
           StdAfx.cpp Port/*.cpp Port/headless/state_log.cpp Port/headless/fast_clock.cpp Port/headless/sim_bench.cpp
+          Port/headless/neteval.cpp
           $(find Port/net -name "*.cpp" -not -path "*/tests/*" | sort))
 # The OpenGL renderer (PR #837), linked in: the game finds its gbh_* functions and Port/sdl_video.cpp's Vid_* ones in
 # the program itself.
