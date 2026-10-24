@@ -5,7 +5,7 @@
 // "remote:<port>[:<teacher>]" slots are played by a trainer (Scripts/port/rl_bots.py) over a local TCP connection, one round trip
 // every kSkip ticks for all of them. The game sends (native byte order, all 32-bit):
 //   count, done, kBotFeatures, then per remote slot: slot, alive, reward since the last message, the buttons its
-//   teacher would press (a scripted brain, "simple" by default: for kickstarting), its features
+//   teacher would press (a scripted brain, "hunter" by default: for kickstarting), its features
 // and the trainer answers each slot's buttons. With done (the last message, at --ticks) there is no answer.
 #include "session.hpp"
 #include <math.h>
@@ -106,7 +106,7 @@ bool net::Arena::Start(const std::vector<std::string>& brains, std::string* erro
                 return false;
             }
             const size_t colon = kind.find(':', 7);
-            bot.teacher = CreateBotBrain(colon == std::string::npos ? "simple" : kind.substr(colon + 1));
+            bot.teacher = CreateBotBrain(colon == std::string::npos ? "hunter" : kind.substr(colon + 1));
             if (!bot.teacher)
             {
                 *error = "no teacher brain in " + kind;
