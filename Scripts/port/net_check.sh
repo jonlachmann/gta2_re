@@ -2,6 +2,7 @@
 # The netcode's checks in one go (docs/netcode.md, "Checks"), on the macOS build (Scripts/port/build_mac.sh):
 #   arena   bot matches on the server alone, several maps, brains and seeds: none may crash
 #   live    a server and two bot clients over a bad link (100 ms, jitter, loss): no crash, no CHECK line
+#   soak    a server and three bot clients, the clock 10 times as fast: 10 minutes of play in 60 s, no crash
 #   replay  recorded client sessions replayed against their saved logs: the same, or nondeterministic (it differs
 #           from itself too), else a regression
 # usage: Scripts/port/net_check.sh [--quick] [--record] [--save] [arena|live|replay ...]
@@ -21,7 +22,7 @@ for a in "$@"; do
     *) STEPS+=("$a") ;;
   esac
 done
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live replay)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live soak replay)
 [ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: Scripts/port/build_mac.sh, then Scripts/port/run_mac.sh once"; exit 1; }
 mkdir -p "$OUT"
 trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (each job execs its game: killing it kills the game)
@@ -76,6 +77,30 @@ live() {
     fail "live: $joined of 2 clients joined, $crashes crashed, $checks CHECK lines (build_port/net_check/live_*.log)"
   else
     pass "live: 2 bot clients for ${secs} s at 100 ms, 2% loss, police on"
+  fi
+}
+
+soak() {
+  local secs=60 p=$((BASE + 202))
+  [ -n "$QUICK" ] && secs=30
+  rm -f "$OUT"/soak_*.log
+  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=10 exec "$BIN" --server --port $p --map mp1-6p --players 6 --police \
+    --arena hunter,soldier,rammer > "$OUT/soak_server.log" 2>&1) &
+  sleep 2
+  for b in rammer soldier hunter; do
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=10 GTA2_NET_CHECKGRID=1 exec "$BIN" --connect 127.0.0.1:$p --name s_$b --bot $b \
+      > "$OUT/soak_$b.log" 2>&1) &
+  done
+  sleep $secs
+  kill $(jobs -p) 2>/dev/null
+  wait 2>/dev/null
+  local crashes checks
+  crashes=$(grep -l "crashed" "$OUT"/soak_*.log | wc -l | tr -d ' ')
+  checks=$(cat "$OUT"/soak_*.log | grep -c "net: CHECK")
+  if [ "$crashes" != 0 ] || [ "$checks" != 0 ]; then
+    fail "soak: $crashes crashed, $checks CHECK lines (build_port/net_check/soak_*.log)"
+  else
+    pass "soak: 3 bot clients, $((secs * 10 / 60)) minutes of play, $(grep -c 'joined as' "$OUT/soak_server.log") joined"
   fi
 }
 
@@ -134,8 +159,8 @@ replay() {
 
 for s in "${STEPS[@]}"; do
   case $s in
-    arena | live | replay) $s ;;
-    *) echo "no step $s (arena, live, replay)"; FAILED=1 ;;
+    arena | live | soak | replay) $s ;;
+    *) echo "no step $s (arena, live, soak, replay)"; FAILED=1 ;;
   esac
 done
 exit $FAILED
