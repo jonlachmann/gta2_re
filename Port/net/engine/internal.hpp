@@ -65,6 +65,7 @@ enum CarField
     kCarFlash,
     kCarHorn,
     kCarHornCooldown,
+    kCarRemap, // its colour (the sprite's remap): a respray, or a car made here, had another
     kCarPhysics, // then its whole CarPhysics, member by member (access.cpp's kPhysics; all 0 without physics)
 };
 enum CarDriver
