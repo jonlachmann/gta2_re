@@ -351,6 +351,13 @@ void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t fr
             {
                 view.health = s.health;
                 view.car = engine::PlayerCarId(e);
+                view.weapon = engine::PlayerWeapon(e);
+                view.ammo = engine::PlayerAmmo(e, view.weapon);
+                view.guns = 0;
+                for (int w = 0; w < 15; w++)
+                {
+                    view.guns += engine::PlayerAmmo(e, w) > 0;
+                }
                 continue;
             }
         }

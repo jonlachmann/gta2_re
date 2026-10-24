@@ -34,6 +34,8 @@ struct BotView
     int rot = 0;
     int health = 0;
     uint32_t car = 0; // the car it drives (a Seen kCar id), 0 on foot
+    int weapon = -1, ammo = 0; // the weapon in hand (Source/Weapon.hpp, 0..14; -1: fists) and its ammo
+    int guns = 0; // the weapons it has ammo for (on foot)
     struct Seen
     {
         enum Kind
@@ -72,6 +74,21 @@ class BotBrain
 // "nn:<file>": a neural network's (bot_nn.cpp), its weights from the file (Scripts/port/train_bots.py)
 std::unique_ptr<BotBrain> CreateBotBrain(const std::string& kind);
 std::unique_ptr<BotBrain> CreateNeuralBrain(const std::string& path); // NULL if the file is no network of this shape
+
+// What the network bots see (bot_nn.cpp): a BotView as numbers, about -1..1, relative to where it faces
+const int kBotFeatures = 53;
+struct BotMemory // what the features remember between ticks
+{
+    float lastX = -1, lastY = 0;
+    uint32_t lastButtons = 0;
+};
+void BotFeatures(const BotView& view, BotMemory& memory, float* out);
+// What they do: a choice in each group (turn left/no/right, forward/no/back, then attack, enter/exit, jump and next
+// weapon, each no/yes)
+const int kBotGroups = 6;
+const int kBotGroupSize[kBotGroups] = {3, 3, 2, 2, 2, 2};
+const int kBotLogits = 14;
+uint32_t BotButtons(const int* choice);
 
 // The view a client gives its bot (bot.cpp)
 void FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t frame, const engine::NavMap* map);

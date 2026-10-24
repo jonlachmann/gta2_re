@@ -28,12 +28,12 @@ GAME = os.path.join(ROOT, "build_port", "mac", "game")
 BIN = os.path.join(ROOT, "build_port", "mac", "gta2_port")
 OUT = os.path.join(ROOT, "build_port", "train")
 
-# bot_nn.cpp's shape: inputs (with a bias), hidden, outputs
-N_IN, N_HID, N_OUT = 49, 32, 10
-N_W1, N_W2 = N_IN * N_HID, (N_HID + 1) * N_OUT
+# bot.hpp's kBotFeatures and kBotLogits, and the hidden layer
+N_IN, N_HID, N_OUT = 53, 32, 14
+N_W1, N_W2 = (N_IN + 1) * N_HID, (N_HID + 1) * N_OUT
 MAP = "mp1-6p"  # Tiny Town: the players start 20-60 blocks apart (downtown: 100). ponytail: --map when wanted
 PER_MATCH = 5  # networks per match; the sixth slot is the scripted bot, a fixed yardstick
-RESULT = re.compile(r"net: arena (\d+) (\S+) frags (-?\d+) deaths (\d+) near ([\d.]+) dealt (-?\d+)")
+RESULT = re.compile(r"net: arena (\d+) (\S+) frags (-?\d+) deaths (\d+) near ([\d.]+) dealt (-?\d+) cars (\d+) pickups (\d+)")
 
 
 def fitness(r):
@@ -50,7 +50,7 @@ def mutate(g, sigma):
 
 def write_nn(g, path):
     with open(path, "w") as f:
-        f.write("nn %d %d %d\n" % (N_IN, N_HID, N_OUT))
+        f.write("mlp argmax 2 %d %d %d\n" % (N_IN, N_HID, N_OUT))
         f.write(" ".join("%.5f" % w for w in g) + "\n")
 
 
