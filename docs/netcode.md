@@ -103,7 +103,7 @@ Usage and test switches:
 - interpolation;
 - the comparison check;
 - modes beyond the game's own frags, points and tag;
-- the next map at a round's end, a results screen;
+- a results screen between maps;
 - the player cap above 6.
 
 ```
@@ -123,14 +123,20 @@ Either end: `--lag`, `--jitter`, `--loss` (the link conditioner).
 
 ## Rounds
 
-A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::CheckRound`). The game ends a network game at its frag limit (`PlayerScoreTracker`: frags >= the limit) and at its time limit (`ManageNetworkTimeAndHudPager_4DADA0`), and a dedicated server can't come back from that: it stopped ticking, and every client froze with it (the time limit, 10 minutes by default, ended every game). So the game gets neither (`NetUi::CopyGameSettings_51C7F0`: an unreachable frag limit, no timer), and the server applies `--fraglimit` (points in a points game; the tag game: time only) and `--timelimit` itself. A round that reaches one ends: the leader wins (at the time limit with a tie: a draw), and the next round starts at once on the same map, everyone at a restart zone with no score, weapons or power-ups. The world entity carries the round's number, the last round's winner and the seconds left; a client puts "X wins round N" on the HUD's message line, and "60 seconds left", "10 seconds left". Not yet: the next map, a results screen, a pause between rounds.
+A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::CheckRound`). The game ends a network game at its frag limit (`PlayerScoreTracker`: frags >= the limit) and at its time limit (`ManageNetworkTimeAndHudPager_4DADA0`), and a dedicated server can't come back from that: it stopped ticking, and every client froze with it (the time limit, 10 minutes by default, ended every game). So the game gets neither (`NetUi::CopyGameSettings_51C7F0`: an unreachable frag limit, no timer), and the server applies `--fraglimit` (points in a points game; the tag game: time only) and `--timelimit` itself. A round that reaches one ends: the leader wins (at the time limit with a tie: a draw), and the next round starts at once on the same map, everyone at a restart zone with no score, weapons or power-ups. The world entity carries the round's number, the last round's winner and the seconds left; a client puts "X wins round N" on the HUD's message line, and "60 seconds left", "10 seconds left". **The next map** (`--maps a,b,c`): a round on each in turn. At a round's end the server sends the next map (`kMsgMapChange`, reliable), and after a pause of 3 s, with the winner on the HUD, the game ends on the server and on every client and the next starts at once: a port hook in `winmain.cpp` (`gPortNextNetworkGame`, under `GTA2_PORT`) goes straight to `InitializeGame_4DA4D0` on the next map instead of to the frontend. A client keeps the exit through its restores, takes only the new game's snapshots (the world entity carries the server's game, `world.game`) and syncs again from its first one, as after joining; the engine clears its maps of the old game's cars, peds and pickups (`ResetForNewGame`). What a new game in the same process needed besides:
+- the rollback set made again for every game: the new `Game` can come at the old one's address with its pools elsewhere;
+- the rollback set leaving out what the game's scratch pointers point to (the last ped processed, a collision's sprite, the map blocks around one): after a map change they point into the old game's freed pools and map, and a restore wrote there. A loader's cursor (`input_data_676170`) did that in every game. Found with Guard Malloc (`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib`) on a replay: it stops at the first read of freed memory. AddressSanitizer hangs at its start on this macOS;
+- a snapshot's weapon in hand only one the player has (the HUD reads it).
+
+Not yet: a results screen between maps.
 
 ## Checks
 
-`Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 4 minutes, and prints PASS or FAIL per step:
+`Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 6 minutes, and prints PASS or FAIL per step:
 - **arena:** 24 bot matches of 5 minutes on the server alone (Tiny Town, Face Off, Downtown; rammers, hunter, soldier, simple, car hopper; random seeds): none may crash.
 - **live:** a server and two bot clients at 100 ms, jitter and 2% loss, police on, with `GTA2_NET_CHECKGRID`: no crash and no `net: CHECK` line.
 - **churn:** two bot clients stay while two others join and leave four times, stopped by SIGTERM and Ctrl-C: no crash, no `CHECK` line, nobody turned away as the server being full. A client that quits or is stopped now leaves the server at once (`Client::Leave`, on exit and on those signals); before, its slot stayed taken until the server's timeout (5-10 s), and a player joining meanwhile was told the server was full.
+- **maps:** a three-map rotation, a round of 15 s each at 4 times the clock: both bot clients follow every map change, no crash, no `CHECK` line.
 - **soak:** a server and three bot clients with the clock 10 times as fast (`GTA2_SPEED=10`): about 10 minutes of play in 60 s, no crash. It catches what only shows after deaths and respawns (it failed on the off-screen counter crash before that fix).
 - **replay:** recorded sessions (`--record` makes three, 60 s each) replayed with every correction logged, against their saved logs. A replay that differs from itself on a second run is reported as nondeterministic, not as a regression. `--save` takes the current build's logs as the baseline, after an intended change.
 

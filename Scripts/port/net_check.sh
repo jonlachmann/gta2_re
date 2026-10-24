@@ -4,6 +4,8 @@
 #   live    a server and two bot clients over a bad link (100 ms, jitter, loss): no crash, no CHECK line
 #   churn   two bot clients staying while two others join and leave, four times (stopped: SIGTERM, Ctrl-C): no
 #           crash, no CHECK line, nobody turned away as the server being full
+#   maps    a map rotation, a round of 15 s each (the clock 4 times as fast): two bot clients follow every map change,
+#           no crash, no CHECK line
 #   soak    a server and three bot clients, the clock 10 times as fast: 10 minutes of play in 60 s, no crash
 #   replay  recorded client sessions replayed against their saved logs: the same, or nondeterministic (it differs
 #           from itself too), else a regression
@@ -24,7 +26,7 @@ for a in "$@"; do
     *) STEPS+=("$a") ;;
   esac
 done
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn soak replay)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn maps soak replay)
 [ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: Scripts/port/build_mac.sh, then Scripts/port/run_mac.sh once"; exit 1; }
 mkdir -p "$OUT"
 trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (each job execs its game: killing it kills the game)
@@ -116,6 +118,35 @@ churn() {
   fi
 }
 
+maps() {
+  local secs=120 p=$((BASE + 204))
+  [ -n "$QUICK" ] && secs=60
+  rm -f "$OUT"/maps_*.log
+  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=4 exec "$BIN" --server --port $p --maps mp1-6p,mp2-6p,downtown-6p --players 6 --timelimit 1 \
+    --arena simple,hunter,soldier > "$OUT/maps_server.log" 2>&1) &
+  sleep 2
+  for b in rammer soldier; do
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=4 GTA2_NET_CHECKGRID=1 exec "$BIN" --connect 127.0.0.1:$p --name m_$b --bot $b \
+      > "$OUT/maps_$b.log" 2>&1) &
+  done
+  sleep $secs
+  kill $(jobs -p) 2>/dev/null
+  wait 2>/dev/null
+  local changes crashes checks followed=1 b
+  changes=$(grep -c "the next map" "$OUT/maps_server.log")
+  crashes=$(grep -l "crashed" "$OUT"/maps_*.log | wc -l | tr -d ' ')
+  checks=$(cat "$OUT"/maps_*.log | grep -c "net: CHECK")
+  for b in rammer soldier; do
+    # every change but perhaps the last, still under way at the end
+    [ $(grep -c "a new game" "$OUT/maps_$b.log") -ge $((changes - 1)) ] || followed=0
+  done
+  if [ "$changes" -lt 3 ] || [ "$crashes" != 0 ] || [ "$checks" != 0 ] || [ $followed = 0 ]; then
+    fail "maps: $changes map changes, clients followed: $followed, $crashes crashed, $checks CHECK lines (build_port/net_check/maps_*.log)"
+  else
+    pass "maps: $changes map changes, both clients followed"
+  fi
+}
+
 soak() {
   local secs=60 p=$((BASE + 202))
   [ -n "$QUICK" ] && secs=30
@@ -195,8 +226,8 @@ replay() {
 
 for s in "${STEPS[@]}"; do
   case $s in
-    arena | live | churn | soak | replay) $s ;;
-    *) echo "no step $s (arena, live, churn, soak, replay)"; FAILED=1 ;;
+    arena | live | churn | maps | soak | replay) $s ;;
+    *) echo "no step $s (arena, live, churn, maps, soak, replay)"; FAILED=1 ;;
   esac
 done
 exit $FAILED
