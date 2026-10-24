@@ -90,7 +90,9 @@ void CountDeath(int i, Player* p, Ped* ped)
 // Weapons and ammo are the server's
 void ApplyWeapons(Player* p, const net::EntityState& e)
 {
-    if (e.f[kPlayerWeapon] >= 1 && e.f[kPlayerWeapon] <= kPlayerWeapons)
+    // Only to a weapon this game has made for the player (a new map's game: not yet, and the HUD reads it,
+    // Hud_PlayerStats::DrawPlayerStats_5D5C80)
+    if (e.f[kPlayerWeapon] >= 1 && e.f[kPlayerWeapon] <= kPlayerWeapons && p->field_718_weapons[e.f[kPlayerWeapon] - 1])
     {
         p->field_788_curr_weapon_idx = (s16)(e.f[kPlayerWeapon] - 1);
     }
