@@ -6,7 +6,8 @@ set -eo pipefail
 cd "$(dirname "$0")/../.."
 OUT=build_port/gl_clang
 mkdir -p $OUT
-INC=$(echo | i686-w64-mingw32-g++ -xc++ -E -v - 2>&1 | sed -n '/#include <...> search starts here:/,/End of search list./p' | grep '^ ' | grep -Ev '/lib/gcc/[^/]+/[^/]+/include(-fixed)?$' | sed 's/^ */-isystem /')
+. Scripts/port/build_common.sh
+INC=$(mingw_includes)
 FL="--target=i686-w64-mingw32 -std=c++11 ${OPT:--O2} -g -w -nostdinc++ -nostdlibinc $INC -fsjlj-exceptions -DGTA2GL_BUILD_DLL"
 R=Renderers/OpenGL
 CORE="$R/core/gl_funcs.cpp $R/core/gl_renderer.cpp $R/core/gl_enhanced.cpp $R/core/vid_system.cpp $R/core/capture.cpp $R/core/options.cpp"
