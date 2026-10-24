@@ -4,7 +4,8 @@
 Headless arena servers (--arena remote:<port>,...) connect to this script; every 3 ticks each sends what its remote
 bots see and the reward since (Port/net/session/arena.cpp) and gets their buttons back. One policy plays all
 learner slots; some matches put earlier versions of it (the pool) in two of them, and the scripted "simple" bot
-always plays the sixth slot as a yardstick. Weapons come from the map's pickups (--armed: pistols for all, a start).
+always plays the sixth slot as a yardstick. At first the policy also learns to press what the scripted bot would
+(kickstarting, --teach), less with each update. Weapons come from the map's pickups (--armed: pistols for all, a start).
 
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py [--updates N] [--envs N] [--spectate K]
   build_port/rlvenv/bin/python Scripts/port/rl_bots.py --watch [file.nn]   a match in a window
@@ -37,6 +38,14 @@ GROUPS = [3, 3, 2, 2, 2, 2]  # bot.hpp's kBotGroupSize: turn, move, attack, ente
 TURN, MOVE, PRESS = [0x4, 0, 0x8], [0x1, 0, 0x2], [0x10, 0x20, 0x40, 0x100]
 RESULT = re.compile(r"net: arena (\d+) (\S+) frags (-?\d+) deaths (\d+) near ([\d.]+) dealt (-?\d+) cars (\d+) pickups (\d+)")
 HIDDEN = 128
+HEAD = 4  # per remote slot before its features: slot, alive, reward, the teacher's buttons (arena.cpp)
+
+
+def choices(b):
+    """The scripted teacher's buttons as a choice per group"""
+    turn = 0 if b & TURN[0] else 2 if b & TURN[2] else 1
+    move = 0 if b & MOVE[0] else 2 if b & MOVE[2] else 1
+    return np.array([turn, move] + [int(bool(b & bit)) for bit in PRESS], dtype=np.int64)
 
 
 def buttons(a):
@@ -61,11 +70,12 @@ class Policy(nn.Module):
             logp = sum(d.log_prob(a[:, g]) for g, d in enumerate(ds))
             return a, logp, self.critic(obs).squeeze(-1)
 
-    def evaluate(self, obs, a):
+    def evaluate(self, obs, a, teacher):
         ds = self.dists(obs)
         logp = sum(d.log_prob(a[:, g]) for g, d in enumerate(ds))
         ent = sum(d.entropy() for d in ds)
-        return logp, ent, self.critic(obs).squeeze(-1)
+        imitation = -sum(d.log_prob(teacher[:, g]) for g, d in enumerate(ds))  # kickstarting: the teacher's choices
+        return logp, ent, imitation, self.critic(obs).squeeze(-1)
 
     def export(self, path, mode="sample"):
         """As the game's nn: brain reads it (Port/net/session/bot_nn.cpp)"""
@@ -123,16 +133,16 @@ def load_opponent(n_in):
     return p
 
 
-def ppo_update(policy, opt, batch, args):
-    obs, act, logp_old, adv, ret = batch
+def ppo_update(policy, opt, batch, args, teach):
+    obs, act, logp_old, adv, ret, teacher = batch
     adv = (adv - adv.mean()) / (adv.std() + 1e-8)
     n = len(obs)
     for _ in range(args.epochs):
         for idx in torch.randperm(n).split(args.minibatch):
-            logp, ent, v = policy.evaluate(obs[idx], act[idx])
+            logp, ent, imitation, v = policy.evaluate(obs[idx], act[idx], teacher[idx])
             ratio = (logp - logp_old[idx]).exp()
             pg = -torch.min(ratio * adv[idx], ratio.clamp(1 - args.clip, 1 + args.clip) * adv[idx]).mean()
-            loss = pg + 0.5 * (v - ret[idx]).pow(2).mean() - args.entropy * ent.mean()
+            loss = pg + 0.5 * (v - ret[idx]).pow(2).mean() - args.entropy * ent.mean() + teach * imitation.mean()
             opt.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
@@ -144,7 +154,7 @@ def gae(traj, bootstrap, gamma, lam):
     """traj: [(obs, act, logp, value, reward, done)]; returns advantages and returns"""
     adv, last = [0.0] * len(traj), 0.0
     for t in reversed(range(len(traj))):
-        _, _, _, v, r, done = traj[t]
+        v, r, done = traj[t][3:6]
         nv = 0.0 if done else (traj[t + 1][3] if t + 1 < len(traj) else bootstrap)
         delta = r + gamma * nv - v
         last = delta + gamma * lam * (0.0 if done else last)
@@ -195,7 +205,7 @@ def train(args):
             m = matches[key]
             try:
                 count, done, n_feat = struct.unpack("3I", read_exact(s, 12))
-                raw = read_exact(s, count * (3 + n_feat) * 4)
+                raw = read_exact(s, count * (HEAD + n_feat) * 4)
             except ConnectionError:
                 count, done, n_feat, raw = 0, 1, 0, b""
             if policy is None and n_feat:
@@ -207,7 +217,7 @@ def train(args):
                     update = state["update"]
                     print("continuing from update %d" % update, flush=True)
                 opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
-            rows = np.frombuffer(raw, dtype=np.float32).reshape(count, 3 + n_feat) if count else np.zeros((0, 3), np.float32)
+            rows = np.frombuffer(raw, dtype=np.float32).reshape(count, HEAD + n_feat) if count else np.zeros((0, HEAD), np.float32)
             if m.opponent is None:
                 slots = [int(r[:1].view(np.uint32)[0]) for r in rows]
                 m.opponent = {sl: None for sl in slots}
@@ -221,17 +231,17 @@ def train(args):
                 k = (key, slot)
                 if m.opponent.get(slot) is not None:
                     if not done:
-                        batch.append((key, slot, r[3:], m.opponent[slot], alive))
+                        batch.append((key, slot, r[HEAD:], m.opponent[slot], alive, None))
                     continue
                 p = pending.get(k)
                 if p is not None:
                     p[4] += reward
                     if done or alive:
-                        trajs.setdefault(k, []).append((p[0], p[1], p[2], p[3], p[4], bool(done)))
+                        trajs.setdefault(k, []).append((p[0], p[1], p[2], p[3], p[4], bool(done), p[5]))
                         stored += 1
                         del pending[k]
                 if not done:
-                    batch.append((key, slot, r[3:], None, alive))
+                    batch.append((key, slot, r[HEAD:], None, alive, choices(int(r[3:4].view(np.uint32)[0]))))
             if done:
                 s.close()
                 del matches[key]
@@ -248,10 +258,10 @@ def train(args):
             obs = np.stack([b[2] for b in rows])
             a, logp, v = (t.numpy() for t in net.act(torch.from_numpy(obs)))
             btn = buttons(a)
-            for i, (key, slot, o, opp, alive) in enumerate(rows):
+            for i, (key, slot, o, opp, alive, teacher) in enumerate(rows):
                 replies.setdefault(key, {})[slot] = int(btn[i]) if alive else 0
                 if opp is None and alive:
-                    pending[(key, slot)] = [obs[i], a[i], float(logp[i]), float(v[i]), 0.0]
+                    pending[(key, slot)] = [obs[i], a[i], float(logp[i]), float(v[i]), 0.0, teacher]
         for key, by_slot in replies.items():
             order = [b[1] for b in batch if b[0] == key]
             try:
@@ -260,7 +270,7 @@ def train(args):
                 pass
         if stored >= args.steps:
             update += 1
-            obs, act, logp, adv, ret = [], [], [], [], []
+            obs, act, logp, adv, ret, teacher = [], [], [], [], [], []
             with torch.no_grad():
                 for k, traj in trajs.items():
                     p = pending.get(k)
@@ -268,12 +278,14 @@ def train(args):
                     a_, r_ = gae(traj, boot, args.gamma, args.lam)
                     obs += [t[0] for t in traj]
                     act += [t[1] for t in traj]
+                    teacher += [t[6] for t in traj]
                     logp += [t[2] for t in traj]
                     adv += a_
                     ret += r_
             batch_t = (torch.from_numpy(np.stack(obs)), torch.from_numpy(np.stack(act)).long(), torch.tensor(logp), torch.tensor(adv, dtype=torch.float32),
-                       torch.tensor(ret, dtype=torch.float32))
-            pg, ent = ppo_update(policy, opt, batch_t, args)
+                       torch.tensor(ret, dtype=torch.float32), torch.from_numpy(np.stack(teacher)))
+            teach = args.teach * max(0.0, 1 - update / args.teach_updates)
+            pg, ent = ppo_update(policy, opt, batch_t, args, teach)
             mean_r = sum(t[4] for tr in trajs.values() for t in tr) / max(1, stored)
             trajs.clear()
             stored = 0
@@ -334,6 +346,8 @@ def main():
     ap.add_argument("--entropy", type=float, default=0.01)
     ap.add_argument("--pool-every", type=int, default=10, help="updates between copies of the policy kept as opponents")
     ap.add_argument("--pool-share", type=float, default=0.5, help="the matches with two pool opponents")
+    ap.add_argument("--teach", type=float, default=1.0, help="the imitation loss's weight at the start (kickstarting from the scripted bot)")
+    ap.add_argument("--teach-updates", type=int, default=150, help="updates until the imitation loss is gone")
     ap.add_argument("--armed", action="store_true", help="pistols kept loaded (a start: fights happen sooner), not only the pickups")
     ap.add_argument("--spectate", type=int, default=0, metavar="K", help="a windowed match of the policy every K updates")
     ap.add_argument("--watch", nargs="?", const=os.path.join(OUT, "latest.nn"), metavar="NN", help="watch a match in a window instead")
