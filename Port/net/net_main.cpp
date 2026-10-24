@@ -5,6 +5,7 @@
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)
 //            [--arena brain,brain,...]  (bots on the server itself in the first slots, e.g. nn:best.nn,simple)
 //            [--ticks N]  (prints the arena's result and ends at tick N: Scripts/port/train_bots.py)
+//            [--seed N]  (the game's random state at the start: another match from the same start)
 //   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple, carhop, rammer, nn:<file>)
 //   either: [--lag ms] [--jitter ms] [--loss percent]  a link conditioner on this end's sends (tests)
 //   --replay <file>  a client session recorded with GTA2_NET_RECORD=<file>, played back without a server
@@ -149,6 +150,10 @@ int NetMain_Init(std::vector<std::string>& args)
                 sc.arena.push_back(args[i + 1].substr(at, end == std::string::npos ? end : end - at));
             }
             i++;
+        }
+        else if (a == "--seed" && more)
+        {
+            sc.seed = (uint32_t)strtoul(args[++i].c_str(), NULL, 10);
         }
         else if (a == "--ticks" && more)
         {

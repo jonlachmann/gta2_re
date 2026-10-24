@@ -175,6 +175,11 @@ void net::engine::SetTickMs(int ms)
     }
 }
 
+void net::engine::SeedRandom(uint32_t seed)
+{
+    PortRandSetState(seed);
+}
+
 // --- Snapshots ---
 
 void net::engine::CapturePed(Ped* p, Car* driving, Snapshot& out)

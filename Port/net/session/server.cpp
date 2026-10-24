@@ -406,6 +406,10 @@ void net::Server::StartGameOnce()
             engine::SetPlayerName((int)i, mSlots[i].name.c_str());
         }
     }
+    if (mConfig.seed)
+    {
+        engine::SeedRandom(mConfig.seed);
+    }
     mStarted = true;
 }
 

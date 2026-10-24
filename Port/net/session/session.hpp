@@ -39,6 +39,7 @@ struct ServerConfig
     int lagMs = 0, jitterMs = 0, lossPercent = 0; // the link conditioner (tests)
     std::vector<std::string> arena; // bot brains playing the first slots on the server itself (--arena)
     uint32_t endTick = 0; // the arena's result printed and the server ended at this tick (--ticks; 0: never)
+    uint32_t seed = 0; // the game's random state at the start (--seed; 0: the game's own)
 };
 
 // The server's own bot players (arena.cpp), slots 0..n-1
