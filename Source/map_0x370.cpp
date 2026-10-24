@@ -4550,7 +4550,7 @@ void Map_0x370::build_zone_list_4E90E0(u32 chunk_size)
         in_use_size += zone_data_size;
         pZone = reinterpret_cast<gmp_map_zone*>(reinterpret_cast<u8*>(pZone) + zone_data_size);
     }
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     field_32C_pZones = static_cast<gmp_zone_list*>(Memory::malloc_4FE4D0(sizeof(gmp_zone_list) + sizeof(gmp_map_zone*) * num_zones)); // 64-bit pointers
 #else
     field_32C_pZones = static_cast<gmp_zone_list*>(Memory::malloc_4FE4D0(4 * num_zones + 4));

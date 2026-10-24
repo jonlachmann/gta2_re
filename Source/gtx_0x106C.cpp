@@ -446,7 +446,7 @@ void gtx_0x106C::SetDeltaDataPtrs_5AABF0()
     s32 size;
     delta_entry* pEntry = static_cast<delta_entry*>(field_50_delta_buffer);
 
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     // Port, 64-bit: the deltas' pointers are 8 bytes; the loop below treats them as 4-byte words
     for (sprite_deltas* d = reinterpret_cast<sprite_deltas*>(field_50_delta_buffer);
          reinterpret_cast<u8*>(d) < reinterpret_cast<u8*>(field_50_delta_buffer) + field_60_delta_len;
@@ -501,7 +501,7 @@ void gtx_0x106C::build_delta_container_5AAC70()
         pIter = reinterpret_cast<sprite_deltas*>(reinterpret_cast<u8*>(pIter) + size);
     }
 
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     field_54_del = static_cast<delta_container*>(Memory::malloc_4FE4D0(sizeof(delta_container) + sizeof(sprite_deltas*) * maxSprite)); // 64-bit pointers
 #else
     field_54_del = static_cast<delta_container*>(Memory::malloc_4FE4D0(4 * maxSprite + 8));
@@ -636,7 +636,7 @@ void gtx_0x106C::load_map_object_info_5AAF00(u32 obji_chunk_len)
 MATCH_FUNC(0x5AAF80)
 void gtx_0x106C::load_sprite_index_5AAF80(u32 sprx_chunk_size)
 {
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     // Port, 64-bit: the file's records are 8 bytes (a 4-byte offset, width, height), the entries hold a pointer
     {
         const u32 count = sprx_chunk_size / 8;

@@ -128,7 +128,7 @@ struct DmapInfoList;
 // The column data is an array of 32-bit words that the map indexes; the decomp types it u16* (4 bytes on the
 // original). The 64-bit port needs 4-byte elements too.
 // (A macro on 32-bit: a new typedef name moves VC6's code in Particle_4C::UpdateCollisionBurst_state_31_34_53BAC0.)
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     #define MapColumnWord u32
 #else
     #define MapColumnWord u16*
@@ -559,7 +559,7 @@ class Map_0x370
                            u32* outBlockBytes,
                            DmapInfoList** outSubObj,
                            s32* outSubObjBytes);
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     // Port, 64-bit: a caller passes size_t counts, which are no longer u32
     void GetModifiedMapData_4E8CF0(MapColumnWord** outColumnPtr, size_t* outColumnBytes, gmp_block_info** outBlockPtr, size_t* outBlockBytes,
                                    DmapInfoList** outSubObj, s32* outSubObjBytes)

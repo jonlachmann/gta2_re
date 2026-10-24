@@ -183,7 +183,7 @@ struct sprite_deltas
 
 // The size of a sprite_deltas with n deltas: 8 * n + 4 in the original (4-byte pointers); the 64-bit port's
 // deltas hold 8-byte pointers (docs/port.md)
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     #define GTX_DELTAS_SIZE(n) ((u32)(sizeof(sprite_deltas) - sizeof(sprite_delta) + sizeof(sprite_delta) * (n)))
 #else
     #define GTX_DELTAS_SIZE(n) (8 * (n) + 4)
