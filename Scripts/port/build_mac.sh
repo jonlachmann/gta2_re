@@ -11,7 +11,7 @@ COMMON="${OPT:--O2} -g -w -I$BREW/include -DGL_SILENCE_DEPRECATION"
 # Game: the same flags as the Windows build (docs/port.md), plus the Windows names from Port/compat
 CXXFLAGS="$COMMON -fshort-wchar -std=c++17 -fms-extensions -Wno-address-of-temporary -fno-strict-aliasing -fwrapv
   -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fno-strict-return -IPort/compat -include Port/compat/port_linux.h
-  -ISource -I. -IPort/net/enet/include -D_CRT_SECURE_NO_WARNINGS -D_USE_32BIT_TIME_T -DGTA2_PORT -DNDEBUG -DBUILD_MSS -DSTATELOG_IN_PORT $*"
+  -ISource -I. -IPort/net/enet/include -D_CRT_SECURE_NO_WARNINGS -D_USE_32BIT_TIME_T -DGTA2_PORT -DNDEBUG -DBUILD_MSS $*"
 RENFLAGS="$COMMON -std=c++11"
 . Scripts/port/build_common.sh
 ENETCC="clang ${OPT:--O2} -g -w -IPort/net/enet/include $ENET_DEFS"

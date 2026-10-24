@@ -13,17 +13,23 @@
 //                                     (Scripts/port/layout.py writes it from the port's DWARF)
 //   GTA2_STATELOG_DUMP=<a>-<b>:<n>,.. full bytes of those entries (names, *name for pointees) at game frames a..b
 //   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
-//                                     a..b, to <log>.trace:
+//                                     a..b, caught with int3 breakpoints, so the same in 10.5.exe and in the port
+//                                     (Scripts/port/state_check.py, TRACE=), to <log>.trace:
 //                                     C <game frame> <label> <ecx> <6 stack dwords> at the entry and
 //                                     R <game frame> <label> <eax> <dword at eax> at the return; both end in ^<esp>.
-//   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords> int3 breakpoints, so the
-//                                     same in 10.5.exe and in the port (Scripts/port/state_check.py, TRACE=)
+//   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords>
+//   GTA2_STATELOG_IGNORE=<a>|<b>|..   entries whose name contains one of these (state_diff.py's IGNORE) are no
+//                                     pointer targets: what points into them would only be compared by chance
 //
 // Pointer fields (marked p in GTA2_STATELOG_MASK) are hashed as what they point into: (entry, offset) when that is
 // one of the logged entries, else nothing, so a pointer to the wrong object shows up. Other values that look like
 // pointers (0x00400000..0x7FFEFFFF, per aligned dword) are left out: they differ between the processes, and
 // positions (Fix16 up to 0x3FC000), counters and flags are below that range.
+//
+// 32-bit builds only: the log compares 4-byte words and pointers with 10.5.exe's. In the 64-bit macOS build the two
+// calls do nothing.
 #include "state_log.hpp"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +43,19 @@
     #include <windows.h>
 #endif
 
+#if UINTPTR_MAX > 0xFFFFFFFFu
+void StateLog_Init()
+{
+    if (getenv("GTA2_STATELOG"))
+    {
+        fprintf(stderr, "GTA2_STATELOG: 32-bit builds only\n");
+    }
+}
+
+void StateLog_Frame(unsigned)
+{
+}
+#else
 namespace
 {
 struct Entry
@@ -62,6 +81,38 @@ std::vector<std::string> gDumpNames;
 bool LooksLikePointer(unsigned v)
 {
     return v >= 0x00400000u && v <= 0x7FFEFFFFu;
+}
+
+// The parts of a list: "a,b," is "a", "b" and ""
+std::vector<std::string> Split(const std::string& list, char sep)
+{
+    std::vector<std::string> parts;
+    for (size_t start = 0;;)
+    {
+        const size_t end = list.find(sep, start);
+        parts.push_back(list.substr(start, end == std::string::npos ? std::string::npos : end - start));
+        if (end == std::string::npos)
+        {
+            return parts;
+        }
+        start = end + 1;
+    }
+}
+
+// The game frame log_random prints (the first field of gpRng_67AB34's rng); false before a game has started
+bool GameFrame(int* pFrame)
+{
+    const unsigned char* rng = 0;
+    if (gFrameGlobal)
+    {
+        memcpy(&rng, gFrameGlobal, sizeof(rng));
+    }
+    if (!rng)
+    {
+        return false;
+    }
+    memcpy(pFrame, rng, sizeof(*pFrame));
+    return true;
 }
 
 // Where the entries are this frame, sorted by address: a pointer into one of them is hashed as (entry, offset), the
@@ -93,7 +144,7 @@ unsigned Canonical(unsigned v)
 }
 
 const unsigned char kPointerMask = 0x7F; // mask bytes of a pointer field (layout.py knows the types)
-
+const unsigned kPointerWord = kPointerMask * 0x01010101u; // a whole pointer field
 unsigned Hash(const unsigned char* p, const unsigned char* mask, unsigned size)
 {
     unsigned h = 2166136261u; // FNV-1a
@@ -107,7 +158,7 @@ unsigned Hash(const unsigned char* p, const unsigned char* mask, unsigned size)
         {
             memcpy(&m, mask + i, 4);
         }
-        if (m == 0x7F7F7F7Fu) // a pointer field: what it points to
+        if (m == kPointerWord) // a pointer field: what it points to
         {
             v = LooksLikePointer(v) ? Canonical(v) : v;
         }
@@ -208,17 +259,19 @@ void ParseDump()
     {
         return;
     }
-    std::string names = colon + 1;
-    size_t start = 0;
-    while (start <= names.size())
+    gDumpNames = Split(colon + 1, ',');
+}
+
+void ParseIgnore()
+{
+    const char* ig = getenv("GTA2_STATELOG_IGNORE");
+    const std::vector<std::string> parts = Split(ig ? ig : "", '|');
+    for (size_t p = 0; p < parts.size(); p++)
     {
-        size_t comma = names.find(',', start);
-        gDumpNames.push_back(names.substr(start, comma == std::string::npos ? std::string::npos : comma - start));
-        if (comma == std::string::npos)
+        for (size_t i = 0; !parts[p].empty() && i < gEntries.size(); i++)
         {
-            break;
+            gEntries[i].ignored |= gEntries[i].name.find(parts[p]) != std::string::npos;
         }
-        start = comma + 1;
     }
 }
 #if defined(_WIN32)
@@ -240,19 +293,10 @@ int gTraceFrom, gTraceTo;
 unsigned gTraceThis;
 bool gArmed; // the entry breakpoints are in only for the traced frames: each hit costs four exceptions
 
-int Frame()
+// Whether this is one of the traced game frames, and which
+bool InTrace(int* pFrame)
 {
-    const unsigned char* rng = 0;
-    int frame = -1;
-    if (gFrameGlobal)
-    {
-        memcpy(&rng, gFrameGlobal, sizeof(rng));
-    }
-    if (rng)
-    {
-        memcpy(&frame, rng, sizeof(frame));
-    }
-    return frame;
+    return GameFrame(pFrame) && *pFrame >= gTraceFrom && *pFrame <= gTraceTo;
 }
 
 void Poke(unsigned char* p, unsigned char v)
@@ -276,6 +320,64 @@ Breakpoint* Find(unsigned char* p, bool ret)
     return 0;
 }
 
+// Every call that returns at ret's address and whose frame is gone (more than one after a tail call), innermost first
+void LogReturns(Breakpoint* ret, const CONTEXT* c)
+{
+    while (ret->returns > 0 && ret->pendingEsp.back() < c->Esp)
+    {
+        int frame;
+        if (InTrace(&frame))
+        {
+            // and what eax points to: VC6 returns a class through a hidden pointer, which it returns in eax
+            const unsigned* p = (const unsigned*)(size_t)c->Eax;
+            const unsigned deref = p && !IsBadReadPtr(p, 4) ? *p : 0;
+            fprintf(gTrace, "R %d %s %08lx %08x ^%08lx\n", frame, ret->pending.back().c_str(), (unsigned long)c->Eax, deref,
+                    (unsigned long)c->Esp);
+        }
+        ret->pending.pop_back();
+        ret->pendingEsp.pop_back();
+        ret->returns--;
+    }
+}
+
+// A call of entry's function: logged, and counted at its return address, which gets a return breakpoint
+void LogCall(unsigned char* at, const CONTEXT* c)
+{
+    const unsigned* sp = (const unsigned*)c->Esp;
+    const Breakpoint* entry = Find(at, false);
+    int frame;
+    if (InTrace(&frame))
+    {
+        fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x %08x %08x ^%08lx", frame, entry->label.c_str(), (unsigned long)c->Ecx,
+                sp[1], sp[2], sp[3], sp[4], sp[5], sp[6], (unsigned long)c->Esp);
+        const unsigned* self = (const unsigned*)(size_t)c->Ecx;
+        if (gTraceThis && self && !IsBadReadPtr(self, gTraceThis))
+        {
+            fputs(" |", gTrace);
+            for (unsigned i = 0; i < gTraceThis / 4; i++)
+            {
+                fprintf(gTrace, " %08x", self[i]);
+            }
+        }
+        fputc('\n', gTrace);
+    }
+    unsigned char* back = (unsigned char*)(size_t)sp[0];
+    Breakpoint* b = Find(back, true);
+    if (!b)
+    {
+        Breakpoint nb = {back, *back, std::string(), 0, std::vector<std::string>(), std::vector<unsigned>()};
+        gBreakpoints.push_back(nb);
+        b = &gBreakpoints.back();
+        entry = Find(at, false); // push_back may have moved it
+    }
+    if (b->returns++ == 0)
+    {
+        Poke(back, 0xCC);
+    }
+    b->pending.push_back(entry->label);
+    b->pendingEsp.push_back(c->Esp); // the return pops past it
+}
+
 LONG CALLBACK OnException(EXCEPTION_POINTERS* ep)
 {
     CONTEXT* c = ep->ContextRecord;
@@ -291,66 +393,22 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* ep)
         return EXCEPTION_CONTINUE_SEARCH;
     }
     unsigned char* at = (unsigned char*)ep->ExceptionRecord->ExceptionAddress;
-    Breakpoint* ret = Find(at, true);
-    // Every call that returns here and whose frame is gone (more than one after a tail call), innermost first
-    while (ret && ret->returns > 0 && ret->pendingEsp.back() < c->Esp)
+    if (Breakpoint* ret = Find(at, true))
     {
-        const int frame = Frame();
-        if (frame >= gTraceFrom && frame <= gTraceTo)
-        {
-            // and what eax points to: VC6 returns a class through a hidden pointer, which it returns in eax
-            const unsigned* p = (const unsigned*)(size_t)c->Eax;
-            const unsigned deref = p && !IsBadReadPtr(p, 4) ? *p : 0;
-            fprintf(gTrace, "R %d %s %08lx %08x ^%08lx\n", frame, ret->pending.back().c_str(), (unsigned long)c->Eax, deref,
-                    (unsigned long)c->Esp);
-        }
-        ret->pending.pop_back();
-        ret->pendingEsp.pop_back();
-        ret->returns--;
+        LogReturns(ret, c);
     }
-    Breakpoint* entry = Find(at, false);
+    if (Find(at, false))
+    {
+        LogCall(at, c); // may move the breakpoints
+    }
+    const Breakpoint* entry = Find(at, false);
+    const Breakpoint* ret = Find(at, true);
     if (!entry && !ret)
     {
         return EXCEPTION_CONTINUE_SEARCH;
     }
-    if (entry)
-    {
-        const unsigned* sp = (const unsigned*)c->Esp;
-        const int frame = Frame();
-        if (frame >= gTraceFrom && frame <= gTraceTo)
-        {
-            fprintf(gTrace, "C %d %s %08lx %08x %08x %08x %08x %08x %08x ^%08lx", frame, entry->label.c_str(), (unsigned long)c->Ecx,
-                    sp[1], sp[2], sp[3], sp[4], sp[5], sp[6], (unsigned long)c->Esp);
-            const unsigned* self = (const unsigned*)(size_t)c->Ecx;
-            if (gTraceThis && self && !IsBadReadPtr(self, gTraceThis))
-            {
-                fputs(" |", gTrace);
-                for (unsigned i = 0; i < gTraceThis / 4; i++)
-                {
-                    fprintf(gTrace, " %08x", self[i]);
-                }
-            }
-            fputc('\n', gTrace);
-        }
-        unsigned char* back = (unsigned char*)(size_t)sp[0];
-        Breakpoint* b = Find(back, true);
-        if (!b)
-        {
-            Breakpoint nb = {back, *back, std::string(), 0, std::vector<std::string>(), std::vector<unsigned>()};
-            gBreakpoints.push_back(nb);
-            b = &gBreakpoints.back();
-            entry = Find(at, false); // push_back may have moved it
-            ret = Find(at, true);
-        }
-        if (b->returns++ == 0)
-        {
-            Poke(back, 0xCC);
-        }
-        b->pending.push_back(entry->label);
-        b->pendingEsp.push_back(c->Esp); // the return pops past it
-    }
     // Run the original instruction once, then arm this address again if anything still wants it
-    const bool keep = entry || (ret && ret->returns > 0);
+    const bool keep = entry || ret->returns > 0;
     Poke(at, entry ? entry->orig : ret->orig);
     c->Eip = (DWORD)(size_t)at;
     if (keep)
@@ -373,25 +431,21 @@ void ParseTrace(const std::string& path)
     const char* self = getenv("GTA2_STATELOG_TRACE_THIS");
     gTraceThis = self ? (unsigned)atoi(self) & ~3u : 0;
     gTrace = fopen((path + ".trace").c_str(), "w");
-    setvbuf(gTrace, 0, _IONBF, 0); // unbuffered: a crash keeps the trace up to it
-    std::string list = t;
-    size_t start = 0;
-    while (start < list.size())
+    if (!gTrace)
     {
-        size_t comma = list.find(',', start);
-        std::string item = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
-        size_t eq = item.find('=');
+        return;
+    }
+    setvbuf(gTrace, 0, _IONBF, 0); // unbuffered: a crash keeps the trace up to it
+    const std::vector<std::string> items = Split(t, ',');
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        const size_t eq = items[i].find('=');
         if (eq != std::string::npos)
         {
-            unsigned char* p = (unsigned char*)(size_t)strtoul(item.c_str() + eq + 1, 0, 16);
-            Breakpoint b = {p, *p, item.substr(0, eq), 0, std::vector<std::string>(), std::vector<unsigned>()};
+            unsigned char* p = (unsigned char*)(size_t)strtoul(items[i].c_str() + eq + 1, 0, 16);
+            Breakpoint b = {p, *p, items[i].substr(0, eq), 0, std::vector<std::string>(), std::vector<unsigned>()};
             gBreakpoints.push_back(b);
         }
-        if (comma == std::string::npos)
-        {
-            break;
-        }
-        start = comma + 1;
     }
     gBreakpoints.reserve(gBreakpoints.size() + 4096); // ponytail: return breakpoints beyond that move the entries, Find() copes
     AddVectoredExceptionHandler(1, OnException);
@@ -415,20 +469,15 @@ void ArmTrace(int frame)
     }
 }
 #endif
-} // namespace
 
-void StateLog_Init()
+// The entries: in the port its registry, written out as <path>.globals; in 10.5.exe (nullvideo.dll) that list, at the
+// original addresses. False when there is no list.
+bool LoadEntries(const char* path)
 {
-    const char* path = getenv("GTA2_STATELOG");
-    if (!path || gLog)
-    {
-        return;
-    }
 #if defined(STATELOG_IN_PORT)
     size_t count = 0;
     const PortGlobal* const* globals = PortGlobals(&count);
-    std::string tablePath = std::string(path) + ".globals";
-    FILE* table = fopen(tablePath.c_str(), "w");
+    FILE* table = fopen((std::string(path) + ".globals").c_str(), "w");
     for (size_t i = 0; i < count; i++)
     {
         const PortGlobal& g = *globals[i];
@@ -442,13 +491,13 @@ void StateLog_Init()
     {
         fclose(table);
     }
+    return true;
 #else
-    // Inside 10.5.exe: the port's list, at the original addresses
     const char* tablePath = getenv("GTA2_STATELOG_TABLE");
     FILE* table = tablePath ? fopen(tablePath, "r") : 0;
     if (!table)
     {
-        return;
+        return false;
     }
     char line[512];
     while (fgets(line, sizeof(line), table))
@@ -461,51 +510,13 @@ void StateLog_Init()
         }
     }
     fclose(table);
+    return true;
 #endif
-    gLog = fopen(path, "w");
-    // GTA2_STATELOG_IGNORE=a|b|..: entries whose name contains one of these (state_diff.py's IGNORE) are no
-    // pointer targets: what points into them would only be compared by chance
-    if (const char* ig = getenv("GTA2_STATELOG_IGNORE"))
-    {
-        std::string list = std::string(ig) + "|";
-        for (size_t start = 0, bar; (bar = list.find('|', start)) != std::string::npos; start = bar + 1)
-        {
-            const std::string part = list.substr(start, bar - start);
-            for (size_t i = 0; !part.empty() && i < gEntries.size(); i++)
-            {
-                gEntries[i].ignored |= gEntries[i].name.find(part) != std::string::npos;
-            }
-        }
-    }
-    ParseMask();
-    ParseDump();
-#if defined(_WIN32)
-    ParseTrace(path);
-#endif
-    if (!gDumpNames.empty())
-    {
-        gDump = fopen((std::string(path) + ".dump").c_str(), "w");
-    }
 }
 
-void StateLog_Frame(unsigned flip)
+// Where the entries are this frame (gRanges, sorted), for Canonical
+void CollectRanges()
 {
-    if (!gLog)
-    {
-        return;
-    }
-    const unsigned char* rng = 0;
-    if (gFrameGlobal)
-    {
-        memcpy(&rng, gFrameGlobal, sizeof(rng));
-    }
-    if (!rng)
-    {
-        return; // not in a game yet
-    }
-    int frame;
-    memcpy(&frame, rng, sizeof(frame));
-    fprintf(gLog, "F %u %d", flip, frame);
     gRanges.clear();
     for (size_t i = 0; i < gEntries.size(); i++)
     {
@@ -517,6 +528,12 @@ void StateLog_Frame(unsigned flip)
         }
     }
     std::sort(gRanges.begin(), gRanges.end());
+}
+
+// The frame's line: the hash of every chunk that changed since the last one
+void WriteHashes(unsigned flip, int frame)
+{
+    fprintf(gLog, "F %u %d", flip, frame);
     size_t chunk = 0;
     for (size_t i = 0; i < gEntries.size(); i++)
     {
@@ -539,6 +556,69 @@ void StateLog_Frame(unsigned flip)
     }
     fputc('\n', gLog);
     fflush(gLog);
+}
+
+// GTA2_STATELOG_DUMP's entries in full, with where their pointers point: @<entry>+<offset>
+void WriteDump(int frame)
+{
+    for (size_t i = 0; i < gEntries.size(); i++)
+    {
+        const Entry& e = gEntries[i];
+        for (size_t n = 0; n < gDumpNames.size(); n++)
+        {
+            const unsigned char* p = gDumpNames[n] == e.name ? Target(e) : 0;
+            if (!p)
+            {
+                continue;
+            }
+            fprintf(gDump, "D %d %s", frame, e.name.c_str());
+            for (unsigned b = 0; b < e.size; b += 4)
+            {
+                unsigned v = 0;
+                memcpy(&v, p + b, e.size - b < 4 ? e.size - b : 4);
+                fprintf(gDump, " %08x", v);
+                const unsigned c = LooksLikePointer(v) ? Canonical(v) : 0xFFFFFFFFu;
+                if (c != 0xFFFFFFFFu)
+                {
+                    fprintf(gDump, "@%s+%x", gEntries[c >> 20].name.c_str(), c & 0xFFFFFu);
+                }
+            }
+            fputc('\n', gDump);
+        }
+    }
+    fflush(gDump);
+}
+} // namespace
+
+void StateLog_Init()
+{
+    const char* path = getenv("GTA2_STATELOG");
+    if (!path || gLog || !LoadEntries(path))
+    {
+        return;
+    }
+    gLog = fopen(path, "w");
+    ParseIgnore();
+    ParseMask();
+    ParseDump();
+#if defined(_WIN32)
+    ParseTrace(path);
+#endif
+    if (!gDumpNames.empty())
+    {
+        gDump = fopen((std::string(path) + ".dump").c_str(), "w");
+    }
+}
+
+void StateLog_Frame(unsigned flip)
+{
+    int frame;
+    if (!gLog || !GameFrame(&frame))
+    {
+        return; // no log, or not in a game yet
+    }
+    CollectRanges();
+    WriteHashes(flip, frame);
 #if defined(_WIN32)
     if (gTrace)
     {
@@ -546,33 +626,9 @@ void StateLog_Frame(unsigned flip)
         ArmTrace(frame);
     }
 #endif
-
     if (gDump && frame >= gDumpFrom && frame <= gDumpTo)
     {
-        for (size_t i = 0; i < gEntries.size(); i++)
-        {
-            const Entry& e = gEntries[i];
-            for (size_t n = 0; n < gDumpNames.size(); n++)
-            {
-                const unsigned char* p = gDumpNames[n] == e.name ? Target(e) : 0;
-                if (p)
-                {
-                    fprintf(gDump, "D %d %s", frame, e.name.c_str());
-                    for (unsigned b = 0; b < e.size; b += 4)
-                    {
-                        unsigned v = 0;
-                        memcpy(&v, p + b, e.size - b < 4 ? e.size - b : 4);
-                        fprintf(gDump, " %08x", v);
-                        const unsigned c = LooksLikePointer(v) ? Canonical(v) : 0xFFFFFFFFu;
-                        if (c != 0xFFFFFFFFu) // where it points: @<entry>+<offset>
-                        {
-                            fprintf(gDump, "@%s+%x", gEntries[c >> 20].name.c_str(), c & 0xFFFFFu);
-                        }
-                    }
-                    fputc('\n', gDump);
-                }
-            }
-        }
-        fflush(gDump);
+        WriteDump(frame);
     }
 }
+#endif
