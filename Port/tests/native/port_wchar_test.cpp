@@ -1,5 +1,4 @@
-// Port/port_wchar.cpp check. Runs natively (no Windows needed):
-//   clang++ -fshort-wchar -std=c++17 -IPort Port/tests/native/port_wchar_test.cpp Port/port_wchar.cpp && ./a.out
+// Port/port_wchar.cpp check. Runs natively (no Windows needed): Scripts/port/native_tests.sh
 #include "compat/port_wchar.h"
 #include <stdio.h>
 #include "../check.h"

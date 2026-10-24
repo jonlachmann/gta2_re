@@ -253,7 +253,8 @@ behaviour tied to the decomp (and the replays of M2 meaningful). Each step was c
 | Sound | `Port/miles_sdl.cpp`, `Source/3rdParty/mss.h` | The 52 `AIL_*` functions `cSampleManager.cpp` calls, as a software mixer in an SDL3 audio callback, plus WAV streams via `SDL_LoadWAV`. No 3D provider, so the game uses its 2D path. |
 
 Tests: `Port/tests/*_test.cpp` (the ini parser, the mixer), built by `build.sh` into `build_port/*.exe`
-and run under wine. Scripted input for checks without a person: `GTA2_PORT_KEYS=<ms>:<dik>:<1|0>,...`.
+and run under wine; `Port/tests/native/` (wide strings, the POSIX file layer) build and run on the host with
+`Scripts/port/native_tests.sh`. Scripted input for checks without a person: `GTA2_PORT_KEYS=<ms>:<dik>:<1|0>,...`.
 Sound without speakers: `SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=sdlaudio.raw` writes the mix
 (float stereo, 44.1 kHz) to the game folder.
 
