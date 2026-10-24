@@ -16,6 +16,7 @@ const net::SessionEnv& net::Env()
         e.navDump = getenv("GTA2_NET_NAVDUMP");
         e.testKill = getenv("GTA2_NET_TESTKILL");
         e.testArm = getenv("GTA2_NET_TESTARM");
+        e.testPowerUp = getenv("GTA2_NET_TESTPOWERUP");
         return e;
     }();
     return sEnv;

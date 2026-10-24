@@ -511,6 +511,15 @@ void net::engine::DebugKill(int victim, int killer)
     }
 }
 
+void net::engine::DebugPowerUp(int player, int powerUp)
+{
+    Player* p = GetPlayer(player);
+    if (p && p->field_2C4_player_ped && powerUp >= 0 && powerUp < kPowerUps)
+    {
+        p->CollectPowerUp_564D60(powerUp);
+    }
+}
+
 void net::engine::DebugArm(int player, int weapon, int ammo)
 {
     Player* p = GetPlayer(player);

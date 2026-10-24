@@ -446,6 +446,17 @@ void net::Server::RunTestHooks()
             engine::DebugKill(k.victim, k.killer);
         }
     }
+    // GTA2_NET_TESTPOWERUP=<tick>:<player>:<power-up>[,...] gives players power-ups (12: an instant gang)
+    for (const char* k = Env().testPowerUp; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
+    {
+        unsigned tick = 0;
+        int player = 0, powerUp = 0;
+        if (sscanf(k, "%u:%d:%d", &tick, &player, &powerUp) == 3 && tick == mTick)
+        {
+            printf("net: test power-up %d for player %d at tick %u\n", powerUp, player, mTick);
+            engine::DebugPowerUp(player, powerUp);
+        }
+    }
     // GTA2_NET_TESTARM=<weapon>:<ammo> keeps every player armed (weapon_type, 0 pistol, 1 smg, ...)
     if (const char* arm = Env().testArm)
     {
