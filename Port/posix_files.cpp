@@ -59,8 +59,7 @@ std::string Resolve(const char* path)
         const std::string part = in.substr(start, end - start);
         if (!part.empty() && part != ".")
         {
-            const std::string dir = out == "/" ? "/" : out;
-            const std::string matched = part == ".." ? part : MatchCase(dir == "/" ? "/" : dir, part);
+            const std::string matched = part == ".." ? part : MatchCase(out, part);
             out += (out.empty() || out == "/") ? matched : "/" + matched;
         }
         start = end + 1;
