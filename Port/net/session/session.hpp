@@ -266,6 +266,8 @@ class Client
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
     BotView mBotView;
     uint32_t mLastInput = ~0u; // for the input log
+    int mMarks = 0; // F12 presses (ChooseInput)
+    uint32_t mMarkFrame = 0;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;
     Stats mStats;

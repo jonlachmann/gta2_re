@@ -3,6 +3,11 @@
 // Little-endian 32-bit numbers throughout.
 #include "replay.hpp"
 #include <string.h>
+#if defined(_WIN32)
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
 
 namespace
 {
@@ -26,6 +31,32 @@ bool Get(FILE* f, uint32_t* v)
     return true;
 }
 } // namespace
+
+std::string net::NextRecordingPath()
+{
+#if defined(_WIN32)
+    _mkdir("recordings");
+#else
+    mkdir("recordings", 0755);
+#endif
+    unsigned next = 0;
+    if (FILE* f = fopen("recordings/next", "r"))
+    {
+        if (fscanf(f, "%u", &next) != 1)
+        {
+            next = 0;
+        }
+        fclose(f);
+    }
+    if (FILE* f = fopen("recordings/next", "w"))
+    {
+        fprintf(f, "%u\n", next + 1);
+        fclose(f);
+    }
+    char path[64];
+    snprintf(path, sizeof(path), "recordings/session-%u.rec", next % 10);
+    return path;
+}
 
 net::ClientRecorder::~ClientRecorder()
 {

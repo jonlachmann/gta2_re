@@ -113,13 +113,20 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
         return false;
     }
     Welcomed(welcome, pGame);
-    if (const char* path = Env().record)
+    // GTA2_NET_RECORD=<file>, or off; a person's session is recorded anyway, a bot's only when asked
+    const char* record = Env().record;
+    const std::string path = record ? (strcmp(record, "off") ? record : "") : mConfig.bot.empty() ? NextRecordingPath() : "";
+    if (!path.empty())
     {
         mRecorder.reset(new ClientRecorder());
-        if (!mRecorder->Open(path, welcome))
+        if (!mRecorder->Open(path.c_str(), welcome))
         {
-            printf("net: can't record to %s\n", path);
+            printf("net: can't record to %s\n", path.c_str());
             mRecorder.reset();
+        }
+        else
+        {
+            printf("net: recording to %s (F12 marks a moment)\n", path.c_str());
         }
     }
     printf("net: joined %s:%u as player %d of %d, %s\n", config.host.c_str(), config.port, mSlot, welcome.players, welcome.scr.c_str());
@@ -393,6 +400,17 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
         local = mBot ? mBot->Think(mBotView) : 0;
     }
     local &= 0x3FFFFF;
+    // F12 (a key the game doesn't use, here as its DirectInput code and key-down bit: Source/input_bits.hpp) marks
+    // the moment, in play and in its replay alike
+    const uint32_t kKeyDown = 0x200000, kMarkKey = 0x58; // DIK_F12
+    if ((local & kKeyDown) && ((local >> 12) & 0x1FF) == kMarkKey)
+    {
+        if (mFrame != mMarkFrame + 1) // held: one mark
+        {
+            printf("net: mark %d at frame %u, tick %u\n", ++mMarks, mFrame, mTick);
+        }
+        mMarkFrame = mFrame;
+    }
     if (Env().inputLog && local != mLastInput)
     {
         printf("net: frame %u, input 0x%x\n", mFrame, local);
