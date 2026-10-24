@@ -171,6 +171,7 @@ void ProtectPlayers();
 // Cars (cars.cpp, car_ai.cpp)
 void CarPhysicsFields(std::vector<FieldDesc>& out);
 void CaptureCar(Car* c, Snapshot& out);
+bool CarHasPhysics(const EntityState& e); // a car entity's physics is there (awake): not all zeros
 void SetCarPhysics(Car* car, const EntityState& e); // the physics the snapshot has for it, after MoveCar
 // Whether it has exploded (or is burning out); its state as the server has it: an explosion the server had is carried
 // out (the game's own), damage, dents, lights, horn and colour are set. False: it is a wreck here and not there (it has

@@ -40,11 +40,12 @@ const size_t kPhysicsCount = sizeof(kPhysics) / sizeof(kPhysics[0]);
 const int kCp1X = net::engine::MemberIndex(kPhysics, kPhysicsCount, offsetof(CarPhysics, field_38_cp1.x));
 static_assert(net::engine::kCarPhysics + sizeof(kPhysics) / sizeof(kPhysics[0]) <= net::kMaxFields, "a car's fields");
 
-bool HasPhysics(const net::EntityState& e)
-{
-    return e.f[net::engine::kCarPhysics + kCp1X] != 0;
-}
 } // namespace
+
+bool net::engine::CarHasPhysics(const EntityState& e)
+{
+    return e.f[kCarPhysics + kCp1X] != 0;
+}
 
 int net::engine::gExplosionsCarried, net::engine::gWrecksReplaced;
 
@@ -105,19 +106,27 @@ void net::engine::MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16&
 
 void net::engine::SetCarPhysics(Car* car, const EntityState& e)
 {
+    if (!CarHasPhysics(e))
+    {
+        return; // asleep on the server: this game's goes on (or stays asleep)
+    }
+    // Awake there, asleep here (a car without a driver here, settled, gave its physics back: Car::ServicePhysics_442190):
+    // woken as the game wakes a car that is hit (Car::SetupCarPhysicsAndSpriteBinding_43BCA0), else it isn't
+    // simulated between snapshots, only moved by each one (the comparison check: a third of the cars)
+    if (!car->field_58_physics)
+    {
+        car->SetupCarPhysicsAndSpriteBinding_43BCA0();
+    }
     if (CarPhysics* m = car->field_58_physics)
     {
-        if (HasPhysics(e)) // none on the server: this game's goes on
-        {
-            ApplyMembers(m, kPhysics, kPhysicsCount, e, kCarPhysics);
-        }
+        ApplyMembers(m, kPhysics, kPhysicsCount, e, kCarPhysics);
     }
 }
 
 void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
 {
     const CarPhysics* m = car ? car->field_58_physics : NULL;
-    if (!Debug().carDiff || !m || !HasPhysics(e))
+    if (!Debug().carDiff || !m || !CarHasPhysics(e))
     {
         return;
     }

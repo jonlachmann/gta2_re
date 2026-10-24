@@ -577,6 +577,7 @@ struct FieldTally
 };
 std::vector<std::vector<FieldTally>> gTally; // [type][field]
 uint64_t gMissing[8]; // per type: in the snapshot, mapped, but not captured here
+uint64_t gAsleepHere, gAsleepThere; // cars with physics on one side only (asleep on the other)
 
 // A car reference of this game's (CarRef) as the server's
 int32_t ServerCarRef(int32_t ref, const std::unordered_map<int32_t, int32_t>& toServer)
@@ -637,6 +638,10 @@ void net::engine::ComparePrediction(const Snapshot& snap)
             continue;
         }
         EntityState h = *it->second;
+        if (s.type == kEntityCar && CarHasPhysics(h) != CarHasPhysics(s))
+        {
+            (CarHasPhysics(s) ? gAsleepHere : gAsleepThere)++;
+        }
         // References to cars: this game's ids into the server's
         if (s.type == kEntityPlayer)
         {
@@ -689,7 +694,9 @@ void net::engine::PrintPredictionStats(uint32_t frame)
     {
         printf("%s %s", i ? ";" : "", rows[i].line.c_str());
     }
-    printf("%s; not captured here: %llu cars, %llu peds\n", rows.empty() ? " none" : "", (unsigned long long)gMissing[kEntityCar], (unsigned long long)gMissing[kEntityPed]);
+    printf("%s; not captured here: %llu cars, %llu peds; car physics asleep here only %llu, there only %llu\n", rows.empty() ? " none" : "",
+           (unsigned long long)gMissing[kEntityCar], (unsigned long long)gMissing[kEntityPed], (unsigned long long)gAsleepHere, (unsigned long long)gAsleepThere);
     gTally.clear();
     memset(gMissing, 0, sizeof(gMissing));
+    gAsleepHere = gAsleepThere = 0;
 }
