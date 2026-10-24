@@ -385,7 +385,7 @@ void Game::ShowDebugOverlay_4B9270()
     }
 }
 
-#if GTA2_PORT
+#if defined(GTA2_PORT)
 extern void (*gPortDrawOverlay)(); // Port/net/net_main.cpp: NULL unless a debug overlay is on
 #endif
 
@@ -420,7 +420,7 @@ void Game::Draw_4B92D0()
         gMike_A80_6F7328->DebugDrawProfiling_4FF250();
     }
 
-#if GTA2_PORT
+#if defined(GTA2_PORT)
     if (gPortDrawOverlay)
     {
         gPortDrawOverlay(); // debug markers over the frame (Port/net: GTA2_NET_MARKER)
