@@ -184,3 +184,8 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         }
     }
 }
+
+int net::engine::PickupModel(const EntityState& e)
+{
+    return e.type == kEntityObject ? e.f[kObjModel] : 0;
+}

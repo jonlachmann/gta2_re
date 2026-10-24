@@ -95,6 +95,8 @@ int PlayerDeaths(const EntityState& e);
 uint32_t PlayerCarId(const EntityState& e); // the NetId of the car it drives, 0 on foot
 int PlayerWeapon(const EntityState& e); // its weapon in hand (Player::field_788_curr_weapon_idx), -1: none
 int PlayerAmmo(const EntityState& e, int weapon); // 0..14 on foot, 15..27 a car's
+// A pickup entity's Object::field_18_model (objects:: in Source/enums.hpp: 200..227 weapons, 228.. power-ups)
+int PickupModel(const EntityState& e);
 // The position of a player's ped or car, in blocks; false without a ped
 bool PlayerPosition(int player, float* pX, float* pY);
 bool PlayerPose(int player, float* pX, float* pY, float* pZ, int* pRot); // and its height and heading (0..1439)
