@@ -127,9 +127,10 @@ A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::C
 
 ## Checks
 
-`Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 3 minutes, and prints PASS or FAIL per step:
+`Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 4 minutes, and prints PASS or FAIL per step:
 - **arena:** 24 bot matches of 5 minutes on the server alone (Tiny Town, Face Off, Downtown; rammers, hunter, soldier, simple, car hopper; random seeds): none may crash.
 - **live:** a server and two bot clients at 100 ms, jitter and 2% loss, police on, with `GTA2_NET_CHECKGRID`: no crash and no `net: CHECK` line.
+- **churn:** two bot clients stay while two others join and leave four times, stopped by SIGTERM and Ctrl-C: no crash, no `CHECK` line, nobody turned away as the server being full. A client that quits or is stopped now leaves the server at once (`Client::Leave`, on exit and on those signals); before, its slot stayed taken until the server's timeout (5-10 s), and a player joining meanwhile was told the server was full.
 - **soak:** a server and three bot clients with the clock 10 times as fast (`GTA2_SPEED=10`): about 10 minutes of play in 60 s, no crash. It catches what only shows after deaths and respawns (it failed on the off-screen counter crash before that fix).
 - **replay:** recorded sessions (`--record` makes three, 60 s each) replayed with every correction logged, against their saved logs. A replay that differs from itself on a second run is reported as nondeterministic, not as a regression. `--save` takes the current build's logs as the baseline, after an intended change.
 

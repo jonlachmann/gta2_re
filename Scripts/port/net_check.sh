@@ -2,6 +2,8 @@
 # The netcode's checks in one go (docs/netcode.md, "Checks"), on the macOS build (Scripts/port/build_mac.sh):
 #   arena   bot matches on the server alone, several maps, brains and seeds: none may crash
 #   live    a server and two bot clients over a bad link (100 ms, jitter, loss): no crash, no CHECK line
+#   churn   two bot clients staying while two others join and leave, four times (stopped: SIGTERM, Ctrl-C): no
+#           crash, no CHECK line, nobody turned away as the server being full
 #   soak    a server and three bot clients, the clock 10 times as fast: 10 minutes of play in 60 s, no crash
 #   replay  recorded client sessions replayed against their saved logs: the same, or nondeterministic (it differs
 #           from itself too), else a regression
@@ -22,7 +24,7 @@ for a in "$@"; do
     *) STEPS+=("$a") ;;
   esac
 done
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live soak replay)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn soak replay)
 [ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: Scripts/port/build_mac.sh, then Scripts/port/run_mac.sh once"; exit 1; }
 mkdir -p "$OUT"
 trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (each job execs its game: killing it kills the game)
@@ -77,6 +79,40 @@ live() {
     fail "live: $joined of 2 clients joined, $crashes crashed, $checks CHECK lines (build_port/net_check/live_*.log)"
   else
     pass "live: 2 bot clients for ${secs} s at 100 ms, 2% loss, police on"
+  fi
+}
+
+churn() {
+  local p=$((BASE + 203)) r
+  rm -f "$OUT"/churn_*.log
+  (cd "$GAME" && GTA2_HEADLESS=1 exec "$BIN" --server --port $p --map mp1-6p --players 6 --arena hunter,soldier \
+    > "$OUT/churn_server.log" 2>&1) &
+  sleep 2
+  for b in rammer soldier; do
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_NET_CHECKGRID=1 exec "$BIN" --connect 127.0.0.1:$p --name stay_$b --bot $b \
+      > "$OUT/churn_stay_$b.log" 2>&1) &
+  done
+  for r in 1 2 3 4; do
+    (cd "$GAME" && GTA2_HEADLESS=1 exec "$BIN" --connect 127.0.0.1:$p --name in_a$r --bot carhop > "$OUT/churn_a$r.log" 2>&1) &
+    local a=$!
+    (cd "$GAME" && GTA2_HEADLESS=1 exec "$BIN" --connect 127.0.0.1:$p --name in_b$r --bot simple > "$OUT/churn_b$r.log" 2>&1) &
+    local b=$!
+    sleep 10
+    kill -TERM $a
+    kill -INT $b
+    sleep 1
+  done
+  kill $(jobs -p) 2>/dev/null
+  wait 2>/dev/null
+  local crashes checks full joined
+  crashes=$(grep -l "crashed" "$OUT"/churn_*.log | wc -l | tr -d ' ')
+  checks=$(cat "$OUT"/churn_*.log | grep -c "net: CHECK")
+  full=$(grep -l "is full" "$OUT"/churn_*.log | wc -l | tr -d ' ')
+  joined=$(grep -c "joined as" "$OUT/churn_server.log")
+  if [ "$crashes" != 0 ] || [ "$checks" != 0 ] || [ "$full" != 0 ] || [ "$joined" != 10 ]; then
+    fail "churn: $joined of 10 joins, $full turned away, $crashes crashed, $checks CHECK lines (build_port/net_check/churn_*.log)"
+  else
+    pass "churn: 8 joins and leaves beside 2 clients that stayed"
   fi
 }
 
@@ -159,8 +195,8 @@ replay() {
 
 for s in "${STEPS[@]}"; do
   case $s in
-    arena | live | soak | replay) $s ;;
-    *) echo "no step $s (arena, live, soak, replay)"; FAILED=1 ;;
+    arena | live | churn | soak | replay) $s ;;
+    *) echo "no step $s (arena, live, churn, soak, replay)"; FAILED=1 ;;
   esac
 done
 exit $FAILED
