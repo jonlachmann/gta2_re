@@ -61,7 +61,8 @@ def play(brains, port, ticks, armed, window=False):
         env["GTA2_HEADLESS"] = "1"
     if armed:
         env["GTA2_NET_TESTARM"] = "0:99"  # a pistol each, kept loaded
-    args = [BIN, "--server", "--port", str(port), "--map", MAP, "--players", str(len(brains)), "--arena", ",".join(brains)]
+    args = [BIN, "--server", "--port", str(port), "--map", MAP, "--players", str(len(brains)), "--arena", ",".join(brains),
+            "--seed", str(random.randrange(1, 1 << 31))]  # the game is deterministic: the seed makes each match another
     if ticks:
         args += ["--ticks", str(ticks)]
     out = subprocess.run(args, cwd=GAME, env=env, capture_output=not window, text=True, timeout=None if window else 600)
@@ -137,7 +138,8 @@ def spectate(pop, args):
     if not args.unarmed:
         env["GTA2_NET_TESTARM"] = "0:99"
     brains = ["nn:" + p for p in paths] + ["simple"]
-    return subprocess.Popen([BIN, "--server", "--port", "7898", "--map", MAP, "--players", "6", "--arena", ",".join(brains), "--ticks", "2700"], cwd=GAME, env=env,
+    return subprocess.Popen([BIN, "--server", "--port", "7898", "--map", MAP, "--players", "6", "--arena", ",".join(brains), "--ticks", "2700",
+                             "--seed", str(random.randrange(1, 1 << 31))], cwd=GAME, env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
