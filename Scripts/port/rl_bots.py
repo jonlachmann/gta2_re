@@ -170,7 +170,7 @@ def train(args):
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", args.port))
     listener.listen(64)
-    policy, opt, n_in, update = None, None, None, 0
+    policy, opt, n_in, update, start = None, None, None, 0, 0
     pending = {}  # (match id, slot) -> [obs, act, logp, value, reward so far]
     trajs = {}  # (match id, slot) -> finished transitions since the last update
     matches, waiting, launched, stored = {}, [], 0, 0
@@ -214,7 +214,7 @@ def train(args):
                 if os.path.exists(os.path.join(OUT, "policy.pt")):
                     state = torch.load(os.path.join(OUT, "policy.pt"), weights_only=True)
                     policy.load_state_dict(state["policy"])
-                    update = state["update"]
+                    update = start = state["update"]
                     print("continuing from update %d" % update, flush=True)
                 opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
             rows = np.frombuffer(raw, dtype=np.float32).reshape(count, HEAD + n_feat) if count else np.zeros((0, HEAD), np.float32)
@@ -284,7 +284,7 @@ def train(args):
                     ret += r_
             batch_t = (torch.from_numpy(np.stack(obs)), torch.from_numpy(np.stack(act)).long(), torch.tensor(logp), torch.tensor(adv, dtype=torch.float32),
                        torch.tensor(ret, dtype=torch.float32), torch.from_numpy(np.stack(teacher)))
-            teach = args.teach * max(0.0, 1 - update / args.teach_updates)
+            teach = args.teach * max(0.0, 1 - (update - start) / args.teach_updates)  # from this run's start
             pg, ent = ppo_update(policy, opt, batch_t, args, teach)
             mean_r = sum(t[4] for tr in trajs.values() for t in tr) / max(1, stored)
             trajs.clear()
@@ -347,7 +347,7 @@ def main():
     ap.add_argument("--pool-every", type=int, default=10, help="updates between copies of the policy kept as opponents")
     ap.add_argument("--pool-share", type=float, default=0.5, help="the matches with two pool opponents")
     ap.add_argument("--teach", type=float, default=1.0, help="the imitation loss's weight at the start (kickstarting from the scripted bot)")
-    ap.add_argument("--teach-updates", type=int, default=150, help="updates until the imitation loss is gone")
+    ap.add_argument("--teach-updates", type=int, default=150, help="updates of this run until the imitation loss is gone")
     ap.add_argument("--armed", action="store_true", help="pistols kept loaded (a start: fights happen sooner), not only the pickups")
     ap.add_argument("--spectate", type=int, default=0, metavar="K", help="a windowed match of the policy every K updates")
     ap.add_argument("--watch", nargs="?", const=os.path.join(OUT, "latest.nn"), metavar="NN", help="watch a match in a window instead")
