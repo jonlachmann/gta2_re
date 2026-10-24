@@ -19,6 +19,20 @@ bool net::engine::InCarTransition(Ped* ped)
            objective == objectives_enum::leave_car_36 || objective == objectives_enum::enter_train_37 || objective == objectives_enum::leave_train_38;
 }
 
+bool net::engine::AtCarDoor(Ped* ped)
+{
+    const s32 s1 = ped->field_278_ped_state_1, s2 = ped->field_27C_ped_state_2;
+    return s1 == ped_state_1::entering_car_3 || s1 == ped_state_1::exiting_car_4 || s2 == ped_state_2::ped2_entering_a_car_6 ||
+           s2 == ped_state_2::ped2_getting_out_a_car_7;
+}
+
+bool net::engine::LeavingCar(Ped* ped)
+{
+    const s32 objective = ped->get_objective_403A80();
+    return ped->field_278_ped_state_1 == ped_state_1::exiting_car_4 || ped->field_27C_ped_state_2 == ped_state_2::ped2_getting_out_a_car_7 ||
+           objective == objectives_enum::leave_car_36 || objective == objectives_enum::leave_train_38;
+}
+
 void net::engine::ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Car* car = ped->field_16C_car;

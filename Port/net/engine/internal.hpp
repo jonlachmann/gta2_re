@@ -33,7 +33,7 @@ enum PlayerField
     kPlayerPoints,
     kPlayerAmmo0, // field_718_weapons[0..27]: the ammo of its own weapons (0..14) and its car weapons (15..27)
     kPlayerCar = kPlayerAmmo0 + 28, // the car it drives: Car::field_6C_car_id + 1, 0 none
-    kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead
+    kPlayerState, // 1: getting into or out of a car (InCarTransition), 2: dead, 4: getting out (LeavingCar)
     kPlayerTarget, // the car it is going to get into (Ped::field_150_target_objective_car): car_id + 1, 0 none
     kPlayerName, // its name (Player::field_83C_player_name), 4 characters a field, kPlayerNameFields of them
     kPlayerNameEnd = kPlayerName + 4,
@@ -131,6 +131,8 @@ void GuardPeds();
 
 // vehicles.cpp: a ped into or out of a car at once, ending as the game's own entering and leaving do
 bool InCarTransition(Ped* ped); // on its way into or out of a car: states, or an objective to do it
+bool LeavingCar(Ped* ped); // on its way out of one
+bool AtCarDoor(Ped* ped); // getting in or out at the door (InCarTransition's states, not the objective's walk there)
 void ForceIntoCar(Ped* ped, Car* car);
 void ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 

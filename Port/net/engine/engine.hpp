@@ -171,6 +171,7 @@ void PutInGame(int slot, bool freshScore);
 void DebugKill(int victim, int killer);
 bool PlayerWasted(int player);
 bool PlayerInCar(int player); // in this game
+std::string DebugPlayerCar(int player, const Snapshot& snap); // for the logs: its car states here and in the snapshot
 bool DebugCheckPlayerCars(const char* where);
 void DebugOnCrash();
 void DebugSetFrame(uint32_t frame); // the client's frame, for the debug checks' messages // from the crash handler (Port/main.cpp): the local player's ped, car and camera // every in-game player's car is a live car; prints the first time not

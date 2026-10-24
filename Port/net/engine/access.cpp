@@ -120,7 +120,7 @@ net::Schema BuildSchema()
         player.fields.push_back(FieldDesc{kAmmo[i], 16, false});
     }
     player.fields.push_back(FieldDesc{"car", 25, false}); // kPlayerCar
-    player.fields.push_back(FieldDesc{"state", 2, false}); // kPlayerState
+    player.fields.push_back(FieldDesc{"state", 3, false}); // kPlayerState
     player.fields.push_back(FieldDesc{"target", 25, false}); // kPlayerTarget
     static const char* const kNames[4] = {"name0", "name1", "name2", "name3"};
     for (int i = 0; i < 4; i++)
@@ -290,9 +290,10 @@ void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
 void net::engine::MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot)
 {
     Sprite* s = ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : NULL;
-    if (!s || InCarTransition(ped))
+    if (!s || AtCarDoor(ped))
     {
-        return; // getting in or out, the game keeps its char's place in the collision grid itself: re-added, a link stays behind
+        return; // getting in or out at the door, the game keeps its char's place in the collision grid itself: re-added, a link
+                // stays behind (the walk to the door is plain walking: corrected, it no longer drifted from the server's)
     }
     gSpriteGrid_1_679208->RemoveFromRegionBuckets_477B60(s);
     s->set_xyz_lazy_420600(x, y, z);
@@ -415,7 +416,7 @@ void net::engine::Capture(Snapshot& out)
             e.f[kPlayerAmmo0 + w] = p->field_718_weapons[w] ? p->field_718_weapons[w]->field_0_ammo : 0;
         }
         e.f[kPlayerCar] = ped->field_16C_car ? ped->field_16C_car->field_6C_car_id + 1 : 0;
-        e.f[kPlayerState] = (InCarTransition(ped) ? 1 : 0) | (ped->isDead_403B60() ? 2 : 0);
+        e.f[kPlayerState] = (InCarTransition(ped) ? 1 : 0) | (ped->isDead_403B60() ? 2 : 0) | (LeavingCar(ped) ? 4 : 0);
         const s32 objective = ped->get_objective_403A80();
         Car* target = objective == objectives_enum::enter_car_as_driver_35 ? ped->field_150_target_objective_car : NULL;
         e.f[kPlayerTarget] = target ? target->field_6C_car_id + 1 : 0;
@@ -708,6 +709,28 @@ void net::engine::Apply(const Snapshot& snap)
         {
             DebugGridOk("after moving a player", ped->field_16C_car);
         }
+        // The server's player on its way into or out of a car and this game's not: another player's key press came
+        // before the ticks this game resimulates, so its ped stood by the car until the server had it inside. Started
+        // here from the server's position, as the key starts it (Player::HandleControls_5668D0)
+        if ((e.f[kPlayerState] & 3) == 1 && !InCarTransition(ped) && !ped->isDead_403B60() && !p->field_28_wasted_or_busted)
+        {
+            Car* car = ped->field_16C_car;
+            if (!car && serverTarget && serverTarget->field_50_car_sprite && !(e.f[kPlayerState] & 4) && ped->field_168_game_object)
+            {
+                ped->SetObjective2_463830(objectives_enum::no_obj_0);
+                ped->SetObjective(serverTarget->IsTrainModel_403BA0() ? objectives_enum::enter_train_37 : objectives_enum::enter_car_as_driver_35);
+                ped->SetTargetObjectiveCar(serverTarget);
+                ped->set_enter_car_as_passenger_4039B0(0);
+                ped->set_target_car_door_403A70(0);
+            }
+            else if (car && (e.f[kPlayerState] & 4) && e.f[kPlayerCar] && ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) == car &&
+                     car->CanExitCar_43AF10())
+            {
+                ped->SetObjective2_463830(objectives_enum::no_obj_0);
+                ped->SetObjective(car->field_84_car_info_idx == car_model_enum::TRAIN ? objectives_enum::leave_train_38 : objectives_enum::leave_car_36);
+                ped->SetTargetObjectiveCar(car);
+            }
+        }
         if (jump)
         {
             p->field_90_game_camera.UpdateFollowPedCamera_436540(ped);
@@ -831,7 +854,7 @@ void net::engine::SetPose(const Pose& pose)
     }
     Player* p = GetPlayer((int)pose.id - 1);
     Ped* ped = p && p->field_8E_in_use ? p->field_2C4_player_ped : NULL;
-    if (ped && !ped->field_16C_car && !InCarTransition(ped) && !ped->isDead_403B60())
+    if (ped && !ped->field_16C_car && !AtCarDoor(ped) && !ped->isDead_403B60())
     {
         MovePed(ped, Fix16(pose.x, 0), Fix16(pose.y, 0), Fix16(pose.z, 0), Ang16((s16)pose.rot, (u8)0));
     }
@@ -867,6 +890,35 @@ void net::engine::DrawOverlay()
     v[2].x = x + r, v[2].y = y + r;
     v[3].x = x - r, v[3].y = y + r;
     pgbh_DrawFlatRect(v, (s32)0xFFFF00FF); // magenta: where the server has us (a snapshot's tick, before the prediction)
+}
+
+std::string net::engine::DebugPlayerCar(int player, const Snapshot& snap)
+{
+    Player* p = GetPlayer(player);
+    Ped* ped = p ? p->field_2C4_player_ped : NULL;
+    if (!ped)
+    {
+        return "";
+    }
+    char line[256];
+    int n = snprintf(line, sizeof(line), "here: states %d/%d objective %d car %p%s%s", (int)ped->field_278_ped_state_1, (int)ped->field_27C_ped_state_2,
+                     (int)ped->get_objective_403A80(), (void*)ped->field_16C_car, InCarTransition(ped) ? " (transition)" : "",
+                     ped->field_150_target_objective_car ? " (target car)" : "");
+    for (const EntityState& e : snap.entities)
+    {
+        if (e.type == kEntityPlayer && e.id == (uint32_t)player + 1)
+        {
+            Car* c = e.f[kPlayerCar] ? ReplicaCar(kCarIdBase + (uint32_t)(e.f[kPlayerCar] - 1)) : NULL;
+            float lx = 0, ly = 0, lz = 0;
+            int lr = 0;
+            PlayerPose(LocalPlayer(), &lx, &ly, &lz, &lr);
+            const float dx = e.f[kPlayerX] / 16384.0f - lx, dy = e.f[kPlayerY] / 16384.0f - ly;
+            snprintf(line + n, sizeof(line) - n, "; tick %u there: car %d (%p here) state %d target %d at (%.2f, %.2f), %.1f blocks from us", snap.tick,
+                     e.f[kPlayerCar], (void*)c, e.f[kPlayerState], e.f[kPlayerTarget], e.f[kPlayerX] / 16384.0f, e.f[kPlayerY] / 16384.0f,
+                     sqrtf(dx * dx + dy * dy));
+        }
+    }
+    return line;
 }
 
 void net::engine::DebugSelfLog(uint32_t frame)

@@ -8,7 +8,7 @@
 
 namespace net
 {
-const uint32_t kProtocolVersion = 6;
+const uint32_t kProtocolVersion = 7;
 const uint16_t kDefaultPort = 27920;
 const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (Evaluations, 7)
 const uint8_t kChannelUnreliable = 0; // snapshots, commands
