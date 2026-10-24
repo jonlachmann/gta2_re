@@ -39,6 +39,8 @@ void SetTickMs(int ms);
 void SeedRandom(uint32_t seed); // the game's rand() state (a server's: clients take it from snapshots)
 // What a client doesn't simulate: spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
+// After every tick, on the server too: what the game's own logic can leave behind that crashes it later (client_mode.cpp)
+void GuardPeds();
 
 // --- Snapshots (schema.cpp, access.cpp) ---
 

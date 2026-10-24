@@ -13,8 +13,36 @@
 // Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
 // given that order through its group here (PedGroup::PromoteMemberToLeader_4C9680) and sat in a car since (the
 // server's ped was there: the snapshot, or its own car-jack predicted differently) kept it, and crashed on it
+namespace
+{
+bool IsPassenger(Car* car, Ped* ped)
+{
+    for (PedListNode* n = car->field_4_passengers_list.field_0_pFirstPed; n; n = n->mpNext)
+    {
+        if (n->field_0_char_ped == ped)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
 void net::engine::GuardPeds()
 {
+    // Two players getting into one empty car by the same door at once: the second one's entry ends with it as the
+    // driver, without pulling the first out, which sits on in it as no driver or passenger. The
+    // car doesn't know it: blown up, it doesn't kill it, and it drives the wreck without physics (a crash). Out at
+    // the side, as a car-jack would have put it
+    for (int i = 0; i < PlayerCount(); i++)
+    {
+        Ped* ped = InGamePed(i);
+        Car* car = ped ? ped->field_16C_car : NULL;
+        if (car && ped->field_278_ped_state_1 == ped_state_1::in_car_10 && car->field_54_driver != ped && !IsPassenger(car, ped))
+        {
+            ForceOutBesideCar(ped, car);
+        }
+    }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         if (p->field_16C_car && !p->field_168_game_object &&

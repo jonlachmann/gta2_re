@@ -167,7 +167,6 @@ void SnapCamera(Player* p); // the camera at its ped at once, not panning there
 void ProtectPlayers();
 // Before and after every tick (client_mode.cpp): what the server's game never has, this one can't run (a ped's on-foot
 // order in a car)
-void GuardPeds();
 
 // Cars (cars.cpp, car_ai.cpp)
 void CarPhysicsFields(std::vector<FieldDesc>& out);

@@ -550,6 +550,7 @@ void net::Server::PrintStats(const Snapshot& world)
 void net::Server::Frame()
 {
     mTick++; // the tick that just ran
+    engine::GuardPeds();
     StartGameOnce();
     PollTransport();
     RunTestHooks();
