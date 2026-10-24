@@ -122,6 +122,15 @@ Client options: `--connect host[:port]`, `--name`, `--bot`.
 
 Either end: `--lag`, `--jitter`, `--loss` (the link conditioner).
 
+## Checks
+
+`Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 2 minutes, and prints PASS or FAIL per step:
+- **arena:** 24 bot matches of 5 minutes on the server alone (Tiny Town, Face Off, Downtown; rammers, hunter, soldier, simple, car hopper; random seeds): none may crash.
+- **live:** a server and two bot clients at 100 ms, jitter and 2% loss, police on, with `GTA2_NET_CHECKGRID`: no crash and no `net: CHECK` line.
+- **replay:** recorded sessions (`--record` makes three, 60 s each) replayed with every correction logged, against their saved logs. A replay that differs from itself on a second run is reported as nondeterministic, not as a regression. `--save` takes the current build's logs as the baseline, after an intended change.
+
+Fixtures and logs are in `build_port/net_check/`. Each test game is the shell job itself (`exec`), so the script's exit ends them all.
+
 ## Decisions
 
 | Topic | Choice |
