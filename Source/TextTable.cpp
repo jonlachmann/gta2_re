@@ -102,8 +102,7 @@ void TextTable::TKEY_Load_5B5960(u32 chunk_size)
         memcpy(&e.field_4_key, pRaw + i * 12 + 4, 8);
     }
     delete[] pRaw;
-    return;
-#endif
+#else
     // TODO: probably an inline
     field_0_tKey.field_4_tKey_count = chunk_size / sizeof(TextKeyEntry);
     field_0_tKey.field_0_tKey = new TextKeyEntry[field_0_tKey.field_4_tKey_count];
@@ -113,6 +112,7 @@ void TextTable::TKEY_Load_5B5960(u32 chunk_size)
     }
 
     File::Global_Read_4A71C0(field_0_tKey.field_0_tKey, chunk_size);
+#endif
 }
 
 MATCH_FUNC(0x5B59B0)

@@ -458,8 +458,7 @@ void gtx_0x106C::SetDeltaDataPtrs_5AABF0()
                 reinterpret_cast<u8*>(field_48_delta_store) + reinterpret_cast<uptr>(d->field_4_deltas[delta_idx].field_0_pData));
         }
     }
-    return;
-#endif
+#else
     for (u32 offset = 0; offset < static_cast<u32>(field_60_delta_len); offset += size)
     {
         for (u32 delta_idx = 0; delta_idx < pEntry->field_2_delta_count; delta_idx++)
@@ -469,6 +468,7 @@ void gtx_0x106C::SetDeltaDataPtrs_5AABF0()
         size = GTX_DELTAS_SIZE(pEntry->field_2_delta_count);
         pEntry = reinterpret_cast<delta_entry*>(reinterpret_cast<char_type*>(pEntry) + size);
     }
+#endif
 }
 
 MATCH_FUNC(0x5AAC40)
