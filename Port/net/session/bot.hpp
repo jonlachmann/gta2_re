@@ -50,6 +50,7 @@ struct BotView
         float x, y, z;
         int rot;
         int health; // for kPlayer
+        bool weapon; // for kPickup: a weapon (else a power-up)
     };
     std::vector<Seen> seen; // what the client's snapshot has, others only
     const engine::NavMap* map = nullptr;

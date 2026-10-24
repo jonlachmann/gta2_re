@@ -13,7 +13,7 @@
 namespace
 {
 const float kPi = 3.14159265f;
-const int kPlayers = 3, kCars = 2, kPeds = 1, kPickups = 3; // the nearest ones it sees
+const int kPlayers = 3, kCars = 2, kPeds = 1, kWeapons = 2, kPowerUps = 1; // the nearest ones it sees
 const int kRays = 8; // how far it can walk, in 8 directions
 const float kRange = 16; // blocks: farther is "far"
 const uint32_t kActionBits[8] = {net::kBtnLeft, net::kBtnRight, net::kBtnForward, net::kBtnBack, net::kBtnAttack, net::kBtnEnterExit, net::kBtnJump, net::kBtnNextWeapon};
@@ -33,13 +33,13 @@ void Relative(const net::BotView& v, float x, float y, float* out)
     out[2] = Clamp(hypotf(dx, dy) / kRange);
 }
 
-// The <n> nearest of a kind, 3 values each (and a player's health): none is far ahead
-float* Nearest(const net::BotView& v, net::BotView::Seen::Kind kind, int n, float* out)
+// The <n> nearest of a kind (pickups: weapons or power-ups), 3 values each (and a player's health): none is far ahead
+float* Nearest(const net::BotView& v, net::BotView::Seen::Kind kind, int n, float* out, bool weapons = false)
 {
     std::vector<std::pair<float, const net::BotView::Seen*>> sorted;
     for (const net::BotView::Seen& s : v.seen)
     {
-        if (s.kind == kind && (kind != net::BotView::Seen::kPlayer || s.health > 0))
+        if (s.kind == kind && (kind != net::BotView::Seen::kPlayer || s.health > 0) && (kind != net::BotView::Seen::kPickup || s.weapon == weapons))
         {
             sorted.push_back(std::make_pair(hypotf(s.x - v.x, s.y - v.y), &s));
         }
@@ -219,7 +219,8 @@ void net::BotFeatures(const BotView& v, BotMemory& m, float* out)
     p = Nearest(v, BotView::Seen::kPlayer, kPlayers, p);
     p = Nearest(v, BotView::Seen::kCar, kCars, p);
     p = Nearest(v, BotView::Seen::kPed, kPeds, p);
-    p = Nearest(v, BotView::Seen::kPickup, kPickups, p);
+    p = Nearest(v, BotView::Seen::kPickup, kWeapons, p, true);
+    p = Nearest(v, BotView::Seen::kPickup, kPowerUps, p, false);
     for (int r = 0; r < kRays; r++)
     {
         *p++ = Ray(v, r);

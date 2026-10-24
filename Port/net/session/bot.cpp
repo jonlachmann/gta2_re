@@ -30,15 +30,15 @@ uint32_t Steer(int err)
     return err > 80 ? net::kBtnLeft : err < -80 ? net::kBtnRight : 0;
 }
 
-// The nearest of a kind (players: living ones); NULL if none
-const net::BotView::Seen* Nearest(const net::BotView& v, net::BotView::Seen::Kind kind, float* pDist)
+// The nearest of a kind (players: living ones; pickups: weapons only, if asked); NULL if none
+const net::BotView::Seen* Nearest(const net::BotView& v, net::BotView::Seen::Kind kind, float* pDist, bool weapons = false)
 {
     const net::BotView::Seen* best = NULL;
     *pDist = 1e9f;
     for (const net::BotView::Seen& s : v.seen)
     {
         const float d = hypotf(s.x - v.x, s.y - v.y);
-        if (s.kind == kind && d < *pDist && (kind != net::BotView::Seen::kPlayer || s.health > 0))
+        if (s.kind == kind && d < *pDist && (kind != net::BotView::Seen::kPlayer || s.health > 0) && (!weapons || s.weapon))
         {
             *pDist = d;
             best = &s;
@@ -81,7 +81,8 @@ class DecidingBot : public net::BotBrain
 };
 
 // Walks to the nearest player along its own route (replanned every second, or when the target moves to another
-// cell), turns to face it and shoots when it is close; backs off and turns when stuck
+// cell), turns to face it and shoots when it is close; backs off and turns when stuck. Without a gun and nobody
+// within 2 blocks, it fetches the nearest weapon first.
 class SimpleBot : public DecidingBot
 {
   public:
@@ -123,6 +124,12 @@ class SimpleBot : public DecidingBot
         }
         mTrying = false;
         mTargetDist = target ? best : -1;
+        float weaponDist = 0;
+        const net::BotView::Seen* weapon = v.guns == 0 && (!target || best >= 2.0f) ? Nearest(v, net::BotView::Seen::kPickup, &weaponDist, true) : NULL;
+        if (weapon)
+        {
+            return Along(v, weapon->x, weapon->y);
+        }
         if (!target)
         {
             return 0;
@@ -132,12 +139,13 @@ class SimpleBot : public DecidingBot
         {
             const int err = TurnTo(v.rot, dx, dy);
             uint32_t b = Steer(err);
-            if (best > 1.2f)
+            const float reach = v.guns ? 1.2f : 0.8f; // fists only reach that far
+            if (best > reach)
             {
                 b |= net::kBtnForward;
                 mTrying = true;
             }
-            else if (best < 0.6f)
+            else if (best < 0.4f)
             {
                 b |= net::kBtnBack; // too close to hit: a step back
             }
@@ -147,9 +155,14 @@ class SimpleBot : public DecidingBot
             }
             return b;
         }
-        // Far: along the route
+        return Along(v, target->x, target->y); // far
+    }
+
+    // To (tx, ty) along the route
+    uint32_t Along(const net::BotView& v, float tx, float ty)
+    {
         const int N = net::engine::NavMap::kSize;
-        const int cx = (int)v.x, cy = (int)v.y, gx = (int)target->x, gy = (int)target->y;
+        const int cx = (int)v.x, cy = (int)v.y, gx = (int)tx, gy = (int)ty;
         if (v.map && (mPath.empty() || v.frame >= mReplanAt || gy * N + gx != mGoal))
         {
             mGoal = gy * N + gx;
@@ -165,7 +178,7 @@ class SimpleBot : public DecidingBot
                 break;
             }
         }
-        float wx = target->x, wy = target->y; // no route: straight at it
+        float wx = tx, wy = ty; // no route: straight at it
         if (!mPath.empty())
         {
             // Aim a few cells ahead where the route is straight: smoother than cell by cell
@@ -342,6 +355,7 @@ void net::FillBotView(BotView& view, const Snapshot& snap, int self, uint32_t fr
         s.z = engine::Blocks(e.f[2]);
         s.rot = e.f[3];
         s.health = 0;
+        s.weapon = engine::PickupModel(e) >= 200 && engine::PickupModel(e) <= 227; // Ped::HandlePickupCollision_45DE80
         uint32_t buttons = 0;
         if (engine::PlayerOf(e, &s.player, &buttons))
         {
