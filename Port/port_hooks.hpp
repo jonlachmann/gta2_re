@@ -15,6 +15,10 @@ namespace crt
 extern void (*gPortHeapHook)(size_t size);
 } // namespace crt
 
+// The idle time before attract mode in Frontend::Run_4AEDB0: 60 s, or GTA2_PORT_ATTRACT_MS for tests (Port/main.cpp; the
+// same as Scripts/port/patch_attract.py does to 10.5.exe)
+extern u32 gPortAttractIdleMs;
+
 // Port/net/net_main.cpp's
 extern s32 gPortTrafficCap; // the ambient traffic cars for the whole game (Car.cpp): 16, or a network server's --traffic
 extern void (*gPortDrawOverlay)(); // drawn last in Game::Draw_4B92D0; NULL unless a debug overlay is on

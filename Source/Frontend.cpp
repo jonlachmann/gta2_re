@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <wchar.h>
 #if defined(GTA2_PORT)
+#include "Port/port_hooks.hpp"
 #include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
 #endif
 
@@ -899,9 +900,7 @@ s32 Frontend::Run_4AEDB0()
                 --remaining;
             } while (remaining);
 #if defined(GTA2_PORT)
-            // Test aid: GTA2_PORT_ATTRACT_MS shortens the idle time before attract mode (see Scripts/port/patch_attract.py)
-            static const u32 sAttractIdleMs = getenv("GTA2_PORT_ATTRACT_MS") ? atoi(getenv("GTA2_PORT_ATTRACT_MS")) : 60000;
-            if (Time - field_C9E4_last_input_time > sAttractIdleMs)
+            if (Time - field_C9E4_last_input_time > gPortAttractIdleMs)
 #else
             if (Time - field_C9E4_last_input_time > 60000)
 #endif

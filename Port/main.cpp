@@ -5,6 +5,8 @@
 #include "headless/fast_clock.hpp"
 #include "net/net_main.hpp"
 #include "net/engine/engine.hpp"
+#include "port_hooks.hpp"
+#include <stdlib.h>
 #include <string>
 #include <vector>
 
@@ -49,8 +51,14 @@ static void OnCrash(int sig, siginfo_t* info, void* context)
 }
 #endif
 
+u32 gPortAttractIdleMs = 60000;
+
 int main(int argc, char** argv)
 {
+    if (const char* ms = getenv("GTA2_PORT_ATTRACT_MS")) // a test aid: attract mode sooner (docs/port.md, M2)
+    {
+        gPortAttractIdleMs = (u32)atoi(ms);
+    }
 #if !defined(_WIN32)
     struct sigaction sa = {};
     sa.sa_sigaction = OnCrash;
