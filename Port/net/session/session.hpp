@@ -138,6 +138,7 @@ class Server
     void RunTestHooks();
     void SetNextInputs(const Snapshot& world);
     void FeedJerk(const Snapshot& world);
+    void CheckRound(const Snapshot& world);
     void PrintStats(const Snapshot& world);
     void SendSnapshot(int slot, Slot& s, const Snapshot& world);
     std::vector<Item> PriceArea(const std::vector<const EntityState*>& area, const Snapshot* base, float x, float y) const;
@@ -153,6 +154,7 @@ class Server
     Stats mStats;
     JerkMeter mJerk;
     Arena mArena;
+    uint32_t mRoundStart = 0; // the tick the round started at
 };
 
 struct ClientConfig
@@ -224,6 +226,7 @@ class Client
     void RecordTick();
     void HandleEvents(const std::vector<TransportEvent>& events);
     void TakeSnapshot();
+    void AnnounceRound();
     void Resync(const Snapshot& snap);
     void Reconcile(const Snapshot& snap);
     void MeasureShownError(const Snapshot& snap);
@@ -268,6 +271,7 @@ class Client
     BotView mBotView;
     uint32_t mLastInput = ~0u; // for the input log
     int mMarks = 0; // F12 presses (ChooseInput)
+    engine::Round mRound; // the last one announced
     uint32_t mMarkFrame = 0;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;

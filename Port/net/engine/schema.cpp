@@ -52,6 +52,9 @@ net::Schema BuildSchema()
     net::EntityType world = {"world", {{"cycle", 32, false}, {"rand", 32, false}, {"reach", 10, false}, {"it", 3, false}}};
     AppendNumbered(world.fields, "it_time", MAX_PLAYERS, 16);
     world.fields.push_back(FieldDesc{"zone_turn", 16, true});
+    world.fields.push_back(FieldDesc{"round", 16, false});
+    world.fields.push_back(FieldDesc{"winner", 3, false});
+    world.fields.push_back(FieldDesc{"seconds_left", 13, false});
     net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false},
                                          {"age", 6, false}}};
     s.types.push_back(player); // kEntityPlayer

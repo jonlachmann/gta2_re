@@ -520,6 +520,51 @@ void net::Server::FeedJerk(const Snapshot& world)
     }
 }
 
+// The round's end by the server's limits (the game has none: engine/rounds.cpp): the frag limit (points in a points
+// game; the tag game: time only) or the time limit. The leader wins (a draw at the time limit: nobody), and the next
+// round starts on the same map
+void net::Server::CheckRound(const Snapshot& world)
+{
+    engine::Round& round = engine::CurrentRound();
+    const int limit = mConfig.game.fragLimit, minutes = mConfig.game.timeLimitMin, type = mConfig.game.gameType;
+    const uint32_t ticksPerSecond = 1000 / (mConfig.game.tickMs > 0 ? mConfig.game.tickMs : 33);
+    const int elapsed = (int)((mTick - mRoundStart) / ticksPerSecond);
+    round.secondsLeft = minutes ? std::max(0, minutes * 60 - elapsed) : 0;
+    int best = -1, bestScore = 0, second = 0;
+    for (const EntityState& e : world.entities)
+    {
+        int p = 0;
+        uint32_t b = 0;
+        if (engine::PlayerOf(e, &p, &b) && p < (int)mSlots.size() && mSlots[p].used)
+        {
+            const int score = type == 2 ? engine::PlayerPoints(e) : engine::PlayerFrags(e);
+            if (best < 0 || score > bestScore)
+            {
+                second = best < 0 ? score : bestScore;
+                best = p;
+                bestScore = score;
+            }
+            else if (score > second)
+            {
+                second = score;
+            }
+        }
+    }
+    const bool reached = limit > 0 && type != 3 && best >= 0 && bestScore >= limit;
+    if (!mStarted || !(reached || (minutes && round.secondsLeft == 0)))
+    {
+        return;
+    }
+    const bool draw = !reached && bestScore == second;
+    printf("net: round %d over at tick %u: %s;%s\n", round.number, mTick,
+           draw ? "a draw" : (engine::PlayerName(best) + " (player " + std::to_string(best) + ") wins with " + std::to_string(bestScore)).c_str(),
+           Scoreboard(world).c_str());
+    round.number++;
+    round.winner = draw ? 0 : best + 1;
+    mRoundStart = mTick;
+    engine::NewRound();
+}
+
 void net::Server::PrintStats(const Snapshot& world)
 {
     int used = 0;
@@ -559,6 +604,7 @@ void net::Server::Frame()
     world.tick = mTick;
     SetNextInputs(world);
     FeedJerk(world);
+    CheckRound(world);
     if (mConfig.endTick && mTick >= mConfig.endTick)
     {
         mArena.Finish(world);

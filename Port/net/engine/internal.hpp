@@ -57,6 +57,9 @@ enum WorldField
     kWorldIt, // the tag game's "it" (TagGame::field_0_fugitive): player index + 1, 0 nobody
     kWorldItTime, // and the seconds each player has been it (field_4_it_time_secs), MAX_PLAYERS of them
     kWorldZoneTurn = kWorldItTime + 6, // which restart zone is next (Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0): a respawn here goes where the server's does
+    kWorldRound, // the round (rounds.cpp): its number, the last one's winner (player + 1) and the seconds left
+    kWorldWinner,
+    kWorldSecondsLeft,
 };
 enum CarField
 {
@@ -162,7 +165,8 @@ void ApplySlots(const Snapshot& snap); // the slots in the game: the snapshot's
 void ApplyPlayer(const EntityState& e);
 void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize); // the deaths a client has carried out (in the rollback set: world.cpp)
 void KillCredited(Ped* ped, int killerSlot); // the game's own death, credited to a player (-1: nobody)
-void SnapCamera(Player* p); // the camera at its ped at once, not panning there
+void SnapCamera(Player* p);
+void ResetDeaths(int slot); // the death count the snapshots carry (players.cpp) // the camera at its ped at once, not panning there
 // Player peds take no damage on a client: their health and deaths are the server's (client_mode.cpp)
 void ProtectPlayers();
 void SeenByAll(); // every ped and car counts as seen (client_mode.cpp): no removal off screen on a client

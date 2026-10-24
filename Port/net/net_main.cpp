@@ -1,5 +1,6 @@
 // Port/net (docs/netcode.md, "Code layout"): the command line and the session's lifetime.
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
+//            (the limits end a round, and the next starts on the same map: engine/rounds.cpp)
 //            [--police]  (police on, as the lobby's box; off by default as there)
 //            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)

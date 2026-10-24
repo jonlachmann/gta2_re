@@ -93,6 +93,7 @@ int EntityAge(const EntityState& e);
 bool PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons);
 int PlayerHealth(const EntityState& e); // a player entity's health
 int PlayerFrags(const EntityState& e);
+int PlayerPoints(const EntityState& e);
 int PlayerDeaths(const EntityState& e);
 uint32_t PlayerCarId(const EntityState& e); // the NetId of the car it drives, 0 on foot
 int PlayerWeapon(const EntityState& e); // its weapon in hand (Player::field_788_curr_weapon_idx), -1: none
@@ -108,6 +109,20 @@ bool PlayerInCar(int player); // in this game
 float PlayerViewRadius(int player);
 // A slot's name as the game shows it (over the player, in kill messages): Player::field_83C_player_name, up to 15
 void SetPlayerName(int slot, const char* name);
+std::string PlayerName(int slot); // as the game shows it
+
+// --- Rounds (rounds.cpp, N6): the frag and time limits are the netcode's (the game gets none it would end on), a
+// round that reaches one starts the next on the same map. The server keeps the round; snapshots carry it ---
+
+struct Round
+{
+    int number = 1;
+    int winner = 0; // the last round's: player index + 1, 0 none (a draw, or no round over yet)
+    int secondsLeft = 0; // of this one, 0: no time limit
+};
+Round& CurrentRound();
+void NewRound(); // every slot in the game respawned with no score, weapons or power-ups
+void ShowHudMessage(const char* text); // the game's message line, over the HUD
 // Player slots in a running network game (slots.cpp): out of the game as the game handles a player who left, in
 // again with a new ped at the next restart zone (and an empty score if <freshScore>)
 bool SlotInGame(int slot);

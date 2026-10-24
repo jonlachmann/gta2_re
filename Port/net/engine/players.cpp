@@ -282,6 +282,7 @@ void net::engine::ApplyWorld(const EntityState& w)
 {
     gpRng_67AB34->field_0_rng = w.f[kWorldCycle];
     gPortZoneRoundRobin = (short)w.f[kWorldZoneTurn];
+    CurrentRound() = Round{w.f[kWorldRound], w.f[kWorldWinner], w.f[kWorldSecondsLeft]};
     // The tag game's "it" is the server's, made the game's way (its weapons off, the arrow, "you're it")
     Player* it = GetPlayer(w.f[kWorldIt] - 1);
     if (it && it != gTagGame_6F8450.field_0_fugitive && gTagGame_6F8450.IsTagGame_434B20())
@@ -406,6 +407,11 @@ int net::engine::PlayerHealth(const EntityState& e)
     return e.type == kEntityPlayer ? e.f[kPlayerHealth] : 0;
 }
 
+int net::engine::PlayerPoints(const EntityState& e)
+{
+    return e.type == kEntityPlayer ? e.f[kPlayerPoints] : 0;
+}
+
 int net::engine::PlayerFrags(const EntityState& e)
 {
     return e.type == kEntityPlayer ? e.f[kPlayerFrags] : 0;
@@ -483,6 +489,21 @@ float net::engine::PlayerViewRadius(int player)
     const float depth = 8.0f + c.field_98_cur_pos.field_8_z.ToFloat(); // (8 - z) + camera z, at z 0
     const float hw = c.field_70_screen_px_center_x * depth / scale, hh = c.field_74_screen_px_center_y * depth / scale;
     return sqrtf(hw * hw + hh * hh);
+}
+
+std::string net::engine::PlayerName(int slot)
+{
+    Player* p = GetPlayer(slot);
+    return p ? NarrowName(p) : std::string();
+}
+
+void net::engine::ResetDeaths(int slot)
+{
+    if (slot >= 0 && slot < MAX_PLAYERS)
+    {
+        gDeaths[slot] = 0;
+        gKiller[slot] = 0;
+    }
 }
 
 void net::engine::SetPlayerName(int slot, const char* name)

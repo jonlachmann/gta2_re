@@ -102,7 +102,8 @@ Usage and test switches:
 - passengers;
 - interpolation;
 - the comparison check;
-- modes beyond the game's own frags;
+- modes beyond the game's own frags, points and tag;
+- the next map at a round's end, a results screen;
 - the player cap above 6.
 
 ```
@@ -119,6 +120,10 @@ Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--game
 Client options: `--connect host[:port]`, `--name`, `--bot`.
 
 Either end: `--lag`, `--jitter`, `--loss` (the link conditioner).
+
+## Rounds
+
+A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::CheckRound`). The game ends a network game at its frag limit (`PlayerScoreTracker`: frags >= the limit) and at its time limit (`ManageNetworkTimeAndHudPager_4DADA0`), and a dedicated server can't come back from that: it stopped ticking, and every client froze with it (the time limit, 10 minutes by default, ended every game). So the game gets neither (`NetUi::CopyGameSettings_51C7F0`: an unreachable frag limit, no timer), and the server applies `--fraglimit` (points in a points game; the tag game: time only) and `--timelimit` itself. A round that reaches one ends: the leader wins (at the time limit with a tie: a draw), and the next round starts at once on the same map, everyone at a restart zone with no score, weapons or power-ups. The world entity carries the round's number, the last round's winner and the seconds left; a client puts "X wins round N" on the HUD's message line, and "60 seconds left", "10 seconds left". Not yet: the next map, a results screen, a pause between rounds.
 
 ## Checks
 

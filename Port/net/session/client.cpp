@@ -500,6 +500,28 @@ void net::Client::Resync(const Snapshot& snap)
     engine::ApplyScores(snap);
 }
 
+// A new round (its number changed in a snapshot): who won the last one, on the HUD; and when time is short
+void net::Client::AnnounceRound()
+{
+    const engine::Round& now = engine::CurrentRound();
+    std::string line;
+    if (now.number != mRound.number && now.number > 1)
+    {
+        line = now.winner ? engine::PlayerName(now.winner - 1) + " wins round " + std::to_string(now.number - 1)
+                          : "Round " + std::to_string(now.number - 1) + " is a draw";
+    }
+    else if (now.number == mRound.number && now.secondsLeft < mRound.secondsLeft && (now.secondsLeft == 60 || now.secondsLeft == 10))
+    {
+        line = std::to_string(now.secondsLeft) + " seconds left";
+    }
+    if (!line.empty())
+    {
+        engine::ShowHudMessage(line.c_str());
+        printf("net: frame %u, %s\n", mFrame, line.c_str());
+    }
+    mRound = now;
+}
+
 void net::Client::TakeSnapshot()
 {
     const Snapshot& snap = mReceived[mLatestTick % kRing];
@@ -689,6 +711,7 @@ void net::Client::Frame()
     if (mNewSnapshot)
     {
         TakeSnapshot();
+        AnnounceRound();
     }
     FeedJerk();
     engine::SetTickMs(mReplay ? 1 : PacedTickMs()); // every frame: a restore brings back the game's tick length too (a replay: no waiting)
