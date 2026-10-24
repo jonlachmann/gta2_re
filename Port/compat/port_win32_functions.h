@@ -27,6 +27,7 @@ BOOL WINAPI ReleaseMutex(HANDLE h);
 BOOL WINAPI CloseHandle(HANDLE h);
 UINT WINAPI GetDriveTypeA(LPCSTR root);
 BOOL WINAPI GetComputerNameA(LPSTR buf, LPDWORD size);
+BOOL WINAPI GetUserNameA(LPSTR buf, LPDWORD size);
 BOOL WINAPI GetKeyboardLayoutNameA(LPSTR buf);
 HINSTANCE WINAPI ShellExecuteA(HWND hwnd, LPCSTR op, LPCSTR file, LPCSTR params, LPCSTR dir, INT show);
 BOOL WINAPI PostMessageA(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);

@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <dlfcn.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -87,6 +88,15 @@ BOOL WINAPI GetComputerNameA(LPSTR buf, LPDWORD size)
     }
     buf[*size - 1] = 0;
     *size = (DWORD)strlen(buf);
+    return TRUE;
+}
+
+// The login name (the replay header's, InputRecorder_67F8B0)
+BOOL WINAPI GetUserNameA(LPSTR buf, LPDWORD size)
+{
+    const char* name = getenv("USER");
+    snprintf(buf, *size, "%s", name ? name : "");
+    *size = (DWORD)strlen(buf) + 1;
     return TRUE;
 }
 
