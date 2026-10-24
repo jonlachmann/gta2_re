@@ -26,3 +26,6 @@ extern s16 gPortZoneRoundRobin; // Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0
 // Port/net/engine/netplay.cpp's: asked when a network game has ended (winmain.cpp): true to start the next one at once,
 // without the frontend (a dedicated server's map change, Port/net/engine/rounds.cpp)
 extern bool (*gPortNextNetworkGame)();
+// A network client's: its police are off (bSkip_police_67D4F9) but the server's wanted points stand, so Ped's tick
+// (Ped.cpp, after ManageWeapon_46F390) neither zeroes them nor registers a criminal (Port/net/engine/client_mode.cpp)
+extern bool gPortKeepWantedPoints;

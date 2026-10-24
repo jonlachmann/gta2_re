@@ -86,6 +86,7 @@ bool NextNetworkGame()
 } // namespace
 
 bool (*gPortNextNetworkGame)() = NextNetworkGame;
+bool gPortKeepWantedPoints;
 
 void net::engine::SetNextMap(const std::string& gmp, const std::string& sty, const std::string& scr)
 {

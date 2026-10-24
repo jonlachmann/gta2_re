@@ -9,6 +9,7 @@
 #include "Source/Char_Pool.hpp"
 #include "Source/Ped.hpp"
 #include "Source/debug.hpp"
+#include "Port/port_hooks.hpp"
 
 // Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
 // given that order through its group here (PedGroup::PromoteMemberToLeader_4C9680) and sat in a car since (the
@@ -84,6 +85,7 @@ void net::engine::ClientModeFrame()
     bSkip_dummies_67D4EF = true; // no ambient peds (PedManager::Dummies_470330)
     bSkip_mission_67D4E5 = true; // scripts run on the server only (they set up the level before the first frame)
     bSkip_police_67D4F9 = true;
+    gPortKeepWantedPoints = true; // the server's (players' entities, peds' AI state)
     bSkip_ambulance_67D6C9 = true;
     SeenByAll();
 }
