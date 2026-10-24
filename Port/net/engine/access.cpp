@@ -13,6 +13,7 @@
 #include "Source/rng.hpp"
 #include "Source/sprite.hpp"
 #include "Source/GameSession.hpp"
+#include <math.h>
 #include <string.h>
 #include <unordered_map>
 
@@ -85,6 +86,33 @@ bool net::engine::Near(const Sprite* s, int32_t x, int32_t y, int32_t radius)
 {
     const int32_t dx = s->field_14_xy.x.mValue - x, dy = s->field_14_xy.y.mValue - y;
     return dx < radius && dx > -radius && dy < radius && dy > -radius;
+}
+
+net::engine::ReachArea::ReachArea(const Snapshot& snap, float margin) : mReach(SnapshotReach(snap) - margin)
+{
+    mLocated = PlayerPosition(LocalPlayer(), &mX, &mY);
+}
+
+float net::engine::ReachArea::DistanceTo(const Sprite* s) const
+{
+    const float dx = s->field_14_xy.x.ToFloat() - mX, dy = s->field_14_xy.y.ToFloat() - mY;
+    return sqrtf(dx * dx + dy * dy);
+}
+
+bool net::engine::ReachArea::Inside(const Sprite* s) const
+{
+    const float dx = s->field_14_xy.x.ToFloat() - mX, dy = s->field_14_xy.y.ToFloat() - mY;
+    return mLocated && dx * dx + dy * dy < mReach * mReach;
+}
+
+bool net::engine::ReachArea::Beyond(const Sprite* s) const
+{
+    if (!s || !mLocated)
+    {
+        return false;
+    }
+    const float dx = s->field_14_xy.x.ToFloat() - mX, dy = s->field_14_xy.y.ToFloat() - mY;
+    return dx * dx + dy * dy > mReach * mReach;
 }
 
 bool net::engine::IsSpareDriver(const Ped* ped)

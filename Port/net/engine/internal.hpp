@@ -124,6 +124,20 @@ EntityState Entity(uint32_t id, uint8_t type);
 void PutPosition(EntityState& e, const Sprite* s); // fields 0..3
 bool Near(const Sprite* s, int32_t x, int32_t y, int32_t radius); // within <radius> (raw) on both axes
 const EntityState* FindWorld(const Snapshot& snap);
+// The area a snapshot covered around the local player, less a margin (blocks): what the snapshot lacks is gone only
+// inside it (beyond, a busy area's snapshot was cut for size). Without a local player, nothing is inside or beyond
+class ReachArea
+{
+  public:
+    ReachArea(const Snapshot& snap, float margin);
+    bool Inside(const Sprite* s) const;
+    bool Beyond(const Sprite* s) const;
+    float DistanceTo(const Sprite* s) const;
+
+  private:
+    bool mLocated;
+    float mX = 0, mY = 0, mReach;
+};
 // The one dummy ped every traffic car shares as its driver (Car::SpawnDriverPed, CarManager::field_4_spare_driver): no
 // ped of its own, never sent, moved, forced or removed
 bool IsSpareDriver(const Ped* ped);

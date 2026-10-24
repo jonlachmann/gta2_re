@@ -147,20 +147,16 @@ void net::engine::ApplyPickups(const Snapshot& snap)
     }
     // Not in the snapshot: collected on the server, or out of the area. Only well inside it (20 of the 24 blocks) is it
     // gone; nearer the edge it stays (in and out of the area as we move, it was made again and again)
-    float px = 0, py = 0, pz = 0;
-    int prot = 0;
-    const bool located = PlayerPose(LocalPlayer(), &px, &py, &pz, &prot);
+    const ReachArea area(snap, 2.0f);
     std::set<Object*> gone;
-    const float kSure = SnapshotReach(snap) - 2.0f; // inside what the snapshot covered, with a margin
     for (auto it = gObjects.begin(); it != gObjects.end();)
     {
         const Sprite* sp = it->second->field_4_sprite;
-        const float dx = sp->field_14_xy.x.ToFloat() - px, dy = sp->field_14_xy.y.ToFloat() - py;
-        if (!seen.count(it->first) && located && dx * dx + dy * dy < kSure * kSure)
+        if (!seen.count(it->first) && area.Inside(sp))
         {
             if (Debug().pickupLog)
             {
-                printf("net: pickup %u removed: not in the snapshot, %.1f blocks away, model %d\n", it->first, sqrtf(dx * dx + dy * dy),
+                printf("net: pickup %u removed: not in the snapshot, %.1f blocks away, model %d\n", it->first, area.DistanceTo(sp),
                        (int)it->second->field_18_model);
             }
             it->second->Dealloc_5291B0();
@@ -176,8 +172,7 @@ void net::engine::ApplyPickups(const Snapshot& snap)
     }
     for (Object* c : live)
     {
-        const float dx = c->field_4_sprite->field_14_xy.x.ToFloat() - px, dy = c->field_4_sprite->field_14_xy.y.ToFloat() - py;
-        if (!mapped.count(c) && !gone.count(c) && !remade.count(c) && located && dx * dx + dy * dy < kSure * kSure)
+        if (!mapped.count(c) && !gone.count(c) && !remade.count(c) && area.Inside(c->field_4_sprite))
         {
             if (Debug().pickupLog)
             {

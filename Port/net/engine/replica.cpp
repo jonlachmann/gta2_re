@@ -363,20 +363,10 @@ void ApplyGroups(const Snapshot& snap)
 // the car or ped is still there); so do this game's own cars and peds nobody mapped
 void RemoveUnsent(const Pass& a, const Snapshot& snap)
 {
-    float px = 0, py = 0;
-    const bool located = PlayerPosition(LocalPlayer(), &px, &py);
-    const float reach = SnapshotReach(snap) - 1.0f;
-    auto beyond = [&](const Sprite* sp) {
-        if (!sp || !located)
-        {
-            return false;
-        }
-        const float dx = sp->field_14_xy.x.ToFloat() - px, dy = sp->field_14_xy.y.ToFloat() - py;
-        return dx * dx + dy * dy > reach * reach;
-    };
+    const ReachArea area(snap, 1.0f);
     for (auto it = gCars.begin(); it != gCars.end();)
     {
-        if (a.seen.count(it->first) || beyond(it->second->field_50_car_sprite))
+        if (a.seen.count(it->first) || area.Beyond(it->second->field_50_car_sprite))
         {
             ++it;
             continue;
@@ -386,7 +376,7 @@ void RemoveUnsent(const Pass& a, const Snapshot& snap)
     }
     for (auto it = gPeds.begin(); it != gPeds.end();)
     {
-        if (a.seen.count(it->first) || beyond(PedSprite(it->second)))
+        if (a.seen.count(it->first) || area.Beyond(PedSprite(it->second)))
         {
             ++it;
             continue;

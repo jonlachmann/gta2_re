@@ -12,7 +12,7 @@ const int kEntries = 1024; // sound_obj has 1020 audio entities, each with at mo
 
 struct Pool
 {
-    unsigned char mEntries[kEntries][sizeof(SoundPosEntry)];
+    alignas(SoundPosEntry) unsigned char mEntries[kEntries][sizeof(SoundPosEntry)];
     int mNext[kEntries]; // free list
     int mHead;
     int mReady; // 0 until the free list is built (the pool is zero-initialised)
