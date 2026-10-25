@@ -291,7 +291,7 @@ class Client
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
     BotView mBotView;
     uint32_t mLastInput = ~0u; // for the input log
-    int mMarks = 0; // F12 presses (ChooseInput)
+    int mMarks = 0; // mark key presses (F12 or the key under Esc) (ChooseInput)
     engine::Round mRound; // the last one announced
     int mGeneration = 0; // engine::GameGeneration's, of the game running
     int mServerGame = -1; // the server's game we take snapshots of: the next after a map change (-1: the first one's)

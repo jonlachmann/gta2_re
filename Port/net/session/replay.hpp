@@ -2,7 +2,7 @@
 // does nothing but react to what arrives each frame and to its own input, so a recording of exactly that (the
 // server's welcome, then per frame the packets, the round trip it saw and the input it used) replays its game
 // tick for tick: as fast as the game runs, and the same every time. GTA2_NET_RECORD=<file> records, --replay <file>
-// plays it back. Without GTA2_NET_RECORD, a person's session is recorded anyway (NextRecordingPath), and F12 in play
+// plays it back. Without GTA2_NET_RECORD, a person's session is recorded anyway (NextRecordingPath), and F12 (or the key under Esc) in play
 // marks a moment to look at: the client and its replay print "net: mark N at frame F" (the key is in the input).
 #pragma once
 #include "../core/protocol.hpp"

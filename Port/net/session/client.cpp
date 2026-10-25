@@ -128,7 +128,7 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
         }
         else
         {
-            printf("net: recording to %s (F12 marks a moment)\n", path.c_str());
+            printf("net: recording to %s (F12 or the key under Esc marks a moment)\n", path.c_str());
         }
     }
     printf("net: joined %s:%u as player %d of %d, %s\n", config.host.c_str(), config.port, mSlot, welcome.players, welcome.scr.c_str());
@@ -439,10 +439,11 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
         local = mBot ? mBot->Think(mBotView) : 0;
     }
     local &= 0x3FFFFF;
-    // F12 (a key the game doesn't use, here as its DirectInput code and key-down bit: Source/input_bits.hpp) marks
-    // the moment, in play and in its replay alike
-    const uint32_t kKeyDown = 0x200000, kMarkKey = 0x58; // DIK_F12
-    if ((local & kKeyDown) && ((local >> 12) & 0x1FF) == kMarkKey)
+    // F12, or the key under Esc (` or §: keyboards without F12), keys the game doesn't use (here as their DirectInput
+    // codes and the key-down bit: Source/input_bits.hpp), mark the moment, in play and in its replay alike
+    const uint32_t kKeyDown = 0x200000, kMarkF12 = 0x58, kMarkGrave = 0x29; // DIK_F12, DIK_GRAVE
+    const uint32_t key = (local >> 12) & 0x1FF;
+    if ((local & kKeyDown) && (key == kMarkF12 || key == kMarkGrave))
     {
         if (mFrame != mMarkFrame + 1) // held: one mark
         {
