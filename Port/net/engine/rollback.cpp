@@ -7,6 +7,7 @@
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/CollisionSoundQueue.hpp"
+#include "Source/CrimeReportQueue.hpp"
 #include "Source/Weapon.hpp"
 #include "Source/WeaponManager.hpp"
 #include "Source/sound_obj.hpp"
@@ -113,6 +114,10 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
         gCollisionSoundQueue_66AFE0->Reset_40BB90();
     }
     gSound_obj_66F680.field_544C[0].field_18 = 0; // sound_obj::PlayVocal_418C80's slot (0: none)
+    if (gCrimeReportQueue_67A4B8) // the crimes the police radio calls out
+    {
+        gCrimeReportQueue_67A4B8->field_2_read_idx = gCrimeReportQueue_67A4B8->field_0_write_idx;
+    }
     // ... and what it takes from peds and cars (all the Take* accessors sound_obj.cpp uses)
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {

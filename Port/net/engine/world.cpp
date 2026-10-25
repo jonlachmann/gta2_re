@@ -20,8 +20,9 @@ namespace
 // to before the press (a held key moved the player only a little). And the audio driver layer (0x6FFF00, the
 // sample manager): its stream handles restored were ones already closed, freed again on the next vocal. And the
 // DirectInput devices: the mouse's is freed when the window loses focus (Input_ReleaseMouse_5D7C70), and the next
-// save read it (a crash on alt-tab).
-const unsigned kFrameLoop[] = {0x67B804, 0x67B5C0, 0x67B6C0, 0x706C60, 0x67F8B0, 0x67B990, 0x6FFF00, 0x6F56B8, 0x6F56C8, 0x6F5AEC, 0x6F5A28, 0x6F5868, 0x6F593C, 0x6F57D8, 0x6F5B18, 0x6F5B28,
+// save read it (a crash on alt-tab). And the police radio's crime reports and callout cooldown: only the sound reads
+// them (sound_obj::PoliceRadioMessageGeneration_426790), and restored the radio called out the same crime again.
+const unsigned kFrameLoop[] = {0x67A4B8, 0x6758A8, 0x67B804, 0x67B5C0, 0x67B6C0, 0x706C60, 0x67F8B0, 0x67B990, 0x6FFF00, 0x6F56B8, 0x6F56C8, 0x6F5AEC, 0x6F5A28, 0x6F5868, 0x6F593C, 0x6F57D8, 0x6F5B18, 0x6F5B28,
                                0x6F58C0, 0x6F58C4, 0x6F5980, 0x6F573C, 0x6F5860, 0x6F58A0, 0x6F5858, 0x6F5B74, 0x6F5944,
                                0x707098, 0x7081F0, 0x6F58D8, 0x6F5760, 0x6F56E0, 0x6F5798, 0x626A08, 0x706C50};
 
