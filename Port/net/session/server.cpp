@@ -462,6 +462,14 @@ void net::Server::RunTestHooks()
             engine::DebugPowerUp(player, powerUp);
         }
     }
+    // GTA2_NET_TESTWANTED=<points> keeps every player at least that wanted (600: a star, the network game's most)
+    if (const char* wanted = Env().testWanted)
+    {
+        for (size_t i = 0; i < mSlots.size(); i++)
+        {
+            engine::DebugWanted((int)i, atoi(wanted));
+        }
+    }
     // GTA2_NET_TESTARM=<weapon>:<ammo> keeps every player armed (weapon_type, 0 pistol, 1 smg, ...)
     if (const char* arm = Env().testArm)
     {

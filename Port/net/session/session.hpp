@@ -28,6 +28,7 @@ struct SessionEnv
     const char* navDump; // the bots' map as a picture
     const char* testKill; // <tick>:<victim>:<killer>[,...]: server test kills
     const char* testArm; // <weapon>:<ammo>: every player kept armed on the server
+    const char* testWanted; // <points>: every player kept at least that wanted on the server
     const char* testPowerUp; // <tick>:<player>:<power-up>[,...]: server test power-ups
 };
 const SessionEnv& Env();

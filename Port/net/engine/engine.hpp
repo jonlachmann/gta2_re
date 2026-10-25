@@ -216,6 +216,7 @@ void DumpNavMap(const NavMap& map, const char* path); // as a picture (PGM): gre
 // The game's own death for a player, credited to another (-1: nobody); a server's frags follow from it
 void DebugKill(int victim, int killer);
 void DebugArm(int player, int weapon, int ammo); // Player::AddWeaponWithAmmo_564960
+void DebugWanted(int player, int points); // at least that many wanted points (Ped::field_20A_wanted_points)
 void DebugPowerUp(int player, int powerUp); // Player::CollectPowerUp_564D60 (power_up_indices, e.g. 12 instant gang)
 // A client's replicas: how many cars and peds are mapped, and how far (in blocks, the largest) the mapped ones are
 // from <snap> right now, before it is applied: the drift of one tick of the client's own sim

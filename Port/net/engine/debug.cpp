@@ -579,6 +579,12 @@ std::vector<std::vector<FieldTally>> gTally; // [type][field]
 uint64_t gMissing[8]; // per type: in the snapshot, mapped, but not captured here
 uint64_t gAsleepHere, gAsleepThere; // cars with physics on one side only (asleep on the other)
 
+bool IsCop(Ped* p)
+{
+    const s32 o = p->field_240_occupation;
+    return (o >= ped_ocupation_enum::police && o <= ped_ocupation_enum::unknown_cop_occu_31) || o == ped_ocupation_enum::roadblock_cop_37;
+}
+
 // A car reference of this game's (CarRef) as the server's
 int32_t ServerCarRef(int32_t ref, const std::unordered_map<int32_t, int32_t>& toServer)
 {
@@ -592,11 +598,12 @@ void net::engine::ComparePrediction(const Snapshot& snap)
     const Schema& schema = NetSchema();
     if (gTally.empty())
     {
-        gTally.resize(schema.types.size());
+        gTally.resize(schema.types.size() + 1); // the last: cops, apart from the other peds
         for (size_t t = 0; t < schema.types.size(); t++)
         {
             gTally[t].resize(schema.types[t].fields.size());
         }
+        gTally.back().resize(schema.types[kEntityPed].fields.size());
     }
     Snapshot here;
     Capture(here);
@@ -613,6 +620,7 @@ void net::engine::ComparePrediction(const Snapshot& snap)
     for (const EntityState& s : snap.entities)
     {
         uint32_t local = s.id; // the world and players: the same ids
+        bool cop = false;
         if (s.type == kEntityCar)
         {
             Car* c = ReplicaCar(s.id);
@@ -622,6 +630,7 @@ void net::engine::ComparePrediction(const Snapshot& snap)
         {
             Ped* p = ReplicaPed(s.id);
             local = p ? kPedIdBase + p->field_200_id : 0;
+            cop = p && IsCop(p);
         }
         else if (s.type == kEntityObject)
         {
@@ -652,7 +661,7 @@ void net::engine::ComparePrediction(const Snapshot& snap)
         {
             h.f[kPedCar] = ServerCarRef(h.f[kPedCar], carToServer);
         }
-        std::vector<FieldTally>& tally = gTally[s.type];
+        std::vector<FieldTally>& tally = cop ? gTally.back() : gTally[s.type];
         for (size_t f = 0; f < tally.size(); f++)
         {
             tally[f].compared++;
@@ -682,7 +691,9 @@ void net::engine::PrintPredictionStats(uint32_t frame)
             if (x.differ)
             {
                 char line[160];
-                snprintf(line, sizeof(line), "%s.%s %.1f%% (%llu of %llu, %.1f off on average)", schema.types[t].name, schema.types[t].fields[f].name,
+                const bool cop = t == schema.types.size();
+                snprintf(line, sizeof(line), "%s.%s %.1f%% (%llu of %llu, %.1f off on average)", cop ? "cop" : schema.types[t].name,
+                         schema.types[cop ? kEntityPed : t].fields[f].name,
                          100.0 * x.differ / x.compared, (unsigned long long)x.differ, (unsigned long long)x.compared, x.absSum / x.differ);
                 rows.push_back(Row{(double)x.differ / x.compared, line});
             }

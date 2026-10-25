@@ -18,6 +18,7 @@ const net::SessionEnv& net::Env()
         e.testArm = getenv("GTA2_NET_TESTARM");
         e.compare = getenv("GTA2_NET_COMPARE") != NULL;
         e.testPowerUp = getenv("GTA2_NET_TESTPOWERUP");
+        e.testWanted = getenv("GTA2_NET_TESTWANTED");
         return e;
     }();
     return sEnv;

@@ -608,6 +608,16 @@ void net::engine::DebugKill(int victim, int killer)
     }
 }
 
+void net::engine::DebugWanted(int player, int points)
+{
+    Player* p = GetPlayer(player);
+    Ped* ped = p ? p->field_2C4_player_ped : NULL;
+    if (ped && !ped->isDead_403B60() && ped->field_20A_wanted_points < points)
+    {
+        ped->field_20A_wanted_points = (s16)points;
+    }
+}
+
 void net::engine::DebugPowerUp(int player, int powerUp)
 {
     Player* p = GetPlayer(player);
