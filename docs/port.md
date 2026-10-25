@@ -444,7 +444,9 @@ winedbg) are gone: the state check and `GTA2_STATELOG_DUMP` do their jobs. wined
 
 `Scripts/port/build_mac.sh` builds `build_port/mac/gta2_port`, a **native arm64, 64-bit** program (Homebrew
 SDL3, the system OpenGL, the Linux build's POSIX layer), and `Scripts/port/run_mac.sh [map]` runs it in a
-copy of the install. It plays the frontend, all three cities and the attract demos. Issue #840 planned ARM64
+copy of the install. CMake builds the same program, and the netcode's tests: `cmake -S Port -B build_port/mac && cmake --build
+build_port/mac -j`, then `ctest --test-dir build_port/mac` (`Port/CMakeLists.txt`, clang on macOS or Linux; the Windows
+build stays `Scripts/port/build.sh`). It plays the frontend, all three cities and the attract demos. Issue #840 planned ARM64
 with 32-bit pointers (M4), but macOS has no such ABI for programs: the kernel refuses a `__PAGEZERO` below
 4 GB on arm64, and `mmap` won't hand out low addresses, so every pointer is above 4 GB. It is a 64-bit build,
 then, which issue #840 called possible later (117 structures, 168 conversions). What it took:
