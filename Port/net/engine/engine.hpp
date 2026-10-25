@@ -263,5 +263,8 @@ void DebugSetFrame(uint32_t frame); // the client's frame, for the debug checks'
 // GTA2_NET_MARKER: a square drawn where the newest snapshot has the local player (raw Fix16), over the frame
 void SetServerMarker(int32_t x, int32_t y, int32_t z);
 void DrawOverlay(); // the game calls it while drawing (Game::Draw_4B92D0, gPortDrawOverlay)
+// A client's connection, over the frame: <corner> small at the bottom right (the ping), <centre> across the middle
+// (an outage); empty: nothing
+void SetNetStatus(const std::string& corner, const std::string& centre);
 } // namespace engine
 } // namespace net

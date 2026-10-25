@@ -3,6 +3,9 @@
 #include "internal.hpp"
 #include "Source/Camera.hpp"
 #include "Source/Car.hpp"
+#include "Source/Draw.hpp"
+#include "Source/Frontend.hpp"
+#include "Source/gtx_0x106C.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"
 #include "Source/ObjectDefinitions.hpp"
@@ -218,6 +221,7 @@ bool GridsSound(const char* where)
 
 bool gMarker;
 Fix16 gMarkerX, gMarkerY, gMarkerZ;
+wchar_t gStatusCorner[64], gStatusCentre[64];
 } // namespace
 
 bool net::engine::DebugGridOk(const char* where, Car* car)
@@ -467,10 +471,44 @@ void net::engine::SetServerMarker(int32_t x, int32_t y, int32_t z)
     gMarkerZ = Raw(z);
 }
 
+namespace
+{
+void Widen(const std::string& text, wchar_t* out, size_t size)
+{
+    size_t n = 0;
+    for (; n < text.size() && n + 1 < size; n++)
+    {
+        out[n] = (wchar_t)(unsigned char)text[n];
+    }
+    out[n] = 0;
+}
+} // namespace
+
+void net::engine::SetNetStatus(const std::string& corner, const std::string& centre)
+{
+    Widen(corner, gStatusCorner, sizeof(gStatusCorner) / sizeof(gStatusCorner[0]));
+    Widen(centre, gStatusCentre, sizeof(gStatusCentre) / sizeof(gStatusCentre[0]));
+}
+
 void net::engine::DrawOverlay()
 {
     Camera* cam = gViewCamera_676978;
-    if (!gMarker || !cam)
+    if (!cam)
+    {
+        return;
+    }
+    // In the HUD's 640-wide units (DrawTextScaled_5D77A0 scales them as it does the HUD's)
+    const float scale = cam->field_A8_ui_scale.ToFloat() > 0 ? cam->field_A8_ui_scale.ToFloat() : 1.0f;
+    const s32 w = (s32)(cam->field_68_screen_px_width / scale), h = (s32)(cam->field_6C_screen_px_height / scale);
+    if (gStatusCorner[0])
+    {
+        DrawTextScaled_5D77A0(gStatusCorner, w - 8 - Frontend::GetMaxTextWidth_5D8990(gStatusCorner, word_703BAA), h - 24, word_703BAA);
+    }
+    if (gStatusCentre[0])
+    {
+        DrawTextScaled_5D77A0(gStatusCentre, (w - Frontend::GetMaxTextWidth_5D8990(gStatusCentre, word_703BAA)) / 2, h / 3, word_703BAA);
+    }
+    if (!gMarker)
     {
         return;
     }

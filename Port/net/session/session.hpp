@@ -218,6 +218,7 @@ class Client
     struct TickRecord
     {
         uint32_t tick = 0, buttons = 0; // the input used for the tick (tick: 0 until there is one)
+        long long sentMs = 0; // when its command was first sent (the ping: until a snapshot says the server has it)
         uint32_t shownTick = 0; // the tick <predX>, <predY> and <shown> are for (0: none)
         float predX = 0, predY = 0; // where the local player was predicted to be
         std::vector<engine::ReplicaPos> shown; // where the mapped cars and peds were shown (the display error)
@@ -259,6 +260,9 @@ class Client
     void SetNextInputs(uint32_t local);
     void SendCommands();
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
+    void Reconnect(); // the connection dropped: a new one, now and then, until the server has us back
+    void Rejoined(const Welcome& welcome);
+    void ShowStatus(); // the ping, and an outage, over the frame
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;
@@ -288,6 +292,12 @@ class Client
     std::unique_ptr<ClientRecorder> mRecorder;
     std::unique_ptr<ClientReplay> mReplay;
     uint32_t mRtt = 0; // the round trip as the transport sees it (or the recording says)
+    uint32_t mPingMs = 0; // from a command sent to the snapshot saying the server has it (a link conditioner's delay too)
+    uint32_t mPingShown = 0;
+    long long mPingShownMs = 0, mLastSnapshotMs = 0, mReconnectMs = 0;
+    int mReconnects = 0; // attempts since the connection dropped
+    bool mGaveUp = false; // back as another player, or on another map: no game to go on with here
+    std::string mScr; // the map's script (a rejoin must find the same)
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
     BotView mBotView;
     uint32_t mLastInput = ~0u; // for the input log

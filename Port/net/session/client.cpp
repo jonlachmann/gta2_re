@@ -13,6 +13,13 @@
 namespace
 {
 const int kSaves = 32; // ticks a snapshot may be behind and still be reconciled (about 1 s)
+const int kStallMs = 700; // no snapshot for this long: the connection is out (ENet drops it after 5 to 10 s)
+const int kReconnectMs = 3000; // between attempts to connect again
+
+long long NowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 // Polls until a message of <want> arrives on the reliable channel, a disconnect, or <ms> pass
 bool WaitFor(net::Transport* t, net::TransportEvent::Type want, int ms, net::TransportEvent* pOut)
@@ -53,6 +60,7 @@ void net::Client::Welcomed(const Welcome& welcome, engine::NetworkGame* pGame)
     pGame->gmp = welcome.gmp;
     pGame->sty = welcome.sty;
     pGame->scr = welcome.scr;
+    mScr = welcome.scr;
     mJerk.PrintJumps(Env().jerkLog >= 2);
 }
 
@@ -202,6 +210,14 @@ void net::Client::OnSnapshot(BitReader& r)
     mSlack = (int)h.lastCmdTick - (int)(h.tick + 1);
     mSlackKnown = mSynced && h.lastCmdTick > mJumpTick; // it has heard of the ticks since our last jump
     mNewSnapshot = true;
+    mLastSnapshotMs = NowMs();
+    const TickRecord& acked = mHist[h.lastCmdTick % kRing];
+    if (acked.tick == h.lastCmdTick && acked.sentMs)
+    {
+        // ponytail: up to a tick high (the server sends its snapshot after its tick, not as the command arrives)
+        const uint32_t sample = (uint32_t)(mLastSnapshotMs - acked.sentMs);
+        mPingMs = mPingMs ? (mPingMs * 7 + sample) / 8 : sample;
+    }
 }
 
 uint32_t net::Client::Lead() const
@@ -514,15 +530,42 @@ void net::Client::HandleEvents(const std::vector<TransportEvent>& events)
         else if (e.type == TransportEvent::kReceive)
         {
             BitReader r(e.data.data(), e.data.size());
-            if (r.Bits(8) == kMsgMapChange)
+            const uint32_t type = r.Bits(8);
+            Welcome welcome;
+            Reject reject;
+            if (type == kMsgMapChange)
             {
                 OnMapChange(r);
             }
+            else if (type == kMsgWelcome && !mConnected && ReadWelcome(r, welcome))
+            {
+                Rejoined(welcome);
+            }
+            else if (type == kMsgReject && !mConnected && ReadReject(r, reject))
+            {
+                printf("net: frame %u, the server won't have us back: %s\n", mFrame, reject.reason.c_str());
+                mTransport.reset(); // and try again: it may be full only for now
+            }
         }
-        else if (e.type == TransportEvent::kDisconnect && mConnected)
+        else if (e.type == TransportEvent::kConnect && !mConnected && mTransport)
         {
+            Hello hello;
+            hello.name = mConfig.name; // the server gives us our slot back by it
+            BitWriter w;
+            WriteHello(w, hello);
+            mTransport->Send(0, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+            mTransport->Flush();
+        }
+        else if (e.type == TransportEvent::kDisconnect)
+        {
+            if (mConnected)
+            {
+                printf("net: frame %u, lost the server\n", mFrame);
+                mReconnects = 0;
+                std::fill(mRemote.begin(), mRemote.end(), 0u); // the others stand still meanwhile
+            }
             mConnected = false;
-            printf("net: lost the server\n");
+            mTransport.reset();
         }
     }
 }
@@ -535,6 +578,7 @@ void net::Client::OnMapChange(BitReader& r)
     {
         printf("net: frame %u, the next map: %s\n", mFrame, m.scr.c_str());
         engine::ChangeMap(m.gmp, m.sty, m.scr, 90);
+        mScr = m.scr;
         mServerGame = m.game; // from now on: the old game's snapshots would put its things into the next map's
     }
 }
@@ -707,6 +751,10 @@ int net::Client::PacedTickMs() const
 void net::Client::SetNextInputs(uint32_t local)
 {
     const uint32_t next = mTick + 1;
+    if (mHist[next % kRing].tick != next)
+    {
+        mHist[next % kRing].sentMs = 0;
+    }
     mHist[next % kRing].tick = next;
     mHist[next % kRing].buttons = local;
     for (size_t i = 0; i < mRemote.size(); i++)
@@ -740,7 +788,82 @@ void net::Client::SendCommands()
         WriteCommands(w, mLatestTick, cmds, n);
         mTransport->Send(0, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
         mTransport->Flush();
+        if (!mHist[next % kRing].sentMs)
+        {
+            mHist[next % kRing].sentMs = NowMs();
+        }
     }
+}
+
+void net::Client::Reconnect()
+{
+    const long long now = NowMs();
+    if (mTransport || now < mReconnectMs)
+    {
+        return; // connecting (the hello follows its kConnect: HandleEvents), or not yet
+    }
+    mReconnectMs = now + kReconnectMs;
+    mReconnects++;
+    printf("net: frame %u, connecting to %s:%u again (attempt %d)\n", mFrame, mConfig.host.c_str(), mConfig.port, mReconnects);
+    std::string error;
+    mTransport.reset(CreateClientTransport(mConfig.host.c_str(), mConfig.port, &error));
+    if (mTransport && (mConfig.lagMs || mConfig.jitterMs || mConfig.lossPercent))
+    {
+        mTransport.reset(CreateConditioner(mTransport.release(), mConfig.lagMs, mConfig.jitterMs, mConfig.lossPercent));
+    }
+}
+
+// Back in: the same game goes on from the server's next snapshot, if the server has us as the same player on the same
+// map (a server restarted on it too: its ticks start over)
+void net::Client::Rejoined(const Welcome& welcome)
+{
+    if (welcome.version != kProtocolVersion || welcome.slot != mSlot || welcome.scr != mScr)
+    {
+        printf("net: frame %u, the server has us back as player %d on %s, not %d on %s: start the game again to play on\n", mFrame,
+               welcome.slot, welcome.scr.c_str(), mSlot, mScr.c_str());
+        mGaveUp = true;
+        Leave();
+        return;
+    }
+    printf("net: frame %u, back in as player %d\n", mFrame, mSlot);
+    mConnected = true;
+    mSynced = false;
+    mNewSnapshot = false;
+    mLatestTick = 0;
+    mServerGame = -1; // a restarted server counts its games from the start again
+    mLastSnapshotMs = NowMs();
+    for (Snapshot& s : mReceived)
+    {
+        s = Snapshot();
+    }
+    for (Parts& p : mParts)
+    {
+        p = Parts();
+    }
+}
+
+void net::Client::ShowStatus()
+{
+    const long long now = NowMs();
+    if (now - mPingShownMs >= 1000) // a number that holds still long enough to read
+    {
+        mPingShown = mPingMs;
+        mPingShownMs = now;
+    }
+    std::string centre;
+    if (mGaveUp)
+    {
+        centre = "Lost the server";
+    }
+    else if (!mConnected)
+    {
+        centre = "Lost the server, reconnecting";
+    }
+    else if (mSynced && now - mLastSnapshotMs > kStallMs)
+    {
+        centre = "Connection interrupted";
+    }
+    engine::SetNetStatus(mConnected && mPingShown ? "ping " + std::to_string(mPingShown) : "", centre);
 }
 
 void net::Client::Leave()
@@ -798,8 +921,17 @@ void net::Client::Frame()
         RecordTick();
     }
     HandleEvents(events);
+    if (!mReplay)
+    {
+        ShowStatus();
+    }
     if (!mConnected)
     {
+        if (!mReplay && !mGaveUp)
+        {
+            Reconnect();
+        }
+        SetNextInputs(local); // the game goes on here meanwhile: ours, the others' standing still
         return;
     }
     if (mNewSnapshot)
