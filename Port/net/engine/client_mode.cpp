@@ -78,6 +78,16 @@ void net::engine::GuardPeds()
             p->field_258_objective = objectives_enum::no_obj_0;
             p->field_25C_internal_objective = objectives_enum::no_obj_0;
         }
+        // A fire engine's crew told to aim its water cannon from a car without one, or at no car (here its car was
+        // another than the server's, or the order came first): Ped::AimVehicleTurretStateMachine_46A6D0 read the cannon
+        const bool aiming = p->field_258_objective == objectives_enum::turret_put_out_car_fire_60 ||
+                            p->field_25C_internal_objective == objectives_enum::turret_put_out_car_fire_60;
+        if (aiming && (!p->field_150_target_objective_car || !p->field_16C_car ||
+                       !p->field_16C_car->field_0_attachments.GetSpriteForModel_5A6A50(objects::water_cannon_114)))
+        {
+            p->field_258_objective = objectives_enum::no_obj_0;
+            p->field_25C_internal_objective = objectives_enum::no_obj_0;
+        }
     }
 }
 
