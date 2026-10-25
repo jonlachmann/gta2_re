@@ -211,13 +211,6 @@ void net::Client::OnSnapshot(BitReader& r)
     mSlackKnown = mSynced && h.lastCmdTick > mJumpTick; // it has heard of the ticks since our last jump
     mNewSnapshot = true;
     mLastSnapshotMs = NowMs();
-    const TickRecord& acked = mHist[h.lastCmdTick % kRing];
-    if (acked.tick == h.lastCmdTick && acked.sentMs)
-    {
-        // ponytail: up to a tick high (the server sends its snapshot after its tick, not as the command arrives)
-        const uint32_t sample = (uint32_t)(mLastSnapshotMs - acked.sentMs);
-        mPingMs = mPingMs ? (mPingMs * 7 + sample) / 8 : sample;
-    }
 }
 
 uint32_t net::Client::Lead() const
@@ -420,13 +413,63 @@ bool net::Client::TakeEvents(std::vector<TransportEvent>& events, uint32_t* pRec
         uint32_t recordedFrame = 0;
         return mReplay->Frame(&recordedFrame, &mRtt, pRecordedInput, events);
     }
+    events.swap(mPending);
     TransportEvent e;
-    while (mTransport->Poll(e))
+    while (mTransport && mTransport->Poll(e))
     {
-        events.push_back(e);
+        if (!TakePong(e))
+        {
+            events.push_back(e);
+        }
     }
-    mRtt = mTransport->RoundTripMs(0);
+    mRtt = mTransport ? mTransport->RoundTripMs(0) : 0;
     return true;
+}
+
+// Between frames: polled every millisecond or so, so a pong is timed when it comes, not at the next frame
+void net::Client::Idle()
+{
+    TransportEvent e;
+    while (!mReplay && mTransport && mTransport->Poll(e))
+    {
+        if (!TakePong(e))
+        {
+            mPending.push_back(e);
+        }
+    }
+}
+
+bool net::Client::TakePong(const TransportEvent& e)
+{
+    if (e.type != TransportEvent::kReceive || e.channel != kChannelUnreliable || e.data.empty() || e.data[0] != kMsgPong)
+    {
+        return false;
+    }
+    BitReader r(e.data.data(), e.data.size());
+    r.Bits(8);
+    const uint32_t sent = r.Bits(32);
+    const uint32_t sample = (uint32_t)NowMs() - sent;
+    if (sample < 10000) // ponytail: a pong from before a reconnect or a clock wrap, dropped
+    {
+        mPingMs = mPingMs ? (mPingMs * 3 + sample) / 4 : sample;
+    }
+    return true;
+}
+
+// Twice a second: our clock to the server, which sends it straight back
+void net::Client::SendPing()
+{
+    const long long now = NowMs();
+    if (!mTransport || now - mPingSentMs < 500)
+    {
+        return;
+    }
+    mPingSentMs = now;
+    BitWriter w;
+    w.Bits(kMsgPing, 8);
+    w.Bits((uint32_t)now, 32);
+    mTransport->Send(0, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
+    mTransport->Flush();
 }
 
 void net::Client::StartBot()
@@ -691,6 +734,10 @@ void net::Client::PrintStats(const Snapshot& snap)
         local += " " + std::to_string(mLocalDeaths[i]);
     }
     printf("net: frame %u, frags/deaths(health)%s; deaths shown here:%s\n", mFrame, Scoreboard(snap).c_str(), local.c_str());
+    if (!mReplay) // a replay has no network
+    {
+        printf("net: frame %u, ping %u ms (ENet's %u)\n", mFrame, mPingMs, mRtt);
+    }
     int poolCars = 0, poolPeds = 0, poolChars = 0, sent = 0, driven = 0, same = 0, traffic = 0, trafficHere = 0;
     engine::PrintReplicaLog();
     engine::PoolUse(&poolCars, &poolPeds, &poolChars);
@@ -751,10 +798,6 @@ int net::Client::PacedTickMs() const
 void net::Client::SetNextInputs(uint32_t local)
 {
     const uint32_t next = mTick + 1;
-    if (mHist[next % kRing].tick != next)
-    {
-        mHist[next % kRing].sentMs = 0;
-    }
     mHist[next % kRing].tick = next;
     mHist[next % kRing].buttons = local;
     for (size_t i = 0; i < mRemote.size(); i++)
@@ -788,10 +831,6 @@ void net::Client::SendCommands()
         WriteCommands(w, mLatestTick, cmds, n);
         mTransport->Send(0, kChannelUnreliable, w.Data().data(), w.ByteCount(), false);
         mTransport->Flush();
-        if (!mHist[next % kRing].sentMs)
-        {
-            mHist[next % kRing].sentMs = NowMs();
-        }
     }
 }
 
@@ -945,5 +984,9 @@ void net::Client::Frame()
     if (mSynced)
     {
         SendCommands();
+    }
+    if (!mReplay)
+    {
+        SendPing();
     }
 }

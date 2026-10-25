@@ -277,6 +277,7 @@ int NetMain_Init(std::vector<std::string>& args)
         }
         net::engine::StartNetworkGame(sc.game);
         gTickMs = sc.game.tickMs;
+        gPortIdleHook = [] { gServer->Idle(); }; // pings answered at once
     }
     else if (!replay.empty())
     {
@@ -306,6 +307,7 @@ int NetMain_Init(std::vector<std::string>& args)
             return -1;
         }
         atexit(LeaveServer);
+        gPortIdleHook = [] { gClient->Idle(); }; // pongs timed as they come
         signal(SIGTERM, OnStopSignal);
         signal(SIGINT, OnStopSignal);
 #if !defined(_WIN32)

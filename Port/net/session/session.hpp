@@ -110,6 +110,7 @@ class Server
   public:
     bool Start(const ServerConfig& config, std::string* error);
     void Frame();
+    void Idle(); // between frames: a ping answered at once, the rest kept for the frame
 
   private:
     struct Slot
@@ -147,6 +148,7 @@ class Server
     void OnCommands(int slot, BitReader& r);
     void StartGameOnce();
     void PollTransport();
+    void OnEvent(const TransportEvent& e);
     void RunTestHooks();
     void SetNextInputs(const Snapshot& world);
     void FeedJerk(const Snapshot& world);
@@ -163,6 +165,7 @@ class Server
     ServerConfig mConfig;
     std::unique_ptr<Transport> mTransport;
     std::vector<Slot> mSlots;
+    std::vector<TransportEvent> mPending; // what Idle polled, for the next frame
     uint32_t mTick = 0;
     bool mStarted = false;
     Stats mStats;
@@ -206,6 +209,7 @@ class Client
     bool StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error);
     void Frame();
     void Leave(); // tells the server at once (a quit, a signal), not by its timeout seconds later
+    void Idle(); // between frames: a pong timed as it arrives, the rest kept for the frame
 
   private:
     struct Parts
@@ -218,7 +222,6 @@ class Client
     struct TickRecord
     {
         uint32_t tick = 0, buttons = 0; // the input used for the tick (tick: 0 until there is one)
-        long long sentMs = 0; // when its command was first sent (the ping: until a snapshot says the server has it)
         uint32_t shownTick = 0; // the tick <predX>, <predY> and <shown> are for (0: none)
         float predX = 0, predY = 0; // where the local player was predicted to be
         std::vector<engine::ReplicaPos> shown; // where the mapped cars and peds were shown (the display error)
@@ -263,6 +266,8 @@ class Client
     void Reconnect(); // the connection dropped: a new one, now and then, until the server has us back
     void Rejoined(const Welcome& welcome);
     void ShowStatus(); // the ping, and an outage, over the frame
+    bool TakePong(const TransportEvent& e); // a pong (the ping's round trip measured): not for the frame
+    void SendPing();
 
     ClientConfig mConfig;
     std::unique_ptr<Transport> mTransport;
@@ -292,9 +297,10 @@ class Client
     std::unique_ptr<ClientRecorder> mRecorder;
     std::unique_ptr<ClientReplay> mReplay;
     uint32_t mRtt = 0; // the round trip as the transport sees it (or the recording says)
-    uint32_t mPingMs = 0; // from a command sent to the snapshot saying the server has it (a link conditioner's delay too)
+    uint32_t mPingMs = 0; // the network's round trip: a ping to its pong, both answered between frames (a link conditioner's delay too)
     uint32_t mPingShown = 0;
-    long long mPingShownMs = 0, mLastSnapshotMs = 0, mReconnectMs = 0;
+    long long mPingShownMs = 0, mLastSnapshotMs = 0, mReconnectMs = 0, mPingSentMs = 0;
+    std::vector<TransportEvent> mPending; // what Idle polled, for the next frame
     int mReconnects = 0; // attempts since the connection dropped
     bool mGaveUp = false; // back as another player, or on another map: no game to go on with here
     std::string mScr; // the map's script (a rejoin must find the same)

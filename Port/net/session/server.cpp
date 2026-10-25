@@ -213,6 +213,13 @@ void net::Server::OnReceive(const TransportEvent& e)
         OnHello(e.peer, r);
         return;
     }
+    if (type == kMsgPing) // polled in a frame, not between them (Idle): late by that much
+    {
+        std::vector<uint8_t> pong = e.data;
+        pong[0] = kMsgPong;
+        mTransport->Send(e.peer, kChannelUnreliable, pong.data(), pong.size(), false);
+        return;
+    }
     const int slot = SlotOfPeer(e.peer);
     if (slot >= 0 && type == kMsgCommands) // else: not joined, or nothing a client sends
     {
@@ -425,24 +432,54 @@ void net::Server::StartGameOnce()
 
 void net::Server::PollTransport()
 {
+    for (const TransportEvent& e : mPending)
+    {
+        OnEvent(e);
+    }
+    mPending.clear();
     TransportEvent e;
     while (mTransport->Poll(e))
     {
-        if (e.type == TransportEvent::kReceive)
+        OnEvent(e);
+    }
+}
+
+// Between frames: a client's ping goes back at once (its round trip is then the network's alone, not our tick's
+// wait); anything else waits for the frame, as a join or a leave changes the game
+void net::Server::Idle()
+{
+    TransportEvent e;
+    while (mTransport && mTransport->Poll(e))
+    {
+        if (e.type == TransportEvent::kReceive && e.channel == kChannelUnreliable && !e.data.empty() && e.data[0] == kMsgPing)
         {
-            OnReceive(e);
+            e.data[0] = kMsgPong;
+            mTransport->Send(e.peer, kChannelUnreliable, e.data.data(), e.data.size(), false);
+            mTransport->Flush();
         }
-        else if (e.type == TransportEvent::kDisconnect)
+        else
         {
-            const int slot = SlotOfPeer(e.peer);
-            if (slot >= 0)
-            {
-                printf("net: player %d (%s) left\n", slot, mSlots[slot].name.c_str());
-                const std::string name = mSlots[slot].name;
-                mSlots[slot] = Slot();
-                mSlots[slot].name = name; // kept for its return
-                engine::TakeOutOfGame(slot);
-            }
+            mPending.push_back(e);
+        }
+    }
+}
+
+void net::Server::OnEvent(const TransportEvent& e)
+{
+    if (e.type == TransportEvent::kReceive)
+    {
+        OnReceive(e);
+    }
+    else if (e.type == TransportEvent::kDisconnect)
+    {
+        const int slot = SlotOfPeer(e.peer);
+        if (slot >= 0)
+        {
+            printf("net: player %d (%s) left\n", slot, mSlots[slot].name.c_str());
+            const std::string name = mSlots[slot].name;
+            mSlots[slot] = Slot();
+            mSlots[slot].name = name; // kept for its return
+            engine::TakeOutOfGame(slot);
         }
     }
 }

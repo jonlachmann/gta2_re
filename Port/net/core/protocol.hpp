@@ -8,7 +8,7 @@
 
 namespace net
 {
-const uint32_t kProtocolVersion = 13;
+const uint32_t kProtocolVersion = 14;
 const uint16_t kDefaultPort = 27920;
 const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (Evaluations, 7)
 const uint8_t kChannelUnreliable = 0; // snapshots, commands
@@ -25,6 +25,8 @@ enum MsgType : uint8_t
     kMsgSnapshot = 5, // server -> client, unreliable
     kMsgSnapshotPart = 6, // server -> client, unreliable: one part of a snapshot too big for one packet
     kMsgMapChange = 7, // server -> client, reliable: the next map, after a round (engine/rounds.cpp)
+    kMsgPing = 8, // client -> server, unreliable: the client's clock (ms, 32 bits), answered at once with
+    kMsgPong = 9, // server -> client, unreliable: the same clock back (the ping: the network's round trip alone)
 };
 
 struct Hello

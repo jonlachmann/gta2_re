@@ -1,6 +1,7 @@
 // Port (docs/port.md): the user32 subset of sdl_win32.hpp on SDL3, for the game's one window.
 #include "sdl_win32.hpp"
 #include "sdl_dinput.hpp"
+#include "port_hooks.hpp"
 #include <SDL3/SDL.h>
 #include <deque>
 
@@ -286,12 +287,18 @@ BOOL Port_PeekMessageA(LPMSG pMsg, HWND, UINT, UINT, UINT)
     // Nothing to do until the next frame: the game's loop would spin on PeekMessageA and RunGameFrame_4DA850 and
     // keep a core busy (as the original does). A millisecond's sleep while a frame is more than 1 ms away; never
     // when one is due (lockstep runs, replays, the frontend's own timing), so nothing runs slower.
+    if (gPortIdleHook)
+    {
+        gPortIdleHook();
+    }
     if ((int)(gMatchStartTime_6F5A28 - timeGetTime()) > 1)
     {
         SDL_Delay(1);
     }
     return FALSE;
 }
+
+void (*gPortIdleHook)() = NULL;
 
 BOOL Port_TranslateMessage(const MSG*)
 {

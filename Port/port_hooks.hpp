@@ -27,6 +27,7 @@ extern s32 gPortSpawnPlayers;
 // Called in Game::UpdateGame_4B9410 after the players' tick (their cameras moved), before anything spawns; NULL but on
 // a network server, which moves a client's cameras' bounds to where that client already shows them (its lag ahead)
 extern void (*gPortAfterPlayersHook)();
+extern void (*gPortIdleHook)(); // while the game waits for its next frame (Port_PeekMessage): the netcode's polling
 extern void (*gPortDrawOverlay)(); // drawn last in Game::Draw_4B92D0; NULL unless a debug overlay is on
 extern s16 gPortZoneRoundRobin; // Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0's place, rolled back and sent by a network server
 // Port/net/engine/netplay.cpp's: asked when a network game has ended (winmain.cpp): true to start the next one at once,
