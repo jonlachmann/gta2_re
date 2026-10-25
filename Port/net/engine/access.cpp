@@ -11,6 +11,7 @@
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
 #include "Source/SpriteGrid.hpp"
+#include "Source/TrafficLights.hpp"
 #include "Source/char.hpp"
 #include "Source/network_data.hpp"
 #include "Source/rng.hpp"
@@ -213,6 +214,11 @@ void net::engine::Capture(Snapshot& out)
     w.f[kWorldGame] = GameGeneration() & 0xFFFF;
     w.f[kWorldRand] = (int32_t)PortRandState();
     w.f[kWorldSeed] = (int32_t)PortRandSeed();
+    if (gTrafficLights_194_705958 && gCarManager_6C_677930)
+    {
+        w.f[kWorldLights] = gTrafficLights_194_705958->field_192_phase | gTrafficLights_194_705958->field_193_timer << 4 |
+                            (gCarManager_6C_677930->field_20_light_state_a & 0xF) << 12;
+    }
     w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_idx + 1 : 0;
     for (int i = 0; i < MAX_PLAYERS; i++)
     {

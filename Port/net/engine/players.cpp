@@ -11,6 +11,7 @@
 #include "Source/GameSession.hpp"
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
+#include "Source/TrafficLights.hpp"
 #include "Source/Weapon.hpp"
 #include "Source/char.hpp"
 #include "Source/network_data.hpp"
@@ -339,6 +340,23 @@ void net::engine::ApplyWorld(const EntityState& w)
     }
     PortRandSetState((unsigned int)w.f[kWorldRand]);
     PortRandSetSeed((unsigned int)w.f[kWorldSeed]);
+    // The traffic lights as the server's: each game ran its own from its start, so a client's cars waited at a red
+    // the server's had as green (and were put back behind it by the next snapshot)
+    TrafficLights* lights = gTrafficLights_194_705958;
+    if (lights && gCarManager_6C_677930 && w.f[kWorldLights])
+    {
+        const u8 phase = (u8)(w.f[kWorldLights] & 0xF);
+        lights->field_193_timer = (u8)(w.f[kWorldLights] >> 4);
+        gCarManager_6C_677930->field_20_light_state_a = (w.f[kWorldLights] >> 12) & 0xF;
+        if (lights->field_192_phase != phase)
+        {
+            lights->field_192_phase = phase;
+            for (u32 i = 0; i < lights->field_190_array_used_count; i++)
+            {
+                lights->field_0_traffic_lights[i]->UpdateLightsFromPhase_5C27A0(phase);
+            }
+        }
+    }
 }
 
 void net::engine::ApplySlots(const Snapshot& snap)
