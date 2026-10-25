@@ -127,10 +127,15 @@ void net::Server::OnHello(uint32_t peer, BitReader& r)
     }
     else if (SlotOfPeer(peer) < 0)
     {
+        // The slot this name had (a client back after its connection dropped: the same player), else the first free
         int slot = 0;
-        while (slot < (int)mSlots.size() && mSlots[slot].used)
+        while (slot < (int)mSlots.size() && (mSlots[slot].used || mSlots[slot].name != hello.name))
         {
             slot++;
+        }
+        for (int i = 0; slot == (int)mSlots.size() && i < (int)mSlots.size(); i++)
+        {
+            slot = mSlots[i].used ? slot : i;
         }
         if (slot == (int)mSlots.size())
         {
@@ -433,7 +438,9 @@ void net::Server::PollTransport()
             if (slot >= 0)
             {
                 printf("net: player %d (%s) left\n", slot, mSlots[slot].name.c_str());
+                const std::string name = mSlots[slot].name;
                 mSlots[slot] = Slot();
+                mSlots[slot].name = name; // kept for its return
                 engine::TakeOutOfGame(slot);
             }
         }
