@@ -9,11 +9,9 @@
 #include "Source/CarAI.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Ped.hpp"
-#include "Source/char.hpp"
 #include "Source/debug.hpp"
 #include "Source/Police.hpp"
 #include "Port/port_hooks.hpp"
-#include <unordered_set>
 
 // Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
 // given that order through its group here (PedGroup::PromoteMemberToLeader_4C9680) and sat in a car since (the
@@ -70,42 +68,6 @@ void net::engine::GuardPeds()
         {
             ai->field_68_car_in_collision = NULL;
             ai->field_24_bf.bFlag12 = 0; // the collision to handle (it says there is a car)
-        }
-    }
-    // A ped on foot after or at the door of a car that is going (no sprite now, or out of the pool: the server's
-    // removal, more of them with more traffic): it read the car (Char::state_3_551A00, Ped::EnterTargetObjectiveCar_4686C0:
-    // crashes). It stops and walks
-    std::unordered_set<Car*> usable;
-    for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
-    {
-        if (c->field_50_car_sprite)
-        {
-            usable.insert(c);
-        }
-    }
-    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
-    {
-        Char* c = p->field_168_game_object;
-        if (!c || p->field_278_ped_state_1 == ped_state_1::in_car_10)
-        {
-            continue;
-        }
-        Car** refs[4] = {&c->field_84_target_car, &p->field_150_target_objective_car, &p->field_154_target_to_enter, &p->field_16C_car};
-        bool gone = false;
-        for (Car** r : refs)
-        {
-            if (*r && !usable.count(*r))
-            {
-                *r = NULL;
-                gone = true;
-            }
-        }
-        if (gone)
-        {
-            p->SetObjective(objectives_enum::no_obj_0, 9999);
-            p->SetObjective2_463830(objectives_enum::no_obj_0);
-            p->ChangeNextPedState1_45C500(ped_state_1::walking_0);
-            p->ChangeNextPedState2_45C540(ped_state_2::ped2_walking_0);
         }
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)

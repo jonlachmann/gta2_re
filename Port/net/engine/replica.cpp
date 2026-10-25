@@ -143,9 +143,25 @@ void Prune(Pass& a)
 // A car goes, unless a ped points to it (its driver, a passenger, a corpse cloned in it, Player::Wasted_567130): that
 // ped would point at a removed car (the sound listener's camera follows a player's corpse and reads its car,
 // sound_obj::InterrogateAudioEntities_41A730)
+// A ped here going for it (to get in, after it, at its door) keeps it too: freed, the ped read it on (its sprite,
+// Char::state_3_551A00, a crash). It goes on a later snapshot, once the server's ped is about something else
+bool TargetedHere(Car* car)
+{
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+    {
+        Char* c = p->field_168_game_object;
+        if (p->field_150_target_objective_car == car || p->field_154_target_to_enter == car || p->field_16C_car == car ||
+            (c && c->field_84_target_car == car))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void RemoveCar(const Pass& a, Car* car)
 {
-    if ((car->field_54_driver && !IsSpareDriver(car->field_54_driver)) || a.referenced.count(car))
+    if ((car->field_54_driver && !IsSpareDriver(car->field_54_driver)) || a.referenced.count(car) || TargetedHere(car))
     {
         gOccupiedKept++;
         return;
