@@ -289,6 +289,12 @@ bool Plain(int32_t state1, int32_t state2)
            (state2 == ped_state_2::ped2_walking_0 || state2 == ped_state_2::ped2_staying_14);
 }
 
+// The stored states (Ped::ChangeNextPedState1_45C500's): plain ones, or none yet (11/28, as Ped's constructor sets them)
+bool PlainStored(int32_t state1, int32_t state2)
+{
+    return Plain(state1, state2) || (state1 == 11 && state2 == ped_state_2::Unknown_28);
+}
+
 // Its weapons, the game's way of arming a ped (Ped::ForceWeapon_46F600 drops the one it had): a gang member here had
 // none and never showed the shots the server's fired
 void ApplyWeapons(Ped* p, const net::EntityState& e)
@@ -468,7 +474,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     memcpy(&p->field_21C_bf, &flags, sizeof(flags));
     p->field_216_health = (s16)(e.f[kHealth] > 0 ? e.f[kHealth] : 1); // a death comes from the server's state, whole
     if (!driving && Plain(e.f[kStates + kState1], e.f[kStates + kState2]) && Plain(p->field_278_ped_state_1, p->field_27C_ped_state_2) &&
-        Plain(e.f[kStates + kStored1], e.f[kStates + kStored2]) && p->field_168_game_object)
+        PlainStored(e.f[kStates + kStored1], e.f[kStates + kStored2]) && p->field_168_game_object)
     {
         p->field_278_ped_state_1 = e.f[kStates + kState1];
         p->field_27C_ped_state_2 = e.f[kStates + kState2];
