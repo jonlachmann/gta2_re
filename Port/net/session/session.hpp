@@ -23,6 +23,7 @@ struct SessionEnv
     bool marker; // the server's position of the local player drawn
     bool corrLog, animLog, inputLog;
     bool compare; // the comparison check: the prediction against each snapshot, field by field
+    uint32_t divergeTick, divergeTicks; // the divergence check: from that server tick on this game alone, for that many ticks
     int jerkLog; // 1: the jerk statistics, 2: and each jump
     float blend; // how far a correction is blended in each frame (0.2; 1: at once)
     const char* navDump; // the bots' map as a picture
@@ -247,6 +248,7 @@ class Client
     void StartOver(); // a new game (the next map): synced again from its first snapshot
     void Resync(const Snapshot& snap);
     void Reconcile(const Snapshot& snap);
+    void CompareAlone(const Snapshot& snap, engine::SavedWorld* saved);
     void MeasureShownError(const Snapshot& snap);
     void TakePlayerStates(const Snapshot& snap);
     void Blend(const std::vector<engine::Pose>& shown);
@@ -276,6 +278,7 @@ class Client
 
     // Prediction: this game's tick (the server tick it is predicting) and the game saved after each tick
     bool mSynced = false;
+    uint32_t mAloneFrom = 0; // the divergence check: the server tick from which this game runs on its own (0: not yet)
     uint32_t mTick = 0;
     std::vector<std::unique_ptr<engine::SavedWorld>> mSaves;
     TickRecord mHist[kRing];

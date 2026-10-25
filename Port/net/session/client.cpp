@@ -271,6 +271,11 @@ void net::Client::Reconcile(const Snapshot& snap)
     MeasureShownError(snap);
     TakePlayerStates(snap);
     engine::SavedWorld* saved = s <= mTick && s + kSaves > mTick ? mSaves[s % kSaves].get() : NULL;
+    if (mAloneFrom)
+    {
+        CompareAlone(snap, saved);
+        return;
+    }
     if (!saved || !saved->valid || saved->tick != s)
     {
         engine::Apply(snap); // too old (or too new) to reconcile: take it as it is
@@ -289,6 +294,14 @@ void net::Client::Reconcile(const Snapshot& snap)
     }
     engine::Apply(snap);
     engine::DebugCheckPlayerCars("after the apply");
+    if (Env().divergeTick && s >= Env().divergeTick)
+    {
+        engine::CompareDivergence(snap, 0); // as applied: what the snapshot didn't carry over
+        engine::DumpPeds(s, false);
+        mAloneFrom = s;
+        engine::StartRandLog(); // from here on each tick runs once (the resimulation below, then live)
+        printf("net: divergence check, on our own from server tick %u (our tick %u)\n", s, mTick);
+    }
     std::vector<uint32_t> buttons(mRemote);
     for (uint32_t t = s + 1; t <= mTick; t++)
     {
@@ -302,6 +315,24 @@ void net::Client::Reconcile(const Snapshot& snap)
     mStats.rollbacks++;
     engine::ApplyScores(snap);
     Blend(before);
+}
+
+// The divergence check, once on our own: each snapshot against our game at its tick (a save), then back to now
+void net::Client::CompareAlone(const Snapshot& snap, engine::SavedWorld* saved)
+{
+    const uint32_t s = snap.tick;
+    if (saved && saved->valid && saved->tick == s && s > mAloneFrom)
+    {
+        engine::RestoreGame(*saved);
+        engine::CompareDivergence(snap, s - mAloneFrom);
+        engine::DumpPeds(s, false);
+        engine::RestoreGame(*mSaves[mTick % kSaves]);
+    }
+    if (s >= mAloneFrom + Env().divergeTicks)
+    {
+        engine::PrintDivergence();
+        exit(0);
+    }
 }
 
 // GTA2_NET_CORRLOG: corrections of over half a block or 45 degrees (players: a quarter block)
@@ -580,7 +611,7 @@ void net::Client::TakeSnapshot()
     // How far our commands are from two ticks early. ENet's round trip doesn't see a link conditioner, and the server's
     // word is better anyway: it says which tick's command it had last
     const int off = mSynced && mSlackKnown ? mSlack - 2 : 0;
-    if (!mSynced || mLatestTick > mTick || off < -3 || off > 12)
+    if (!mAloneFrom && (!mSynced || mLatestTick > mTick || off < -3 || off > 12))
     {
         Resync(snap);
     }

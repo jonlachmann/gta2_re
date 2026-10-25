@@ -2,6 +2,7 @@
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
 //            (the limits end a round, and the next starts on the same map: engine/rounds.cpp)
 //            [--maps <mmp>,<mmp>,...]  (a round on each in turn, the first instead of --map)
+//            [--interest blocks]  (how far around a client its snapshots reach: 24)
 //            [--police]  (police on, as the lobby's box; off by default as there)
 //            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)
@@ -152,6 +153,10 @@ int NetMain_Init(std::vector<std::string>& args)
         else if (a == "--tickms" && more)
         {
             sc.game.tickMs = atoi(args[++i].c_str());
+        }
+        else if (a == "--interest" && more)
+        {
+            sc.interestRadius = (float)atof(args[++i].c_str());
         }
         else if (a == "--traffic" && more)
         {

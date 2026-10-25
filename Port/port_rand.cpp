@@ -24,10 +24,15 @@ void PortRandSetState(unsigned int state)
 }
 
 unsigned int gPortRandCalls;
+void (*gPortRandLog)(void* caller);
 
 int port_rand_5EDEE1()
 {
     gPortRandCalls++;
+    if (gPortRandLog)
+    {
+        gPortRandLog(__builtin_return_address(0)); // the divergence check's log of who draws (Port/net/engine/debug.cpp)
+    }
     return PortRandStep(sState);
 }
 

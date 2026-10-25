@@ -223,6 +223,7 @@ void FreeReplicas(ReplicaState* state);
 // A ped's AI state (ped_state.cpp): its fields (kPedAi on), capture, apply. Apply: false when the ped is dead here and
 // not on the server (it has to be made again)
 void PedStateFields(std::vector<FieldDesc>& out);
+void PedStateRefFields(std::vector<int>* peds, std::vector<int>* cars); // the ped entity's fields that are references (net ids)
 void CapturePedState(const Ped* p, EntityState& e);
 bool ApplyPedState(Ped* p, const EntityState& e);
 void ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityState*>>& peds); // once the snapshot's peds are here

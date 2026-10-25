@@ -235,6 +235,15 @@ void DebugOwnCarDiff(const Snapshot& snap);
 // tallied; printed (the fields that differ most) and cleared by PrintPredictionStats
 void ComparePrediction(const Snapshot& snap);
 void PrintPredictionStats(uint32_t frame);
+// The divergence check: the server's state at a tick against this game's after age ticks on its own (0: just applied)
+void CompareDivergence(const Snapshot& snap, uint32_t age);
+void PrintDivergence();
+// GTA2_NET_DUMPPEDS=<file>[:<from>:<to>]: every ped's Ped, Char and Sprite as bytes, by the server's ids, at a tick
+// (Scripts/port/ped_diff.py compares a server's dump with a client's)
+void DumpPeds(uint32_t tick, bool server);
+// GTA2_NET_RANDLOG=<file>:<from>:<to>: each rand() draw's caller (an offset in the program) at those ticks (the game's
+// cycle), from when StartRandLog is called; Scripts/port/rand_diff.py compares two
+void StartRandLog();
 void DebugSoundChannels(uint32_t frame); // GTA2_NET_SOUNDLOG: the sound's playing channels, printed when they change
 void DebugAnimLog(uint32_t frame); // GTA2_NET_ANIMLOG: the other players' inputs, states and walking animation, every third frame
 void DebugSelfLog(uint32_t frame); // GTA2_NET_SELFLOG: the local player around a death (position, states, the death fields)

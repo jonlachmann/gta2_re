@@ -189,6 +189,19 @@ void net::engine::PedStateFields(std::vector<FieldDesc>& out)
     out.push_back(FieldDesc{"weapon2", 6, false});
 }
 
+void net::engine::PedStateRefFields(std::vector<int>* peds, std::vector<int>* cars)
+{
+    for (int i = 0; i < kPedRefCount; i++)
+    {
+        peds->push_back(kPedRefs + i);
+    }
+    peds->push_back(kGroup);
+    for (int i = 0; i < kCarRefCount; i++)
+    {
+        cars->push_back(kCarRefs + i);
+    }
+}
+
 void net::engine::CapturePedState(const Ped* p, EntityState& e)
 {
     CaptureMembers(p, kValues, kValueCount, e, kFirst);

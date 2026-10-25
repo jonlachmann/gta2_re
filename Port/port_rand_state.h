@@ -6,6 +6,7 @@
 unsigned int PortRandState();
 void PortRandSetState(unsigned int state);
 extern unsigned int gPortRandCalls; // port_rand_5EDEE1 calls so far
+extern void (*gPortRandLog)(void* caller); // when set, told of each draw's caller
 
 // VC6's rand(): a linear congruential generator, 15 bits per call
 inline int PortRandStep(unsigned int& state)

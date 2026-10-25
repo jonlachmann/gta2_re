@@ -668,6 +668,8 @@ void net::Server::Frame()
     Snapshot world;
     engine::Capture(world);
     world.tick = mTick;
+    engine::DumpPeds(mTick, true);
+    engine::StartRandLog();
     SetNextInputs(world);
     FeedJerk(world);
     CheckRound(world);

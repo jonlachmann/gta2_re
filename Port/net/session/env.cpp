@@ -17,6 +17,11 @@ const net::SessionEnv& net::Env()
         e.testKill = getenv("GTA2_NET_TESTKILL");
         e.testArm = getenv("GTA2_NET_TESTARM");
         e.compare = getenv("GTA2_NET_COMPARE") != NULL;
+        e.divergeTick = 0, e.divergeTicks = 300;
+        if (const char* d = getenv("GTA2_NET_DIVERGE")) // <server tick>[:<ticks>]
+        {
+            sscanf(d, "%u:%u", &e.divergeTick, &e.divergeTicks);
+        }
         e.testPowerUp = getenv("GTA2_NET_TESTPOWERUP");
         e.testWanted = getenv("GTA2_NET_TESTWANTED");
         return e;
