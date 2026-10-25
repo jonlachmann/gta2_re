@@ -54,6 +54,7 @@ void OnFrame(void*)
     if (gClient)
     {
         gClient->Frame();
+        net::engine::AnchorAttachments(); // the frame is drawn next
     }
 }
 

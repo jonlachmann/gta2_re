@@ -42,6 +42,9 @@ void SeedRandom(uint32_t seed); // the game's rand() state (a server's: clients 
 void SetRandOwners(bool client);
 // What a client doesn't simulate: spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
+// Cars' attached objects (a tank's turret, a fire engine's cannon) back on their cars, after the client moved the cars
+// (a snapshot, the blend): the game puts them there in the car's own update, before that (Object::UpdateMovementAndEffects_527070)
+void AnchorAttachments();
 // After every tick, on the server too: what the game's own logic can leave behind that crashes it later (client_mode.cpp)
 void GuardPeds();
 

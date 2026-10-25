@@ -10,6 +10,9 @@
 #include "Source/CarChaseTaskTable.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Ped.hpp"
+#include "Source/Object_3C.hpp"
+#include "Source/Object_5C.hpp"
+#include "Source/sprite.hpp"
 #include "Source/debug.hpp"
 #include "Source/Police.hpp"
 #include "Port/port_hooks.hpp"
@@ -167,5 +170,34 @@ void net::engine::SeenByAll()
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
     {
         c->field_76_last_seen_timer = 0;
+    }
+}
+
+void net::engine::AnchorAttachments()
+{
+    for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
+    {
+        Sprite* car = c->field_50_car_sprite;
+        for (AttachedSprite* a = car ? c->field_0_attachments.field_0_p18 : NULL; a; a = a->mpNext)
+        {
+            Object* o = a->field_0_pSprite ? a->field_0_pSprite->AsObject2C_40FEC0() : NULL;
+            if (!o || !o->field_4_sprite || o->field_25_removal_state)
+            {
+                continue;
+            }
+            // As the game does: the offset turned with the car, its rotation on top of the car's
+            Fix16 x = car->field_14_xy.x, y = car->field_14_xy.y;
+            if (a->field_8_offset_x != Fix16(0) || a->field_C_offset_y != Fix16(0))
+            {
+                x = a->field_8_offset_x;
+                y = a->field_C_offset_y;
+                Ang16 rot = car->field_0_rotation;
+                Ang16::RotateVector_41FC90(x, y, rot);
+                x += car->field_14_xy.x;
+                y += car->field_14_xy.y;
+            }
+            o->field_4_sprite->set_xyz_lazy_420600(x, y, car->field_1C_zpos);
+            o->field_4_sprite->set_ang_lazy_420690(car->field_0_rotation + a->field_10_offset_rot);
+        }
     }
 }
