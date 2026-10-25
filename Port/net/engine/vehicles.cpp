@@ -131,12 +131,13 @@ void net::engine::ForceIntoCar(Ped* ped, Car* car)
     }
     ped->field_16C_car = car;
     ped->field_248_enter_car_as_passenger = 0;
-    ped->field_278_ped_state_1 = ped_state_1::in_car_10;
-    ped->field_27C_ped_state_2 = ped_state_2::ped2_driving_10;
     // Nothing left to do on foot: both its objective and the internal one (a walk to a point would run on without
-    // a char, Ped::WalkToTargetPoint_46C770)
+    // a char, Ped::WalkToTargetPoint_46C770). Before the states: no objective is a walk (ChangePedStatesByMode_463300),
+    // and after them a ped sat in its car walking, its AI never driving again (a police car's crew)
     ped->SetObjective(objectives_enum::no_obj_0, 9999);
     ped->SetObjective2_463830(objectives_enum::no_obj_0);
+    ped->field_278_ped_state_1 = ped_state_1::in_car_10;
+    ped->field_27C_ped_state_2 = ped_state_2::ped2_driving_10;
     car->field_88_despawn_status = car_despawn_status::active_1; // as Ped::SpawnPedInCar_45C730: not removed with a driver
     car->AssignDriver_4406E0(ped);
 }

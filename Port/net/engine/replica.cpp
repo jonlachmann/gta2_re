@@ -317,7 +317,8 @@ void ApplyPed(Pass& a, const EntityState& e)
     const bool settled = !e.f[kPedState] && !InCarTransition(ped) && !ped->isDead_403B60();
     if (serverCar)
     {
-        if (serverCar->field_54_driver != ped && settled && !a.owned.count(serverCar))
+        // (or its driver here already, but not sitting in it: a police car's driver walked, Police off here)
+        if ((serverCar->field_54_driver != ped || ped->field_278_ped_state_1 != ped_state_1::in_car_10) && settled && !a.owned.count(serverCar))
         {
             ForceIntoCar(ped, serverCar);
         }
