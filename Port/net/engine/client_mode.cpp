@@ -13,9 +13,16 @@
 
 // Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
 // given that order through its group here (PedGroup::PromoteMemberToLeader_4C9680) and sat in a car since (the
-// server's ped was there: the snapshot, or its own car-jack predicted differently) kept it, and crashed on it
+// server's ped was there: the snapshot, or its own car-jack predicted differently) kept it, and crashed on it.
+// So did a punch (Ped::MeleeAttackStateMachine_46B670) and an attack on foot (Ped::AttackTargetStateMachine_46D460)
 namespace
 {
+bool OnFootOnly(s32 objective)
+{
+    return objective == objectives_enum::objective_32 || objective == objectives_enum::punch_char_23 ||
+           objective == objectives_enum::kill_char_on_foot_20;
+}
+
 bool IsPassenger(Car* car, Ped* ped)
 {
     for (PedListNode* n = car->field_4_passengers_list.field_0_pFirstPed; n; n = n->mpNext)
@@ -47,7 +54,7 @@ void net::engine::GuardPeds()
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         if (p->field_16C_car && !p->field_168_game_object &&
-            (p->field_258_objective == objectives_enum::objective_32 || p->field_25C_internal_objective == objectives_enum::objective_32))
+            (OnFootOnly(p->field_258_objective) || OnFootOnly(p->field_25C_internal_objective)))
         {
             p->field_258_objective = objectives_enum::no_obj_0;
             p->field_25C_internal_objective = objectives_enum::no_obj_0;
