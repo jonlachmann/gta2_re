@@ -103,6 +103,20 @@ void net::engine::GuardPeds()
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
+        // A ped on foot in the car state (the snapshot's: the server's got in, its entry here another) with no car to get
+        // into: Ped::UpdateCharB4_462B80 seats it in its char's target car, and read none. Its own car, or on foot
+        Char* body = p->field_168_game_object;
+        if (body && p->field_278_ped_state_1 == ped_state_1::in_car_10 && !(body->field_84_target_car && cars.count(body->field_84_target_car)))
+        {
+            if (p->field_16C_car && cars.count(p->field_16C_car))
+            {
+                body->field_84_target_car = p->field_16C_car;
+            }
+            else
+            {
+                p->field_278_ped_state_1 = ped_state_1::walking_0;
+            }
+        }
         if (p->field_16C_car && !p->field_168_game_object &&
             (OnFootOnly(p->field_258_objective) || OnFootOnly(p->field_25C_internal_objective)))
         {

@@ -54,6 +54,7 @@ void OnFrame(void*)
     if (gClient)
     {
         gClient->Frame();
+        net::engine::GuardPeds(); // again: the snapshot this frame applied comes before the next tick
         net::engine::AnchorAttachments(); // the frame is drawn next
     }
 }
