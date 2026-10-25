@@ -12,12 +12,16 @@
 #include "Source/char.hpp"
 #include "Source/sprite.hpp"
 
+// An order to get out counts in a car only, one to get in on foot only: a SWAT van's driver that had got out here,
+// the server's staying in, kept its order to leave, and was never put back (its van driverless here for a minute)
 bool net::engine::InCarTransition(Ped* ped)
 {
     const s32 s1 = ped->field_278_ped_state_1, s2 = ped->field_27C_ped_state_2, objective = ped->get_objective_403A80();
+    const bool inCar = ped->field_16C_car != NULL;
     return s1 == ped_state_1::entering_car_3 || s1 == ped_state_1::exiting_car_4 || s2 == ped_state_2::ped2_entering_a_car_6 ||
-           s2 == ped_state_2::ped2_getting_out_a_car_7 || objective == objectives_enum::enter_car_as_driver_35 ||
-           objective == objectives_enum::leave_car_36 || objective == objectives_enum::enter_train_37 || objective == objectives_enum::leave_train_38;
+           s2 == ped_state_2::ped2_getting_out_a_car_7 ||
+           (!inCar && (objective == objectives_enum::enter_car_as_driver_35 || objective == objectives_enum::enter_train_37)) ||
+           (inCar && (objective == objectives_enum::leave_car_36 || objective == objectives_enum::leave_train_38));
 }
 
 // entering_car_3 with ped2_following_a_car_4 is still walking: after the car while it moves, or up to it (Ped.cpp's
