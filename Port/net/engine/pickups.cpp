@@ -1,5 +1,5 @@
-// Port/net (docs/netcode.md, "Pickups"): the server's pickups (weapons, power-ups, tokens: Object::IsPickup_421060) on
-// the clients. Other objects aren't sent: a client makes its own fires, explosions and projectiles. A client adopts a
+// Port/net (docs/netcode.md, "Pickups"): the server's pickups (weapons, power-ups, tokens: Object::IsPickup_421060) and
+// roadblock barriers on the clients. Other objects aren't sent: a client makes its own fires, explosions and projectiles. A client adopts a
 // pickup of its own at the same place (the map script made it on both sides), makes the ones it lacks
 // (Object_5C::NewPhysicsObj_5299B0, as the game drops one) and removes those the server no longer has (collected, or
 // its own: one it collected in a prediction comes back while the server still has it).
@@ -17,21 +17,31 @@ namespace
 {
 std::unordered_map<uint32_t, Object*> gObjects; // NetId -> this game's pickup
 
+// A pickup, or a police roadblock's barrier: the police are the server's (Police_38's roadblocks make them), so a
+// client has none of its own
 bool Usable(const Object* o)
 {
-    return o && o->field_4_sprite && o->field_8_definition && !o->field_25_removal_state && const_cast<Object*>(o)->IsPickup_421060();
+    return o && o->field_4_sprite && o->field_8_definition && !o->field_25_removal_state &&
+           (const_cast<Object*>(o)->IsPickup_421060() || o->field_18_model == objects::roadblock_21);
+}
+
+// Every live object, whether on the pool's list or not: a barrier is made off it (Object_5C::CreateObject_529C00, a
+// definition not in the pool list: AllocateUntracked), and only the sprite grids find it
+template <typename F> void ForEachObject(F f)
+{
+    for (Object& o : gObject_2C_Pool_6F8F80->field_8_pool)
+    {
+        if (Usable(&o))
+        {
+            f(&o);
+        }
+    }
 }
 
 std::set<Object*> LivePickups()
 {
     std::set<Object*> out;
-    for (Object* o = gObject_2C_Pool_6F8F80->field_4_pPrev; o; o = o->mpNext)
-    {
-        if (Usable(o))
-        {
-            out.insert(o);
-        }
-    }
+    ForEachObject([&](Object* o) { out.insert(o); });
     return out;
 }
 
@@ -50,18 +60,13 @@ void net::engine::ClearPickups()
 
 void net::engine::CapturePickups(Snapshot& out)
 {
-    for (Object* o = gObject_2C_Pool_6F8F80->field_4_pPrev; o; o = o->mpNext)
-    {
-        if (!Usable(o))
-        {
-            continue;
-        }
+    ForEachObject([&](Object* o) {
         EntityState e = Entity(kObjIdBase + (uint32_t)o->field_14_id, kEntityObject);
         PutPosition(e, o->field_4_sprite);
         e.f[kObjModel] = o->field_18_model;
         e.f[kObjIdx] = o->field_26_ped_ref_idx;
         out.entities.push_back(e);
-    }
+    });
 }
 
 int net::engine::gPickupsMade, net::engine::gPickupsRemoved;
@@ -131,7 +136,7 @@ void net::engine::ApplyPickups(const Snapshot& snap)
         if (!o && Debug().pickupLog)
         {
             static int sMade;
-            if (sMade++ < 20)
+            if (sMade++ < 20 || e.f[kObjModel] == objects::roadblock_21) // barriers: rare, and each worth seeing
             {
                 printf("net: pickup %u made: model %d at (%.2f, %.2f), %zu live pickups here\n", e.id, e.f[kObjModel], e.f[kObjX] / 16384.0f,
                        e.f[kObjY] / 16384.0f, live.size());

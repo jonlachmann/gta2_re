@@ -135,6 +135,10 @@ Not yet: a results screen between maps.
 
 GTA2's chat is a line typed live: F10 starts it (`Player`'s key handling, `Hud_ChatInput::StartChatting_5D1830`), each key adds to the player's line (`HandleChatInputKey_5D15E0`, from the key event in the input word), Enter ends it, and while it is typed every machine shows "name: line_" over the HUD (`DrawChatMessages_5D16B0`). There is no history. The key events reach the server in the commands (22 bits), so the server's player has the line; the player entity carries it (`chatting` and 80 characters), and a client shows the others' lines from the snapshots and its own as it types: the local player's line is kept through each restore and resimulation, which see no key events (`TakeLocalChat`, `PutLocalChat`). A late command repeated on the server keeps its controls only, or a key would type twice. Each client logs the others' lines as they change (`net: chat, <name>: <line>`).
 
+## Roadblock barriers
+
+A police roadblock (`PoliceRoadblock::CreateRoadblock_575FF0`, from 3 stars) is the server's: its cars and cops come as cars and peds, its barriers (`objects::roadblock_21`) with the pickups (`engine/pickups.cpp`). A barrier's definition keeps it off the object pool's list (`CreateObject_529C00`: `AllocateUntracked`, only the sprite grids find it), so the pickups now walk the pool's whole array; before, neither the server's snapshot nor a client's own count saw one. A barrier a car pushes moves on each side by itself: one more than a block off is made again where the server has it. Checked with `GTA2_NET_TESTWANTED=5000` (4 stars) and two bot clients, 150 s: 30 barriers made on the clients, 20 removed with their roadblocks (the rest still stood at the end), none made twice.
+
 ## Connection
 
 A client shows its **ping** at the bottom right: the network's round trip alone. Twice a second it sends its clock (`kMsgPing`), and the server sends it straight back (`kMsgPong`). Both poll between frames, about every millisecond (`gPortIdleHook`, where the game waits for its next frame), so neither the server's tick nor the client's frame adds to it, and a link conditioner's delay counts as the wire's: 100 ms each way shows 200 (the earlier measure, a command to the snapshot answering it, showed 288). The client's log prints it with ENet's own round trip, which doesn't see a conditioner. With no snapshot for 0.7 s it shows **Connection interrupted** and plays on with the others' last inputs; snapshots coming back resync it as usual. When ENet drops the connection (5-10 s) it shows **Lost the server, reconnecting**: the others stand still, and every 3 s it connects again under its name. The server gives a name its old slot back if that is free, so the game goes on as the same player, put back at a restart zone (as anyone joining). The same goes for a server restarted on the same map (its ticks start over). Back as another player or on another map, the client stops at **Lost the server**: that takes a new game. Checked: a server paused 3 s (no drop), killed and restarted (back in, 7 s to notice the drop).
@@ -249,7 +253,7 @@ Port/net/
                car_ai.cpp, ped_state.cpp  a car's and a ped's AI state (members.hpp: member tables by name)
                replica.cpp   a client's cars and peds: adopted, made, moved, removed
                vehicles.cpp  getting into and out of cars at once, or started as the enter key starts it
-               pickups.cpp, slots.cpp  pickups; slots joining and leaving a running game
+               pickups.cpp, slots.cpp  pickups and roadblock barriers; slots joining and leaving a running game
                client_mode.cpp  what a client doesn't simulate (spawning, despawning, scripts, police)
                sound_pool.cpp   SoundPosEntry from a pool in the rollback set (milestone S)
                navmap.cpp    the static map for bots
