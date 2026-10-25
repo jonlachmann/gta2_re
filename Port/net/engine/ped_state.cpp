@@ -100,7 +100,11 @@ const int kChar = kGangs + 2; // its char's movement and animation (0 without a 
 const Member kCharValues[] = {CM(field_10_char_state, 4, true),      CM(field_14_target_rotation, 2, true),  CM(field_38_velocity, 4, true),
                               CM(field_3C_run_or_jump_speed, 4, true), CM(field_98_velocity_vector.x, 4, true), CM(field_98_velocity_vector.y, 4, true),
                               CM(field_6C_animation_state, 4, true), CM(field_68_animation_frame, 1, false), CM(field_70_frame_timer, 1, true),
-                              CM(field_71_frame_delay, 1, true)};
+                              CM(field_71_frame_delay, 1, true),
+                              // its wander: the next idle behaviour's timer and the turn it takes (Char::SelectRandomIdleBehavior_54C580,
+                              // ApplyRandomRotationJitter_54C6C0), its jumps, and the push off another ped (Char::state_1_5504F0)
+                              CM(field_46_timer, 2, false), CM(field_42_rotation_jitter, 2, true), CM(field_54_jump_scale_counter, 1, true),
+                              CM(field_6A_repulsion_timer, 1, false), CM(field_74_repulsion_rotation, 2, true)};
 #undef CM
 const size_t kCharCount = sizeof(kCharValues) / sizeof(kCharValues[0]);
 const int kCharState = net::engine::MemberIndex(kCharValues, kCharCount, offsetof(Char, field_10_char_state));
