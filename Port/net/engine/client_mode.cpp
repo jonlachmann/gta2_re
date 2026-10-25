@@ -7,11 +7,13 @@
 #include "Source/Player.hpp"
 #include "Source/Car.hpp"
 #include "Source/CarAI.hpp"
+#include "Source/CarChaseTaskTable.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Ped.hpp"
 #include "Source/debug.hpp"
 #include "Source/Police.hpp"
 #include "Port/port_hooks.hpp"
+#include <set>
 
 // Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
 // given that order through its group here (PedGroup::PromoteMemberToLeader_4C9680) and sat in a car since (the
@@ -68,6 +70,32 @@ void net::engine::GuardPeds()
         {
             ai->field_68_car_in_collision = NULL;
             ai->field_24_bf.bFlag12 = 0; // the collision to handle (it says there is a car)
+        }
+    }
+    // A chase task (police cars boxing in a wanted player) whose driver has no car with it now: its car went (the
+    // server's) or is another (the snapshot's). CarAI::UpdateStateMachine_44E560 found that driver in the table
+    // (FindDriverInState_4748A0) and read its car's task. Freed, and no car keeps it (as AmbulanceService does)
+    std::set<Ped*> peds;
+    std::set<Car*> cars;
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+    {
+        peds.insert(p);
+    }
+    for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
+    {
+        cars.insert(c);
+    }
+    for (CarChaseTask& t : gCarChaseTaskTable_678E30->field_0_entries)
+    {
+        Ped* d = t.field_4_pDriver;
+        Car* car = d && peds.count(d) ? d->field_16C_car : NULL;
+        if (t.field_0_in_use == 1 && !(car && cars.count(car) && car->field_60_pChaseTask == &t))
+        {
+            for (Car* c : cars)
+            {
+                c->field_60_pChaseTask = c->field_60_pChaseTask == &t ? NULL : c->field_60_pChaseTask;
+            }
+            gCarChaseTaskTable_678E30->FreeEntry_474CC0(&t);
         }
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
