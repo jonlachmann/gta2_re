@@ -66,6 +66,9 @@ int main(int argc, char** argv)
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
     sigaction(SIGABRT, &sa, NULL);
+    sigaction(SIGTRAP, &sa, NULL); // a trap: clang's __builtin_trap, libc++ hardening
+    sigaction(SIGILL, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
 #endif
 #if defined(_WIN32)
     FastClock_Install(); // GTA2_SPEED (docs/port.md, M2)
