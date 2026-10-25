@@ -157,6 +157,14 @@ Below the snapshot's fields, two dumps compare the game itself:
 
 First findings (Tiny Town and Downtown, police on, idle clients): the game's one random stream (rand(), behind gRng_6F6784) is off after the first tick. The server draws for traffic and ambient peds the client doesn't spawn, and for everything near other players; the client for the peds it keeps after the server removed them. With two players about 140 blocks apart on Downtown, the server drew 99 numbers a tick and the client 52. Peds' random turns (Char::ApplyRandomRotationJitter_54C6C0) and choices then differ within 1-3 ticks. Unsent too: Char's field_42_rotation_jitter and field_46_timer (its next idle behaviour). A ped getting into or out of a car on either side gets none of the server's AI state until both have settled (a cop at a car door on the server walked off on its own here).
 
+## Random draws
+
+The game has one random stream (rand(), behind gRng_6F6784), as in 10.5.exe: its original netcode was lockstep, every machine simulating the whole map, and checked the stream with each player's input (winmain.cpp's sync check). A client here simulates only its own area, so every draw the server made for anything else (the traffic and ambient peds it spawns, the peds near other players, its scripts and police) moved every later draw of the client's: its peds' random turns and choices were others from the first tick.
+
+In a network game the draws have owners (`Port/port_rand_owner.h`, `Port/port_rand.cpp`): each ped's update (with its char's), each car's, and each service only the server runs (traffic, ambient peds, generators, garages, scripts, emergency crews, ambulances, police, fire engines) draws a hash of the game's seed, the owner (the server's net id, or the service), the tick and how many it drew in this update. An entity then decides the same way wherever it is simulated, and a replay draws the same. The hooks in Source/ (the pool loops, Game::UpdateGame_4B9410) are port builds only; outside a network game nothing owns a draw. Draws without an owner (a player's controls, objects, explosions) are still the one stream, which snapshots carry as before. The seed is the server's `--seed` (0 without one), sent in the world entity.
+
+With two idle clients on Downtown about 140 blocks apart, the server had drawn 99 numbers a tick to a client's 52 before; after, the client's peds kept to the server's except where the server spawned a ped next to them (which the next snapshot brings).
+
 Fixtures and logs are in `build_port/net_check/`. Each test game is the shell job itself (`exec`), so the script's exit ends them all.
 
 ## Decisions
