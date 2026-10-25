@@ -50,6 +50,8 @@ const Member kValues[] = {
 const size_t kValueCount = sizeof(kValues) / sizeof(kValues[0]);
 
 const int kObjective = net::engine::MemberIndex(kValues, kValueCount, offsetof(Ped, field_258_objective));
+const int kPassenger = net::engine::MemberIndex(kValues, kValueCount, offsetof(Ped, field_248_enter_car_as_passenger));
+const int kDoor = net::engine::MemberIndex(kValues, kValueCount, offsetof(Ped, field_24C_target_car_door));
 
 // The flags that are the ped's own behaviour; the others say where it is in this game's structures (active, scheduled for
 // removal, in the pathfinder's list, on fire with a flame object of this game's)
@@ -411,6 +413,44 @@ void net::engine::ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityS
 }
 
 
+namespace
+{
+// The server's ped on its way into or out of a car and this game's settled: started here the way the game starts it
+// (as a player's, players.cpp's StartTransition), else it went on with what it did before until both had settled
+// (a cop at a police car's door on the server walked off here). Into the server's target car, with its seat and
+// door; out of the car both have it in
+bool StartCarTransition(Ped* p, const net::EntityState& e)
+{
+    using namespace net::engine;
+    if (p->field_15C_player || !e.f[kPedState] || InCarTransition(p) || !p->field_168_game_object == !p->field_16C_car)
+    {
+        return false; // a player's (players.cpp), the server's settled, ours on its way already, or neither on foot nor in a car
+    }
+    const int32_t objective = e.f[kFirst + kObjective];
+    if (!p->field_16C_car && !e.f[kPedCar] && objective == objectives_enum::enter_car_as_driver_35)
+    {
+        bool ok;
+        Car* car = LocalCar((uint32_t)e.f[kCarRefs + kRefObjectiveCar], &ok);
+        if (!car || !car->field_50_car_sprite)
+        {
+            return false; // not here (yet)
+        }
+        StartEntering(p, car);
+        p->set_enter_car_as_passenger_4039B0((char_type)e.f[kFirst + kPassenger]);
+        p->set_target_car_door_403A70((char_type)e.f[kFirst + kDoor]);
+        return true;
+    }
+    const bool leaving = objective == objectives_enum::leave_car_36 || e.f[kStates + kState1] == ped_state_1::exiting_car_4 ||
+                         e.f[kStates + kState2] == ped_state_2::ped2_getting_out_a_car_7; // as LeavingCar (vehicles.cpp)
+    if (p->field_16C_car && RefCar(e.f[kPedCar]) == p->field_16C_car && leaving && p->field_16C_car->CanExitCar_43AF10())
+    {
+        StartLeaving(p);
+        return true;
+    }
+    return false;
+}
+} // namespace
+
 bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
 {
     const bool deadThere = e.f[kStates + kState1] == ped_state_1::dead_9;
@@ -442,6 +482,10 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
                          p->field_16C_car->field_5C_AI && // its objectives drive through the car's AI (ApplyCarAi gives it one)
                          e.f[kStates + kState1] == ped_state_1::in_car_10 && // driving there too, not on its way out
                          e.f[kFirst + kObjective] != objectives_enum::objective_32; // an on-foot one
+    if (StartCarTransition(p, e))
+    {
+        return true;
+    }
     if (!driving && (p->field_16C_car || InCarTransition(p) || e.f[kPedCar] || e.f[kPedState]))
     {
         // In a car, or on its way into or out of one, on either side: that is replica.cpp's (ForceIntoCar, ForceOutOfCar
