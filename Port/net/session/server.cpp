@@ -36,6 +36,14 @@ struct TestKill
     unsigned tick;
     int victim, killer;
 };
+// A client's Escape (the key's code in the input: Source/input_bits.hpp) is its own (Client::ChooseInput: its leave
+// prompt): here it would open the server's quit prompt for that player, whose yes ended the server's game
+uint32_t WithoutEscape(uint32_t buttons)
+{
+    const uint32_t kKeyDown = 0x200000, kKeyBits = 0x1FF000, kEscape = 0x01; // DIK_ESCAPE
+    return ((buttons & kKeyBits) >> 12) == kEscape ? buttons & ~(kKeyDown | kKeyBits) : buttons;
+}
+
 std::vector<TestKill> TestKills()
 {
     std::vector<TestKill> out;
@@ -199,7 +207,7 @@ void net::Server::OnCommands(int slot, BitReader& r)
         if (cmds[i].tick > mTick && cmds[i].tick <= mTick + kRing)
         {
             s.cmdTick[cmds[i].tick % kRing] = cmds[i].tick;
-            s.cmdButtons[cmds[i].tick % kRing] = cmds[i].buttons;
+            s.cmdButtons[cmds[i].tick % kRing] = WithoutEscape(cmds[i].buttons);
         }
     }
 }
