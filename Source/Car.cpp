@@ -49,6 +49,9 @@
 #include "sprite.hpp"
 #include "TextTable.hpp"
 #include "winmain.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_rand_owner.h" // PortRandScope
+#endif
 
 // field_A4_light_flags bits of CarLightFlags8: bEmergencyLights, bLightFlashing and bHeadlightFlash
 enum
@@ -1638,7 +1641,14 @@ void CarManager::CarsService_446790()
 
     gCar_BC_Pool_67792C->field_0_pool.UpdatePool();
 
+#if defined(GTA2_PORT)
+    {
+        PortRandScope portRandScope(kPortRandTraffic); // the server's alone (a network game)
+        gTrafficSpawner_14_677934->GenerateTraffic_583670();
+    }
+#else
     gTrafficSpawner_14_677934->GenerateTraffic_583670();
+#endif
 
     if (field_54_spawn_block > 0)
     {

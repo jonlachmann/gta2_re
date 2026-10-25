@@ -22,6 +22,9 @@
 
 #include <dinput.h>
 #include "ped_graphic_type.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_rand_owner.h" // PortRandScope
+#endif
 
 // Defined in Ped.cpp
 EXTERN_GLOBAL(s16, gPedOffscreenDespawnTime_678656);
@@ -647,6 +650,9 @@ void PedManager::PedsService_4703F0()
 
     if (!bSkip_dummies_67D4EF)
     {
+#if defined(GTA2_PORT)
+        PortRandScope portRandScope(kPortRandDummies); // the server's alone (a network game)
+#endif
         Dummies_470330();
     }
     field_3_num_peds_updated = static_cast<char_type>(gNumPedsUpdated_6787E0);

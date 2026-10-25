@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Health, deaths, weapons, scores", "Players in cars"): the players as snapshot entities,
 // and the server's put into a client's game: health, deaths, weapons, power-ups, its car, its place.
 #include "internal.hpp"
+#include "Port/port_rand_owner.h"
 #include "Port/port_hooks.hpp"
 #include "Port/port_rand_state.h"
 #include "Source/Camera.hpp"
@@ -337,6 +338,7 @@ void net::engine::ApplyWorld(const EntityState& w)
         gTagGame_6F8450.field_4_it_time_secs[i] = w.f[kWorldItTime + i];
     }
     PortRandSetState((unsigned int)w.f[kWorldRand]);
+    PortRandSetSeed((unsigned int)w.f[kWorldSeed]);
 }
 
 void net::engine::ApplySlots(const Snapshot& snap)

@@ -2,6 +2,7 @@
 // the game here; the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
 // (pickups.cpp) do the parts. Also the helpers the engine's files share.
 #include "internal.hpp"
+#include "Port/port_rand_owner.h"
 #include "Port/port_hooks.hpp"
 #include "Port/port_rand_state.h"
 #include "Source/Car.hpp"
@@ -178,6 +179,7 @@ void net::engine::SetTickMs(int ms)
 void net::engine::SeedRandom(uint32_t seed)
 {
     PortRandSetState(seed);
+    PortRandSetSeed(seed);
 }
 
 // --- Snapshots ---
@@ -210,6 +212,7 @@ void net::engine::Capture(Snapshot& out)
     w.f[kWorldSecondsLeft] = CurrentRound().secondsLeft;
     w.f[kWorldGame] = GameGeneration() & 0xFFFF;
     w.f[kWorldRand] = (int32_t)PortRandState();
+    w.f[kWorldSeed] = (int32_t)PortRandSeed();
     w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_idx + 1 : 0;
     for (int i = 0; i < MAX_PLAYERS; i++)
     {

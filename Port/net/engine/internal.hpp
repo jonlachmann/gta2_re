@@ -65,6 +65,7 @@ enum WorldField
     kWorldWinner,
     kWorldSecondsLeft,
     kWorldGame, // the server's game since its start (GameGeneration): a client takes only its current one's
+    kWorldSeed, // the seed of the entities' own random draws (Port/port_rand_owner.h)
 };
 enum CarField
 {

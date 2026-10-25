@@ -3,6 +3,7 @@
 // start), else created; moved to the server's state every snapshot; removed when the server no longer sends it.
 // Local cars and peds the server doesn't know (other than the players' own) are removed.
 #include "internal.hpp"
+#include "Port/port_rand_owner.h"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"
@@ -501,6 +502,63 @@ void net::engine::ClearReplicas()
 {
     gCars.clear();
     gPeds.clear();
+}
+
+// --- The owners of random draws (Port/port_rand_owner.h): an entity's key is the server's net id ---
+
+namespace
+{
+std::unordered_map<const Ped*, uint32_t> gPedKeys; // a client's: this game's ped -> the server's id, made each tick
+std::unordered_map<const Car*, uint32_t> gCarKeys;
+
+unsigned int ServerPedKey(const Ped* p)
+{
+    return p->field_15C_player ? 1 + p->field_15C_player->field_2E_idx : net::engine::kPedIdBase + p->field_200_id;
+}
+
+unsigned int ServerCarKey(const Car* c)
+{
+    return net::engine::kCarIdBase + c->field_6C_car_id;
+}
+
+unsigned int ClientPedKey(const Ped* p)
+{
+    if (p->field_15C_player)
+    {
+        return 1 + p->field_15C_player->field_2E_idx;
+    }
+    auto it = gPedKeys.find(p);
+    return it != gPedKeys.end() ? it->second : 0; // one of this game's own: the game's stream
+}
+
+unsigned int ClientCarKey(const Car* c)
+{
+    auto it = gCarKeys.find(c);
+    return it != gCarKeys.end() ? it->second : 0;
+}
+
+void ClientTickStart()
+{
+    // ponytail: made again every tick (a few hundred entries); the maps change with every apply and restore
+    gPedKeys.clear();
+    gCarKeys.clear();
+    for (const auto& kv : gPeds)
+    {
+        gPedKeys[kv.second] = kv.first;
+    }
+    for (const auto& kv : gCars)
+    {
+        gCarKeys[kv.second] = kv.first;
+    }
+}
+} // namespace
+
+void net::engine::SetRandOwners(bool client)
+{
+    gPortRandOwned = true;
+    gPortRandPedKey = client ? ClientPedKey : ServerPedKey;
+    gPortRandCarKey = client ? ClientCarKey : ServerCarKey;
+    gPortRandTickHook = client ? ClientTickStart : NULL;
 }
 
 const std::unordered_map<uint32_t, Car*>& net::engine::ReplicaCars()

@@ -228,6 +228,7 @@ int NetMain_Init(std::vector<std::string>& args)
     }
     PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same (milestone S)
     PortRandParticle_Separate(true); // and particles: a resimulation makes the flames it made before
+    net::engine::SetRandOwners(!server); // and each entity and server service its own: the same wherever it runs
     if (getenv("GTA2_NET_MARKER"))
     {
         gPortDrawOverlay = net::engine::DrawOverlay; // where the newest snapshot has us, over the frame

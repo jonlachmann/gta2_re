@@ -1,5 +1,18 @@
 #include "Game.hpp"
 #include "ped_group_type.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_rand_owner.h" // PortRandScope
+#endif
+// A service only the server runs draws its own random numbers in a network game (port_rand_owner.h)
+#if defined(GTA2_PORT)
+    #define PORT_RAND_SERVICE(key, call) \
+        { \
+            PortRandScope portRandScope(key); \
+            call; \
+        }
+#else
+    #define PORT_RAND_SERVICE(key, call) call
+#endif
 #include "ped_class.hpp"
 #include "AmbulanceService.hpp"
 #include "InputRecorder_67F8B0.hpp"
@@ -471,6 +484,9 @@ void Game::UpdatePaused_4B93C0()
 MATCH_FUNC(0x4B9410)
 void Game::UpdateGame_4B9410()
 {
+#if defined(GTA2_PORT)
+    PortRandTickStart(gpRng_67AB34->get_cur_rng_41CFE0()); // the owners' draws are numbered per tick
+#endif
     Player** ppPlayerIter = field_4_players;
     u32 i = 0;
     while (i < field_23_num_players)
@@ -493,10 +509,10 @@ void Game::UpdateGame_4B9410()
 
     gCranePool_D9C_679FD4->CranesService_480E50();
     gCrusherPool_94_67A830->CrushersService_4887F0();
-    gGeneratorPool_14AC_67E5D0->GeneratorsService_4C1D70();
+    PORT_RAND_SERVICE(kPortRandGenerators, gGeneratorPool_14AC_67E5D0->GeneratorsService_4C1D70());
     gPedManager_6787BC->PedsService_4703F0();
     gPublicTransport_181C_6FF1D4->PublicTransportService_57A7A0(); // trains & buses
-    gGarage_48_6FD26C->GaragesService_5349D0();
+    PORT_RAND_SERVICE(kPortRandGarages, gGarage_48_6FD26C->GaragesService_5349D0());
     gCarManager_6C_677930->CarsService_446790();
 
     if (bDo_mike_67D5CC)
@@ -513,19 +529,19 @@ void Game::UpdateGame_4B9410()
 
     if (!bSkip_mission_67D4E5)
     {
-        gScriptManager_6F8060->ExecuteScriptThreads_5127A0(); // missions
+        PORT_RAND_SERVICE(kPortRandScripts, gScriptManager_6F8060->ExecuteScriptThreads_5127A0()); // missions
     }
 
-    gEmergencyCrewPool_706280->ServiceAll_5CBBD0();
+    PORT_RAND_SERVICE(kPortRandEmergency, gEmergencyCrewPool_706280->ServiceAll_5CBBD0());
 
     if (!bSkip_ambulance_67D6C9)
     {
-        gAmbulance_110_6F70A8->AmbulancesService_4FA790(); // ambulance
+        PORT_RAND_SERVICE(kPortRandAmbulance, gAmbulance_110_6F70A8->AmbulancesService_4FA790()); // ambulance
     }
 
     if (!bSkip_police_67D4F9)
     {
-        gPolice_7B8_6FEE40->Service_570270();
+        PORT_RAND_SERVICE(kPortRandPolice, gPolice_7B8_6FEE40->Service_570270());
     }
 
     if (!bSkip_particles_67D64D)
@@ -543,7 +559,7 @@ void Game::UpdateGame_4B9410()
     gHud_2B00_706620->UpdateHUD_5D69D0();
     gpRng_67AB34->AdvanceCycle_48B900(); // rng
     gDoor_4D4_67BD2C->DoorsService_49D460();
-    gFirefighterPool_54_67D4C0->FireEnginesService_4A85F0(); // fire engines
+    PORT_RAND_SERVICE(kPortRandFireEngines, gFirefighterPool_54_67D4C0->FireEnginesService_4A85F0()); // fire engines
 
     if (!bExplodingScoresOff_67D4FB)
     {

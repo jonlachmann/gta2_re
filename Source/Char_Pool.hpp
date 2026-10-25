@@ -139,6 +139,9 @@ class PedPool
             ++field_0_pool.field_X_count;
 
             Ped* pNext = pCurrItem->mpNext;
+#if defined(GTA2_PORT)
+            PortRandScope portRandScope(pCurrItem); // a ped's draws (and its char's) are its own (a network game)
+#endif
 
             if (pCurrItem->PoolUpdate())
             {
