@@ -205,6 +205,9 @@ class Client
   public:
     // Connects and waits for the server's welcome (a few seconds at most): then the game to start is known
     bool Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error);
+    // The same without waiting (the frontend's network page): PollConnect each frame, 1 welcomed, 0 not yet, -1 failed
+    bool BeginConnect(const ClientConfig& config, std::string* error);
+    int PollConnect(engine::NetworkGame* pGame, std::string* error);
     // No server: a recorded session (GTA2_NET_RECORD) played back frame for frame, as fast as the game runs
     bool StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error);
     void Frame();
@@ -238,6 +241,7 @@ class Client
         uint32_t carFrames = 0, carMismatch = 0; // frames x players, and those where in-car differs from the snapshot
     };
     void Welcomed(const Welcome& welcome, engine::NetworkGame* pGame);
+    bool OnWelcome(const TransportEvent& e, engine::NetworkGame* pGame, std::string* error);
     void OnSnapshot(BitReader& r);
     void OnSnapshotPart(BitReader& r);
     bool TakeEvents(std::vector<TransportEvent>& events, uint32_t* pRecordedInput);
@@ -302,6 +306,8 @@ class Client
     long long mPingShownMs = 0, mLastSnapshotMs = 0, mReconnectMs = 0, mPingSentMs = 0;
     std::vector<TransportEvent> mPending; // what Idle polled, for the next frame
     int mReconnects = 0; // attempts since the connection dropped
+    bool mHelloSent = false; // joining: connected, waiting for the welcome
+    long long mJoinWaitMs = 0; // joining: since when we wait (6 s each for the connection and the welcome)
     bool mGaveUp = false; // back as another player, or on another map: no game to go on with here
     std::string mScr; // the map's script (a rejoin must find the same)
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
@@ -312,6 +318,8 @@ class Client
     int mGeneration = 0; // engine::GameGeneration's, of the game running
     int mServerGame = -1; // the server's game we take snapshots of: the next after a map change (-1: the first one's)
     uint32_t mMarkFrame = 0;
+    bool mLeavePrompt = false, mLeft = false; // Escape's prompt (ChooseInput), and its yes: left the server
+    uint32_t mPromptKeyFrame = 0;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;
     Stats mStats;

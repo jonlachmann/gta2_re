@@ -577,6 +577,14 @@ void net::engine::SetRandOwners(bool client)
     gPortRandTickHook = client ? ClientTickStart : NULL;
 }
 
+void net::engine::ClearRandOwners()
+{
+    gPortRandOwned = false;
+    gPortRandPedKey = NULL;
+    gPortRandCarKey = NULL;
+    gPortRandTickHook = NULL;
+}
+
 const std::unordered_map<uint32_t, Car*>& net::engine::ReplicaCars()
 {
     return gCars;

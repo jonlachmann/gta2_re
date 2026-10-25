@@ -1838,6 +1838,12 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
     u8 stage_main_idx;
     u8 stage_bonus_idx;
 
+#if defined(GTA2_PORT)
+    if (gPortFrontendInput && gPortFrontendInput(this))
+    {
+        return; // a port page's (the network game's: Port/net/menu.cpp)
+    }
+#endif
     pMenuPage = &field_136_menu_pages_array[field_132_current_page_idx];
     pMenuPageSaved = pMenuPage;
     pStats = GetCurrPlayerStats_4B43E0();
@@ -4105,6 +4111,12 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
     pPage->field_BC6_current_option_idx = 0;
     pPage->field_BC8_default_option_idx = 0;
     field_EE0E_credits.LoadCredits_483F20();
+#if defined(GTA2_PORT)
+    if (gPortFrontendSetup)
+    {
+        gPortFrontendSetup(this); // the port's pages (the network game's: Port/net/menu.cpp)
+    }
+#endif
 }
 
 // The GMP/STY/SCR names read from a MAIN or BONUS block of the .seq file. A struct (not three

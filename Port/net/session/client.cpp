@@ -21,22 +21,6 @@ long long NowMs()
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-// Polls until a message of <want> arrives on the reliable channel, a disconnect, or <ms> pass
-bool WaitFor(net::Transport* t, net::TransportEvent::Type want, int ms, net::TransportEvent* pOut)
-{
-    for (int i = 0; i < ms; i++)
-    {
-        while (t->Poll(*pOut))
-        {
-            if (pOut->type == want || pOut->type == net::TransportEvent::kDisconnect)
-            {
-                return pOut->type == want;
-            }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    return false;
-}
 } // namespace
 
 void net::CorrectionStats::Print(uint32_t frame, const char* what) const
@@ -78,7 +62,7 @@ bool net::Client::StartReplay(const char* path, engine::NetworkGame* pGame, std:
     return true;
 }
 
-bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error)
+bool net::Client::BeginConnect(const ClientConfig& config, std::string* error)
 {
     mConfig = config;
     mTransport.reset(CreateClientTransport(config.host.c_str(), config.port, error));
@@ -90,23 +74,62 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
     {
         mTransport.reset(CreateConditioner(mTransport.release(), config.lagMs, config.jitterMs, config.lossPercent));
     }
+    mHelloSent = false;
+    mJoinWaitMs = NowMs();
+    return true;
+}
+
+// The connection, our hello, the server's welcome: 1 welcomed (the game to start is in <pGame>), 0 not yet, -1 failed
+int net::Client::PollConnect(engine::NetworkGame* pGame, std::string* error)
+{
     TransportEvent e;
-    if (!WaitFor(mTransport.get(), TransportEvent::kConnect, 6000, &e))
+    while (mTransport->Poll(e))
     {
-        *error = "no answer from " + config.host;
+        if (e.type == TransportEvent::kDisconnect)
+        {
+            *error = mHelloSent ? "the server closed the connection" : "no answer from " + mConfig.host;
+            return -1;
+        }
+        if (e.type == TransportEvent::kConnect && !mHelloSent)
+        {
+            Hello hello;
+            hello.name = mConfig.name;
+            BitWriter w;
+            WriteHello(w, hello);
+            mTransport->Send(0, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+            mTransport->Flush();
+            mHelloSent = true;
+            mJoinWaitMs = NowMs(); // and as long again for the welcome
+        }
+        else if (e.type == TransportEvent::kReceive && mHelloSent && e.channel == kChannelReliable)
+        {
+            return OnWelcome(e, pGame, error) ? 1 : -1;
+        }
+    }
+    if (NowMs() - mJoinWaitMs > 6000)
+    {
+        *error = mHelloSent ? "the server didn't welcome us" : "no answer from " + mConfig.host;
+        return -1;
+    }
+    return 0;
+}
+
+bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame, std::string* error)
+{
+    if (!BeginConnect(config, error))
+    {
         return false;
     }
-    Hello hello;
-    hello.name = config.name;
-    BitWriter w;
-    WriteHello(w, hello);
-    mTransport->Send(0, kChannelReliable, w.Data().data(), w.ByteCount(), true);
-    mTransport->Flush();
-    if (!WaitFor(mTransport.get(), TransportEvent::kReceive, 6000, &e))
+    int result = 0;
+    while (!(result = PollConnect(pGame, error)))
     {
-        *error = "the server didn't welcome us";
-        return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    return result > 0;
+}
+
+bool net::Client::OnWelcome(const TransportEvent& e, engine::NetworkGame* pGame, std::string* error)
+{
     BitReader r(e.data.data(), e.data.size());
     const uint32_t type = r.Bits(8);
     if (type == kMsgReject)
@@ -139,7 +162,7 @@ bool net::Client::Connect(const ClientConfig& config, engine::NetworkGame* pGame
             printf("net: recording to %s (F12 or the key under Esc marks a moment)\n", path.c_str());
         }
     }
-    printf("net: joined %s:%u as player %d of %d, %s\n", config.host.c_str(), config.port, mSlot, welcome.players, welcome.scr.c_str());
+    printf("net: joined %s:%u as player %d of %d, %s\n", mConfig.host.c_str(), mConfig.port, mSlot, welcome.players, welcome.scr.c_str());
     return true;
 }
 
@@ -509,6 +532,31 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
             printf("net: mark %d at frame %u, tick %u\n", ++mMarks, mFrame, mTick);
         }
         mMarkFrame = mFrame;
+    }
+    // Escape, and Y or N while its prompt shows, are this client's: the prompt to leave, drawn over the frame (ShowStatus).
+    // Neither the game here nor the server gets them: the game's own quit prompt is on its player, which the snapshots
+    // and resimulations set again (it showed for a moment), and the server's yes ended everyone's game
+    const uint32_t kKeyBits = 0x1FF000, kEscape = 0x01, kYes = 0x15, kNo = 0x31; // DIK_ESCAPE, DIK_Y, DIK_N
+    if (!mReplay && (local & kKeyDown) && (key == kEscape || (mLeavePrompt && (key == kYes || key == kNo))))
+    {
+        if (mFrame != mPromptKeyFrame + 1) // held: once
+        {
+            if (key == kYes)
+            {
+                printf("net: frame %u, left the game\n", mFrame);
+                mLeavePrompt = false;
+                mLeft = mGaveUp = true; // no reconnecting
+                mConnected = false;
+                Leave();
+                engine::LeaveForMenu(); // and the frontend's network page (Port/net/net_main.cpp, LeaveNetworkGame)
+            }
+            else
+            {
+                mLeavePrompt = key == kEscape && !mLeavePrompt;
+            }
+        }
+        mPromptKeyFrame = mFrame;
+        local &= ~(kKeyDown | kKeyBits);
     }
     if (Env().inputLog && local != mLastInput)
     {
@@ -890,7 +938,15 @@ void net::Client::ShowStatus()
         mPingShownMs = now;
     }
     std::string centre;
-    if (mGaveUp)
+    if (mLeft)
+    {
+        centre = "";
+    }
+    else if (mLeavePrompt)
+    {
+        centre = "Leave the game?  Y / N";
+    }
+    else if (mGaveUp)
     {
         centre = "Lost the server";
     }

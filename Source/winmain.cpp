@@ -2456,6 +2456,15 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
                                     CleanUpInputAndOthers_4DA700();
                                     break; // go to the beginning: InitializeGame_4DA4D0, with the next map
                                 }
+                                const s32 page = gPortLeaveNetworkGame ? gPortLeaveNetworkGame() : -1;
+                                if (page >= 0)
+                                {
+                                    bStartNetworkGame_7081F0 = 0; // a client that left: back to the frontend, as a single player
+                                    state = page;
+                                    CleanUpInputAndOthers_4DA700();
+                                    bDoFrontEnd_626B68 = 1;
+                                    break; // go to the beginning: the frontend
+                                }
 #endif
                                 switch (gGame_0x40_67E008->GetExitType_4D09C0())
                                 {

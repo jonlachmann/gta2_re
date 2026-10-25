@@ -40,6 +40,7 @@ void SetTickMs(int ms);
 void SeedRandom(uint32_t seed); // the game's rand() state (a server's: clients take it from snapshots)
 // A network game's random draws: each entity's update and each server service its own (Port/port_rand_owner.h)
 void SetRandOwners(bool client);
+void ClearRandOwners(); // back to the game's own streams (a single-player game after a network one)
 // What a client doesn't simulate: spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
 // Cars' attached objects (a tank's turret, a fire engine's cannon) back on their cars, after the client moved the cars
@@ -149,6 +150,11 @@ void ShowHudMessage(const char* text); // the game's message line, over the HUD
 // (winmain.cpp, gPortNextNetworkGame); KeepMapChange every frame until then. GameGeneration counts the games, for
 // the session to start over when it changes
 void ChangeMap(const std::string& gmp, const std::string& sty, const std::string& scr, int pauseTicks);
+// This network game ends at once for the frontend (LeftForMenu() says so to winmain.cpp's gPortLeaveNetworkGame), and
+// StopNetworkGame puts back what a single-player game expects
+void LeaveForMenu();
+bool LeftForMenu();
+void StopNetworkGame();
 void KeepMapChange();
 int GameGeneration();
 int SnapshotGame(const Snapshot& snap); // the server's GameGeneration at it (-1: no world in it)

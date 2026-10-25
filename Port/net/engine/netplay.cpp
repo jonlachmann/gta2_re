@@ -7,6 +7,9 @@
 #include "engine.hpp"
 #include "Source/NetPlay.hpp"
 #include "Source/NetUi.hpp"
+#include "Source/Game.hpp"
+#include "Source/debug.hpp"
+#include "Port/port_hooks.hpp"
 #include <stdlib.h>
 #include <string.h>
 
@@ -72,6 +75,47 @@ void net::engine::StartNetworkGame(const NetworkGame& game)
     gChecked = true;
     gNetPlay_7071E8.field_5D4_player_idx = game.localPlayer;
     gNetPlay_7071E8.field_758_n2.field_4_players_count = 2; // > 1: the game calls SendToAll every frame
+}
+
+namespace
+{
+bool gLeftForMenu;
+} // namespace
+
+void net::engine::LeaveForMenu()
+{
+    gLeftForMenu = true;
+    if (gGame_0x40_67E008)
+    {
+        gGame_0x40_67E008->ExitGameNoBonus_4B8C00(1, GameExitType::PlayerQuit_2);
+    }
+}
+
+bool net::engine::LeftForMenu()
+{
+    return gLeftForMenu;
+}
+
+// What a client's network game set that a single-player game would keep: the network game itself (the NetPlay
+// answers), the client mode's switches (no traffic, peds, scripts, police: set every frame in ClientModeFrame), the
+// replicas, the status over the frame
+void net::engine::StopNetworkGame()
+{
+    gLeftForMenu = false;
+    gActive = false;
+    gNetPlay_7071E8.field_5D4_player_idx = 0;
+    gNetPlay_7071E8.field_758_n2.field_4_players_count = 0;
+    // ponytail: off, not as before: a network game cleared them at its start (ClearDebugFlags_4DB170)
+    bSkip_recycling_67D575 = false;
+    bSkip_dummies_67D4EF = false;
+    bSkip_mission_67D4E5 = false;
+    bSkip_police_67D4F9 = false;
+    bSkip_ambulance_67D6C9 = false;
+    gPortKeepWantedPoints = false;
+    ClearRandOwners();
+    ResetForNewGame();
+    gGeneration++;
+    SetNetStatus("", "");
 }
 
 namespace
