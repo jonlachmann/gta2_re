@@ -1674,7 +1674,11 @@ bool CarManager::CanAllocateCarOfKindWithSpare_446870(s32 type) const
         case car_kind::parked_car_9:
             return this->field_44_parked_cars < 200;
         case car_kind::recycled_1:
+#if defined(GTA2_PORT)
+            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap * gPortSpawnPlayers - 1;
+#else
             return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < 15;
+#endif
         case car_kind::mission_car_8:
             return this->field_3C_mission_cars < 23;
         default:
@@ -1701,7 +1705,7 @@ bool CarManager::CanAllocateCarOfKind_446930(s32 type) const
             return this->field_44_parked_cars < 200;
         case car_kind::recycled_1:
 #if defined(GTA2_PORT)
-            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap;
+            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap * gPortSpawnPlayers;
 #else
             return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < 16;
 #endif
@@ -6935,8 +6939,14 @@ void TrafficSpawner::MakeTrafficForCurrCamera_5832C0()
     Fix16 w;
 
     Fix16 wanted_traffic_scale;
+#if defined(GTA2_PORT)
+    // The same limit as CarManager::CanAllocateCarOfKind_446930's (16 for the whole game in 10.5.exe)
+    if ((!bLimit_recycling_67D4CA || gCarManager_6C_677930->field_28_recycled_cars < 2) &&
+        gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap * gPortSpawnPlayers)
+#else
     if ((!bLimit_recycling_67D4CA || gCarManager_6C_677930->field_28_recycled_cars < 2) &&
         gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars != 16)
+#endif
     {
         s32 angleFace = Ang16::GetAngleFace_4F78F0(field_0_cam->ComputeTargetFacingAngle_4358D0());
 
@@ -7152,8 +7162,13 @@ bool TrafficSpawner::SpawnTrafficCar_582480(s32 spawn_type, s32 arrow_direction,
     s32 found_z;
     Fix16 ground_z;
 
+#if defined(GTA2_PORT)
+    if (gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars >= gPortTrafficCap * gPortSpawnPlayers ||
+        arrow_direction == blocked_direction || gCarManager_6C_677930->field_54_spawn_block > 0)
+#else
     if (gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars == 16 || arrow_direction == blocked_direction ||
         gCarManager_6C_677930->field_54_spawn_block > 0)
+#endif
     {
         return false;
     }

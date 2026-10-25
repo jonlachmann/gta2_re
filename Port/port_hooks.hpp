@@ -20,7 +20,13 @@ extern void (*gPortHeapHook)(size_t size);
 extern u32 gPortAttractIdleMs;
 
 // Port/net/net_main.cpp's
-extern s32 gPortTrafficCap; // the ambient traffic cars for the whole game (Car.cpp): 16, or a network server's --traffic
+extern s32 gPortTrafficCap; // the ambient traffic cars per player (Car.cpp): 16, or a network server's --traffic
+// Port/net/engine/players.cpp's: the players the ambient traffic and peds are for (Car.cpp, Char_Pool.cpp: the game's
+// limits are for the whole game, and the first players' cameras took them all); 1 but on a network server
+extern s32 gPortSpawnPlayers;
+// Called in Game::UpdateGame_4B9410 after the players' tick (their cameras moved), before anything spawns; NULL but on
+// a network server, which moves a client's cameras' bounds to where that client already shows them (its lag ahead)
+extern void (*gPortAfterPlayersHook)();
 extern void (*gPortDrawOverlay)(); // drawn last in Game::Draw_4B92D0; NULL unless a debug overlay is on
 extern s16 gPortZoneRoundRobin; // Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0's place, rolled back and sent by a network server
 // Port/net/engine/netplay.cpp's: asked when a network game has ended (winmain.cpp): true to start the next one at once,

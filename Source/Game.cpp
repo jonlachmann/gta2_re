@@ -498,6 +498,12 @@ void Game::UpdateGame_4B9410()
         i++;
         ppPlayerIter++;
     }
+#if defined(GTA2_PORT)
+    if (gPortAfterPlayersHook)
+    {
+        gPortAfterPlayersHook();
+    }
+#endif
 
     gCollisionSoundQueue_66AFE0->Reset_40BB90();
     gCollisionCounters_6791FC->ResetCount_478A20();

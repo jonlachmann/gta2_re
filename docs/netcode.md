@@ -114,7 +114,7 @@ GTA2_ARGS="--connect 127.0.0.1 --name me" Scripts/port/run_mac.sh               
 GTA2_HEADLESS=1 GTA2_ARGS="--connect 127.0.0.1 --bot --name bot1" Scripts/port/run_mac.sh   # a test bot
 ```
 
-Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--gametype 1-3`, `--fraglimit`, `--timelimit`, `--tickms`, `--police [N]` (the lobby's police box, off by default there too; N: the most wanted stars, 1-6, the game's own 1 by default), `--traffic N`, `--packets N`.
+Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--gametype 1-3`, `--fraglimit`, `--timelimit`, `--tickms`, `--police [N]` (the lobby's police box, off by default there too; N: the most wanted stars, 1-6, the game's own 1 by default), `--traffic N` (ambient traffic cars per player, 16 by default), `--packets N`.
 
 **Jerkiness** (`GTA2_NET_JERKLOG=1`, 2 also prints each jump): per entity and frame, the change of its step, on each client (what is shown) and on the server (the game's own motion). Tiny Town, police on, two rammers, a fighter and a car hopper, 100 ms ±10 ms, 200 s: cars move as smoothly on the clients as on the server, peds have twice the server's small changes but as few large ones, remote players three times (prediction from their last input, eased by the blend, `GTA2_NET_BLEND`, 0.2 by default). Most steps over 0.4 blocks were a player getting into or out of a car. Starting other players' entries from the snapshot, and correcting the walk to the door (including the walk after a car that still moves, states 3/4, which isn't at the door yet), took them from 28 to 4 in four recorded sessions. What is left is a ped reaching the door about half a block from where the server's did.
 
@@ -377,10 +377,10 @@ Every service is one call in `Game::UpdateGame_4B9410`, and several already have
 | Service | Client | Why |
 |---|---|---|
 | players, cars, peds, objects (movement, physics, collisions, weapons) | **run** | This is the prediction, for the local player and for dead reckoning of the rest |
-| traffic spawn (`TrafficSpawner::GenerateTraffic_583670`, in the car service) and dummy peds (`PedManager::Dummies_470330`) | **off** | Only the server creates entities |
+| traffic spawn (`TrafficSpawner::GenerateTraffic_583670`, in the car service) and dummy peds (`PedManager::Dummies_470330`) | **off** | Only the server creates entities. Its limits are per player, up to 3 players' worth (`gPortSpawnPlayers`; 80 ambient peds at most: the ped pool holds 200, the traffic's drivers among them): 10.5.exe's 16 traffic cars and 50 peds were for the whole game, and the first players' cameras took them all. And it spawns for where a client shows its player: before anything spawns, each client's camera bounds grow ahead along the camera's motion by that client's lead (how early its commands come, and half the round trip from its acknowledgements: `engine::SetSpawnLead`, in the server's log as "spawned for N ticks ahead"), so a car or ped doesn't appear inside its view |
 | despawning of far entities (inside the per-entity updates) | **off** | Only the server destroys; these checks still have to be found |
 | scripts, police, ambulance, firefighters, emergency crews, generators, garages | **off** | They create entities or change game state; the results arrive replicated |
-| doors, cranes, crushers, trains/buses, traffic lights | run or off | Deterministic from their state, cheap; running them predicts them, and the snapshot corrects them |
+| doors, cranes, crushers, trains/buses, traffic lights | run or off | Deterministic from their state, cheap; running them predicts them, and the snapshot corrects them. The traffic lights' phase, its timer and the cars' light state travel in the world entity (`kWorldLights`): each game ran its own cycle from its start, so a client's cars stopped at a red the server's drove through |
 | particles, tile animations, lights, HUD, sound | **run, cosmetic** | Client only, and muted during resim |
 
 ## Whole-map simulation and tunable cleanup

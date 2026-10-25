@@ -640,12 +640,13 @@ void net::Server::PrintStats(const Snapshot& world)
     engine::DriverStats(world, &sent, &driven, &same);
     printf("net: tick %u, %d players, %zu entities (%d drivers), %.0f bytes per snapshot, %u late commands; frags/deaths(health)%s\n", mTick, used,
            world.entities.size(), sent, used ? mStats.bytes / 300.0 / used : 0.0, late, Scoreboard(world).c_str());
-    printf("net: tick %u, %.2f packets per snapshot\n", mTick, used ? mStats.parts / 300.0 / used : 0.0);
+    printf("net: tick %u, %.2f packets per snapshot; %s\n", mTick, used ? mStats.parts / 300.0 / used : 0.0, engine::SpawnStats().c_str());
     for (size_t i = 0; i < mSlots.size(); i++)
     {
         if (mSlots[i].used)
         {
-            printf("net: tick %u, player %zu sees %.1f blocks (centre to corner)\n", mTick, i, engine::PlayerViewRadius((int)i));
+            printf("net: tick %u, player %zu sees %.1f blocks (centre to corner), spawned for %d ticks ahead\n", mTick, i, engine::PlayerViewRadius((int)i),
+                   engine::SpawnLead((int)i));
         }
     }
     printf("net: tick %u, snapshots had new state for %.0f%% of the entities in the clients' areas (%u of %u not for all)%s\n", mTick,
@@ -679,6 +680,17 @@ void net::Server::Frame()
         fflush(stdout);
         _Exit(0); // ponytail: no game shutdown; the trainer only reads the result line
     }
+    int players = 0;
+    for (size_t i = 0; i < mSlots.size(); i++)
+    {
+        const Slot& s = mSlots[i];
+        players += s.used;
+        // A client shows its player ahead of here by how early its commands come and the way back of the snapshots
+        // (half the round trip, from what it acknowledged); the next tick spawns for there
+        const bool remote = s.used && s.peer != kArenaPeer && s.ackTick && s.lastCmdTick;
+        engine::SetSpawnLead((int)i, remote ? (int)(s.lastCmdTick - mTick) + (int)(mTick - s.ackTick) / 2 : 0);
+    }
+    engine::SetSpawnPlayers(players);
     for (size_t i = 0; i < mSlots.size(); i++)
     {
         if (mSlots[i].used && mSlots[i].peer != kArenaPeer)
