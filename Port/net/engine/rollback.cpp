@@ -72,8 +72,14 @@ void net::engine::RestoreGame(const SavedWorld& in)
     unsigned char* channels = (unsigned char*)&gSound_obj_66F680 + from;
     memcpy(sLive, channels, to - from);
     const u8 active = gSound_obj_66F680.field_10_nActiveSamples;
+    // So does the police radio and the car radio (from field_5504 on): restored, the stars it last called out went
+    // back too, and every correction started its call again over the one it was saying
+    const size_t radio = offsetof(sound_obj, field_5504_radio_station_change_mode);
+    static unsigned char sRadio[sizeof(sound_obj) - offsetof(sound_obj, field_5504_radio_station_change_mode)];
+    memcpy(sRadio, (unsigned char*)&gSound_obj_66F680 + radio, sizeof(sRadio));
     RestoreWorld(RollbackSet(), in.mImpl->bytes);
     memcpy(channels, sLive, to - from);
+    memcpy((unsigned char*)&gSound_obj_66F680 + radio, sRadio, sizeof(sRadio));
     gSound_obj_66F680.field_10_nActiveSamples = active;
     RestoreReplicas(in.mImpl->replicas);
 }
