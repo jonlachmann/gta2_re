@@ -9,6 +9,7 @@
 #include "Source/Char_Pool.hpp"
 #include "Source/Ped.hpp"
 #include "Source/debug.hpp"
+#include "Source/Police.hpp"
 #include "Port/port_hooks.hpp"
 
 // Pulling someone out of a car is done on foot (Ped::PullDriverOutOfCarStateMachine_46B2F0 moves its char). A cop
@@ -38,6 +39,12 @@ bool IsPassenger(Car* car, Ped* ped)
 
 void net::engine::GuardPeds()
 {
+    // A network game's police stop at 1 star (Police's constructor): --police N lets them go to N, here and on
+    // the server (a client's own crimes, predicted, add points up to it: Ped::add_wanted_points_470160)
+    if (MaxWantedStars() > 1)
+    {
+        gPolice_7B8_6FEE40->field_660_max_wanted_stars = MaxWantedStars();
+    }
     // Two players getting into one empty car by the same door at once: the second one's entry ends with it as the
     // driver, without pulling the first out, which sits on in it as no driver or passenger. The
     // car doesn't know it: blown up, it doesn't kill it, and it drives the wreck without physics (a crash). Out at

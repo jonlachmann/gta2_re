@@ -60,6 +60,11 @@ bool Active()
 }
 } // namespace
 
+int net::engine::MaxWantedStars()
+{
+    return gNetGame.police;
+}
+
 void net::engine::StartNetworkGame(const NetworkGame& game)
 {
     gNetGame = game;
@@ -205,7 +210,7 @@ void NetUi::CopyGameSettings_51C7F0(NetworkGameSettings* pSettings)
         pSettings->field_20190_game_speed = 2; // 33 ms; the netcode sets its own tick length after the boot
         pSettings->field_20194_frag_limit = 0x7FFFFFFF; // the limits are the netcode's (rounds.cpp): none the game would end on
         pSettings->field_20198_game_type = gNetGame.gameType;
-        pSettings->field_201A0_police_on = gNetGame.police;
+        pSettings->field_201A0_police_on = gNetGame.police != 0;
         pSettings->field_201A4_game_time_limit = 0; // (0: no timer)
     }
 }

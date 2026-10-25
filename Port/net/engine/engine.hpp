@@ -26,6 +26,7 @@ struct NetworkGame
 };
 // Before WinMain: the game boots this network game (with -N on its command line)
 void StartNetworkGame(const NetworkGame& game);
+int MaxWantedStars(); // the booted game's police setting: the most stars, 0 with police off
 // Once per network frame, after the tick and before drawing (NetPlay::SendToAll_521B20)
 typedef void (*FrameHook)(void* user);
 void SetFrameHook(FrameHook hook, void* user);

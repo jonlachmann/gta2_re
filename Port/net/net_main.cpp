@@ -3,7 +3,7 @@
 //            (the limits end a round, and the next starts on the same map: engine/rounds.cpp)
 //            [--maps <mmp>,<mmp>,...]  (a round on each in turn, the first instead of --map)
 //            [--interest blocks]  (how far around a client its snapshots reach: 24)
-//            [--police]  (police on, as the lobby's box; off by default as there)
+//            [--police [stars]]  (police on, as the lobby's box, off by default as there; up to 1 star, as the game, or 1-6)
 //            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)
 //            [--arena brain,brain,...]  (bots on the server itself in the first slots, e.g. nn:best.nn,simple)
@@ -16,6 +16,8 @@
 #include "net_main.hpp"
 #include "Port/port_hooks.hpp" // the hooks defined here, as the game declares them
 #include "session/session.hpp"
+#include <algorithm>
+#include <ctype.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -165,6 +167,10 @@ int NetMain_Init(std::vector<std::string>& args)
         else if (a == "--police")
         {
             sc.game.police = 1; // the lobby's "police" box (off by default there too)
+            if (more && isdigit((unsigned char)args[i + 1][0]))
+            {
+                sc.game.police = std::max(1, std::min(6, atoi(args[++i].c_str()))); // the most stars (the game's own: 1)
+            }
         }
         else if (a == "--packets" && more)
         {
