@@ -689,6 +689,94 @@ The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attac
 | N6 | Game flow: the mode module (frags first: join, spawn, score, win), join and leave mid-game, chat, script events, map change; a port-only player cap with a runtime count (~45-50 sites, see "Evaluations", 4); spawn points from restart zones and the per-map file; the network-game rules as server settings; new remaps if simple; the simple bot (`--bot`). | 16 bot clients on one map for an hour. |
 | N8 | Later modes: points, tag (both in the game), team deathmatch and CTF (new, with the game's assets). | One bot match per mode. |
 | N7 | Hardening: the server trusts only inputs; rate limits; protocol version; timeouts. | Fuzz input packets. |
+| N9 | Setting up games: hosting from the menu, the public address and UPnP, a password, the data check, then a master server (heartbeat, list, join links) with the web app, and the in-game parts a website can't do (LAN games, real pings). See "Setting up games". | A friend joins a game hosted from the menu over the internet with no router setup; a server registered with the master shows in the web app's list and its join link starts the game in it. |
+
+## Setting up games (plan, N9)
+
+Both ways to play, as the generation who played GTA2 knows them: **classic** (start a server, open a port, tell
+friends the IP) and **central** (GameSpy: anyone runs a server, registers it, and people find and join it). The
+web app with the lobby and the server registration is built separately; the master server's list is its public
+JSON API, read by the website, the game and anyone's tools alike: **one list, several views**, never two lists.
+
+### Classic
+
+1. **Host from the menu** (the frontend's step 2): a "Host game" page (map, players, police, time limit; the
+   frontend's unused page 13 or 15) starts a server in the background and joins it.
+2. **The address to share**: while hosting, the LAN address and the public one with the port ("friends join
+   81.2.3.4:27920"); the public address from a small endpoint of the web app.
+3. **Port forwarding by itself**: UPnP / NAT-PMP (`miniupnpc`, plain C) asks the router to open the UDP port; the page
+   says whether it did ("Port open", or "open UDP 27920 on your router").
+4. **A reachability test**: the web app sends one UDP packet to the server's public address and the server says
+   whether it arrived: the "is it my firewall?" question answered.
+5. **LAN games**: servers answer a broadcast UDP query; the network page lists them.
+6. **Join links**: `gta2://host:port` starts the game with `--connect` (a URL handler on Windows, `Info.plist` on
+   macOS, a `.desktop` file on Linux).
+7. **A password**, optional, for private games.
+8. **`server.ini`**: name, password, map rotation, message of the day, instead of a long command line.
+
+### Central (the master server)
+
+9. **Heartbeat**: a server with `--public` (or "list publicly" on the host page) sends name, map, players, version and
+   port every 30-60 s over UDP from its game socket, so the master sees its address after NAT; quiet servers drop off.
+10. **Verified listings**: before listing, the master sends a challenge to the address it saw and waits for the answer
+    (no dead or fake entries).
+11. **The list**: in the web app first (below); the game reads the same list with one UDP query to the master (no TLS
+    library in the game; the web app serves JSON to the website).
+12. **NAT punch-through**: the master introduces a client and a server, both send at once; ENet is UDP between two
+    addresses, so it works through most home NATs (not symmetric or carrier-grade ones).
+13. **A relay** as the last resort, shown as such ("via relay"): a snapshot is under 1 KB at 30 Hz, about 30 KB/s
+    per player, so a small VPS carries a fair number of games. Built when the reachability test (4) shows how many
+    hosts need it.
+14. **Accounts optional**: a name is enough to play; accounts in the web app add reserved names, friends, stats.
+
+### Games that work
+
+15. **The data check**: at join the client sends its protocol version and a hash of `data/` (maps, scripts,
+    styles); the server turns a mismatch away with a clear message, and the lists grey such servers out. Before
+    strangers play together (also N7).
+16. **Missing maps** downloaded from the server or the web app.
+17. **Updates**: the web app knows the current version; the game says when it is behind.
+18. **Quick play**: one button, the best-filled compatible server with a low ping.
+
+### Running servers for others
+
+19. **A server package**: the static Linux server (no GL, SDL's dummy drivers; a function table instead of `dlsym`
+    on itself for the renderer's functions, musl or numeric addresses only), a Dockerfile, a `server.ini` example.
+20. **Admin**: kick, ban, change map, say; a remote admin password, or the web app for registered servers.
+21. **Stats with the heartbeat** (players over time, maps, uptime) for the web app's server pages.
+
+### The list on the website and in the game
+
+Not redundant as long as both read the master: each does what the other can't. Only the game measures a real
+ping (a browser has no UDP), sees LAN games, and stays in full screen with a gamepad; only the website reaches
+people who haven't installed the game, gives a server a link to share, and holds accounts, stats and admin. GameSpy
+began as an external browser launching the game (GameSpy Arcade); Quake 3 and Unreal Tournament put it in the game.
+So:
+
+1. The web app's list with join links (6): little game work, and it works the day the master does.
+2. In the game, what the website can't do: LAN games (5), recent servers and favourites, and the **info query**:
+   every server answers a small "info" packet (name, map, players, version) on its game port outside ENet
+   (`ENetHost::intercept` sees non-ENet packets), so the game pings servers itself. The LAN broadcast is the same
+   query.
+3. The full in-game list later, if players ask: by then a small view on the master's list and the info query.
+
+**The in-game list, when built**, reuses the frontend, as the network page does (`Port/net/menu.cpp`): a page has
+10 options and 15 text elements, so 8 server rows, "Refresh" and "Back"; the list lives in our code and the 8
+visible entries are written into the rows each frame (scrolling at the edges); one label per row (name, map,
+players, ping), or columns as text elements or `DrawTextScaled_5D77A0` through a small frontend draw hook (the
+font is proportional); the status element shows the selected server's details. Labels are 50 characters,
+uppercase, in the font's characters. Selecting a row fills in the address and runs the join there is. Dear ImGui
+(the decomp's debug overlay, not in the port build) would give a real table quicker, but looks like a debug tool
+on a 1999 game and needs a GL backend: kept for admin and debug tools.
+
+### Order
+
+1. Classic hosting in the game: the host page, the address to share, UPnP, the password (1, 2, 3, 7).
+2. The data check (15).
+3. The master: heartbeat with verification, the web app's list, join links (9, 10, 11, 6).
+4. In the game: the info query, LAN games, recent servers (5).
+5. Connectivity: punch-through, then the relay, as the reachability test shows the need (4, 12, 13).
+6. Admin, quick play, the server package, the in-game list if asked for.
 
 ## From openGTA2 (`openGTA2/network`)
 
