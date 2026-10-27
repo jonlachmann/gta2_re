@@ -120,6 +120,12 @@ the passenger missing on the client every time), the client's ped corrections ha
 - modes beyond the game's own frags, points and tag;
 - a results screen between maps;
 - the player cap above 6.
+- **to investigate: an instant gang doesn't board a bus** (on the server, so the game's own AI, not the netcode). In a
+  played test (`GTA2_NET_TESTCAR` bus, `GTA2_NET_GANGLOG`) the four members walked to doors 0-2 and stayed in states
+  3/4 for the whole 33 s the bus stood, within a block of it; normal cars worked. `PedGroup::CoordinateGroupCarEntry_4C9F00`
+  is a matched function. Open: the original does the same, the test bus (spawned as the debug menu does) lacks
+  something a traffic bus has, or the port places a long vehicle's doors wrong. First check: the gang and a traffic bus;
+  then why a member never reaches its door; then the original under wine.
 
 ```
 Scripts/port/build_mac.sh                                    # or build_linux.sh / build.sh
