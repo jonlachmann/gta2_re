@@ -1,6 +1,7 @@
 // Port/net: the engine's checks, logs and statistics (GTA2_NET_* switches, docs/netcode.md). Nothing here changes the
 // game, apart from the server marker drawn over the frame.
 #include "internal.hpp"
+#include <chrono>
 #include "Source/Camera.hpp"
 #include "Source/Car.hpp"
 #include "Source/Draw.hpp"
@@ -484,6 +485,24 @@ void Widen(const std::string& text, wchar_t* out, size_t size)
 }
 } // namespace
 
+namespace
+{
+wchar_t gAnnouncement[128];
+long long gAnnouncementUntilMs;
+long long NowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+} // namespace
+
+// Over the frame for 4 s, as the netcode's other lines: the game's own message line is in the HUD, which the rollback
+// restores to before the message (it showed for a frame)
+void net::engine::ShowHudMessage(const char* text)
+{
+    Widen(text, gAnnouncement, sizeof(gAnnouncement) / sizeof(gAnnouncement[0]));
+    gAnnouncementUntilMs = NowMs() + 4000;
+}
+
 void net::engine::SetNetStatus(const std::string& corner, const std::string& centre)
 {
     Widen(corner, gStatusCorner, sizeof(gStatusCorner) / sizeof(gStatusCorner[0]));
@@ -503,6 +522,10 @@ void net::engine::DrawOverlay()
     if (gStatusCorner[0])
     {
         DrawTextScaled_5D77A0(gStatusCorner, w - 8 - Frontend::GetMaxTextWidth_5D8990(gStatusCorner, word_703BAA), h - 24, word_703BAA);
+    }
+    if (gAnnouncement[0] && NowMs() < gAnnouncementUntilMs)
+    {
+        DrawTextScaled_5D77A0(gAnnouncement, (w - Frontend::GetMaxTextWidth_5D8990(gAnnouncement, word_703BAA)) / 2, h / 4, word_703BAA);
     }
     if (gStatusCentre[0])
     {

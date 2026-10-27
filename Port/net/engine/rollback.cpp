@@ -98,6 +98,7 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
     }
     ProtectPlayers();
     GuardPeds();
+    KeepPlayerArrows();
     SeenByAll();
     g->UpdateAllPlayersControls_4B9380();
     if (g->field_0_game_state == GameState::Running_1)

@@ -46,6 +46,8 @@ void ClientModeFrame();
 // Cars' attached objects (a tank's turret, a fire engine's cannon) back on their cars, after the client moved the cars
 // (a snapshot, the blend): the game puts them there in the car's own update, before that (Object::UpdateMovementAndEffects_527070)
 void AnchorAttachments();
+// An arrow on the HUD to each other player in the game, made again when one is missing (client_mode.cpp)
+void KeepPlayerArrows();
 // After every tick, on the server too: what the game's own logic can leave behind that crashes it later (client_mode.cpp)
 void GuardPeds();
 
@@ -145,7 +147,7 @@ struct Round
 };
 Round& CurrentRound();
 void NewRound(); // every slot in the game respawned with no score, weapons or power-ups
-void ShowHudMessage(const char* text); // the game's message line, over the HUD
+void ShowHudMessage(const char* text); // a line over the frame for a few seconds (debug.cpp, with the status lines)
 // The next map: the game ends after <pauseTicks> and the next starts at once on it, without the frontend
 // (winmain.cpp, gPortNextNetworkGame); KeepMapChange every frame until then. GameGeneration counts the games, for
 // the session to start over when it changes

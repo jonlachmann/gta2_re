@@ -35,21 +35,6 @@ void net::engine::NewRound()
     }
 }
 
-void net::engine::ShowHudMessage(const char* text)
-{
-    static wchar_t wide[128]; // the HUD keeps the pointer while it shows it
-    size_t n = 0;
-    for (; text[n] && n + 1 < sizeof(wide) / sizeof(wide[0]); n++)
-    {
-        wide[n] = (wchar_t)(unsigned char)text[n];
-    }
-    wide[n] = 0;
-    if (gHud_2B00_706620)
-    {
-        gHud_2B00_706620->field_111C_message.ShowMessage_5D1A00(wide, hud_message_priority::important_3);
-    }
-}
-
 namespace
 {
 int gExitTicks; // the pause left before a map change ends the game

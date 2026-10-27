@@ -15,6 +15,8 @@
 #include "Source/sprite.hpp"
 #include "Source/debug.hpp"
 #include "Source/Police.hpp"
+#include "Source/Hud.hpp"
+#include "Source/GameSession.hpp"
 #include "Port/port_hooks.hpp"
 #include <set>
 
@@ -162,6 +164,7 @@ void net::engine::ClientModeFrame()
 {
     ProtectPlayers();
     GuardPeds();
+    KeepPlayerArrows(); // in the tick: its saves have it, so a rollback doesn't take it back
     bSkip_recycling_67D575 = true; // no traffic generation, no car despawning (TrafficSpawner::GenerateTraffic_583670)
     bSkip_dummies_67D4EF = true; // no ambient peds (PedManager::Dummies_470330)
     bSkip_mission_67D4E5 = true; // scripts run on the server only (they set up the level before the first frame)
@@ -184,6 +187,43 @@ void net::engine::SeenByAll()
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
     {
         c->field_76_last_seen_timer = 0;
+    }
+}
+
+// An arrow to each other player in the game. The game makes them when the HUD starts (Hud::Init_5D6BE0: those in the
+// game then) and drops one for good once its player is out of the game for a tick (ArrowTrace::UpdateAimCoordinates_5D03F0):
+// here players join after the start, and come and go with the snapshots, so a missing one is made again (all of them,
+// as the game makes them), before each tick, the resimulated ones too
+void net::engine::KeepPlayerArrows()
+{
+    if (!gHud_2B00_706620 || !gGame_0x40_67E008 || gGameSession_67E8E0.GetMultiplayerGamemode_4C5BC0() == TAG_GAME_3)
+    {
+        return; // the tag game: an arrow to the fugitive alone (TagGame.cpp)
+    }
+    Hud_Arrow_7C_Array& arrows = gHud_2B00_706620->field_1F18_arrows;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        Player* p = gGame_0x40_67E008->field_4_players[i];
+        if (!p || p->field_0_is_user || !p->field_8E_in_use || !p->field_2C4_player_ped)
+        {
+            continue;
+        }
+        bool found = false;
+        for (Hud_Arrow& a : arrows.field_0_array)
+        {
+            const ArrowTrace& t = a.field_18_targets.field_18_primary_target;
+            found = found || (a.field_18_targets.field_10_gang_info.field_6_in_use && t.field_10_target_type == ArrowTargetType::Player_6 && t.field_C_player == p);
+        }
+        if (!found)
+        {
+            static unsigned made;
+            if (++made <= 20 || made % 100 == 0)
+            {
+                printf("net: the arrows to the other players made again (%u times), player %d's was missing\n", made, i);
+            }
+            arrows.CreatePlayerArrows_5D1350();
+            return;
+        }
     }
 }
 
