@@ -6,6 +6,7 @@
 #include "Source/CarPhysics.hpp"
 #include "Source/SpriteGrid.hpp"
 #include "Source/explosion_type.hpp"
+#include "Source/gtx_0x106C.hpp"
 #include "Source/sprite.hpp"
 #include <stdio.h>
 
@@ -67,7 +68,9 @@ void net::engine::CaptureCar(Car* c, Snapshot& out)
     e.f[kCarFlash] = (u8)c->field_A5_flash_phase_counter;
     e.f[kCarHorn] = c->field_A7_horn;
     e.f[kCarHornCooldown] = c->field_A8_horn_cooldown;
-    e.f[kCarRemap] = c->field_50_car_sprite->get_remap_41C1F0();
+    // Its colour: a remap, or the model's own palette (-1: Car::AssignRandomRemap_43A7D0 picks it as one choice, and it
+    // leaves the remap as it was, so the remap alone said nothing then)
+    e.f[kCarRemap] = c->field_50_car_sprite->field_34_palette_type == palette_types_enum::car_remaps_3 ? c->field_50_car_sprite->get_remap_41C1F0() : -1;
     CaptureCarAi(c, e);
     if (const CarPhysics* m = c->field_58_physics)
     {
@@ -177,7 +180,21 @@ bool net::engine::SetCarState(Car* car, const EntityState& e)
     car->field_A8_horn_cooldown = (u8)e.f[kCarHornCooldown];
     if (e.f[kCarRemap] >= 0 && e.f[kCarRemap] < 256)
     {
+        if (car->field_50_car_sprite->field_34_palette_type != palette_types_enum::car_remaps_3 &&
+            gGtx_0x106C_703DD4->get_car_info_5AA3B0(car->field_84_car_info_idx)->has_remaps())
+        {
+            car->field_50_car_sprite->SetRemap((s16)e.f[kCarRemap]); // on its own palette here: SetCarRemap only compares remaps
+        }
         car->SetCarRemap((u8)e.f[kCarRemap]); // only a model with remaps, only when it differs (and its trailer)
+    }
+    else if (e.f[kCarRemap] < 0)
+    {
+        // The model's own palette there: a car made or adopted here kept the remap it was given (shown in another colour)
+        car->field_50_car_sprite->SetPaletteSprites_420700();
+        if (car->field_64_pTrailer && car->field_64_pTrailer->field_C_trailer_car)
+        {
+            car->field_64_pTrailer->field_C_trailer_car->field_50_car_sprite->SetPaletteSprites_420700();
+        }
     }
     return true;
 }
