@@ -28,7 +28,7 @@ namespace
 {
 bool OnFootOnly(s32 objective)
 {
-    return objective == objectives_enum::objective_32 || objective == objectives_enum::punch_char_23 ||
+    return objective == objectives_enum::pull_driver_out_32 || objective == objectives_enum::punch_char_23 ||
            objective == objectives_enum::kill_char_on_foot_20;
 }
 

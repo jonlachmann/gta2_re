@@ -556,7 +556,7 @@ std::unordered_map<const Car*, uint32_t> gCarKeys;
 
 unsigned int ServerPedKey(const Ped* p)
 {
-    return p->field_15C_player ? 1 + p->field_15C_player->field_2E_idx : net::engine::kPedIdBase + p->field_200_id;
+    return p->field_15C_player ? 1 + p->field_15C_player->field_2E_player_idx : net::engine::kPedIdBase + p->field_200_id;
 }
 
 unsigned int ServerCarKey(const Car* c)
@@ -568,7 +568,7 @@ unsigned int ClientPedKey(const Ped* p)
 {
     if (p->field_15C_player)
     {
-        return 1 + p->field_15C_player->field_2E_idx;
+        return 1 + p->field_15C_player->field_2E_player_idx;
     }
     auto it = gPedKeys.find(p);
     return it != gPedKeys.end() ? it->second : 0; // one of this game's own: the game's stream

@@ -163,7 +163,7 @@ LinkWas Record(Sprite* sp, int type, const std::unordered_map<const Char*, Ped*>
             w.state1 = (int)p->field_278_ped_state_1;
             w.state2 = (int)p->field_27C_ped_state_2;
             w.objective = (int)p->get_objective_403A80();
-            w.player = p->field_15C_player ? (int)p->field_15C_player->field_2E_idx : -1;
+            w.player = p->field_15C_player ? (int)p->field_15C_player->field_2E_player_idx : -1;
             auto n = netIds.find(p);
             w.netId = n != netIds.end() ? n->second : 0;
         }
@@ -271,7 +271,7 @@ bool net::engine::DebugCheckPlayerCars(const char* where)
             {
                 Ped* d = car->field_54_driver;
                 printf("net: CHECK %s: player %d drives car %d, which has driver %p (spare %d, player %d), mapped %d\n", where, i,
-                       (int)car->field_6C_car_id, (void*)d, (int)IsSpareDriver(d), d && d->field_15C_player ? (int)d->field_15C_player->field_2E_idx : -1,
+                       (int)car->field_6C_car_id, (void*)d, (int)IsSpareDriver(d), d && d->field_15C_player ? (int)d->field_15C_player->field_2E_player_idx : -1,
                        (int)(MappedId(car) != 0));
             }
             return false;
@@ -295,7 +295,7 @@ void net::engine::DebugOnCrash()
     Ped* camPed = p->field_90_game_camera.field_34_target_ped;
     Car* camCar = p->field_90_game_camera.field_38_target_car;
     fprintf(stderr, "net: crash state: local player %d in use %d, ped %p (live %d) car %p, camera ped %p (live %d, the player's %d) car %p (live %d)\n",
-            (int)p->field_2E_idx, (int)p->field_8E_in_use, (void*)ped, (int)livePeds.count(ped), ped ? (void*)ped->field_16C_car : NULL,
+            (int)p->field_2E_player_idx, (int)p->field_8E_in_use, (void*)ped, (int)livePeds.count(ped), ped ? (void*)ped->field_16C_car : NULL,
             (void*)camPed, (int)livePeds.count(camPed), camPed == ped, (void*)camCar, (int)liveCars.count(camCar));
     // The sound listener's camera (sound_obj::InterrogateAudioEntities_41A730 reads its followed ped's car)
     Camera* listener = NULL;
@@ -451,9 +451,9 @@ void net::engine::DebugSoundChannels(uint32_t frame)
             {
                 const Weapon* w = ae->field_4_pObj->field_C_pAny.pWeapon_30;
                 const Ped* ped = w ? w->field_24_pPed : NULL;
-                snprintf(buf, sizeof(buf), "[weapon %d ammo %d reload %d shot %d ped %d player %d]", w ? w->field_1C_idx : -1, w ? w->field_0_ammo : -1,
+                snprintf(buf, sizeof(buf), "[weapon %d ammo %d reload %d shot %d ped %d player %d]", w ? w->field_1C_weapon_type : -1, w ? w->field_0_ammo : -1,
                          w ? w->field_2_reload_timer : -1, w ? w->field_2C_shot_fired : -1, ped ? ped->field_200_id : -1,
-                         ped && ped->field_15C_player ? ped->field_15C_player->field_2E_idx : -1);
+                         ped && ped->field_15C_player ? ped->field_15C_player->field_2E_player_idx : -1);
                 line += buf;
             }
         }
@@ -522,15 +522,15 @@ void net::engine::DrawOverlay()
     const s32 w = (s32)(cam->field_68_screen_px_width / scale), h = (s32)(cam->field_6C_screen_px_height / scale);
     if (gStatusCorner[0])
     {
-        DrawTextScaled_5D77A0(gStatusCorner, w - 8 - Frontend::GetMaxTextWidth_5D8990(gStatusCorner, word_703BAA), h - 24, word_703BAA);
+        DrawTextScaled_5D77A0(gStatusCorner, w - 8 - Frontend::GetMaxTextWidth_5D8990(gStatusCorner, gStyleTextFont_703BAA), h - 24, gStyleTextFont_703BAA);
     }
     if (gAnnouncement[0] && NowMs() < gAnnouncementUntilMs)
     {
-        DrawTextScaled_5D77A0(gAnnouncement, (w - Frontend::GetMaxTextWidth_5D8990(gAnnouncement, word_703BAA)) / 2, h / 4, word_703BAA);
+        DrawTextScaled_5D77A0(gAnnouncement, (w - Frontend::GetMaxTextWidth_5D8990(gAnnouncement, gStyleTextFont_703BAA)) / 2, h / 4, gStyleTextFont_703BAA);
     }
     if (gStatusCentre[0])
     {
-        DrawTextScaled_5D77A0(gStatusCentre, (w - Frontend::GetMaxTextWidth_5D8990(gStatusCentre, word_703BAA)) / 2, h / 3, word_703BAA);
+        DrawTextScaled_5D77A0(gStatusCentre, (w - Frontend::GetMaxTextWidth_5D8990(gStatusCentre, gStyleTextFont_703BAA)) / 2, h / 3, gStyleTextFont_703BAA);
     }
     if (!gMarker)
     {
@@ -649,7 +649,7 @@ uint64_t gAsleepHere, gAsleepThere; // cars with physics on one side only (aslee
 bool IsCop(Ped* p)
 {
     const s32 o = p->field_240_occupation;
-    return (o >= ped_ocupation_enum::police && o <= ped_ocupation_enum::unknown_cop_occu_31) || o == ped_ocupation_enum::roadblock_cop_37;
+    return (o >= ped_ocupation_enum::police && o <= ped_ocupation_enum::walking_army_guard_31) || o == ped_ocupation_enum::roadblock_cop_37;
 }
 
 // A car reference of this game's (CarRef) as the server's
@@ -891,7 +891,7 @@ void net::engine::DumpPeds(uint32_t tick, bool server)
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
-        uint32_t id = p->field_15C_player ? 1 + p->field_15C_player->field_2E_idx : server ? kPedIdBase + p->field_200_id : 0;
+        uint32_t id = p->field_15C_player ? 1 + p->field_15C_player->field_2E_player_idx : server ? kPedIdBase + p->field_200_id : 0;
         if (!id)
         {
             auto it = toServer.find(p);

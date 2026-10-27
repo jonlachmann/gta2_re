@@ -118,7 +118,7 @@ static_assert(kEnd + 1 <= net::kMaxFields, "a ped's fields and its age (access.c
 
 int32_t WeaponRef(const Weapon* w) // weapon_type + 1, 0 none
 {
-    return w ? w->field_1C_idx + 1 : 0;
+    return w ? w->field_1C_weapon_type + 1 : 0;
 }
 
 uint32_t PedId(const Ped* p) // the server's side
@@ -129,7 +129,7 @@ uint32_t PedId(const Ped* p) // the server's side
     }
     if (p->field_15C_player)
     {
-        return 1 + p->field_15C_player->field_2E_idx; // a player entity
+        return 1 + p->field_15C_player->field_2E_player_idx; // a player entity
     }
     return net::engine::kPedIdBase + p->field_200_id;
 }
@@ -483,7 +483,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
                          p->field_278_ped_state_1 == ped_state_1::in_car_10 &&
                          p->field_16C_car->field_5C_AI && // its objectives drive through the car's AI (ApplyCarAi gives it one)
                          e.f[kStates + kState1] == ped_state_1::in_car_10 && // driving there too, not on its way out
-                         e.f[kFirst + kObjective] != objectives_enum::objective_32; // an on-foot one
+                         e.f[kFirst + kObjective] != objectives_enum::pull_driver_out_32; // an on-foot one
     if (StartCarTransition(p, e))
     {
         return true;

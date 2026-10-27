@@ -44,7 +44,7 @@ struct
 int PlayerIndexOfPed(s32 pedId)
 {
     Ped* killer = pedId ? gPedManager_6787BC->PedById(pedId) : NULL;
-    return killer && killer->field_15C_player ? killer->field_15C_player->field_2E_idx : -1;
+    return killer && killer->field_15C_player ? killer->field_15C_player->field_2E_player_idx : -1;
 }
 
 std::string NarrowName(const Player* p)

@@ -220,7 +220,7 @@ void net::engine::Capture(Snapshot& out)
         w.f[kWorldLights] = gTrafficLights_194_705958->field_192_phase | gTrafficLights_194_705958->field_193_timer << 4 |
                             (gCarManager_6C_677930->field_20_light_state_a & 0xF) << 12;
     }
-    w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_idx + 1 : 0;
+    w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_player_idx + 1 : 0;
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
         w.f[kWorldItTime + i] = gTagGame_6F8450.field_4_it_time_secs[i];

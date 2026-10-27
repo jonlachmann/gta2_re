@@ -135,7 +135,7 @@ void net::engine::ResimTick(const uint32_t* buttons, int count)
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
     {
         c->TakeSoundEvent_411950();
-        c->TakeWeaponKind_4119D0();
+        c->TakeShopEvent_4119D0();
     }
     for (Weapon* w = gWeapon_30_Pool_707014->field_0_pool.field_4_pPrev; w; w = w->mpNext)
     {
