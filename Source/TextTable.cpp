@@ -88,10 +88,10 @@ void TextTable::TKEY_Load_5B5960(u32 chunk_size)
 #if defined(GTA2_PORT) && defined(__LP64__)
     // Port, 64-bit: the file's records are 12 bytes (a 4-byte offset and an 8-character key), the entries hold a
     // pointer, so they are copied over one by one
-    field_0_tKey.field_4_tKey_count = chunkSize / 12;
+    field_0_tKey.field_4_tKey_count = chunk_size / 12;
     field_0_tKey.field_0_tKey = new TextKeyEntry[field_0_tKey.field_4_tKey_count];
-    u8* pRaw = new u8[chunkSize];
-    File::Global_Read_4A71C0(pRaw, chunkSize);
+    u8* pRaw = new u8[chunk_size];
+    File::Global_Read_4A71C0(pRaw, chunk_size);
     for (u32 i = 0; i < field_0_tKey.field_4_tKey_count; i++)
     {
         u32 offset;
