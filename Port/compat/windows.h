@@ -222,6 +222,15 @@ typedef struct _SYSTEMTIME
 #define ERROR_INVALID_PARAMETER 87L
 #define ERROR_MORE_DATA 234L
 #define ERROR_ALREADY_EXISTS 183L
+#define MUTEX_ALL_ACCESS 0x1F0001
+// Primary language ids (winnt.h), as KeyboardLayout::GetLayout_4D6000 reads the keyboard layout's
+#define LANG_ENGLISH 0x09
+#define LANG_FRENCH 0x0c
+#define LANG_GERMAN 0x07
+#define LANG_ITALIAN 0x10
+#define LANG_SPANISH 0x0a
+#define LANG_PORTUGUESE 0x16
+#define LANG_RUSSIAN 0x19
 #define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR)-1)
 #define INFINITE 0xFFFFFFFF
 
