@@ -776,6 +776,12 @@ void net::engine::ComparePrediction(const Snapshot& snap)
         std::vector<FieldTally>& tally = cop ? gTally.back() : gTally[s.type];
         for (size_t f = 0; f < tally.size(); f++)
         {
+            // Not the client's to predict: a player's deaths (a client counts its own, only to carry out each once),
+            // its points (set from the snapshot after this comparison), the world's reach (the server's area)
+            if ((s.type == kEntityPlayer && (f == kPlayerDeaths || f == kPlayerPoints)) || (s.type == kEntityWorld && f == kWorldReach))
+            {
+                continue;
+            }
             tally[f].compared++;
             if (h.f[f] != s.f[f])
             {
