@@ -1002,7 +1002,7 @@ void net::Client::Frame()
     {
         printf("net: the replay ends at frame %u\n", mFrame);
         fflush(stdout);
-        exit(0);
+        _Exit(0); // not exit: its destructors ran under the audio and GL threads still going (freed memory read on Linux)
     }
     const uint32_t local = ChooseInput(recordedInput);
     if (mRecorder)
