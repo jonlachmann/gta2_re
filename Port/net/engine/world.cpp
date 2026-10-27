@@ -28,13 +28,16 @@ const unsigned kFrameLoop[] = {0x67A4B8, 0x6758A8, 0x67B804, 0x67B5C0, 0x67B6C0,
 
 // Pointers whose target isn't game state of its own, so not in the set: a loader's cursor into file data freed after
 // loading (CarInfoTable.cpp's input_data_676170), and one left past the end of the array it filled (modelPhyArrPtr_675F98:
-// a restore wrote a byte into the next heap block's header, which glibc's malloc noticed later and macOS's didn't), and the game's scratch pointers into its pools, map and tables (the
+// a restore wrote a byte into the next heap block's header, which glibc's malloc noticed later and macOS's didn't),
+// the sprite mask cache (gSpriteMaskCache_67AF1C: which drawn texture holds a car with its deltas, lights and damage; a
+// restore put back entries for textures since drawn again, so a car showed an old image, a police car's lights lit
+// and not flashing, until the entry went), and the game's scratch pointers into its pools, map and tables (the
 // last ped processed, a collision's sprite, the blocks around one, a car's info: Ped*, Car*, Sprite*, Object*,
 // gmp_*, CarInfo_2C*, ModelPhysics* globals). What they point into is in the set through the pools; the pointers
 // themselves are kept. With their targets in, a restore wrote into freed memory: the loader's buffer, and after a
 // map change the old game's pools and map (found with Guard Malloc, DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib,
 // on a replay: it stops at the first read of freed memory; MALLOC_STRICT_SIZE=1 also at a read past an allocation)
-const unsigned kNoPointee[] = {0x676170, 0x675F98, 0x675C30, 0x677938, 0x6779B0, 0x678558, 0x6787C0, 0x6787DC, 0x6787E8,
+const unsigned kNoPointee[] = {0x676170, 0x675F98, 0x67AF1C, 0x675C30, 0x677938, 0x6779B0, 0x678558, 0x6787C0, 0x6787DC, 0x6787E8,
                                0x678E40, 0x678F40, 0x678F64, 0x678F84, 0x6F5EB0, 0x6F5EC8, 0x6F5F54, 0x6F5F90,
                                0x6F5F98, 0x6F5FB0, 0x6F6054, 0x6F6060, 0x6F606C, 0x6F6070, 0x6F6078, 0x6F6080,
                                0x6F6084, 0x6F6088, 0x6F608C, 0x6F61E8, 0x6F6478, 0x6F8F8C, 0x6FE0E4, 0x6FE258,
