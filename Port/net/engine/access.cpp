@@ -185,18 +185,19 @@ void net::engine::SeedRandom(uint32_t seed)
 
 // --- Snapshots ---
 
-void net::engine::CapturePed(Ped* p, Car* driving, Snapshot& out)
+void net::engine::CapturePed(Ped* p, Car* driving, Car* riding, Snapshot& out)
 {
-    // On foot or driving (a driver is where its car is; passengers: not yet); players are their own entities
-    Sprite* s = driving ? driving->field_50_car_sprite : !p->field_16C_car ? CharSprite(p) : NULL;
-    if (!s || p->field_238_ped_type == ped_type::player_2 || !(driving || p->IsActive_433B40()) || IsSpareDriver(p)) // (drivers aren't "active")
+    // On foot, driving or riding (a driver or passenger is where its car is); players are their own entities
+    Car* in = driving ? driving : riding;
+    Sprite* s = in ? in->field_50_car_sprite : !p->field_16C_car ? CharSprite(p) : NULL;
+    if (!s || p->field_238_ped_type == ped_type::player_2 || !(in || p->IsActive_433B40()) || IsSpareDriver(p)) // (drivers aren't "active")
     {
         return;
     }
     EntityState e = Entity(kPedIdBase + p->field_200_id, kEntityPed);
     PutPosition(e, s);
     e.f[kPedRemap] = (uint8_t)p->field_244_remap;
-    e.f[kPedCar] = CarRef(driving);
+    e.f[kPedCar] = CarRef(in); // a passenger's has the game's passenger flag with its state (PassengerThere)
     e.f[kPedState] = InCarTransition(p) ? 1 : 0;
     CapturePedState(p, e);
     out.entities.push_back(e);
@@ -231,7 +232,7 @@ void net::engine::Capture(Snapshot& out)
     }
     // Drivers by their cars: a traffic car knows its driver (Car::field_54_driver), but the driver's own field_16C_car
     // needn't point back (measured: 1 of 12 did)
-    std::unordered_map<const Ped*, Car*> driving;
+    std::unordered_map<const Ped*, Car*> driving, riding;
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
     {
         if (c->field_50_car_sprite)
@@ -241,12 +242,22 @@ void net::engine::Capture(Snapshot& out)
             {
                 driving[c->field_54_driver] = c;
             }
+            // Its passengers: those sitting in it (one getting in or out is on foot, its char at the door)
+            for (PedListNode* n = c->field_4_passengers_list.field_0_pFirstPed; n; n = n->mpNext)
+            {
+                Ped* q = n->field_0_char_ped;
+                if (q && q != c->field_54_driver && IsPassengerOf(q, c))
+                {
+                    riding[q] = c;
+                }
+            }
         }
     }
     for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
     {
         auto d = driving.find(p);
-        CapturePed(p, d != driving.end() ? d->second : NULL, out);
+        auto r = riding.find(p);
+        CapturePed(p, d != driving.end() ? d->second : NULL, d == driving.end() && r != riding.end() ? r->second : NULL, out);
     }
     CapturePickups(out);
     SortById(out);

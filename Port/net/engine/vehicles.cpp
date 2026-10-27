@@ -54,6 +54,11 @@ void net::engine::ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const 
     {
         car->ClearDriver_4407F0();
     }
+    if (ped->field_248_enter_car_as_passenger)
+    {
+        car->field_4_passengers_list.RemovePed_471240(ped); // as the game lets a passenger out (Ped.cpp)
+        ped->field_248_enter_car_as_passenger = 0;
+    }
     ped->StartPedWalking_470200(x, y, z); // a char again, walking
     MovePed(ped, x, y, z, rot); // turned the grid-safe way (out of the collision grid and back: harmless if not in it)
 }
@@ -144,4 +149,35 @@ void net::engine::ForceIntoCar(Ped* ped, Car* car)
     ped->field_27C_ped_state_2 = ped_state_2::ped2_driving_10;
     car->field_88_despawn_status = car_despawn_status::active_1; // as Ped::SpawnPedInCar_45C730: not removed with a driver
     car->AssignDriver_4406E0(ped);
+}
+
+bool net::engine::IsPassengerOf(Ped* ped, Car* car)
+{
+    return ped->field_16C_car == car && ped->field_248_enter_car_as_passenger && ped->field_278_ped_state_1 == ped_state_1::in_car_10;
+}
+
+// A passenger as the game seats one (Ped::EnterCarAsPassenger_45C7F0: in the passenger list, no char): the server's
+// (an instant gang in its leader's car, a bus's riders), which the snapshots now carry
+void net::engine::ForceIntoCarAsPassenger(Ped* ped, Car* car)
+{
+    if (!car || !car->field_50_car_sprite || IsPassengerOf(ped, car))
+    {
+        return;
+    }
+    if (ped->field_16C_car)
+    {
+        ForceOutBesideCar(ped, ped->field_16C_car); // in another car, or this one's driver
+    }
+    if (Char* c = ped->field_168_game_object)
+    {
+        if (c->field_88_obj_2c.field_0_p18)
+        {
+            c->field_88_obj_2c.DestroyAllSprites_5A7010();
+        }
+        gChar_B4_Pool_6FDB44->DeAllocate(c);
+        ped->field_168_game_object = NULL;
+    }
+    ped->SetObjective(objectives_enum::no_obj_0, 9999); // as ForceIntoCar: nothing left to do on foot
+    ped->SetObjective2_463830(objectives_enum::no_obj_0);
+    ped->EnterCarAsPassenger_45C7F0(car);
 }

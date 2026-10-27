@@ -81,7 +81,7 @@ Usage and test switches:
 - `GTA2_NET_GANGLOG=1` (server and client) prints player 0's group every 15 game ticks by the server's ids: states,
   objective, door, car, position. The two logs line up by tick. With an instant gang (`GTA2_NET_TESTPOWERUP` with 12,
   repeated: it only works on foot) and a car-hopping bot it showed a member riding in the player's car on the server
-  missing on the client: passengers aren't sent yet.
+  missing on the client, before passengers were sent.
 - `GTA2_NET_TESTWANTED=<points>` keeps every player at least that wanted there (600: one star, the network game's most unless `--police N` allows more), so the cops chase the bots. With `GTA2_NET_COMPARE` on a client, cops are tallied apart from the other peds (`cop.<field>`). Their `group_leader` reads as differing when the leader is another ped: the client gives its own id for it, not the server's.
 
 **Trained bots.** `--bot nn:<file>` is a multilayer perceptron (`session/bot_nn.cpp`). Its 62 inputs (`BotFeatures`) are its health, car, speed, weapon and ammo; the nearest 3 players, 2 cars, a ped, 2 weapon pickups and a power-up relative to where it faces; how far it can walk in 8 directions; a compass, the way along its own route (`BotRoute`) to the nearest player and to the nearest weapon; its last buttons; and whether the nearest players drive. New inputs go at the end: `rl_bots.py` gives a trained policy zero weights for them, so it plays on as before. Its 14 outputs are a choice in each of six groups (turn, move, attack, enter/exit, jump, next weapon), the best one or a sample. Two trainers make the files:
@@ -104,8 +104,17 @@ Usage and test switches:
 | 80 ms round trip, two car-hopping bots and a fighting one, 5 minutes, grid check on | Every traffic car in a snapshot has the traffic driver on the client too (up to 16 at once); a ped driver shows in its car; no crash, no failed check. |
 | 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
 
+**Passengers** (an instant gang in its leader's car, a bus's riders): the server sends each car's seated passengers
+(its passenger list, `Car::field_4_passengers_list`) as peds at their car, with the car and the game's passenger flag
+(`field_248_enter_car_as_passenger`, with the ped's state). A client seats one as the game does
+(`Ped::EnterCarAsPassenger_45C7F0`: in the list, no char; `ForceIntoCarAsPassenger`), lets it out the same way, keeps
+it mapped while it sits (a passenger isn't "active", and no car re-adopts it as its driver), takes it out of the list
+before removing it, and keeps it in its group. Before, a gang member that got in stopped being sent: the client dropped
+it from the gang and went on walking it to the door. Checked with `GTA2_NET_GANGLOG`, an instant gang and a car-hopping
+bot, 75 s: the gang's members and who sits in the leader's car the same on both sides at every logged tick (before:
+the passenger missing on the client every time), the client's ped corrections halved.
+
 **Not yet:**
-- passengers;
 - interpolation;
 - the comparison check;
 - modes beyond the game's own frags, points and tag;

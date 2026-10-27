@@ -135,8 +135,10 @@ void Prune(Pass& a)
     {
         // A player's ped is never a snapshot ped's: one mapped before it was reused for a player's (the pool hands the
         // slot out again) would have the server's ped steer the player (out of its car, the car left driverless)
-        it = a.livePeds.count(it->second) && it->second->IsActive_433B40() && !a.owned.count(it->second) ? (a.mapped.insert(it->second), ++it)
-                                                                                                          : gPeds.erase(it);
+        // (a passenger isn't "active" either, as a driver isn't, but no car re-adopts it: kept while it sits in one)
+        Ped* p = it->second;
+        const bool riding = p->field_16C_car && p->field_248_enter_car_as_passenger;
+        it = a.livePeds.count(p) && (p->IsActive_433B40() || riding) && !a.owned.count(p) ? (a.mapped.insert(p), ++it) : gPeds.erase(it);
     }
 }
 
@@ -266,7 +268,15 @@ Ped* MapPed(Pass& a, const EntityState& e, Car* serverCar)
 {
     auto it = gPeds.find(e.id);
     Ped* ped = it != gPeds.end() ? it->second : NULL;
-    if (!ped && serverCar)
+    if (!ped && serverCar && PassengerThere(e))
+    {
+        // A passenger: made at its car (ApplyPed seats it)
+        if (Sprite* cs = serverCar->field_50_car_sprite; cs && RoomForPed())
+        {
+            ped = gPedManager_6787BC->SpawnPedAt(cs->field_14_xy.x, cs->field_14_xy.y, cs->field_1C_zpos, (u8)e.f[kPedRemap], cs->field_0_rotation);
+        }
+    }
+    else if (!ped && serverCar)
     {
         // Its car's driver here, if nobody's (the map script or the game made it), else a new one
         Ped* d = serverCar->field_54_driver;
@@ -332,7 +342,15 @@ void ApplyPed(Pass& a, const EntityState& e)
     }
     // In the server's car, or on foot, as the server has it (when neither side is getting in or out)
     const bool settled = !e.f[kPedState] && !InCarTransition(ped) && !ped->isDead_403B60();
-    if (serverCar)
+    if (serverCar && PassengerThere(e))
+    {
+        // A passenger there (into a player's car too: an instant gang rides with its leader)
+        if (!IsPassengerOf(ped, serverCar) && settled)
+        {
+            ForceIntoCarAsPassenger(ped, serverCar);
+        }
+    }
+    else if (serverCar)
     {
         // (or its driver here already, but not sitting in it: a police car's driver walked, Police off here)
         if ((serverCar->field_54_driver != ped || ped->field_278_ped_state_1 != ped_state_1::in_car_10) && settled && !a.owned.count(serverCar))
@@ -369,7 +387,7 @@ void ApplyGroups(const Snapshot& snap)
     for (const EntityState& e : snap.entities)
     {
         auto it = e.type == kEntityPed ? gPeds.find(e.id) : gPeds.end();
-        if (it != gPeds.end() && it->second->IsActive_433B40())
+        if (it != gPeds.end() && (it->second->IsActive_433B40() || (it->second->field_16C_car && it->second->field_248_enter_car_as_passenger)))
         {
             groupPeds.push_back(std::make_pair(it->second, &e));
         }
@@ -399,7 +417,16 @@ void RemoveUnsent(const Pass& a, const Snapshot& snap)
             ++it;
             continue;
         }
-        if (it->second->IsActive_433B40())
+        Ped* q = it->second;
+        if (q->field_16C_car && q->field_248_enter_car_as_passenger && !q->IsActive_433B40())
+        {
+            // A passenger the server doesn't have: out of its car's list (Deallocate_45EB60 leaves it there), then gone
+            q->field_16C_car->field_4_passengers_list.RemovePed_471240(q);
+            q->field_248_enter_car_as_passenger = 0;
+            q->field_16C_car = NULL;
+            q->Deallocate_45EB60();
+        }
+        else if (it->second->IsActive_433B40())
         {
             Ped* p = it->second;
             if (p->field_16C_car && p->field_16C_car->field_54_driver != p && !p->field_248_enter_car_as_passenger)

@@ -99,7 +99,7 @@ enum PedField
     kPedZ,
     kPedRot,
     kPedRemap,
-    kPedCar, // the car it drives (CarRef; its position is the car's then)
+    kPedCar, // the car it drives or rides in (CarRef; its position is the car's then; a passenger: PassengerThere)
     kPedState, // 1: getting into or out of a car
     kPedAi, // then its AI state (ped_state.cpp)
 };
@@ -154,7 +154,7 @@ bool IsSpareDriver(const Ped* ped);
 // Moved and turned at once, the collision grid kept right (cars.cpp, access.cpp)
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
-void CapturePed(Ped* p, Car* driving, Snapshot& out);
+void CapturePed(Ped* p, Car* driving, Car* riding, Snapshot& out);
 
 // The debug switches (GTA2_NET_*), read once (debug.cpp)
 struct DebugFlags
@@ -201,6 +201,9 @@ bool InCarTransition(Ped* ped); // on its way into or out of a car: states, or a
 bool LeavingCar(Ped* ped); // on its way out of one
 bool AtCarDoor(Ped* ped); // getting in or out at the door (not the walk there)
 void ForceIntoCar(Ped* ped, Car* car);
+void ForceIntoCarAsPassenger(Ped* ped, Car* car);
+bool IsPassengerOf(Ped* ped, Car* car); // sitting in it as a passenger
+bool PassengerThere(const EntityState& e); // a snapshot ped with a car: a passenger, not its driver (ped_state.cpp)
 void ForceOutOfCar(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void ForceOutBesideCar(Ped* ped, Car* car); // out at the car's side (a car's driver needn't point back to it)
 void StartEntering(Ped* ped, Car* car);

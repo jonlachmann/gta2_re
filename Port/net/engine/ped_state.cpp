@@ -343,7 +343,9 @@ void net::engine::ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityS
         bool ok;
         Ped* leader = e.f[kGroup] ? LocalPed((uint32_t)e.f[kGroup], &ok) : NULL;
         const int idx = e.f[kGroup + 1];
-        if (leader && leader != p && idx != 99 && !p->isDead_403B60() && !leader->isDead_403B60() && !p->field_16C_car)
+        // In a car too: the game keeps a passenger in its group (an instant gang in its leader's car); left out, the
+        // rebuild below took it out of the group here
+        if (leader && leader != p && idx != 99 && !p->isDead_403B60() && !leader->isDead_403B60())
         {
             byLeader[leader].push_back(std::make_pair(idx, p));
             placed.insert(p);
@@ -556,4 +558,9 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     p->field_17C_pGang = GangAt(e.f[kGangs]);
     p->field_19C_dummy_gang = GangAt(e.f[kGangs + 1]);
     return true;
+}
+
+bool net::engine::PassengerThere(const EntityState& e)
+{
+    return e.f[kPedCar] && e.f[kFirst + kPassenger];
 }
