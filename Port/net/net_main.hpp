@@ -15,3 +15,4 @@ void NetMenu_Cancel();
 const std::string& NetMenu_DefaultName(); // --name, if the command line gave one
 void NetMenu_Install(); // the page's hooks in the frontend (Port/net/menu.cpp)
 int NetMenu_Page(); // its frontend page
+void NetMenu_SetStatus(const std::string& status); // the line under its options

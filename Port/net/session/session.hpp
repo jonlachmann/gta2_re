@@ -212,6 +212,7 @@ class Client
     bool StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error);
     void Frame();
     void Leave(); // tells the server at once (a quit, a signal), not by its timeout seconds later
+    const std::string& LeftWhy() const { return mLeftWhy; } // why we went back to the menu ("": the player left)
     void Idle(); // between frames: a pong timed as it arrives, the rest kept for the frame
 
   private:
@@ -269,6 +270,7 @@ class Client
     uint32_t Lead() const; // ticks to run ahead of the newest snapshot
     void Reconnect(); // the connection dropped: a new one, now and then, until the server has us back
     void Rejoined(const Welcome& welcome);
+    void LeaveToMenu(const char* why); // off the server, and the game back to the frontend's network page
     void ShowStatus(); // the ping, and an outage, over the frame
     bool TakePong(const TransportEvent& e); // a pong (the ping's round trip measured): not for the frame
     void SendPing();
@@ -306,9 +308,9 @@ class Client
     long long mPingShownMs = 0, mLastSnapshotMs = 0, mReconnectMs = 0, mPingSentMs = 0;
     std::vector<TransportEvent> mPending; // what Idle polled, for the next frame
     int mReconnects = 0; // attempts since the connection dropped
+    long long mLostMs = 0; // when it dropped
     bool mHelloSent = false; // joining: connected, waiting for the welcome
     long long mJoinWaitMs = 0; // joining: since when we wait (6 s each for the connection and the welcome)
-    bool mGaveUp = false; // back as another player, or on another map: no game to go on with here
     std::string mScr; // the map's script (a rejoin must find the same)
     std::unique_ptr<engine::NavMap> mNavMap; // built once the game has its map
     BotView mBotView;
@@ -319,6 +321,7 @@ class Client
     int mServerGame = -1; // the server's game we take snapshots of: the next after a map change (-1: the first one's)
     uint32_t mMarkFrame = 0;
     bool mLeavePrompt = false, mLeft = false; // Escape's prompt (ChooseInput), and its yes: left the server
+    std::string mLeftWhy;
     uint32_t mPromptKeyFrame = 0;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player
     std::vector<int> mLocalDeaths;

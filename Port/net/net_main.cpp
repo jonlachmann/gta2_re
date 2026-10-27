@@ -145,6 +145,7 @@ int LeaveNetworkGame()
     {
         return -1;
     }
+    NetMenu_SetStatus(gClient ? gClient->LeftWhy() : "");
     delete gClient; // it left the server already
     gClient = NULL;
     gPortIdleHook = NULL;

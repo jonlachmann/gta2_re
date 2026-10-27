@@ -3,9 +3,11 @@
 // background (NetMenu_Join, NetMenu_Poll: the menu runs on meanwhile). Once the server welcomes us the network game is
 // set up as the command line's --connect does, and the frontend boots it as it boots a level (Booting_Map_2), with
 // the game's own network start filling in the session (Start_NetworkGame_5E5A30). The page is one of the frontend's
-// unused ones (12); the game draws it, this file takes its input (gPortFrontendInput) and writes its labels.
+// unused ones (12); the game draws it, this file takes its input (gPortFrontendInput) and writes its labels. The
+// address and the name are kept in gta2.ini, beside the game's own network settings.
 #include "net_main.hpp"
 #include "Port/port_hooks.hpp"
+#include "Port/registry_ini.hpp"
 #include "Source/Frontend.hpp"
 #include "Source/SoundObject.hpp"
 #include "Source/winmain.hpp"
@@ -38,6 +40,38 @@ std::string gBefore; // the field as it was: Esc gives it back
 bool gJoining;
 unsigned gBlink;
 char gPrevKeys[256];
+
+const char* const kSettings = "SOFTWARE\\DMA Design Ltd\\GTA2\\Network";
+
+std::string Load(const char* name)
+{
+    HKEY key;
+    char text[64] = {};
+    DWORD size = sizeof(text) - 1;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, kSettings, 0, KEY_ALL_ACCESS, &key) != ERROR_SUCCESS)
+    {
+        return "";
+    }
+    if (RegQueryValueExA(key, name, 0, 0, (LPBYTE)text, &size) != ERROR_SUCCESS)
+    {
+        text[0] = 0;
+    }
+    RegCloseKey(key);
+    return text;
+}
+
+void Save()
+{
+    HKEY key;
+    DWORD disposition;
+    if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, kSettings, 0, 0, 0, KEY_ALL_ACCESS, 0, &key, &disposition) != ERROR_SUCCESS)
+    {
+        return;
+    }
+    RegSetValueExA(key, "ServerAddress", 0, REG_SZ, (const BYTE*)gAddress.c_str(), (DWORD)gAddress.size() + 1);
+    RegSetValueExA(key, "PlayerName", 0, REG_SZ, (const BYTE*)gName.c_str(), (DWORD)gName.size() + 1); // the game's own
+    RegCloseKey(key);
+}
 
 // Into one of the frontend's 50-character labels. ponytail: by hand, not with the C library's wide functions or
 // strings: the game's wchar_t is 2 bytes (-fshort-wchar), the library's 4
@@ -116,6 +150,7 @@ void Type(Frontend* pFrontend, const bool* pressed)
         if (k == DIK_RETURN || k == DIK_NUMPADENTER)
         {
             gEditing = -1;
+            Save();
             snd1_67D818.field_0_object_type = 5;
             return;
         }
@@ -153,7 +188,7 @@ void Refresh(Frontend* pFrontend)
     SetText(page.field_4_options_array[kAddress].field_6_option_name_str, "Address   " + gAddress + (gEditing == kAddress && cursor ? "_" : ""));
     SetText(page.field_4_options_array[kName].field_6_option_name_str, "Name   " + gName + (gEditing == kName && cursor ? "_" : ""));
     SetText(page.field_4_options_array[kJoin].field_6_option_name_str, gJoining ? "Connecting..." : "Join game");
-    SetText(page.field_518_elements_array[1].field_6_element_name_str, gStatus);
+    SetText(page.field_518_elements_array[0].field_6_element_name_str, gStatus);
 }
 
 // The server welcomed us: the game's network start (as -N does before the frontend), then the frontend boots it
@@ -185,37 +220,36 @@ void Setup(Frontend* pFrontend)
 
     MenuPage& page = pFrontend->field_136_menu_pages_array[kPage];
     page.field_0_number_of_options = kOptions;
-    const s16 ys[kOptions] = {200, 220, 260};
+    // Where the main menu's and the play page's are: right of the picture, on the black
+    const s16 ys[kOptions] = {250, 270, 310};
     for (int i = 0; i < kOptions; i++)
     {
         page.field_4_options_array[i].field_0_option_type = ENTERABLE_1;
-        page.field_4_options_array[i].field_2_x_pos = 200;
+        page.field_4_options_array[i].field_2_x_pos = 300;
         page.field_4_options_array[i].field_4_y_pos = ys[i];
         page.field_4_options_array[i].field_80_menu_page_target = kNoTarget;
     }
     page.field_BC6_current_option_idx = kJoin;
     page.field_BC8_default_option_idx = kJoin;
-    page.field_2_number_of_elements = 2;
-    MenuElement& title = page.field_518_elements_array[0];
-    title.field_0_element_type = STRING_TEXT_1;
-    title.field_2_xpos = 35;
-    title.field_4_ypos = 11;
-    SetText(title.field_6_element_name_str, "Network game");
-    title.field_6A_font_type = pFrontend->field_130_title_font;
-    title.field_6C_font_palette = 5;
-    MenuElement& status = page.field_518_elements_array[1];
+    page.field_2_number_of_elements = 1;
+    MenuElement& status = page.field_518_elements_array[0];
     status.field_0_element_type = STRING_TEXT_1;
-    status.field_2_xpos = 200;
-    status.field_4_ypos = 300;
+    status.field_2_xpos = 300;
+    status.field_4_ypos = 350;
     status.field_6A_font_type = pFrontend->field_11C_normal_font;
     status.field_6C_font_palette = 0xFFFF;
-    if (gName.empty())
+    static bool loaded;
+    if (!loaded)
     {
-        gName = NetMenu_DefaultName();
-        for (char& c : gName)
-        {
-            c = (char)toupper((unsigned char)c);
-        }
+        loaded = true;
+        const std::string address = Load("ServerAddress");
+        gAddress = address.empty() ? gAddress : address;
+        gName = NetMenu_DefaultName().empty() ? Load("PlayerName") : NetMenu_DefaultName();
+    }
+    gName = gName.empty() ? "PLAYER" : gName;
+    for (char& c : gName)
+    {
+        c = (char)toupper((unsigned char)c);
     }
     Refresh(pFrontend);
 }
@@ -227,12 +261,21 @@ bool Input(Frontend* pFrontend)
         // The picture beside the main menu (UpdateMenuScreen_4B6780 knows three options): ours shows the options' one
         const u16 option = pFrontend->field_136_menu_pages_array[MENUPAGE_START_MENU].field_BC6_current_option_idx;
         pFrontend->field_EE08_menu_screen = option == 2 ? Options_0 : option == 3 ? Quit_2 : pFrontend->field_EE08_menu_screen;
+        if (option == 2 && pFrontend->field_C9D0_return_pressed)
+        {
+            // Ours too: the game's page change draws a level's picture for a frame (UpdateMenuScreen_4B6780)
+            pFrontend->ChangeMenuPage_4B3170(kPage);
+            pFrontend->field_EE08_menu_screen = Options_0;
+            snd1_67D818.field_0_object_type = 5;
+            return true;
+        }
         return false;
     }
     if (pFrontend->field_132_current_page_idx != kPage)
     {
         return false;
     }
+    pFrontend->field_EE08_menu_screen = Options_0; // the main menu's picture for "Network game" (the game's: a level's)
     bool pressed[256];
     for (int k = 0; k < 256; k++)
     {
@@ -284,6 +327,7 @@ bool Input(Frontend* pFrontend)
         else
         {
             std::string error;
+            Save();
             gJoining = NetMenu_Join(gAddress, gName, &error);
             gStatus = gJoining ? "" : error;
         }
@@ -292,6 +336,7 @@ bool Input(Frontend* pFrontend)
     else if (pFrontend->field_C9D1_escape_pressed)
     {
         pFrontend->ChangeMenuPage_4B3170(MENUPAGE_START_MENU);
+        pFrontend->field_EE08_menu_screen = Options_0; // "Network game" still chosen there
         snd1_67D818.field_0_object_type = 6;
     }
     else
@@ -302,6 +347,11 @@ bool Input(Frontend* pFrontend)
     return handled;
 }
 } // namespace
+
+void NetMenu_SetStatus(const std::string& status)
+{
+    gStatus = status;
+}
 
 int NetMenu_Page()
 {

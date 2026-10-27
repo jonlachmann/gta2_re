@@ -15,6 +15,7 @@ namespace
 const int kSaves = 32; // ticks a snapshot may be behind and still be reconciled (about 1 s)
 const int kStallMs = 700; // no snapshot for this long: the connection is out (ENet drops it after 5 to 10 s)
 const int kReconnectMs = 3000; // between attempts to connect again
+const int kGiveUpMs = 30000; // reconnecting this long: the server is gone, back to the menu
 
 long long NowMs()
 {
@@ -545,10 +546,7 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
             {
                 printf("net: frame %u, left the game\n", mFrame);
                 mLeavePrompt = false;
-                mLeft = mGaveUp = true; // no reconnecting
-                mConnected = false;
-                Leave();
-                engine::LeaveForMenu(); // and the frontend's network page (Port/net/net_main.cpp, LeaveNetworkGame)
+                LeaveToMenu("");
             }
             else
             {
@@ -885,6 +883,13 @@ void net::Client::SendCommands()
 void net::Client::Reconnect()
 {
     const long long now = NowMs();
+    mLostMs = mReconnects ? mLostMs : now;
+    if (now - mLostMs > kGiveUpMs)
+    {
+        printf("net: frame %u, no answer from the server after %d attempts\n", mFrame, mReconnects);
+        LeaveToMenu("lost the server");
+        return;
+    }
     if (mTransport || now < mReconnectMs)
     {
         return; // connecting (the hello follows its kConnect: HandleEvents), or not yet
@@ -908,8 +913,7 @@ void net::Client::Rejoined(const Welcome& welcome)
     {
         printf("net: frame %u, the server has us back as player %d on %s, not %d on %s: start the game again to play on\n", mFrame,
                welcome.slot, welcome.scr.c_str(), mSlot, mScr.c_str());
-        mGaveUp = true;
-        Leave();
+        LeaveToMenu("the server started another game");
         return;
     }
     printf("net: frame %u, back in as player %d\n", mFrame, mSlot);
@@ -946,10 +950,6 @@ void net::Client::ShowStatus()
     {
         centre = "Leave the game?  Y / N";
     }
-    else if (mGaveUp)
-    {
-        centre = "Lost the server";
-    }
     else if (!mConnected)
     {
         centre = "Lost the server, reconnecting";
@@ -964,6 +964,15 @@ void net::Client::ShowStatus()
 void net::Client::Leave()
 {
     mTransport.reset(); // its destructor disconnects (enet_peer_disconnect_now)
+}
+
+void net::Client::LeaveToMenu(const char* why)
+{
+    mLeft = true; // no reconnecting
+    mConnected = false;
+    mLeftWhy = why;
+    Leave();
+    engine::LeaveForMenu(); // and the frontend's network page (Port/net/net_main.cpp, LeaveNetworkGame)
 }
 
 void net::Client::Frame()
@@ -1022,7 +1031,7 @@ void net::Client::Frame()
     }
     if (!mConnected)
     {
-        if (!mReplay && !mGaveUp)
+        if (!mReplay && !mLeft)
         {
             Reconnect();
         }
