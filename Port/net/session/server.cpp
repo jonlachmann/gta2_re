@@ -596,7 +596,7 @@ void net::Server::CheckRound(const Snapshot& world)
     const uint32_t ticksPerSecond = 1000 / (mConfig.game.tickMs > 0 ? mConfig.game.tickMs : 33);
     const int elapsed = (int)((mTick - mRoundStart) / ticksPerSecond);
     round.secondsLeft = minutes ? std::max(0, minutes * 60 - elapsed) : 0;
-    int best = -1, bestScore = 0, second = 0;
+    int best = -1, bestScore = 0, second = -1; // second: the runner-up's score (-1: nobody else)
     for (const EntityState& e : world.entities)
     {
         int p = 0;
@@ -606,7 +606,7 @@ void net::Server::CheckRound(const Snapshot& world)
             const int score = type == 2 ? engine::PlayerPoints(e) : engine::PlayerFrags(e);
             if (best < 0 || score > bestScore)
             {
-                second = best < 0 ? score : bestScore;
+                second = best < 0 ? second : bestScore; // the leader so far is the runner-up now (the first: nobody yet)
                 best = p;
                 bestScore = score;
             }
