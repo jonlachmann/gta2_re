@@ -11,7 +11,7 @@ status snapshot.
 | Milestone (issue #840) | State |
 |---|---|
 | M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
-| M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (32-bit x86): compiles and links, not run yet**; network removed there, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. Left: running on Linux. See "M1 so far" and "The Linux build". |
+| M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (64-bit x86, as the macOS build): runs** (Debian trixie, headless and windowed with Mesa); the 32-bit build compiles and links, not run; DirectPlay left out, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. See "M1 so far" and "The Linux build". |
 | M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Seven divergences found and fixed or explained; one is unfixable (the original reads stack garbage, particles only). With that cascade and two scratch values left out, the port matches **the whole first attract demo** (4,100 frames). See "M2: the replay test". |
 | M3-M6 | Not started as planned, but a **native macOS build (arm64, 64-bit) plays**: frontend, the three cities, attract demos. See "Native macOS". |
 
@@ -473,15 +473,24 @@ and this one are interchangeable only for the structures without pointers.
 
 ## The Linux build (branch `port`)
 
-Built on the Mac, without running it (a Linux VM wasn't wanted yet): the non-Windows code is the same for
-Linux and macOS, and the Windows build under wine keeps testing the shared SDL3 code at runtime.
+Cross-built on the Mac. **64-bit x86 by default**, as the macOS build (its 64-bit work is shared): runs on Debian
+trixie (in colima's amd64 VM), headless and in a window under Xvfb with Mesa (with the netcode on its branch: a
+server and two clients, one of them windowed, joined and played). Needs only glibc and `libSDL3.so.0` (found next to the program first:
+`$ORIGIN`; Debian's own links sndio, libdecor, PipeWire and more, so it isn't bundled); the C++ runtime is linked in.
+A game folder needs `data/` and an existing `player/` (the game writes its save slots there but doesn't make it).
 
 ```bash
 brew install lld
-Scripts/port/build_linux.sh      # -> build_port/linux/gta2_port, ELF i386, needs libSDL3.so.0
+Scripts/port/build_linux.sh            # -> build_port/linux64/gta2_port, ELF x86-64
+ARCH=i686 Scripts/port/build_linux.sh  # -> build_port/linux/gta2_port, ELF i386 with x87 floats (not run)
 ```
 
-The target files (sysroot) are Debian trixie's i386 packages, unpacked without running anything: `libc6`,
+The 64-bit sysroot is a Debian trixie amd64 container's files (`docker build` with `libc6-dev libstdc++-14-dev
+libgcc-14-dev libsdl3-dev libgl-dev libegl-dev`, then `docker export`): `usr/include`, `usr/lib/x86_64-linux-gnu`,
+`usr/lib/gcc`, `usr/lib/linux` (the kernel headers' `asm` links point there), `usr/lib64`, `lib`, `lib64`, in
+`build_port/linux64_sysroot`. The i386 one:
+
+Debian trixie's i386 packages, unpacked without running anything: `libc6`,
 `libc6-dev`, `linux-libc-dev`, `libgcc-14-dev`, `libgcc-s1`, `libstdc++-14-dev`, `libstdc++6`,
 `libcrypt-dev`, `libcrypt1`, `libsdl3-0`, `libsdl3-dev`, `libgl-dev`, `libegl-dev`, `libglx-dev`
 (URLs from `dists/trixie/main/binary-i386/Packages.xz`; `tar xf x.deb && tar xf data.tar.* -C sysroot`), plus
