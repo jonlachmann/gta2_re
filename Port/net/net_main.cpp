@@ -16,6 +16,7 @@
 #include "net_main.hpp"
 #include "Port/port_hooks.hpp" // the hooks defined here, as the game declares them
 #include "session/session.hpp"
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <ctype.h>
 #include <signal.h>
@@ -213,7 +214,7 @@ const std::string& NetMenu_DefaultName()
 
 int NetMain_Init(std::vector<std::string>& args)
 {
-    bool server = false;
+    bool server = false, window = false; // a server runs headless (GTA2_HEADLESS) unless --window asks to watch it
     std::string connect, map = "downtown-6p", replay, maps;
     net::ServerConfig sc;
     net::ClientConfig cc;
@@ -226,6 +227,10 @@ int NetMain_Init(std::vector<std::string>& args)
         if (a == "--server")
         {
             server = true;
+        }
+        else if (a == "--window")
+        {
+            window = true;
         }
         else if (a == "--connect" && more)
         {
@@ -345,6 +350,10 @@ int NetMain_Init(std::vector<std::string>& args)
     std::string error;
     if (server)
     {
+        if (!window)
+        {
+            SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "GTA2_HEADLESS", "1", true); // what Port_IsHeadless reads
+        }
         // The rotation: each a map's files, the first played first
         for (size_t at = 0, end = 0; !maps.empty() && end != std::string::npos; at = end + 1)
         {

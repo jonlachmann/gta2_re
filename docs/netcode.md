@@ -109,7 +109,7 @@ Usage and test switches:
 
 ```
 Scripts/port/build_mac.sh                                    # or build_linux.sh / build.sh
-GTA2_HEADLESS=1 GTA2_ARGS="--server --map downtown-6p --players 4" Scripts/port/run_mac.sh
+GTA2_ARGS="--server --map downtown-6p --players 4" Scripts/port/run_mac.sh   # no window (--window: one to watch)
 GTA2_ARGS="--connect 127.0.0.1 --name me" Scripts/port/run_mac.sh                  # play with the keyboard
 GTA2_HEADLESS=1 GTA2_ARGS="--connect 127.0.0.1 --bot --name bot1" Scripts/port/run_mac.sh   # a test bot
 ```
