@@ -66,6 +66,17 @@ void net::engine::GuardPeds()
             ForceOutBesideCar(ped, car);
         }
     }
+    // A ped knocked flying (its body an object, Ped::field_184_pObj2C) whose object is gone (the snapshot's removal, or
+    // the server's pickups taking its place): Char::state_8_5520A0 read the object's sprite, freed (a crash at the end
+    // of a long game). Without it, the game's own way: the ped is killed where it lies
+    for (Ped* p = gPedPool_6787B8->field_0_pool.field_4_pPrev; p; p = p->mpNext)
+    {
+        Object* body = p->field_184_pObj2C;
+        if (body && !body->field_4_sprite)
+        {
+            p->field_184_pObj2C = NULL;
+        }
+    }
     // A car's AI remembered a car it hit that has no sprite now (one going), and read its position on the next tick
     // (CarAI::ManageCollisions_452A20: a crash in a resimulation)
     for (Car* c = gCar_BC_Pool_67792C->field_0_pool.field_4_pPrev; c; c = c->mpNext)
