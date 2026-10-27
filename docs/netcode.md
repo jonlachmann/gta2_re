@@ -115,7 +115,10 @@ bot, 75 s: the gang's members and who sits in the leader's car the same on both 
 the passenger missing on the client every time), the client's ped corrections halved.
 
 **Not yet:**
-- interpolation;
+- interpolation of other players: **probably not wanted.** Showing them in the past between snapshots instead of
+  predicting them hides the corrections (the jumps at car doors), but at a high ping they lag behind by the whole
+  delay: shots and collisions at where they were, not where they are. Prediction stays; its corrections are the thing
+  to make smaller (other players' entries and exits started from the snapshot already took the large steps from 28 to 4).
 - the comparison check;
 - modes beyond the game's own frags, points and tag;
 - a results screen between maps;
