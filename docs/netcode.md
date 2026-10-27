@@ -152,7 +152,7 @@ A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::C
 - the rollback set leaving out what the game's scratch pointers point to (the last ped processed, a collision's sprite, the map blocks around one): after a map change they point into the old game's freed pools and map, and a restore wrote there. A loader's cursor (`input_data_676170`) did that in every game. Found with Guard Malloc (`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib`) on a replay: it stops at the first read of freed memory. AddressSanitizer hangs at its start on this macOS;
 - a snapshot's weapon in hand only one the player has (the HUD reads it).
 
-Not yet: a results screen between maps.
+Not yet: a results screen between maps, and the rest of a round's start and end (warmup, ready, countdown, votes): see "Round flow".
 
 ## Chat
 
@@ -713,6 +713,7 @@ The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attac
 | N8 | Later modes: points, tag (both in the game), team deathmatch and CTF (new, with the game's assets). | One bot match per mode. |
 | N7 | Hardening: the server trusts only inputs; rate limits; protocol version; timeouts. | Fuzz input packets. |
 | N9 | Setting up games: hosting from the menu, the public address and UPnP, a password, the data check, then a master server (heartbeat, list, join links) with the web app, and the in-game parts a website can't do (LAN games, real pings). See "Setting up games". | A friend joins a game hosted from the menu over the internet with no router setup; a server registered with the master shows in the web app's list and its join link starts the game in it. |
+| N10 | Round flow: a warmup until enough players are in or all are ready, a countdown, the round, a results screen with a vote for the next map; votes to start, change map and kick, as the server allows. See "Round flow". | Bots ready up, play a round to its limit, vote and go on to the voted map; a player joining in the countdown or during the results gets in at the next round's start. |
 
 ## Setting up games (plan, N9)
 
@@ -800,6 +801,55 @@ on a 1999 game and needs a GL backend: kept for admin and debug tools.
 4. In the game: the info query, LAN games, recent servers (5).
 5. Connectivity: punch-through, then the relay, as the reachability test shows the need (4, 12, 13).
 6. Admin, quick play, the server package, the in-game list if asked for.
+
+## Round flow (plan, N10)
+
+Today a round starts the moment the server's game does, and the next the moment one ends ("Rounds"): no waiting for
+players, no countdown, and between maps only a 3 s pause with the winner. The plan: a round in phases, run by the
+server, the phase and its time left carried in the world entity (as the round number and seconds left are now), so a
+client shows it and a client joining mid-phase knows where the game is.
+
+**Phases**
+
+1. **Warmup**: the map is played, without scores (frags and deaths aren't counted, no limits), so the first ones in
+   can drive around and try weapons. It ends when `--minplayers N` are in (default 2) and either all of them are
+   ready or `--warmup S` seconds have passed since the minimum was reached (default 60; 0: wait for everyone ready).
+   A lone player on a server waits here, not in a round against nobody.
+2. **Countdown**: 5 s, "Round starts in 3, 2, 1" over the frame. Then everyone is put at a restart zone with no
+   score, weapons or power-ups, as a new round does now, and the scores start.
+3. **Round**: as now, to the frag limit or the time limit, with "60 seconds left" and "10 seconds left".
+4. **Results**: the round's winner and a scoreboard (frags, deaths, points per player) for `--results S` seconds
+   (default 15), and the vote for the next map while it shows. Then the next map or the same one, and the
+   countdown (not the warmup again, unless fewer than the minimum are left).
+
+**Ready**: a key (F1, say; F12 and the key under Esc already mark moments for recordings) toggles a
+player's ready flag, carried in its player entity; the HUD lists who is ready ("3 of 4 ready"). Joining sets it off.
+
+**Votes**: one vote at a time, started by any player, open 20 s, decided by a majority of the players in the game
+(those who don't vote count as no). Each kind can be turned off on the server (`--votes map,kick,start` or `none`).
+
+- **Next map** (during the results): the choices are the rotation (`--maps`) or the server's map list; most votes win,
+  ties go to the rotation's next. With nobody voting, the rotation goes on as now.
+- **Change map now**: the same, during a round; it ends the round without a winner.
+- **Start now**: ends the warmup (for a group that is all here, faster than everyone readying).
+- **Kick**: a player, by name; the server refuses its name for 10 minutes. Not against the server's own console.
+
+The vote is a reliable message (start, cast, result), the open vote and its tally in the world entity; the HUD shows
+"Vote: change map to MP2 (F1 yes, F2 no) 2 of 3, 14 s".
+
+**Who decides the settings**: the server's command line (or `server.ini`, N9) as now. A player hosting from the menu
+(N9) is the server, so its host page sets them. No in-game admin beyond the votes for now (N9's admin item adds it).
+
+**Where it fits**: the phases are the server's (`Server::CheckRound` grows into a small state machine in a
+`session/round_flow.cpp`); the clients only show them. Scores outside a round: the server doesn't count frags and
+deaths in the warmup (the game's own counters, reset when the countdown ends, as `NewRound` does). The results screen
+can reuse the frontend's multiplayer results page (`MENUPAGE_MULTIPLAYER_RESULTS`, six rows) drawn over the game, or
+the overlay text first (cheaper), and the page later. Protocol: new world fields (phase, phase seconds, the open
+vote), a ready flag per player, vote messages: a protocol bump.
+
+**Checks**: bots that ready up after a few seconds and vote for a random map (`--bot` gets a "ready, vote" behaviour),
+in `net_check` as a new step: two bots warm up, ready, play a round to a short limit, vote, and both follow to the
+voted map; a third joining in the countdown and one during the results each get in at the next round's start.
 
 ## From openGTA2 (`openGTA2/network`)
 
