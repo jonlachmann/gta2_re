@@ -119,9 +119,18 @@ the passenger missing on the client every time), the client's ped corrections ha
   predicting them hides the corrections (the jumps at car doors), but at a high ping they lag behind by the whole
   delay: shots and collisions at where they were, not where they are. Prediction stays; its corrections are the thing
   to make smaller (other players' entries and exits started from the snapshot already took the large steps from 28 to 4).
-- the comparison check;
-- modes beyond the game's own frags, points and tag;
-- a results screen between maps;
+- **other players at car doors** (what a player notices most: the other one jumps as it gets in or out). Most of the
+  remaining large corrections of other players are with the server at the door (states 3/4 walking to it, 7/14
+  getting in or out, in `GTA2_NET_CORRLOG`'s lines). Next step: a remote player the server has at a door is put at the
+  server's place and door at once instead of walked there by its predicted inputs, then measured again on recorded
+  sessions (`GTA2_NET_COMPARE`, `GTA2_NET_JERKLOG`: remote players' jumps, and `player.x/y` in the comparison);
+- **cops' health**: 12-28% of the cops differ in a few reports, from hits a client predicts (its own shots) before the
+  server's snapshot says otherwise; corrected by the next snapshot. Left as prediction noise for now; a predicted hit
+  on an AI ped could wait for the server instead, if it shows;
+- **cops on foot** differ the most of any entity (animation, aim and position on 20-30% of them): their AI is
+  predicted from the server's last state. Expected, but the noisiest type; worth a look if players see cops jump;
+- modes beyond the game's own frags, points and tag (N8);
+- the round's start and end beyond the limits: warmup, ready, countdown, results, votes (N10);
 - the player cap above 6.
 - **to investigate: an instant gang doesn't board a bus** (on the server, so the game's own AI, not the netcode). In a
   played test (`GTA2_NET_TESTCAR` bus, `GTA2_NET_GANGLOG`) the four members walked to doors 0-2 and stayed in states
@@ -705,8 +714,8 @@ The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attac
 | N0 | **Done**, see "N0 measurements". | Whole-world rollback holds: ~30 µs per busy tick, 0.06 ms save/restore, rollback exact. |
 | S | **Done.** Sound fixes before prediction: its own random stream for `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, and sound kept out of the rollback set (`SoundPosEntry` from a pool, or the sound layer not rolled back at all). | The rollback check exact with sound on; the sim's draws unchanged by muting sound. |
 | N1 | Local rollback, no network: save every tick; every K ticks restore K back and resimulate with the same inputs. | The state log hash after resim equals the hash without it. Proves the restore set is complete and the resim is deterministic within one binary. |
-| N2 | **Mostly done** (see "Status"; the comparison check is still to do). One binary with `--server`/`--connect`; the server starts its network game through the offline stubs (as `GTA2_OFFLINE_MP` does); ENet loopback, full snapshots (no delta), schema v1 starting with peds, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
-| N3 | Bitstream, field masks, per-entity acked baselines, priority and the 1372-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
+| N2 | **Done** (see "Status"; the comparison check is `GTA2_NET_COMPARE`, "Checks"). One binary with `--server`/`--connect`; the server starts its network game through the offline stubs (as `GTA2_OFFLINE_MP` does); ENet loopback, full snapshots (no delta), schema v1 starting with peds, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
+| N3 | **Done**: delta snapshots against each client's acked baseline, cut by priority at the packet's budget ("Filling a snapshot"); `--lag/--jitter/--loss`. Bitstream, field masks, per-entity acked baselines, priority and the 1372-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
 | N4 | **Done.** CSP: tick-stamped commands with redundancy, the server input buffer, clock sync, rollback on snapshot. | Prediction error 0 for the local player when it moves alone, at 150 ms RTT. |
 | N5 | Remote view modes, projectile modes, lag compensation history. | Tuning by playing; switch with cvars. |
 | N6 | Game flow: the mode module (frags first: join, spawn, score, win), join and leave mid-game, chat, script events, map change; a port-only player cap with a runtime count (~45-50 sites, see "Evaluations", 4); spawn points from restart zones and the per-map file; the network-game rules as server settings; new remaps if simple; the simple bot (`--bot`). | 16 bot clients on one map for an hour. |
@@ -877,10 +886,9 @@ Assumed:
 - **No compatibility with the original game's multiplayer.** The DirectPlay `NetPlay` stays as decompiled, unused in the port.
 
 Wanted, but deferred:
-- a frontend page for connecting, then a master server and server browser;
-- NAT punch-through or a relay;
+- a master server and server browser, NAT punch-through or a relay (planned in N9; the frontend page for joining is done);
 - anti-cheat beyond server authority (clients can't set state, only send inputs);
-- protocol versioning for mods (data-file hashes at connect come first, in N7);
+- protocol versioning for mods (data-file hashes at connect come first: N9's data check, also N7's);
 - better bots;
 - simulation tick rates above 30 Hz (see "Tick rate");
 - cleanup modes other than stock (prepared by the hooks).
