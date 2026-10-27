@@ -714,6 +714,25 @@ void net::engine::DebugPowerUp(int player, int powerUp)
     }
 }
 
+void net::engine::DebugCar(int player, int model)
+{
+    Player* p = GetPlayer(player);
+    Ped* ped = p ? p->field_2C4_player_ped : NULL;
+    if (ped && !ped->field_16C_car && gCarManager_6C_677930)
+    {
+        // Beside the player, as the debug menu spawns one (ImGuiDebug.cpp): scale 1, counted as recycled
+        Fix16 scale;
+        scale.mValue = 0x4000;
+        Fix16 off;
+        off.FromInt(2);
+        Car* car = gCarManager_6C_677930->SpawnCarAt_446230(ped->get_cam_x() + off, ped->get_cam_y(), ped->get_cam_z(), 0, model, scale);
+        if (car)
+        {
+            car->IncrementCarStats_443D70(car_kind::recycled_1);
+        }
+    }
+}
+
 void net::engine::DebugArm(int player, int weapon, int ammo)
 {
     Player* p = GetPlayer(player);

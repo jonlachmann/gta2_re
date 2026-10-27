@@ -23,6 +23,7 @@ const net::SessionEnv& net::Env()
             sscanf(d, "%u:%u", &e.divergeTick, &e.divergeTicks);
         }
         e.testPowerUp = getenv("GTA2_NET_TESTPOWERUP");
+        e.testCar = getenv("GTA2_NET_TESTCAR");
         e.testWanted = getenv("GTA2_NET_TESTWANTED");
         return e;
     }();

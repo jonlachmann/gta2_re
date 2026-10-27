@@ -28,6 +28,7 @@
 #endif
 #include "Port/port_rand_state.h"
 #include "Source/rng.hpp"
+#include "Source/PedGroup.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
@@ -1022,4 +1023,37 @@ void net::engine::PrintPredictionStats(uint32_t frame)
     gTally.clear();
     memset(gMissing, 0, sizeof(gMissing));
     gAsleepHere = gAsleepThere = 0;
+}
+
+// GTA2_NET_GANGLOG=1: player 0's group (an instant gang) every 15 game ticks, by the server's ids, on the server and on
+// a client alike, to put the two side by side by tick
+void net::engine::GangLog(bool server)
+{
+    static const bool on = getenv("GTA2_NET_GANGLOG") != NULL;
+    Ped* leader = on ? InGamePed(0) : NULL;
+    PedGroup* g = leader ? leader->field_164_ped_group : NULL;
+    const uint32_t tick = (uint32_t)gpRng_67AB34->get_cur_rng_41CFE0();
+    if (!g || tick % 15)
+    {
+        return;
+    }
+    std::unordered_map<const Ped*, uint32_t> ids;
+    for (const auto& r : ReplicaPeds())
+    {
+        ids[r.second] = r.first;
+    }
+    for (int i = -1; i < (int)g->field_34_count && i < 9; i++)
+    {
+        Ped* p = i < 0 ? leader : g->field_4_ped_list[i];
+        if (!p)
+        {
+            continue;
+        }
+        const uint32_t id = server ? kPedIdBase + p->field_200_id : (ids.count(p) ? ids[p] : 0);
+        Car* car = p->field_16C_car;
+        printf("net: GANG %s tick %u %s %u: states %d/%d objective %d door %d car %s model %d at (%.2f, %.2f) rot %d\n", server ? "server" : "client",
+               tick, i < 0 ? "leader" : "member", id, (int)p->field_278_ped_state_1, (int)p->field_27C_ped_state_2, (int)p->field_258_objective,
+               (int)p->field_24C_target_car_door, car ? (car == leader->field_16C_car ? "leader's" : "other") : "none", car ? (int)car->field_84_car_info_idx : -1, p->get_cam_x().ToFloat(),
+               p->get_cam_y().ToFloat(), (int)(PedSprite(p) ? PedSprite(p)->field_0_rotation.rValue : -1));
+    }
 }

@@ -514,6 +514,17 @@ void net::Server::RunTestHooks()
             engine::DebugPowerUp(player, powerUp);
         }
     }
+    // GTA2_NET_TESTCAR=<tick>:<player>:<model>[,...] puts a car beside players (11: a bus)
+    for (const char* k = Env().testCar; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
+    {
+        unsigned tick = 0;
+        int player = 0, model = 0;
+        if (sscanf(k, "%u:%d:%d", &tick, &player, &model) == 3 && tick == mTick)
+        {
+            printf("net: test car %d for player %d at tick %u\n", model, player, mTick);
+            engine::DebugCar(player, model);
+        }
+    }
     // GTA2_NET_TESTWANTED=<points> keeps every player at least that wanted (600: a star, the network game's most)
     if (const char* wanted = Env().testWanted)
     {
@@ -715,6 +726,7 @@ void net::Server::Frame()
         StartOver();
     }
     engine::GuardPeds();
+    engine::GangLog(true);
     StartGameOnce();
     PollTransport();
     RunTestHooks();

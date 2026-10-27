@@ -77,6 +77,11 @@ Usage and test switches:
 - `GTA2_NET_NAVDUMP=<file.pgm>` writes the map as a picture;
 - `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server;
 - `GTA2_NET_TESTPOWERUP=<tick>:<player>:<power-up>[,...]` gives players power-ups there (12: an instant gang).
+- `GTA2_NET_TESTCAR=<tick>:<player>:<model>[,...]` puts a car beside players there (11: a bus).
+- `GTA2_NET_GANGLOG=1` (server and client) prints player 0's group every 15 game ticks by the server's ids: states,
+  objective, door, car, position. The two logs line up by tick. With an instant gang (`GTA2_NET_TESTPOWERUP` with 12,
+  repeated: it only works on foot) and a car-hopping bot it showed a member riding in the player's car on the server
+  missing on the client: passengers aren't sent yet.
 - `GTA2_NET_TESTWANTED=<points>` keeps every player at least that wanted there (600: one star, the network game's most unless `--police N` allows more), so the cops chase the bots. With `GTA2_NET_COMPARE` on a client, cops are tallied apart from the other peds (`cop.<field>`). Their `group_leader` reads as differing when the leader is another ped: the client gives its own id for it, not the server's.
 
 **Trained bots.** `--bot nn:<file>` is a multilayer perceptron (`session/bot_nn.cpp`). Its 62 inputs (`BotFeatures`) are its health, car, speed, weapon and ammo; the nearest 3 players, 2 cars, a ped, 2 weapon pickups and a power-up relative to where it faces; how far it can walk in 8 directions; a compass, the way along its own route (`BotRoute`) to the nearest player and to the nearest weapon; its last buttons; and whether the nearest players drive. New inputs go at the end: `rl_bots.py` gives a trained policy zero weights for them, so it plays on as before. Its 14 outputs are a choice in each of six groups (turn, move, attack, enter/exit, jump, next weapon), the best one or a sample. Two trainers make the files:

@@ -31,6 +31,7 @@ struct SessionEnv
     const char* testArm; // <weapon>:<ammo>: every player kept armed on the server
     const char* testWanted; // <points>: every player kept at least that wanted on the server
     const char* testPowerUp; // <tick>:<player>:<power-up>[,...]: server test power-ups
+    const char* testCar; // <tick>:<player>:<model>[,...]: server test cars beside players (11: a bus)
 };
 const SessionEnv& Env();
 
