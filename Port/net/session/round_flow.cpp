@@ -497,3 +497,59 @@ void net::RoundFlow::Carry(VoteKind kind, int arg, uint32_t tick, RoundActions& 
         }
     }
 }
+
+std::string net::CompleteCommand(const std::string& line, const std::vector<std::string>& maps, const std::vector<std::string>& names,
+                                 std::vector<std::string>& options)
+{
+    static const std::vector<std::string> kCommands = {"/ready", "/start", "/map", "/kick", "/yes", "/no"};
+    options.clear();
+    if (line.empty() || line[0] != '/')
+    {
+        return line;
+    }
+    const size_t space = line.find(' ');
+    const std::string command = Lower(line.substr(0, space));
+    const std::vector<std::string>* words = &kCommands;
+    std::string head, word = line; // what stays, what is completed
+    if (space != std::string::npos)
+    {
+        words = command == "/map" ? &maps : command == "/kick" ? &names : NULL;
+        const size_t start = line.find_first_not_of(' ', space);
+        head = line.substr(0, space) + " ";
+        word = start == std::string::npos ? "" : line.substr(start);
+    }
+    if (!words)
+    {
+        return line;
+    }
+    const std::string prefix = Lower(word);
+    for (const std::string& w : *words)
+    {
+        if (Lower(w).compare(0, prefix.size(), prefix) == 0)
+        {
+            options.push_back(w);
+        }
+    }
+    if (options.empty())
+    {
+        return line;
+    }
+    // As far as they all agree
+    std::string common = options[0];
+    for (const std::string& o : options)
+    {
+        size_t n = 0;
+        while (n < common.size() && n < o.size() && tolower((unsigned char)common[n]) == tolower((unsigned char)o[n]))
+        {
+            n++;
+        }
+        common.resize(n);
+    }
+    if (options.size() > 1)
+    {
+        return common.size() > word.size() ? head + common : line;
+    }
+    options.clear();
+    const bool takesArg = space == std::string::npos && (common == "/map" || common == "/kick");
+    return head + common + (takesArg ? " " : "");
+}

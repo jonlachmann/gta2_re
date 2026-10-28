@@ -170,6 +170,20 @@ int main()
         f.Command(1, 0, "/start", players, a);
         CHECK(f.State().voteKind == net::kVoteNone && a.notices.back().second == "That vote is off on this server");
     }
+    // Completing commands: a command, a map, a player; several that fit: as far as they agree, and the options
+    {
+        const std::vector<std::string> names = {"Jon", "Jonas", "Bot"};
+        std::vector<std::string> options;
+        CHECK(net::CompleteCommand("/r", maps, names, options) == "/ready" && options.empty());
+        CHECK(net::CompleteCommand("/M", maps, names, options) == "/map ");
+        CHECK(net::CompleteCommand("/map dow", maps, names, options) == "/map downtown-6p");
+        CHECK(net::CompleteCommand("/map m", maps, names, options) == "/map mp" && options.size() == 2);
+        CHECK(net::CompleteCommand("/kick j", maps, names, options) == "/kick Jon" && options.size() == 2);
+        CHECK(net::CompleteCommand("/kick b", maps, names, options) == "/kick Bot" && options.empty());
+        CHECK(net::CompleteCommand("/x", maps, names, options) == "/x" && options.empty());
+        CHECK(net::CompleteCommand("hello", maps, names, options) == "hello");
+        CHECK(net::CompleteCommand("/ready now", maps, names, options) == "/ready now");
+    }
     printf("round flow tests passed\n");
     return 0;
 }

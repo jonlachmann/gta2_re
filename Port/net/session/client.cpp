@@ -559,6 +559,7 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
     }
     if (!mReplay && !mLeavePrompt && (local & kKeyDown))
     {
+        CompleteChat(local, key);
         RoundKeys(local, key);
     }
     if (Env().inputLog && local != mLastInput)
@@ -1105,6 +1106,48 @@ void net::Client::RoundKeys(uint32_t& local, uint32_t key)
     }
     mRoundKeyFrame = mFrame;
     local &= ~(kKeyDown | kKeyBits);
+}
+
+// Tab in a chat line starting with '/': its last word completed (CompleteCommand), the options over the frame when
+// several fit. The key goes to neither the game here nor the server; the others see the line as the server typed it
+void net::Client::CompleteChat(uint32_t& local, uint32_t key)
+{
+    const uint32_t kKeyDown = 0x200000, kKeyBits = 0x1FF000, kTab = 0x0F; // DIK_TAB
+    engine::LocalChat chat = engine::TakeLocalChat();
+    if (key != kTab || !chat.chatting)
+    {
+        return;
+    }
+    local &= ~(kKeyDown | kKeyBits);
+    std::string line;
+    for (int i = 0; i < chat.length && i < 79; i++)
+    {
+        line += (char)(chat.text[i] & 0xFF);
+    }
+    std::vector<std::string> names, options;
+    for (int i = 0; i < engine::PlayerCount(); i++)
+    {
+        if (engine::SlotInGame(i))
+        {
+            names.push_back(engine::PlayerName(i));
+        }
+    }
+    const std::string done = CompleteCommand(line, mMaps, names, options);
+    chat.length = (int)(done.size() < 78 ? done.size() : 78);
+    for (int i = 0; i < 79; i++)
+    {
+        chat.text[i] = i < chat.length ? (short)(unsigned char)done[i] : 0;
+    }
+    engine::PutLocalChat(chat);
+    if (!options.empty())
+    {
+        std::string list;
+        for (const std::string& o : options)
+        {
+            list += (list.empty() ? "" : ",  ") + o;
+        }
+        engine::ShowHudMessage(list.c_str());
+    }
 }
 
 void net::Client::WatchChat()

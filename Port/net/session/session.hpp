@@ -289,6 +289,7 @@ class Client
     // The round flow (session/round_flow.cpp), a client's part: its commands to the server, its keys, the panel
     void SendCommand(const std::string& text);
     void RoundKeys(uint32_t& local, uint32_t key); // F1 ready in the warmup, Y / N on an open vote
+    void CompleteChat(uint32_t& local, uint32_t key); // Tab in a command line: completed (CompleteCommand)
     void WatchChat(); // a chat line typed to its end that starts with '/' goes as a command
     void ShowRound(); // the warmup, countdown, results and an open vote over the frame
     void BotRound(); // a bot readies up and votes
