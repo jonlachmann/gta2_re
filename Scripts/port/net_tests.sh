@@ -9,6 +9,10 @@ mkdir -p $OUT
 clang++ -std=c++17 -O1 -g -Wall -Wextra -fsanitize=${SAN:-undefined} -fno-sanitize-recover=undefined -o $OUT/test_core \
     Port/net/tests/test_core.cpp Port/net/core/*.cpp
 $OUT/test_core
+# The round flow (no game)
+clang++ -std=c++17 -O1 -g -Wall -Wextra -fsanitize=${SAN:-undefined} -fno-sanitize-recover=undefined -o $OUT/test_rounds \
+    Port/net/tests/test_rounds.cpp Port/net/session/round_flow.cpp
+$OUT/test_rounds > /dev/null && echo "net round flow tests passed"
 # ENet as the port builds compile it (Scripts/port/build_*.sh), then the loopback transport test
 . Scripts/port/build_common.sh # ENET_DEFS
 for c in Port/net/enet/*.c; do clang -O1 -g -w -IPort/net/enet/include $ENET_DEFS -c $c -o $OUT/$(basename $c .c).o; done
