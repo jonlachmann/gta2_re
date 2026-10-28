@@ -1,10 +1,10 @@
-// Port/net (docs/netcode.md, "Net schema"): the world entity, one per snapshot: the game's random cycle and seed, the
+// Port/net (docs/netcode.md, "Entities"): the world entity, one per snapshot: the game's random cycle and seed, the
 // restart zones' turn, the round's state (round_state.hpp), the game's generation, the traffic lights and the tag
 // game's fugitive.
 #include "internal.hpp"
-#include "Port/port_rand_owner.h"
+#include "Port/rand/owner.hpp"
 #include "Port/port_hooks.hpp"
-#include "Port/port_rand_state.h"
+#include "Port/rand/state.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"

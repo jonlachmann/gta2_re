@@ -23,7 +23,7 @@
 #include <dinput.h>
 #include "ped_graphic_type.hpp"
 #if defined(GTA2_PORT)
-#include "Port/port_rand_owner.h" // PortRandScope
+#include "Port/rand/owner.hpp" // PortRandScope
 #include "Port/port_hooks.hpp" // gPortSpawnPlayers
 #endif
 
@@ -593,7 +593,7 @@ void PedManager::Dummies_470330()
     s16 max_dummies = gPedManager_6787BC->field_0_max_dummy_chars;
 #if defined(GTA2_PORT)
     // As many per player (a network server's), up to what leaves the ped pool (200) room for the traffic's drivers, the
-    // players, police and crews. ponytail: a fixed 80, not counted from the pool
+    // players, police and crews. A fixed 80, not counted from the pool
     max_dummies = (s16)(max_dummies * gPortSpawnPlayers < 80 ? max_dummies * gPortSpawnPlayers : 80);
 #endif
     if (gPolice_7B8_6FEE40->field_654_max_wanted_level > cop_level_enum::police_3)

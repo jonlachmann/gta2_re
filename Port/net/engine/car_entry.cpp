@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Players in cars"): a client predicts getting into and out of cars by its own input;
+// Port/net (docs/netcode.md, "The client"): a client predicts getting into and out of cars by its own input;
 // when the server has a ped somewhere else (another car, or on foot), these put it there at once, ending the way
 // the game's own entering and leaving end:
 // - into a car: as Ped.cpp's UpdateCharB4 path once the entering animation is done (the char goes back to its

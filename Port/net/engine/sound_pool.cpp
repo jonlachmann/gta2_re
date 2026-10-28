@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, milestone S): SoundPosEntry::operator new/delete. sound_obj gives every audio entity
+// Port/net (docs/netcode.md, "The rollback set"): SoundPosEntry::operator new/delete. sound_obj gives every audio entity
 // that needs one a SoundPosEntry from the heap; a client restoring an older world would bring back pointers to
 // entries freed since. From this fixed pool, which is part of the rollback set, they are restored with the rest.
 #include "Source/sound_obj.hpp"

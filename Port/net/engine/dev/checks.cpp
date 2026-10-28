@@ -28,7 +28,7 @@
 #if !defined(_WIN32)
 #include <dlfcn.h>
 #endif
-#include "Port/port_rand_state.h"
+#include "Port/rand/state.hpp"
 #include "Source/rng.hpp"
 #include "Source/PedGroup.hpp"
 #include <stdio.h>

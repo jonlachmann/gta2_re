@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Port/port_rand.cpp, Port/port_rand_particle.cpp (not their headers: those rename rand and gRng_6F6784)
+// Port/rand/rand.cpp, Port/rand/particle.cpp (not their headers: those rename rand and gRng_6F6784)
 void PortRandSound_Separate(bool separate);
 void PortRandParticle_Separate(bool separate);
 

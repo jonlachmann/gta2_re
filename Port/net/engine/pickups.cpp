@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Pickups"): the server's pickups (weapons, power-ups, tokens: Object::IsPickup_421060) and
+// Port/net (docs/netcode.md, "Entities"): the server's pickups (weapons, power-ups, tokens: Object::IsPickup_421060) and
 // roadblock barriers on the clients. Other objects aren't sent: a client makes its own fires, explosions and projectiles. A client adopts a
 // pickup of its own at the same place (the map script made it on both sides), makes the ones it lacks
 // (Object_5C::NewPhysicsObj_5299B0, as the game drops one) and removes those the server no longer has (collected, or

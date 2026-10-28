@@ -1,7 +1,7 @@
-// Port (docs/netcode.md): the particles' random stream, see port_rand_particle.h. Not in port_rand.cpp: that file's
+// Port (docs/netcode.md): the particles' random stream, see particle.hpp. Not in rand.cpp: that file's
 // headers rename rand, and rng.hpp brings in the C library's.
-#include "port_rand_particle.h"
-#include "port_rand_state.h"
+#include "particle.hpp"
+#include "state.hpp"
 #undef gRng_6F6784
 #include "Source/rng.hpp"
 

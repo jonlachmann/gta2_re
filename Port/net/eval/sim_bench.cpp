@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, N0): GTA2_SIMBENCH=<flip>[:<ticks>] measures the simulation for client-side prediction.
+// Port (docs/netcode.md, "Measurements behind the design"): GTA2_SIMBENCH=<flip>[:<ticks>] measures the simulation for client-side prediction.
 // At that flip (or GTA2_SIMBENCH=p<n>: once n peds are alive; in a game) it runs <ticks> (default 3000) sim ticks back to back, without drawing or audio, and
 // prints to stderr:
 //   - the time per tick of each subsystem service in Game::UpdateGame_4B9410 (the same calls in the same order);

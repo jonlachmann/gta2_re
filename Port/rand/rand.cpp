@@ -1,9 +1,9 @@
-// Port (docs/port.md): VC6's rand()/srand(), see port_rand.hpp.
-#include "port_rand.hpp"
-#include "port_rand_sound.h"
-#include "port_rand_state.h"
-#include "port_rand_owner.h"
-#include "port_globals.hpp"
+// Port (docs/port.md): VC6's rand()/srand(), see rand.hpp.
+#include "rand.hpp"
+#include "sound.hpp"
+#include "state.hpp"
+#include "owner.hpp"
+#include "Port/port_globals.hpp"
 
 // 10.5.exe keeps it at 0x626FE0 (a single-threaded CRT): registered, so the state log compares it
 static unsigned int sState = 1;
@@ -27,7 +27,7 @@ void PortRandSetState(unsigned int state)
 unsigned int gPortRandCalls;
 void (*gPortRandLog)(void* caller);
 
-// The owners' draws (port_rand_owner.h)
+// The owners' draws (owner.hpp)
 unsigned int (*gPortRandPedKey)(const Ped* p);
 unsigned int (*gPortRandCarKey)(const Car* c);
 bool gPortRandOwned;
@@ -111,7 +111,7 @@ int port_rand_5EDEE1()
     return PortRandStep(sState);
 }
 
-// sound_obj's own stream (port_rand_sound.h), the same generator
+// sound_obj's own stream (sound.hpp), the same generator
 static bool sSoundSeparate;
 static unsigned int sSoundState = 1;
 

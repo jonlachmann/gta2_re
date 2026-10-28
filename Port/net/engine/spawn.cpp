@@ -1,10 +1,10 @@
-// Port/net (docs/netcode.md, "Spawning"): a server's ambient traffic and peds for every player, not the first: the game's
+// Port/net (docs/netcode.md, "The server"): a server's ambient traffic and peds for every player, not the first: the game's
 // limits times the players (up to 3 players' worth), and each player's camera bounds out to where its client shows it.
 #include "internal.hpp"
 #include "dev/dev.hpp"
-#include "Port/port_rand_owner.h"
+#include "Port/rand/owner.hpp"
 #include "Port/port_hooks.hpp"
-#include "Port/port_rand_state.h"
+#include "Port/rand/state.hpp"
 #include "Source/Camera.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"

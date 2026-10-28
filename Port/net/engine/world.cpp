@@ -9,7 +9,7 @@
 #include <string.h>
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
-void PortRandParticle_Memory(unsigned char** ppAddr, unsigned int* pSize); // Port/port_rand.cpp
+void PortRandParticle_Memory(unsigned char** ppAddr, unsigned int* pSize); // Port/rand/rand.cpp
 
 namespace
 {

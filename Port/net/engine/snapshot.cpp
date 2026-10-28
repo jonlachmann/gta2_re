@@ -1,11 +1,11 @@
-// Port/net (docs/netcode.md, "Net schema"): a snapshot captured from and applied to the game; the world entity
+// Port/net (docs/netcode.md, "Entities"): a snapshot captured from and applied to the game; the world entity
 // (world_entity.cpp), the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
 // (pickups.cpp) do the parts. Also the helpers the engine's files share, the game's controls the session uses
 // (running, the player count, the inputs, the tick) and a client's view of what is shown.
 #include "internal.hpp"
-#include "Port/port_rand_owner.h"
+#include "Port/rand/owner.hpp"
 #include "Port/port_hooks.hpp"
-#include "Port/port_rand_state.h"
+#include "Port/rand/state.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"

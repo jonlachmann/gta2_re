@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Peds"): a ped's AI state as the server has it. A client runs every ped's AI in its
+// Port/net (docs/netcode.md, "Entities"): a ped's AI state as the server has it. A client runs every ped's AI in its
 // resimulations; with only a position and a heading to go on, a ped made here (or one adopted) decided its own way and
 // every snapshot pulled it back. Now a ped entity carries what the AI runs on: the plain values (objectives and their
 // status, targets, speeds, timers, states, occupation, type, flags, health) and the references (the peds and cars it

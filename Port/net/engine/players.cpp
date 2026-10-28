@@ -1,11 +1,11 @@
-// Port/net (docs/netcode.md, "Health, deaths, weapons, scores", "Players in cars"): the players as snapshot entities,
+// Port/net (docs/netcode.md, "Entities"): the players as snapshot entities,
 // and the server's put into a client's game: health, deaths, weapons, power-ups, its car, its place.
 #include "internal.hpp"
 #include "world.hpp"
 #include "dev/dev.hpp"
-#include "Port/port_rand_owner.h"
+#include "Port/rand/owner.hpp"
 #include "Port/port_hooks.hpp"
-#include "Port/port_rand_state.h"
+#include "Port/rand/state.hpp"
 #include "Source/Camera.hpp"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"

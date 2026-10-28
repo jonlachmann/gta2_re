@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Net schema"): players, cars, peds, pickups and the world as plain numbers. Positions are
+// Port/net (docs/netcode.md, "Entities"): players, cars, peds, pickups and the world as plain numbers. Positions are
 // Fix16 raw values (14 fraction bits): x and y below 256 blocks fit 22 bits, z below 8 blocks 17 bits; angles are
 // Ang16 (0..1439), 11 bits. So what a client gets is exactly the server's value.
 #include "internal.hpp"

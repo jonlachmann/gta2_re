@@ -28,7 +28,7 @@ int gGeneration; // the games started since the boot's
 void* gHookUser;
 bool NextNetworkGame(); // gPortNextNetworkGame
 
-// GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>] (docs/netcode.md, "Evaluations", 4): a local
+// GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>] (docs/netcode.md, "Measurements behind the design"): a local
 // network game without the netcode, only player 0 with input
 void CheckEnvironment()
 {

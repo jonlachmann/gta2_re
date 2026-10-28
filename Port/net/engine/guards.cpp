@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Guards"): the game's own logic made safe for a network game, on the server and the
+// Port/net (docs/netcode.md, "The client"): the game's own logic made safe for a network game, on the server and the
 // clients alike: peds given orders a network game breaks (a car-jack from a car, a punch from a seat), the arrows to
 // the other players, what is attached to a car.
 #include "internal.hpp"

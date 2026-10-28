@@ -19,7 +19,7 @@ EXTERN_GLOBAL(Fix16, kFP16Zero_6FD49C);
 #include "Object_3C.hpp"
 #include "CarPhysics.hpp"
 #if defined(GTA2_PORT)
-#include "Port/port_rand_particle.h" // particles on a stream of their own for the netcode (docs/netcode.md)
+#include "Port/rand/particle.hpp" // particles on a stream of their own for the netcode (docs/netcode.md)
 #endif
 
 EXTERN_GLOBAL(Fix16, kFpPoint2_6FD2F0);

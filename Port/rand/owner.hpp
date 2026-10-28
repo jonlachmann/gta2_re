@@ -1,7 +1,7 @@
 // Port (docs/netcode.md, "Random draws"): who a random draw belongs to. In a network game an entity's update (a ped's,
 // with its char, or a car's) and each service only the server runs (traffic, ambient peds, scripts, police...) draw
 // their own numbers: a hash of the game's seed, the owner, the tick and how many it drew this update
-// (Port/port_rand.cpp), not the game's one stream. A client simulates only its own area: with the one stream, every
+// (Port/rand/rand.cpp), not the game's one stream. A client simulates only its own area: with the one stream, every
 // draw for an entity it doesn't have moved every later draw it makes, so its peds' random turns and choices were
 // another's from the first tick. Owned, an entity decides the same way wherever it runs, whatever else exists.
 // Draws without an owner (none here, or not a network game) stay the game's stream, as in 10.5.exe.

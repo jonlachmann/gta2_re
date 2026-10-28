@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, "Evaluations"): GTA2_NETEVAL=rand,soundrollback,churn,diverge,single,explode, measurements
+// Port (docs/netcode.md, "Measurements behind the design"): GTA2_NETEVAL=rand,soundrollback,churn,diverge,single,explode, measurements
 // for the netcode design. The sim bench (sim_bench.cpp) runs them after its fill (if any) and before the tick
 // benchmark. GTA2_NETEVAL_OUT=<file>: the per-offset churn.
 #include "neteval.hpp"
@@ -16,8 +16,8 @@
 #include "WeaponManager.hpp"
 #include "explosion_type.hpp"
 #include "root_sound.hpp"
-#include "Port/port_rand_sound.h"
-#include "Port/port_rand_state.h"
+#include "Port/rand/sound.hpp"
+#include "Port/rand/state.hpp"
 #include <map>
 #include <stdio.h>
 #include <stdlib.h>

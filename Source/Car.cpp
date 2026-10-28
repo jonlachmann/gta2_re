@@ -50,7 +50,7 @@
 #include "TextTable.hpp"
 #include "winmain.hpp"
 #if defined(GTA2_PORT)
-#include "Port/port_rand_owner.h" // PortRandScope
+#include "Port/rand/owner.hpp" // PortRandScope
 #endif
 
 // field_A4_light_flags bits of CarLightFlags8: bEmergencyLights, bLightFlashing and bHeadlightFlash

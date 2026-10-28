@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Cars"): a car's AI (CarAI: how a traffic or ped driver drives, routes, yields, chases)
+// Port/net (docs/netcode.md, "Entities"): a car's AI (CarAI: how a traffic or ped driver drives, routes, yields, chases)
 // as the server has it. Without it a client's car decided its own way through every resimulation and each snapshot
 // pulled it back (a chasing driver lurched). The plain values go member by member; the two cars it may refer to go as
 // net ids; the nearest entity it caches stays local (it looks again).

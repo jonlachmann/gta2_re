@@ -37,7 +37,7 @@ void SetPlayerInput(int player, uint32_t buttons); // for the next tick
 // The length of a network tick (the game's own setting offers 50, 40 or 33 ms)
 void SetTickMs(int ms);
 void SeedRandom(uint32_t seed); // the game's rand() state (a server's: clients take it from snapshots)
-// A network game's random draws: each entity's update and each server service its own (Port/port_rand_owner.h)
+// A network game's random draws: each entity's update and each server service its own (Port/rand/owner.hpp)
 void SetRandOwners(bool client);
 // What a client doesn't simulate: spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();

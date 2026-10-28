@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Rollback"): a client saves the game after every tick and, when a snapshot for an
+// Port/net (docs/netcode.md, "The rollback set"): a client saves the game after every tick and, when a snapshot for an
 // older tick arrives, restores that tick, applies the snapshot and resimulates up to now with its own inputs.
 #include "internal.hpp"
 #include "world.hpp"

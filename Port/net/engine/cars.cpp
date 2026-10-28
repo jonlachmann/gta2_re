@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Cars carry their whole physics"): a car as a snapshot entity, and the server's state
+// Port/net (docs/netcode.md, "Entities"): a car as a snapshot entity, and the server's state
 // put into this game's car: its place, its whole physics, its damage, lights, horn and colour.
 #include "internal.hpp"
 #include "dev/dev.hpp"

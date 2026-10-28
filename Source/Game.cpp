@@ -1,9 +1,9 @@
 #include "Game.hpp"
 #include "ped_group_type.hpp"
 #if defined(GTA2_PORT)
-#include "Port/port_rand_owner.h" // PortRandScope
+#include "Port/rand/owner.hpp" // PortRandScope
 #endif
-// A service only the server runs draws its own random numbers in a network game (port_rand_owner.h)
+// A service only the server runs draws its own random numbers in a network game (rand/owner.hpp)
 #if defined(GTA2_PORT)
     #define PORT_RAND_SERVICE(key, call) \
         { \

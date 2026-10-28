@@ -13,7 +13,7 @@
 #include "sprite.hpp"
 #include "rng.hpp"
 #if defined(GTA2_PORT)
-#include "Port/port_rand_particle.h" // particles on a stream of their own for the netcode (docs/netcode.md)
+#include "Port/rand/particle.hpp" // particles on a stream of their own for the netcode (docs/netcode.md)
 #endif
 
 // Forward declarations: the functions below are in address order

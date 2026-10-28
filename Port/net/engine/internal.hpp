@@ -56,7 +56,7 @@ enum PlayerState
 enum WorldField
 {
     kWorldCycle, // the game's tick counter (gpRng_67AB34's field_0_rng): timers are stamped with it (a car's damage, a ped's voice...)
-    kWorldRand, // the game's random state (rand(), Port/port_rand.cpp): a resimulation draws what the server drew
+    kWorldRand, // the game's random state (rand(), Port/rand/rand.cpp): a resimulation draws what the server drew
     kWorldReach, // how far this client's snapshot reaches (blocks x 16): the farthest it kept, the rest cut for size
     kWorldIt, // the tag game's "it" (TagGame::field_0_fugitive): player index + 1, 0 nobody
     kWorldItTime, // and the seconds each player has been it (field_4_it_time_secs), MAX_PLAYERS of them
@@ -65,7 +65,7 @@ enum WorldField
     kWorldWinner,
     kWorldSecondsLeft,
     kWorldGame, // the server's game since its start (GameGeneration): a client takes only its current one's
-    kWorldSeed, // the seed of the entities' own random draws (Port/port_rand_owner.h)
+    kWorldSeed, // the seed of the entities' own random draws (Port/rand/owner.hpp)
     kWorldLights, // the traffic lights (one phase for all, TrafficLights): the phase, its timer, the cars' light state
     kWorldPhase, // the round flow's state (core/round_state.hpp), as RoundState has it
     kWorldPhaseLeft,
