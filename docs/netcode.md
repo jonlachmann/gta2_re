@@ -1,903 +1,432 @@
-# Dedicated server netcode: plan
+# The network game
 
-A plan for client/server multiplayer in the port, in the style of Quake 3 and CS 1.6:
-- an authoritative server;
-- client-side prediction (CSP) of the local player;
-- delta compression against acked state;
-- every packet within a 1400-byte MTU.
+Client/server multiplayer for the port (`docs/port.md`), in the style of Quake 3 and its successors:
 
-It builds on the port (`docs/port.md`): the headless build, the state log and its pointer canonicalisation.
+- an **authoritative server** runs the game and takes only the players' inputs;
+- each **client predicts** its game ahead of the server, and on every snapshot rolls the whole world back, applies the
+  server's state and runs the ticks since again (**whole-world rollback**);
+- **snapshots** are deltas against what each client has acknowledged, per entity, cut by priority to a packet budget;
+- **ENet** carries them: unreliable snapshots and commands, reliable messages for everything else.
 
-## Status and how to run it
+It replaces the original's DirectPlay lockstep game. The game's own code runs unchanged: the netcode sits where
+DirectPlay sat (`NetPlay`), and the few changes to `Source/` are port-only hooks ("The game's code").
 
-**Built:**
-- milestone **S** (sound out of the rollback, its own random stream);
-- `core/` with tests (`Scripts/port/net_tests.sh`);
-- the ENet `transport/` with a loopback test;
-- the engine bridge, with the game's network layer as the frame hook;
-- server, client and a test bot.
+What works: 1-6 players on the game's multiplayer maps, frags, points and tag games, police, traffic and ambient peds,
+joining and leaving mid-game, rounds with warmup, results and votes, map rotations, chat with commands, reconnecting,
+a frontend page to join, bots (scripted and trained), recordings that replay without a server. Protocol 16.
 
-A client starts the server's network game. The server takes every player's input from its client, and sends each client delta snapshots of its area: all players, cars and peds within 24 blocks, cut to 1372 bytes. A client puts the players, cars and peds into its own game: it adopts what the map script made on both sides, creates the rest, moves them every snapshot and removes what the server drops.
+## Running
 
-**Prediction (N4).** The client:
-- saves the game after every tick (`engine/rollback.cpp`);
-- on a snapshot of tick S: restores S, applies the server's state, and resimulates up to its own tick with its own inputs (other players: their last input);
-- everything else moves on by the game's own simulation in the resimulated ticks (the extra dead reckoning step was worse without it, and is gone).
+Build the port (`docs/port.md`, "Building"), then from the game folder:
 
-Commands carry the server tick they are for. The server buffers them per tick and repeats the last one when one is late. It reports the newest command tick it got, and the client keeps two ticks of lead by that: a jump when far off, a 10% faster or slower tick otherwise.
-
-**Health, deaths, weapons, scores.** These are the server's:
-- The player entity carries health, a death count and the last killer, the selected weapon, the ammo of the 15 personal weapons, frags and points.
-- On a client, player peds take no damage of their own (the game's invulnerability counter, every tick).
-- A death the server had is carried out with the game's own `Ped::Kill_46F9D0`, credited to the killer. `Player::Wasted_567130` then leaves the corpse and respawns. The deaths carried out are part of the rollback set, so a resimulation never repeats one.
-- Scores are applied after the resimulation.
-- So are the power-up timers (electrofingers and invisibility switched on the ped as the game does), the ammo of all 28 weapons (the car weapons too) and the tag game's "it" with each player's time as it (`SetNewFugitive_516590` when it changes).
-- `GTA2_NET_TESTKILL=<tick>:<victim>:<killer>,...` kills players on the server for tests.
-
-`--lag ms --jitter ms --loss %` puts a link conditioner on either end.
-
-**Joining and leaving** (`engine/slots.cpp`):
-- A slot without a client is out of the game the way the game handles a player who left (`Player::Disconnect_568730`): its ped walks on as a pedestrian.
-- A joining client gets a new player ped at the next restart zone and an empty score. The ped is set up as the map script's `PLAYER_PED` and `Player::InitPlayerPed_565490` do, but keeps the slot's weapons.
-- The server takes empty slots out at the start, puts joiners in and takes leavers out.
-- Snapshots carry only the slots in the game, and clients mirror them.
-
-**Players in cars** (`engine/vehicles.cpp`):
-- A client gets into and out of cars by its own predicted input.
-- When both sides have settled and the server has the player elsewhere, the client puts the ped into the server's car, or out of its own, at once. This ends the way the game's own entering does (the char back to its pool, in car and driving, `Car::AssignDriver_4406E0`) and leaving does (`Car::ClearDriver_4407F0`, `Ped::StartPedWalking_470200`).
-- Another player's enter or exit key reaches a client after the tick it was pressed on, so its resimulations never press it. When the server's player is on its way into or out of a car and the client's isn't, the client starts it the way the key does, from the server's position. The walk to the door is corrected like any walking; only at the door itself is a ped left to the game.
-- The cars players sit in, or are getting into, are never removed, and replicas never remove a car any ped points to (a corpse cloned in a car).
-
-**Drivers** (`engine/replica.cpp`). A car carries its driver: none, the traffic driver, or a ped. All traffic cars share one driver, CarManager's spare (`Car::SpawnDriverPed`, `CarManager::GetSpareDriver_421960`): a ped that points to no car and is never on the street. So that one isn't sent as a ped. A car marked "traffic driver" gets the client's own spare (`Car::SpawnDriverPed`), and loses it when the server's car has none. Any other driver is a ped entity with the car it sits in. The client adopts the driver its car already has, or makes one (`Ped::SpawnDriver_470B00`), and once settled puts the ped into that car (`ForceIntoCar`). The spare never leaves a car the normal way: putting a ped into a traffic car just clears the spare.
-
-**Cars carry their whole physics** (`engine/access.cpp`, `kPhysics`): every `CarPhysics` member but its two pointers, by name (the 64-bit layout isn't the original's), so a predicted car goes on from exactly the server's state, whatever acted on it. A **world** entity, always sent, carries the game's tick counter (`gpRng_67AB34`'s `field_0_rng`). Timers are stamped with it (a car's "damaged until", a ped's voice...), and before it was sent the client counted from elsewhere, which made its car diverge on 237 of 237 desyncs in a test drive. `GTA2_NET_CARDIFF=1` prints each member of the local car the client predicted differently from the server. A car-hopping bot, 150 s: 6 differences, all small (about 0.02 blocks), against 237 before. Getting into and out of a car still shows up to about 1.2 blocks for a moment.
-
-**Peds carry their AI state** (`engine/ped_state.cpp`). Snapshots of peds used to carry only a position and heading; the client's AI then made its own plans and every snapshot pulled the ped back. Now a ped entity also carries the plain values the AI runs on (objectives and their status, targets, speeds, timers, occupation, type, class, flags, health, death cause) and its references (the peds and cars it is after, its gang) as net ids. A client sets them while the ped is plainly on foot on both sides; states only from a whitelist that stands on its own (walking, running, standing); all or nothing when a reference can't be resolved here (out of the area); a death the server had is carried out, one of the client's own is remade. Patrol route and pathfinder list stay local. In a soak, ped corrections of over 45 degrees fell by a third. **Not synced at all:** objects other than pickups (fires, explosions, projectiles, doors, cranes, trains, traffic lights); the client's own simulation makes them, they are rolled back with the world but never corrected.
-
-**Filling a snapshot** (`session/server.cpp`, `SendSnapshot`). A snapshot is one packet of at most 1372 bytes. Every player, and the car each sits in, is in every snapshot wherever it is. Of the rest of the client's area (24 blocks; a camera sees 6 to 8, more at speed): what the client has stays in every snapshot, either with this tick's state or, when there is no room, with the state the client already has and its age (ticks since it was new, the entity type's last field) - a few bits. A client applies only new state and predicts the rest on. New state goes by priority, as in Quake 3's successors: the age plus one, over one plus a sixth of the distance; an entity new to the client counts as 8 ticks old. Before, the snapshot was cut at a distance: entities beyond it were removed on the client and made again later (cars vanished at speed, a bot's car didn't come and its player showed as a ped). On Tiny Town with 48 traffic cars and four players, about 50 to 100% of the area gets new state each tick.
-
-**Test fixture** (`session/replay.cpp`): `GTA2_NET_RECORD=<file>` records a client session (the welcome, then per frame the packets, the round trip and the input). `--replay <file>` plays it back without a server, as fast as the game runs: 8 minutes of game in 10-15 s, the same every time, so a crash can be reproduced and run down. A person's session is recorded without it too, to `recordings/session-<n>.rec` (the newest 10 kept, `GTA2_NET_RECORD=off`: none), and **F12 or the key under Esc (` or §) marks a moment** in play: the client and the replay of its recording print `net: mark <n> at frame <f>, tick <t>`. So a bug seen in play is reported as "the last session, mark 2" and replayed from there. `GTA2_NET_CHECKGRID=1` checks after every step that each link in the collision grid has a live owner whose sprite it is.
-
-With the fixture, a client crash after 1-4 minutes of car hopping turned out to be the replicas' own doing:
-- **What happened:** a car's sprite stayed linked in the collision grid after the car was freed. The sprite was reused, as a roof light, a skid or a particle, and a collision query read through the dead link.
-- **Why:** the grid keeps a sprite in the rows of the collision rect it was added with. The replicas turned cars after re-adding them, and moved cars that aren't in the grid: despawning ones, and ones a carrier holds (`Car::Deactivate_43AA60`, grid 3).
-- **The fix:** moves now change position and rotation between removal and re-adding, and leave such cars alone. Four car-hopping clients ran 6 and 8 minutes with no failed check and no crash.
-
-**CPU.** The game's loop spins between frames, as the original does. The port's `PeekMessageA` now sleeps 1 ms while the next frame is more than 1 ms away: a server takes about 6% of a core, a predicting client about 16%. Lockstep runs and replays don't sleep.
-
-**Bots** (`session/bot.hpp`) are players that perceive and decide on their own:
-- **What a bot sees:** a `BotView` built from what its client knows. That is its own body as predicted, the snapshot's players, cars and peds, and the static map as plain data (`engine::NavMap`: per cell the walking height and the ways to its neighbours, from the map's wall faces and slopes).
-- **What it does:** it returns the input bits a person would press. It uses no game logic: no route finder, no ped AI.
-- **Other brains:** smarter brains, or one that sends the view to another process and reads its answer, implement the same `BotBrain` interface.
-- **Navigation:** `session/bot_nav.cpp` (A*, tested on made-up maps).
-- **The simple brain:** walks its route to the nearest player and fights when close, with presses for fists and holding for guns. Walking while facing `rot` moves along (sin, cos) (measured).
-
-Usage and test switches:
-- `--bot [brain]` (`simple`, the default; `carhop`, which gets into the nearest car, drives, gets out, again);
-- `GTA2_NET_NAVDUMP=<file.pgm>` writes the map as a picture;
-- `GTA2_NET_TESTARM=<weapon>:<ammo>` keeps every player armed on the server;
-- `GTA2_NET_TESTPOWERUP=<tick>:<player>:<power-up>[,...]` gives players power-ups there (12: an instant gang).
-- `GTA2_NET_TESTCAR=<tick>:<player>:<model>[,...]` puts a car beside players there (11: a bus).
-- `GTA2_NET_GANGLOG=1` (server and client) prints player 0's group every 15 game ticks by the server's ids: states,
-  objective, door, car, position. The two logs line up by tick. With an instant gang (`GTA2_NET_TESTPOWERUP` with 12,
-  repeated: it only works on foot) and a car-hopping bot it showed a member riding in the player's car on the server
-  missing on the client, before passengers were sent.
-- `GTA2_NET_TESTWANTED=<points>` keeps every player at least that wanted there (600: one star, the network game's most unless `--police N` allows more), so the cops chase the bots. With `GTA2_NET_COMPARE` on a client, cops are tallied apart from the other peds (`cop.<field>`). Their `group_leader` reads as differing when the leader is another ped: the client gives its own id for it, not the server's.
-
-**Trained bots.** `--bot nn:<file>` is a multilayer perceptron (`session/bot_nn.cpp`). Its 62 inputs (`BotFeatures`) are its health, car, speed, weapon and ammo; the nearest 3 players, 2 cars, a ped, 2 weapon pickups and a power-up relative to where it faces; how far it can walk in 8 directions; a compass, the way along its own route (`BotRoute`) to the nearest player and to the nearest weapon; its last buttons; and whether the nearest players drive. New inputs go at the end: `rl_bots.py` gives a trained policy zero weights for them, so it plays on as before. Its 14 outputs are a choice in each of six groups (turn, move, attack, enter/exit, jump, next weapon), the best one or a sample. Two trainers make the files:
-- **The arena:** `--server --arena <brain>,<brain>,... --ticks N [--seed S]` plays bots on the server itself, in the first slots, with no clients (`session/arena.cpp`). At tick N it prints a result line per bot (frags, deaths, damage dealt, cars entered, pickups taken) and ends. The other slots stay open, so people can join and play against the bots. The game is deterministic: without another seed every match from the same start is the same.
-- **Fast:** `GTA2_SPEED=<k>` speeds up the clock on macOS and Linux too (`Port/posix_win32.cpp`); headless at k = 1000 a match runs at about 11,000 ticks/s, a 150 s match in under half a second.
-- **PPO** (`Scripts/port/rl_bots.py`, torch): `remote:<port>` slots are played by the trainer over a local TCP connection, a decision every 3 ticks, with the reward since the last one (a frag +1, a death -1, 0.01 per point of damage dealt, 0.3 per new kind of weapon, a little for being near someone and for getting nearer; 0.3 for the first car of each life and 0.5 on top of a frag made from a car). One policy plays five slots of each match; in half the matches two of them are earlier copies of it; the scripted bot plays the sixth as a yardstick. No free weapons: they come from the map's pickups (`--armed`: pistols for all). The trainer, not the games, is the limit: 32 games at once keep its batches full.
-- **Kickstarting:** from scratch, PPO learned nothing in 2 million decisions (the scripted bot farmed it). Each remote slot also runs the scripted bot on the same view and sends what it would press; an imitation loss on that, fading over the first 150 updates (`--teach`, `--teach-updates`), got the policy fighting, and once it was gone the policy went on to beat its teacher (armed, after 400 updates: 4 frags and 3 deaths a match against the scripted bot's 1.3 and 5.4).
-- **Weapons and cars:** the scripted bot fetches the nearest weapon when it has none and nobody is within 2 blocks, so the teacher shows that too. Without the compass the policy never learned it (Tiny Town's pickups are behind buildings). The teacher is now "hunter": the rammer when a car is within 10 blocks and nobody within 8 (and once it drives), the fighter otherwise. Two teachers on different slots (rammer and fighter) taught nothing: they showed opposite things on the same view. With the hunter the policy took about one car a match while the imitation lasted, and gave cars up once it was gone (0.03 a match), with more frags on foot (2.2 against the scripted bot's 1.3): to the rewards, driving doesn't pay at its level. The pool keeps the driving versions (`pool/`). Rewards for the first car of each life and for frags from a car made driving stick (1.5 cars a match after the imitation). Then 500 updates against two hunters a game (`--remote 4 --scripted hunter,hunter`). Head to head on Tiny Town, 3 against 3, 24 seeds, frags per bot and match: 1.33 against the simple bot's 0.74, 0.76 against the hunter's 0.89 (before: 0.47 against 0.96), 0.82 against the driving policy before it (0.51). The "soldier" teacher does the whole round: a weapon (whatever happens: fistfights between players get stuck, with no harm done), a car, then along its route to the nearest player, and there it runs it over when coming at it fast and head on, or gets out and shoots it up close (a gun fires straight ahead: from a few blocks most shots miss; rockets, molotovs and grenades from 4-7 blocks, as they blow it up too). Against the hunter, 3 against 3: 1.2 frags a match to 1.9, with more deaths (walking to weapons, it gets run over). Out: `build_port/rl/` (`latest.nn`, `policy.pt` to continue, `pool/`, `log.csv`).
-- **Evolution** (`Scripts/port/train_bots.py`, no dependencies): five networks and the scripted bot per match, pistols kept loaded (`GTA2_NET_TESTARM`), the best 8 of 40 kept and the rest their mutated copies. It levelled off below the scripted bot after about 150 generations.
-- **Watching:** `rl_bots.py --watch [file.nn]` (or `train_bots.py --watch`) plays a match in a window at normal speed, following player 0. `--spectate K` opens one every K updates (generations) during training.
-
-**Measured** (bots on Downtown, 60 s):
-
-| Link | Result |
-|---|---|
-| Loopback | 28-107 bytes per snapshot; both clients see the same positions; up to 13 cars and 11 peds mapped; prediction error 0.00 blocks |
-| Four slots, two bots, a third joining after 40 s, one leaving after 80 s | The joiner spawns at a restart zone and everyone sees it; the leaver disappears everywhere; no crash. |
-| 80 ms round trip, three armed bots on Downtown, 5 minutes | The bots find each other and fight: frags and deaths on the server (for example 1/1, 2/3, 2/1), every client shows them and carries out each death once; no crash, nobody drops; prediction error 0.00 blocks. |
-| 100 ms round trip, 2% loss, test kills (4 deaths, one without a killer) | Every client shows the server's frags and deaths and carries out each death exactly once (2, 1, 1). |
-| 80 ms round trip, two car-hopping bots and a fighting one, 5 minutes, grid check on | Every traffic car in a snapshot has the traffic driver on the client too (up to 16 at once); a ped driver shows in its car; no crash, no failed check. |
-| 150 ms round trip, ±10 ms jitter, 5% loss | Commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; **prediction error 0.00 blocks**. Cars and peds are shown 0.04-0.05 blocks from the server's on average, at most about 0.6 (0.07-0.10 without dead reckoning). |
-
-**Passengers** (an instant gang in its leader's car, a bus's riders): the server sends each car's seated passengers
-(its passenger list, `Car::field_4_passengers_list`) as peds at their car, with the car and the game's passenger flag
-(`field_248_enter_car_as_passenger`, with the ped's state). A client seats one as the game does
-(`Ped::EnterCarAsPassenger_45C7F0`: in the list, no char; `ForceIntoCarAsPassenger`), lets it out the same way, keeps
-it mapped while it sits (a passenger isn't "active", and no car re-adopts it as its driver), takes it out of the list
-before removing it, and keeps it in its group. Before, a gang member that got in stopped being sent: the client dropped
-it from the gang and went on walking it to the door. Checked with `GTA2_NET_GANGLOG`, an instant gang and a car-hopping
-bot, 75 s: the gang's members and who sits in the leader's car the same on both sides at every logged tick (before:
-the passenger missing on the client every time), the client's ped corrections halved.
-
-**Not yet:**
-- interpolation of other players: **probably not wanted.** Showing them in the past between snapshots instead of
-  predicting them hides the corrections (the jumps at car doors), but at a high ping they lag behind by the whole
-  delay: shots and collisions at where they were, not where they are. Prediction stays; its corrections are the thing
-  to make smaller (other players' entries and exits started from the snapshot already took the large steps from 28 to 4).
-- **other players at car doors** (what a player notices most: the other one jumps as it gets in or out). Most of the
-  remaining large corrections of other players are with the server at the door (states 3/4 walking to it, 7/14
-  getting in or out, in `GTA2_NET_CORRLOG`'s lines). Next step: a remote player the server has at a door is put at the
-  server's place and door at once instead of walked there by its predicted inputs, then measured again on recorded
-  sessions (`GTA2_NET_COMPARE`, `GTA2_NET_JERKLOG`: remote players' jumps, and `player.x/y` in the comparison);
-- **cops' health**: 12-28% of the cops differ in a few reports, from hits a client predicts (its own shots) before the
-  server's snapshot says otherwise; corrected by the next snapshot. Left as prediction noise for now; a predicted hit
-  on an AI ped could wait for the server instead, if it shows;
-- **cops on foot** differ the most of any entity (animation, aim and position on 20-30% of them): their AI is
-  predicted from the server's last state. Expected, but the noisiest type; worth a look if players see cops jump;
-- modes beyond the game's own frags, points and tag (N8);
-- the player cap above 6.
-- **to investigate: an instant gang doesn't board a bus** (on the server, so the game's own AI, not the netcode). In a
-  played test (`GTA2_NET_TESTCAR` bus, `GTA2_NET_GANGLOG`) the four members walked to doors 0-2 and stayed in states
-  3/4 for the whole 33 s the bus stood, within a block of it; normal cars worked. `PedGroup::CoordinateGroupCarEntry_4C9F00`
-  is a matched function. Open: the original does the same, the test bus (spawned as the debug menu does) lacks
-  something a traffic bus has, or the port places a long vehicle's doors wrong. First check: the gang and a traffic bus;
-  then why a member never reaches its door; then the original under wine.
-
-```
-Scripts/port/build_mac.sh                                    # or build_linux.sh / build.sh
-GTA2_ARGS="--server --map downtown-6p --players 4" Scripts/port/run_mac.sh   # no window (--window: one to watch)
-GTA2_ARGS="--connect 127.0.0.1 --name me" Scripts/port/run_mac.sh                  # play with the keyboard
-GTA2_HEADLESS=1 GTA2_ARGS="--connect 127.0.0.1 --bot --name bot1" Scripts/port/run_mac.sh   # a test bot
+```bash
+./gta2_port --server --map downtown-6p --players 4         # a dedicated server, headless (--window to watch it)
+./gta2_port --connect 127.0.0.1 --name me                   # play with the keyboard or a pad
+./gta2_port --connect 127.0.0.1 --name bot1 --bot hunter    # a bot client (GTA2_HEADLESS=1: no window)
 ```
 
-Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--gametype 1-3`, `--fraglimit`, `--timelimit`, `--tickms`, `--police [N]` (the lobby's police box, off by default there too; N: the most wanted stars, 1-6, the game's own 1 by default), `--traffic N` (ambient traffic cars per player, 16 by default), `--packets N`. The round flow ("Round flow"): `--minplayers N` (2), `--warmup S` (60), `--results S` (15), `--votes start,map,kick` (or `none`), `--rounds on|off` (on; off with `--arena`).
+`Scripts/port/run/run_mac.sh` passes `GTA2_ARGS` on. Without `--server` or `--connect` the game starts at its frontend,
+where **Network game** joins a server (below). The command line (`Port/net/cmdline.cpp` lists every option):
 
-**Jerkiness** (`GTA2_NET_JERKLOG=1`, 2 also prints each jump): per entity and frame, the change of its step, on each client (what is shown) and on the server (the game's own motion). Tiny Town, police on, two rammers, a fighter and a car hopper, 100 ms ±10 ms, 200 s: cars move as smoothly on the clients as on the server, peds have twice the server's small changes but as few large ones, remote players three times (prediction from their last input, eased by the blend, `GTA2_NET_BLEND`, 0.2 by default). Most steps over 0.4 blocks were a player getting into or out of a car. Starting other players' entries from the snapshot, and correcting the walk to the door (including the walk after a car that still moves, states 3/4, which isn't at the door yet), took them from 28 to 4 in four recorded sessions. What is left is a ped reaching the door about half a block from where the server's did.
-
-Client options: `--connect host[:port]`, `--name`, `--bot`.
-
-Either end: `--lag`, `--jitter`, `--loss` (the link conditioner).
-
-## Rounds
-
-A match is rounds on one map (`engine/rounds.cpp`; when a round starts and ends is the round flow's, `session/round_flow.cpp`, "Round flow"). The game ends a network game at its frag limit (`PlayerScoreTracker`: frags >= the limit) and at its time limit (`ManageNetworkTimeAndHudPager_4DADA0`), and a dedicated server can't come back from that: it stopped ticking, and every client froze with it (the time limit, 10 minutes by default, ended every game). So the game gets neither (`NetUi::CopyGameSettings_51C7F0`: an unreachable frag limit, no timer), and the server applies `--fraglimit` (points in a points game; the tag game: time only) and `--timelimit` itself. A round that reaches one ends: the leader wins (at the time limit with a tie: a draw), and the next round starts at once on the same map, everyone at a restart zone with no score, weapons or power-ups. The world entity carries the round's number, the last round's winner and the seconds left; a client shows "X wins round N", and "60 seconds left", "10 seconds left", over the frame for 4 s as the netcode's other lines (the HUD's message line is in the rollback set: a restore took it back to before the message, which showed for a frame). **The next map** (`--maps a,b,c`): a round on each in turn. At a round's end the server sends the next map (`kMsgMapChange`, reliable), and after a pause of 3 s, with the winner on the HUD, the game ends on the server and on every client and the next starts at once: a port hook in `winmain.cpp` (`gPortNextNetworkGame`, under `GTA2_PORT`) goes straight to `InitializeGame_4DA4D0` on the next map instead of to the frontend. A client keeps the exit through its restores, takes only the new game's snapshots (the world entity carries the server's game, `world.game`) and syncs again from its first one, as after joining; the engine clears its maps of the old game's cars, peds and pickups (`ResetForNewGame`). What a new game in the same process needed besides:
-- the rollback set made again for every game: the new `Game` can come at the old one's address with its pools elsewhere;
-- the rollback set leaving out what the game's scratch pointers point to (the last ped processed, a collision's sprite, the map blocks around one): after a map change they point into the old game's freed pools and map, and a restore wrote there. A loader's cursor (`input_data_676170`) did that in every game. Found with Guard Malloc (`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib`) on a replay: it stops at the first read of freed memory. AddressSanitizer hangs at its start on this macOS;
-- a snapshot's weapon in hand only one the player has (the HUD reads it).
-
-The results between rounds, the warmup, ready, the countdown and the votes: "Round flow".
-
-## Chat
-
-GTA2's chat is a line typed live: F10 starts it (`Player`'s key handling, `Hud_ChatInput::StartChatting_5D1830`), each key adds to the player's line (`HandleChatInputKey_5D15E0`, from the key event in the input word), Enter ends it, and while it is typed every machine shows "name: line_" over the HUD (`DrawChatMessages_5D16B0`). There is no history. The key events reach the server in the commands (22 bits), so the server's player has the line; the player entity carries it (`chatting` and 80 characters), and a client shows the others' lines from the snapshots and its own as it types: the local player's line is kept through each restore and resimulation, which see no key events (`TakeLocalChat`, `PutLocalChat`). A late command repeated on the server keeps its controls only, or a key would type twice. Each client logs the others' lines as they change (`net: chat, <name>: <line>`). In the port a key types the character the system's keyboard layout gives with shift (`Port_TypedChar`, `sdl_dinput.cpp`); the game's own tables (`data/keyboard`) have one character per key and no shift, so `/` (shift-7 on many layouts) was a 7.
-
-**Completing commands:** Tab in a line starting with `/` completes its last word as far as everything that fits agrees: the command (`/ready`, `/start`, `/map`, `/kick`, `/yes`, `/no`), then a map's name from the welcome's list or the name of a player in the game. When several fit, they show over the frame. The completion is the session's (`CompleteCommand` in `session/round_flow.cpp`, tested in `test_rounds.cpp`); the client takes Tab before the game sees it, as F1 and Y / N (`CompleteChat`), and changes its own line through `TakeLocalChat` / `PutLocalChat`. The server's copy of the line (what the others see while it is typed) has the keys only, without the completion; and as it has no keyboard, it types them with the game's table (US, no shift).
-
-## Roadblock barriers
-
-A police roadblock (`PoliceRoadblock::CreateRoadblock_575FF0`, from 3 stars) is the server's: its cars and cops come as cars and peds, its barriers (`objects::roadblock_21`) with the pickups (`engine/pickups.cpp`). A barrier's definition keeps it off the object pool's list (`CreateObject_529C00`: `AllocateUntracked`, only the sprite grids find it), so the pickups now walk the pool's whole array; before, neither the server's snapshot nor a client's own count saw one. A barrier a car pushes moves on each side by itself: one more than a block off is made again where the server has it. Checked with `GTA2_NET_TESTWANTED=5000` (4 stars) and two bot clients, 150 s: 30 barriers made on the clients, 20 removed with their roadblocks (the rest still stood at the end), none made twice.
-
-**Attached objects** (a tank's turret, a fire engine's cannon) follow their car in its update, in the tick. A client moves its cars after the tick (the snapshot, the blend) and draws then, so a turret was drawn where the tank had been. `engine::AnchorAttachments` puts them back on their cars after the client's frame, as the game would (`Object::UpdateMovementAndEffects_527070`'s placing only, not its animation).
-
-## Joining from the frontend
-
-The main menu has **Network game** (`Port/net/menu.cpp`, between options and quit). Its page is the frontend's unused page 12: an address (`host[:port]`, 27920 by default), a name, and **Join game**, where the main menu's options are (right of the picture, which is the main menu's for **Network game**). The address and the name are kept in gta2.ini (`[network]`: `serveraddress`, and the game's own `playername`), saved on each change and on a join. The game draws the page; two port hooks in `Frontend.cpp` (under `GTA2_PORT`) set it up after the game's own pages (`gPortFrontendSetup`) and take its input first (`gPortFrontendInput`): Enter on a field types into it (Enter keeps it, Esc gives it back), Esc leaves the page, and during a join cancels it. The frontend's typing (`HandlePlayerNameTyping_4B2F60`) is the player name's alone, and its keyboard table has no shift, so the page maps the keys an address and a name need itself. Its labels are written by hand into the game's 2-byte `wchar_t` arrays: the C library's wide functions and `std::wstring` take 4 (they crashed it).
-
-The join runs in the background (`Client::BeginConnect`, `PollConnect` each frontend frame; `Client::Connect` is the two in a loop, for `--connect`), with "Connecting..." and the error on the page. Welcomed, the network game is set up as `--connect` sets it up, the game's own network start fills in the session (`Start_NetworkGame_5E5A30`, as `-N` runs it before the frontend), and the frontend boots it as it boots a level (`Booting_Map_2`). `--name`, `--lag` and the like on the command line apply to a join from the page too.
-
-**Leaving**: Escape in a network game is the client's (`Client::ChooseInput`): "Leave the game? Y / N" over the frame, and neither the game nor the server gets the keys. The game's own quit prompt is on its player, which the snapshots and resimulations set again (it showed for a moment), and the server's yes would have ended its game for everyone; a server drops a client's Escape anyway. Yes leaves the server and ends the game as a quit (`engine::LeaveForMenu`); `winmain.cpp` (under `GTA2_PORT`, `gPortLeaveNetworkGame`) then goes to the network page instead of the results, as a single player again: the client deleted, the netcode's hooks off, the NetPlay answers, the client mode's switches (traffic, peds, scripts, police) and the random streams as before (`engine::StopNetworkGame`). A `--connect` client goes there too, and so does a client that lost the server for good (below), with why on the page.
-
-## Connection
-
-A client shows its **ping** at the bottom right: the network's round trip alone. Twice a second it sends its clock (`kMsgPing`), and the server sends it straight back (`kMsgPong`). Both poll between frames, about every millisecond (`gPortIdleHook`, where the game waits for its next frame), so neither the server's tick nor the client's frame adds to it, and a link conditioner's delay counts as the wire's: 100 ms each way shows 200 (the earlier measure, a command to the snapshot answering it, showed 288). The client's log prints it with ENet's own round trip, which doesn't see a conditioner. With no snapshot for 0.7 s it shows **Connection interrupted** and plays on with the others' last inputs; snapshots coming back resync it as usual. When ENet drops the connection (5-10 s) it shows **Lost the server, reconnecting**: the others stand still, and every 3 s it connects again under its name. The server gives a name its old slot back if that is free, so the game goes on as the same player, put back at a restart zone (as anyone joining). The same goes for a server restarted on the same map (its ticks start over). After 30 s without the server, or back as another player or on another map, the client goes back to the network page ("lost the server", "the server started another game"). Checked: a server paused 3 s (no drop), killed and restarted (back in, 7 s to notice the drop), killed for good (the network page 30 s later).
-
-## Checks
-
-`Scripts/port/net_check.sh [--quick] [arena|live|replay]` runs the netcode's checks on the macOS build, about 6 minutes, and prints PASS or FAIL per step:
-- **arena:** 24 bot matches of 5 minutes on the server alone (Tiny Town, Face Off, Downtown; rammers, hunter, soldier, simple, car hopper; random seeds): none may crash.
-- **live:** a server and two bot clients at 100 ms, jitter and 2% loss, police on, with `GTA2_NET_CHECKGRID`: no crash and no `net: CHECK` line.
-- **churn:** two bot clients stay while two others join and leave four times, stopped by SIGTERM and Ctrl-C: no crash, no `CHECK` line, nobody turned away as the server being full. A client that quits or is stopped now leaves the server at once (`Client::Leave`, on exit and on those signals); before, its slot stayed taken until the server's timeout (5-10 s), and a player joining meanwhile was told the server was full.
-- **maps:** a three-map rotation, a round of 15 s each at 4 times the clock: both bot clients follow every map change, no crash, no `CHECK` line.
-- **soak:** a server and three bot clients with the clock 10 times as fast (`GTA2_SPEED=10`): about 10 minutes of play in 60 s, no crash. It catches what only shows after deaths and respawns (it failed on the off-screen counter crash before that fix).
-- **replay:** recorded sessions (`--record` makes three, 60 s each) replayed with every correction logged, against their saved logs. A replay that differs from itself on a second run is reported as nondeterministic, not as a regression. `--save` takes the current build's logs as the baseline, after an intended change.
-
-**The comparison check** (N2, `GTA2_NET_COMPARE=1` on a client): on each snapshot, with the game restored to the snapshot's tick and before the snapshot is applied, every mapped entity is captured here and compared with the server's, field by field (car references translated to the server's ids). Every 300 frames the client prints the fields that differ most and how often. It is a measure, not a pass/fail: remote players and AI peds are predicted, so they differ. First run (a rammer client, 100 ms): the players' points half the time (predicted, then set from the server), the physics of about a third of the cars all at once (asleep on one side, awake on the other), and the peds' animation, char state and velocity a third to a half of the time. Nothing mapped was missing. Left out since, as not the client's to predict: a player's deaths (a client counts its own, only to carry out each once) and points (set from the snapshot after the comparison), and the world's reach.
-
-Entities the server sent again with an older state (an age, a busy area's budget) aren't compared: the client didn't apply them. Ped references (targets, group leaders) are translated to the server's ids too.
-
-**The divergence check** (`GTA2_NET_DIVERGE=<server tick>[:<ticks>]` on a client, 300 ticks by default; also in a replay): the client reconciles as usual up to that tick, compares its game with the snapshot right after applying it (age 0: what the apply didn't carry over), then stops applying snapshots and runs on its own with its own input (none, for an idle client). Each later snapshot is compared with its save of that tick. At the end it prints, per field, after how many ticks each entity first differed, and exits. With an idle client and no other player, everything that differs comes from state the snapshots don't carry, or from the client's game running differently (no spawning, scripts or police of its own). `--interest <blocks>` on the server makes the snapshots reach further (1000: the whole map).
-
-Below the snapshot's fields, two dumps compare the game itself:
-- `GTA2_NET_DUMPPEDS=<file>[:<from>:<to>]` on the server and on the divergence client: every ped's Ped, Char and Sprite as bytes per tick, by the server's ids. `Scripts/port/ped_diff.py <server> <client>` names the members that differ (by clang's record layouts of this build) and when each first did, per ped.
-- `GTA2_NET_RANDLOG=<file>:<from>:<to>` (cycles) on both: each rand() draw's caller. `Scripts/port/rand_diff.py <program> <server> <client>` counts them per tick and function.
-
-First findings (Tiny Town and Downtown, police on, idle clients): the game's one random stream (rand(), behind gRng_6F6784) is off after the first tick. The server draws for traffic and ambient peds the client doesn't spawn, and for everything near other players; the client for the peds it keeps after the server removed them. With two players about 140 blocks apart on Downtown, the server drew 99 numbers a tick and the client 52. Peds' random turns (Char::ApplyRandomRotationJitter_54C6C0) and choices then differ within 1-3 ticks. Unsent too: Char's field_42_rotation_jitter and field_46_timer (its next idle behaviour). A ped getting into or out of a car on either side gets none of the server's AI state until both have settled (a cop at a car door on the server walked off on its own here).
-
-## Random draws
-
-The game has one random stream (rand(), behind gRng_6F6784), as in 10.5.exe: its original netcode was lockstep, every machine simulating the whole map, and checked the stream with each player's input (winmain.cpp's sync check). A client here simulates only its own area, so every draw the server made for anything else (the traffic and ambient peds it spawns, the peds near other players, its scripts and police) moved every later draw of the client's: its peds' random turns and choices were others from the first tick.
-
-In a network game the draws have owners (`Port/port_rand_owner.h`, `Port/port_rand.cpp`): each ped's update (with its char's), each car's, and each service only the server runs (traffic, ambient peds, generators, garages, scripts, emergency crews, ambulances, police, fire engines) draws a hash of the game's seed, the owner (the server's net id, or the service), the tick and how many it drew in this update. An entity then decides the same way wherever it is simulated, and a replay draws the same. The hooks in Source/ (the pool loops, Game::UpdateGame_4B9410) are port builds only; outside a network game nothing owns a draw. Draws without an owner (a player's controls, objects, explosions) are still the one stream, which snapshots carry as before. The seed is the server's `--seed` (0 without one), sent in the world entity.
-
-With two idle clients on Downtown about 140 blocks apart, the server had drawn 99 numbers a tick to a client's 52 before; after, the client's peds kept to the server's except where the server spawned a ped next to them (which the next snapshot brings).
-
-Fixtures and logs are in `build_port/net_check/`. Each test game is the shell job itself (`exec`), so the script's exit ends them all.
-
-## Decisions
-
-| Topic | Choice |
+| | Options |
 |---|---|
-| Authority | The server simulates everything and clients send inputs. Clients are no longer deterministic: they apply state. |
-| Ambient world (traffic, peds, cops) | Server-owned. Each client gets the entities in its **interest area** (around its camera). |
-| Prediction | **Whole-world rollback** on the client, plus a declared **net schema** per entity type (only the fields that matter go over the wire). A full-world state compare checks that the schema is complete. |
-| Transport | **ENet**: unreliable snapshots and inputs, reliable events. |
-| Remote entities | **Configurable**: interpolation, dead reckoning, or interpolation that extrapolates on loss. |
-| Projectiles | **Configurable**: rewind on spawn, or predicted cosmetic plus server spawn. |
-| Players | **Any number**: no fixed count in the protocol (player ids are a varint, byte-sized for up to 255). In the game, `MAX_PLAYERS` (28 uses, ~10 loops written as `< 6`) becomes a port setting. Tested at 16. |
-| Game modes | **Frags first.** Team deathmatch, CTF, points and tag later, so the rules live in one mode module (scoring, spawning, teams, win condition) rather than in the netcode, and teams are part of the player state from the start. |
-| Joining | **Mid-game join**: a full state of the interest area over the reliable channel (~20 KB, about 15 messages), then deltas (see Wire format). For now a joiner **spawns at once** at a restart zone with an empty score. The join is a step of the mode module (`OnJoin`: where, when, with what score, which team), so a mode can later add a respawn delay, spawn protection, team balance or a spectator start. |
-| Spawn points | The map's **Restart zones** (`GetNextZoneOfTypeRoundRobin_4DF0F0(0x10)`, already used for multiplayer respawns), plus an **optional per-map file** next to the `.mmp` with extra points. The scripts' 6 `PLAYER_PED` points stay for the first 6 players. |
-| Program | **One binary** for client, server and bots: `--server`, `--connect <host[:port]>`, `--bot`. A separate server target can be split off later. |
-| Connecting | **Command line** (`--connect`). A frontend page and a server browser come later. |
-| Other players on the HUD | GTA2 shows arrows to every player. Whether every player's position and score go to every client, or only those in the interest area, is a **mode option** (`sv_players_always_visible`). |
-| Network-game rules | The original multiplayer rules (police at most wanted level 1, gangs with basic weapons, car weapons at a tenth, all car models, endless respawns) become **server settings**, each one on by default as in the original. |
-| Player colours | **New remaps** for players beyond the 7 palettes (`Player::ColorScoreFromRemap_569A10`, `Hud_Arrow::SetPlayerArrowColour_5D0DC0`). If that turns out to be complicated (style data), it is deferred and the extra players share colours. Team modes colour by team. |
-| Team modes, CTF | New mode code that **reuses the game's assets**: a flag is a pickup object, its carrier gets the HUD arrow, scores use the existing HUD digits and the results screen. |
-| Cleanup | **Stock GTA2** cleanup at first. It still goes through the cleanup-policy hooks (see "Whole-map simulation"), so modes such as `none` or `wrecks` are a setting later, not a rewrite. |
-| Bots | **Yes**: a headless client with scripted or AI input, over the real network path; also how 16 players are tested. **A simple bot first**: chase the nearest player, shoot when facing them, take a car, follow road routes. Better bots later. |
-| Code | `Port/net/` (protocol, ENet wrapper, schema, rollback), `Port/server_main.cpp`. |
-| Platforms | Server mainly **Linux**, cross-platform (Windows, macOS); ENet 1.3.18. |
-| Rates | **Server settings**: `sv_tickrate`, plus a snapshot rate per client (up to the tick rate). See "Tick rate" below: the game's logic is written per tick, so rates above 30 Hz need the sim scaled. |
+| Server | `--port` (27920), `--map <data/*.mmp>` (downtown-6p), `--maps a,b,c` (a rotation), `--players 1-6`, `--gametype 1-3` (frags, points, tag), `--fraglimit`, `--timelimit` (minutes), `--tickms`, `--police [stars]` (off by default, as the lobby; up to the game's 1 star, or 1-6), `--traffic N` (ambient cars per player, 16), `--packets N` (a snapshot's parts at most, 4), `--interest blocks` (24) |
+| Round flow | `--minplayers N` (2), `--warmup s` (60), `--results s` (15), `--votes start,map,kick` (or `none`), `--rounds on\|off` |
+| Arena | `--arena brain,...` (bots on the server itself), `--ticks N` (the result printed and the server ended at tick N), `--seed N` |
+| Client | `--connect host[:port]`, `--name`, `--bot [brain]` (simple, carhop, rammer, soldier, hunter, `nn:<file>`), `--replay <file>` |
+| Either end | `--lag ms`, `--jitter ms`, `--loss %`: a link conditioner on this end's sends |
 
-### Tick rate
+## Playing
 
-The rate is a server setting because it has to be tuned; fast games run at 64 or 128 ticks per second. In GTA2, though, the simulation is written **per tick**, not per second:
-- speeds, accelerations and turn rates are added once per tick;
-- timers count ticks (for example 130 ticks until a car despawns, 40 for a ped);
-- animations advance a frame per tick.
+**Joining from the frontend.** The main menu has **Network game** (`Port/net/menu.cpp`): an address (`host[:port]`), a
+name and **Join game**, kept in gta2.ini (`[network]`). The join runs in the background with "Connecting..." and any
+error on the page; welcomed, the frontend boots the network game as it boots a level. `--name` and the link
+conditioner's options apply to a join from the page too.
 
-The original's game speed setting only changes the wall time of a tick (50, 40 or 33 ms), so a faster tick makes the whole game run faster.
+**Leaving.** Escape in a network game is the client's: "Leave the game? Y / N" over the frame. Yes leaves the server
+and goes back to the network page as a single player again. So does a client that lost the server for good, or was
+kicked, with why on the page.
 
-| Rate | What it takes |
+**Connection.** The ping shows at the bottom right: the network's round trip alone (`kMsgPing`, answered at once,
+both polled between frames). With no snapshot for 0.7 s it shows **Connection interrupted** and plays on with the
+others' last inputs. When ENet drops the connection (after 5-10 s) it shows **Lost the server, reconnecting** and
+connects again every 3 s under its name; the server gives a name its old slot back if it is free, at a restart zone.
+After 30 s, or back as another player or on another map, it goes back to the network page.
+
+**Chat** is the game's own: F10 starts a line, each key types into it, Enter ends it, and every machine shows
+"name: line_" while it is typed. The key events reach the server in the commands, so the server's player types the
+same line, and the player entity carries it to the other clients. A key types the character the system's keyboard
+layout gives with shift (`Port_TypedChar`): the game's own tables (`data/keyboard`) have one character per key and no
+shift. The server's copy of a line, which has no keyboard, types with the game's table (US, no shift).
+
+**Commands** are chat lines starting with `/`, sent to the server when typed to their end: `/ready`, `/start`,
+`/map N` (or a name), `/kick NAME`, `/yes`, `/no`. Tab completes the command, then a map from the welcome's list or a
+player's name, as far as all that fit agree; when several fit they show over the frame (`CompleteCommand`).
+
+**Rounds** (`session/round_flow.cpp`): a match is rounds in phases, run by the server and shown on every client:
+
+1. **Warmup**: the map is played as usual. It ends when `--minplayers` are in and all are ready (F1 or `/ready`), or
+   `--warmup` seconds after the minimum was reached (0: only when all are ready).
+2. **Countdown**, 5 s. Too few left: back to the warmup. At its end everyone is at a restart zone with no score,
+   weapons or power-ups.
+3. **The round**, to the frag limit (points in a points game; tag: time only) or the time limit. The leader wins;
+   a tie at the time limit is a draw.
+4. **Results** (`--results` s): the winner, frags and deaths, and the maps with their votes (`/map N`). Then the most
+   chosen map, else the rotation's next, else the same map.
+
+**Votes**: `/start` (end the warmup), `/map N` (change now; a round ends without a winner), `/kick NAME` (out, and the
+name turned away for 10 minutes). One at a time, open 20 s, decided by a majority of the people in the game (not
+voting counts as no; the caller votes yes); Y or N while it shows. `--votes` sets which are allowed.
+
+With `--rounds off` (the default with `--arena`) the round starts at once and the next follows its end directly.
+The game's own end of a network game (its frag and time limits) can't be come back from on a dedicated server, so the
+game gets neither and the server ends rounds itself. A map change ends the game on the server and every client and
+starts the next at once: `winmain.cpp` asks the netcode (`gPortNextNetworkGame`) instead of going to the frontend.
+
+## How it works
+
+### Why the engine shapes the design
+
+- **No per-entity update.** `Game::UpdateGame_4B9410` runs every subsystem once per tick, so neither end can simulate
+  one player on its own. The client predicts by rolling back and resimulating the whole world; the server applies
+  each player's input at a given tick, so a client runs ahead of the server (the Overwatch and Rocket League model,
+  not Quake 3's) and the server keeps a small input buffer per player.
+- **State is fixed-point.** Positions are `Fix16` (14 fractional bits), angles `Ang16` (0-1439): a position and
+  rotation go over the wire losslessly, so predicted and server state agree to the bit when nothing else interferes.
+- **State is pools allocated once**, about 3.5 MB in all, already listed by the port's state log (every global and
+  what it points to). The same registry gives the rollback set.
+- **A tick is the game's unit.** Speeds, timers and animations count ticks, so the tick stays the game's (33 ms
+  by default, `--tickms`).
+
+### The game loop
+
+Every network frame `RunGameFrame_4DA850` runs the tick, then `NetPlay::SendToAll_521B20`, where the original sent
+its inputs. The port's `NetPlay` (`engine/netplay.cpp`) makes that the netcode's frame hook: after tick T, before the
+frame is drawn. There the server reads its clients and sets every player's input for T+1; the client sends its
+command, applies snapshots and rolls back. Between frames both poll the network about every millisecond
+(`gPortIdleHook`) for pings, so neither the tick nor the frame adds to the ping.
+
+### The server
+
+- **Commands** carry the server tick they are for and repeat the last few, so a lost packet loses no input. The server
+  buffers them per tick and repeats a player's last input when one is late (its controls only: a repeated key would
+  type twice). It reports the newest command tick it has, and the client keeps its commands about two ticks early.
+- **Snapshots**, per client, every tick (`Server::SendSnapshot`): every player and the car each sits in, wherever they
+  are, and everything within the client's interest area (24 blocks around its player; a camera sees 6 to 8). Each
+  entity is a delta against the state that client acknowledged for it (per-entity baselines, so a snapshot can carry
+  part of the world and nothing waits for a lost packet). What doesn't fit the budget goes with the state the client
+  already has and its age, a few bits. New state goes by priority: the age plus one over one plus a sixth of the
+  distance; an entity new to the client counts as 8 ticks old. A busy area's snapshot goes in up to `--packets` parts
+  of 1372 bytes (the largest unreliable ENet packet that isn't fragmented).
+- **Spawning** (`engine/spawn.cpp`): the game's limits on ambient traffic (16 cars) and peds (50) are for the whole
+  game, and the first players' cameras took them all. A server allows the limits times its players, up to 3 players'
+  worth (its traffic has drivers of its own: more ran the ped pool out). Before anything spawns, each client's camera
+  bounds grow ahead along its motion by that client's lead, so nothing appears inside what it already shows.
+- **Joining and leaving** (`engine/slots.cpp`): a slot without a client is out of the game the way the game handles a
+  player who left (its ped walks on as a pedestrian). A joining client gets a new player ped at the next restart zone
+  and an empty score. Snapshots carry the slots in the game, and clients mirror them.
+
+### The client
+
+- **Prediction** (`engine/rollback.cpp`): the client saves the game after every tick. On a snapshot of tick S it
+  restores S, applies the server's state, and runs the ticks up to its own with its own inputs; other players repeat
+  their last input. Everything else moves on by the game's own simulation in those ticks.
+- **The blend**: what is shown moves a part of the way to the corrected state each frame (`GTA2_NET_BLEND`, 0.2);
+  more than 2 blocks off (a respawn, a car entered) jumps.
+- **What a client runs** (`engine/client_mode.cpp`): a client simulates what moves, not what decides. The game's own
+  debug switches turn the rest off, set again every frame:
+
+  | Service | Client | |
+  |---|---|---|
+  | players, cars, peds, objects (movement, physics, collisions, weapons) | runs | the prediction |
+  | traffic and ambient ped spawning, despawning | off | only the server creates and removes entities |
+  | scripts, police, ambulance, firefighters, emergency crews, generators, garages | off | they create entities; the results arrive as state |
+  | doors, cranes, crushers, trains, traffic lights | runs | predicted, corrected by snapshots (the lights' phase is in the world entity) |
+  | particles, tile animations, lights, HUD, sound | runs | cosmetic; sound is muted while resimulating |
+
+  Player peds take no damage on a client, and everything counts as seen there, so nothing is removed off screen.
+- **Replicas** (`engine/replica.cpp`): the client adopts what the map script made on both sides, makes the rest, moves
+  them every snapshot and removes what the server drops. A car carries its driver: none, the traffic driver (all
+  traffic cars share CarManager's spare, which is never sent as a ped), or a ped. A car's seated passengers come as
+  peds at their car and are seated as the game seats them.
+- **Players in cars** (`engine/car_entry.cpp`): a client gets into and out of cars by its own predicted input. When
+  both sides have settled and the server has the player elsewhere, the client puts the ped into the server's car, or
+  out of its own, at once, ending the way the game's own entering and leaving end. Another player's enter key reaches
+  a client after its tick, so when the server's player is on its way into a car and the client's isn't, the client
+  starts it as the key does.
+- **Guards** (`engine/guards.cpp`, on the server too): what a network game breaks in the game's own logic is made
+  safe: peds given on-foot orders while in a car, the HUD arrows to players who joined after the start, objects
+  attached to cars the client moved (a tank's turret).
+
+### Entities
+
+The **net schema** (`engine/schema.cpp`) declares each entity type's fields, by name and width; `Capture` reads them
+from the game and `Apply` writes them through the game's own functions wherever it keeps derived state (moving a
+sprite relinks it in the collision grid; seating a ped sets both sides of the link). References to other entities go
+as net ids. Structures go member by member by name (`engine/members.hpp`), never by position: the 64-bit layout isn't
+the original's.
+
+| Entity | Carries |
 |---|---|
-| 20-30 Hz (50-33 ms) | Nothing: the original's range. The first version offers this. |
-| Above 30 Hz | Either run the 30 Hz simulation and raise only the *network* rates (inputs sampled and sent faster, snapshots each tick; this lowers input delay a little but not the tick), or scale the simulation: every per-tick constant and timer for a tick of 1/N s (a separate project through Car, CarPhysics, Ped, Char, Object, Weapon and the timers; it has to stay port-only to keep the match). |
+| World (one per snapshot, `engine/world_entity.cpp`) | the game's tick counter (timers are stamped with it), the random seed and stream, the restart zones' turn, the round's state (`core/round_state.hpp`), the game's generation (a map change), the traffic lights, the tag game's fugitive and times |
+| Player (`engine/players.cpp`) | place, input, health, death count and last killer, weapons and the ammo of all 28, frags and points, power-up timers, its car, the chat line |
+| Car (`engine/cars.cpp`, `car_ai.cpp`) | place, its whole `CarPhysics` (but its two pointers), damage, lights, horn, colour, its driver, and its AI (`CarAI`: route, speed, the cars it chases) |
+| Ped (`engine/ped_state.cpp`) | place, and the plain values its AI runs on (objectives, targets, speeds, timers, occupation, flags, health, death cause), its references (targets, group) and its car and seat |
+| Pickup (`engine/pickups.cpp`) | model and place; roadblock barriers too (they are off the object pool's list) |
 
-The netcode keeps the tick length a variable from the start: in the clock sync, the input buffer, the interpolation delay and the snapshot timing, so a higher rate later needs no protocol change.
+Health, deaths, weapons and scores are the server's. A death the server had is carried out on the client with the
+game's own `Ped::Kill_46F9D0`, credited to the killer, and the deaths carried out are part of the rollback set, so a
+resimulation never repeats one. Scores, power-up timers and the tag game's "it" are set after the resimulation.
 
-## Why the engine shapes the design
+Not synced: objects other than pickups (fires, explosions, projectiles); the client's own simulation makes them, and
+rolls them back with the world, but nothing corrects them.
 
-- **No per-entity update.** `Game::UpdateGame_4B9410` runs every subsystem once per tick: peds, cars, objects, police, particles, doors, trains, and so on. Q3 runs one player's usercmd on its own, on arrival. Here neither the client nor the server can simulate just one player. Two things follow:
-  - The **client** predicts by rolling back the whole world and resimulating it.
-  - The **server** applies each player's input at a given server tick. So the client has to run *ahead* of the server (the Overwatch/Rocket League model, not Q3's), and the server keeps a small input buffer per player.
-- **The original multiplayer is deterministic lockstep.** `NetPlay` sends one `u32` of inputs per player per tick (`Network_InputData`) plus sync checks. That whole layer is replaced. The game keeps its input entry points (`Player::SetInputs_565740`), and the server feeds them from the network.
-- **State is fixed-point.** Positions are `Fix16` (14 fractional bits) and angles are `Ang16` (0-1439). A position plus rotation fits **losslessly** in 72 bits: x and y take 22 bits each (256 blocks), z 17, angle 11. The client gets exactly the server's numbers, so predicted and server state agree to the bit when nothing else interferes. No quantisation error feeds back into the prediction.
-- **State is pools, allocated once.** About 3.4 MB in total:
-  - cars 306, peds 200, chars 400, objects 3825, weapons 255, sprites 5031;
-  - plus doors, cranes, trains, explosions and so on.
+### Random draws
 
-  The state log already lists every global and heap block (its "entries"), and it maps pointers to `(entry, offset)`. The same registry gives the rollback set and the entity ids.
+The game has one random stream (`rand()`, behind `gRng_6F6784`). Its original netcode was lockstep, every machine
+simulating the whole map. A client here simulates its own area only, so every draw the server makes for anything else
+would move every later draw of the client's. In a network game the draws have owners (`Port/rand/owner.hpp`): each
+ped's update (with its char's), each car's, and each service only the server runs draws a hash of the game's seed, the
+owner (its net id, or the service), the tick and how many it drew in this update. An entity then decides the same way
+wherever it is simulated. Draws without an owner (a player's controls, objects, explosions) stay the one stream, which
+the world entity carries. Sound and particles draw from streams of their own (`Port/rand/sound.hpp`, `particle.hpp`),
+so muting sound in a resimulation, or the particles there are, don't move the game's draws. Outside a network game
+none of this is on, and the port draws exactly as `10.5.exe`.
+
+### The rollback set
+
+`engine/world.cpp` lists the world as memory blocks: every registered global and what it points to, the `Player`
+objects, the light grid, and the netcode's own (the deaths carried out, the random streams, the sound entries'
+pool). `SoundPosEntry` comes from a pool in the set (`engine/sound_pool.cpp`) instead of the heap, so a restore can't
+bring back freed sound entries. The set is made again for every game (a new map's pools are elsewhere), and leaves
+out what the game's scratch pointers point to (they point into a freed map after a map change). The whole world is
+about 3.5 MB; saving or restoring it takes 0.06 ms, a busy tick about 30 µs.
+
+### Wire format
+
+A little-endian bitstream (`core/bitstream.cpp`), never a copy of a struct: clients are 32- and 64-bit. Messages
+(`core/protocol.hpp`):
+
+| Message | Channel | |
+|---|---|---|
+| `kMsgHello`, `kMsgWelcome`, `kMsgReject` | reliable | the join: the protocol version and name; the slot, the game's settings and map, the maps a vote chooses from |
+| `kMsgCommands` | unreliable | the last few commands (tick and input bits, each delta-coded against the one before) and the newest snapshot the client has |
+| `kMsgSnapshot`, `kMsgSnapshotPart` | unreliable | server tick, the baseline it is made against, entities with field masks and changed fields (`core/snapshot.cpp`) |
+| `kMsgMapChange` | reliable | the next map, after a round |
+| `kMsgPing`, `kMsgPong` | unreliable | the client's clock, sent back at once |
+| `kMsgCommand`, `kMsgNotice` | reliable | a player's command; a line to show (a vote, a player ready) |
+
+ENet runs with `mtu` 1400, two channels (never reliable data on the snapshot channel: under loss it delayed the
+snapshots), its throttle off (it dropped snapshots when the round trip rose) and a flush after every tick.
+
+## Recordings
+
+Every client session is recorded (`session/recording.cpp`): the welcome, then per frame the packets, the round trip
+and the input, to `recordings/session-<n>.rec` (the newest 10; `GTA2_NET_RECORD=<file>` elsewhere, `off` none). A
+client does nothing but react to what arrives and to its own input, so `--replay <file>` plays the session again
+without a server, tick for tick, as fast as the game runs: 8 minutes in 10-15 s, the same every time. **F12, or the key
+under Esc, marks a moment** in play: the client and its replay print `net: mark <n> at frame <f>`, so a bug seen in
+play is "the last session, mark 2".
+
+## Bots
+
+Bots are players whose input comes from a brain (`session/bot.hpp`), on the same path as a person's. A brain sees a
+`BotView` built from what its client knows (its own body as predicted, the snapshot's players, cars and peds, and the
+map as plain data: `engine::NavMap`, the walking height and the ways between cells) and returns the input bits a
+person would press. It uses no game logic: no route finder, no ped AI. Navigation is A* (`session/bot_nav.cpp`).
+
+| Brain | |
+|---|---|
+| `simple` | walks its route to the nearest player and fights when close |
+| `carhop` | gets into the nearest car, drives, gets out, again |
+| `rammer` | drives at players |
+| `hunter` | the rammer when a car is near and nobody is, the fighter otherwise |
+| `soldier` | a weapon, a car, then to the nearest player: runs it over when coming at it head on, or gets out and shoots |
+| `nn:<file>` | a trained network (`session/bot_nn.cpp`): 62 inputs (`BotFeatures`), a choice in six groups of outputs |
+
+In the round flow bots ready up, vote for map 2 in the results and yes on any vote but their own kick.
+
+**Training** (`Scripts/port/bots/rl_bots.py`, PPO with torch): an **arena** (`--server --arena ... --ticks N`, bots
+on the server itself, `Port/net/dev/arena.cpp`) plays the trainer's `remote:<port>` slots over a local socket, a
+decision every 3 ticks with the reward since; `GTA2_SPEED=1000` headless runs a 150 s match in under half a second.
+Each remote slot also runs a scripted teacher on the same view, and an imitation loss on what it would press, fading
+over the first updates, gets the policy started (from scratch PPO learned nothing). `rl_bots.py --watch [file.nn]`
+plays a match in a window. Out: `build_port/rl/` (`latest.nn`, `policy.pt`, `pool/`, `log.csv`). Head to head on Tiny
+Town, the trained policy makes more frags than the simple bot and fewer than the hunter.
 
 ## Code layout
 
-The netcode lives in `Port/net/`. **Only `engine/` includes decomp headers.** Everything else works on plain data, so the decomp can keep moving (renames, struct fixes, new matches) while the netcode only follows it in one folder.
+`Port/net/`. **Only `engine/` and the frontend page (`menu.cpp`) include the game's headers**; everything else works
+on plain data, so the decomp can move on (renames, struct fixes) while the netcode follows it in one place.
+Dependencies go one way: `session` uses `core`, `transport` and `engine/engine.hpp` (plain types only); `engine` uses
+the game and `core`'s types; `dev` and `eval` use whatever they check.
 
 ```
 Port/net/
-  core/        engine-agnostic, unit-tested without the game: bitstream, protocol constants and messages,
-               entity states and their delta coding, input commands
-  transport/   the network: an interface (hosts, peers, channels, events) and its ENet implementation,
-               plus a link conditioner (delay, jitter, loss) for tests
-  engine/      the bridge to the decomp, the only code that knows its types (engine.hpp: what the session sees;
-               internal.hpp: what the engine's files share):
-               world.cpp     the rollback set (every global, what it points to, players, light grid, sound pool)
-               rollback.cpp  saving, restoring and resimulating a tick (the sound's mailboxes emptied)
-               netplay.cpp   the game's network layer (NetPlay/NetUi) for the port: how the game loop and the
-                             netcode meet, and the offline multiplayer start
-               schema.cpp    the net schema: every entity type's fields
-               access.cpp    a snapshot captured and applied as a whole, the game's queries, shared helpers
-               players.cpp   players as entities: health, deaths, weapons, power-ups, names, their cars
-               cars.cpp      cars as entities: place, physics, damage, lights, colour
-               car_ai.cpp, ped_state.cpp  a car's and a ped's AI state (members.hpp: member tables by name)
-               replica.cpp   a client's cars and peds: adopted, made, moved, removed
-               vehicles.cpp  getting into and out of cars at once, or started as the enter key starts it
-               pickups.cpp, slots.cpp  pickups and roadblock barriers; slots joining and leaving a running game
-               client_mode.cpp  what a client doesn't simulate (spawning, despawning, scripts, police)
-               sound_pool.cpp   SoundPosEntry from a pool in the rollback set (milestone S)
-               navmap.cpp    the static map for bots
-               debug.cpp     checks, logs and statistics (the GTA2_NET_* switches)
-  session/     server, client, bots, the recording and replay, the jerk measure (env.cpp: the switches), the round
-               flow (round_flow.cpp: no game types, its own test)
-  enet/        ENet 1.3.18, vendored (MIT)
-  tests/       core tests (Scripts/port/net_tests.sh)
-  net_main.cpp the command line (--server, --connect, --bot) and the session's lifetime
+  net_main.cpp    the session's lifetime: a server, a client, a replay, or a join from the frontend
+  cmdline.cpp     the command line            maps.cpp   the .mmp files, the rotation, what a vote chooses from
+  menu.cpp        the frontend's network page (game UI, so it includes the game's headers)
+  core/           no game, unit-tested: the bitstream, the protocol, entity states and their delta coding, the
+                  round's state
+  transport/      the network: an interface, its ENet implementation, a link conditioner for tests
+  session/        server.cpp, client.cpp, round_flow.cpp (no game: tested on its own), the bots (bot*.cpp),
+                  recording.cpp, env.cpp (the GTA2_NET_* switches)
+  engine/         the bridge to the game (engine.hpp: what the session sees; internal.hpp: what its files share):
+                    netplay.cpp       the game's NetPlay/NetUi for the port: the frame hook, the network game's start
+                    snapshot.cpp      a snapshot captured and applied, the game's controls, shared helpers
+                    schema.cpp        every entity type's fields       world_entity.cpp  the world entity
+                    players.cpp, cars.cpp, car_ai.cpp, ped_state.cpp, pickups.cpp   the entities (members.hpp)
+                    replica.cpp       a client's cars and peds          car_entry.cpp     into and out of cars
+                    slots.cpp         joining and leaving               spawn.cpp         the server's spawn budget
+                    client_mode.cpp   what a client doesn't run         guards.cpp        the game made safe
+                    world.cpp, rollback.cpp, sound_pool.cpp             the rollback set, save and resimulate
+                    rounds.cpp        new rounds, map changes           overlay.cpp       what a client draws over the frame
+                    stats.cpp         the periodic log's statistics     navmap.cpp        the map for bots
+                    dev/              checks, logs and test cheats (dev.hpp), off unless switched on
+  dev/            the session's checks and test hooks (client_probe.cpp, server_probe.cpp), the arena, the jerk meter
+  eval/           measurements behind the design (sim_bench.cpp, neteval.cpp)
+  tests/          the unit tests (ctest)
+  enet/           ENet 1.3.18, vendored (MIT)
 ```
 
-Dependencies only go one way: `session` uses `core`, `transport` and the engine interface (`engine/engine.hpp`, plain types only); `engine` uses the decomp and `core`'s data types.
+The server and the client call their probes (`dev/server_probe.hpp`, `dev/client_probe.hpp`) at fixed places in
+their frame; the engine's dev functions are `engine/dev/dev.hpp`. Everything in `dev/` is linked in and off unless
+its switch is set.
 
-**How the game and the netcode meet.** The game's network game loop already has the boundary we need: the DirectPlay layer, `NetPlay`. Every network frame, `RunGameFrame_4DA850` runs:
-1. the tick (`ExecuteGame_4DA780`);
-2. `do_network_and_local_inputs_4DAF30`, which samples the local input, sends it with `NetPlay::SendToAll_521B20`, draws, receives the other players' inputs, and sets every player's input for the next tick.
+### The game's code
 
-The port's `NetPlay` (`engine/netplay.cpp`) makes `SendToAll` the netcode's per-frame hook: after tick T, before the draw. There the server reads its clients and sets every player's input for tick T+1; the client sends its command, applies snapshots, and later rolls back. The netcode needs no frame-loop code in `Source/`.
+The netcode's hooks in `Source/`, all under `GTA2_PORT` and declared in `Port/port_hooks.hpp`:
 
-**What it does need in `Source/`:** a short list of `#if GTA2_PORT` lines, and nothing more:
-
-| Where | Why |
-|---|---|
-| `sound_obj.cpp`: the random table on its own stream (`Port/port_rand_sound.h`) | Muting sound during a resim mustn't change the sim's random numbers. The stream is shared by default, so the replay checks against 10.5.exe stay exact; the netcode switches it on. |
-| `sound_obj.hpp`: `SoundPosEntry::operator new/delete` | From a pool that is part of the rollback set, so a restore can't bring back freed sound entries. |
-| (later, N6) `types.hpp`: `MAX_PLAYERS` | A port-only player cap. |
-
-Each one stays a single include or declaration, so it moves along with the decomp without merge pain.
-
-## Architecture
-
-```
-server (headless port build, Linux)          client (port build, any platform)
-  ENet host                                     ENet peer
-  per tick (30 Hz):                             per frame:
-    pop each player's input for this tick         sample input -> cmd(tick T+ahead), send last N cmds
-    Game::UpdateGame (full sim, scripts)          on snapshot(S): restore world@S, apply snapshot,
-    capture net state of every entity               resim S+1..now with own cmds (rollback)
-    per client, at its snapshot rate:             predict tick now+1 (local sim)
-      interest set -> delta vs acked baseline     draw: local = predicted,
-      -> priority-sorted, cut at budget             remote = interp / dead reckoning (cvar)
-      -> send unreliable
-```
-
-### Server
-- **The headless build plus a server main.** `Port/headless` has null video and a fast clock; replace the clock with a 33 ms fixed-tick loop. There is no local player: every player slot is network-driven.
-- **Scripts (`.scr`) run only on the server.** Their visible results reach clients as replicated state (doors, generators, cranes, wanted level, scores) or as reliable events (HUD text, arrows, timers, phone messages, kill frenzy).
-- **Interest area.** The camera rectangle of each player plus a margin; the camera zooms out with speed, so the area is derived from the replicated camera height. Traffic already spawns around each player's view in the original MP (`ReduceTrafficSpawnCounterOfOtherViewers_4B9D60`), so the server's world already contains what every client needs.
-- **Validation.** The server checks the data-file hashes (`.gmp`, `.sty`, `.scr`) and the protocol version during the handshake.
-
-### Client
-- **Never spawns or destroys replicated entities on its own.** Ambient spawners, AI decisions with lasting effects (spawning, deleting) and scripts are off in client mode.
-- **Still runs the full simulation.** Every replicated entity moves by the engine's own physics between snapshots, so dead reckoning comes free.
-- **Creates only cosmetic things itself:** particles, decals, sounds, camera shake.
-- **Exception, predicted spawns:** the player's own projectiles in the cosmetic-prediction mode (see Projectiles).
-
-### Rollback
-- **History.** Keep a ring of full-world states, one per tick for the last ~0.5-1 s: 15-30 × 3.4 MB, about 50-100 MB.
-- **On a snapshot for server tick S:**
-  1. Restore world@S.
-  2. Apply the snapshot through the schema.
-  3. Create and destroy entities as the snapshot says.
-  4. Resimulate S+1 .. now with the client's stored commands.
-- **Remote players' inputs during resim:** each player's last input is replicated (a few bits), and the resim repeats it. This is dead reckoning that uses the real game logic.
-- **No side effects during resim.** A `resim` flag mutes sounds, particles, HUD messages and camera shake. These hooks live in `Source/` under `#if GTA2_PORT`, so VC6 is unaffected.
-- **The RNG state** (`port_rand`'s `sState`) is in the snapshot set, so a resim draws the same numbers.
-
-### Net schema: "set what matters"
-
-One table per entity type, like Q3's `netField_t`. Each field has an accessor, a bit width and a kind: int, `Fix16`, angle, enum, or **ref**. A ref is a pointer to another entity, sent as a NetId. Two operations:
-- `Capture(entity) -> NetState`: plain data, compared and delta-encoded by field.
-- `Apply(entity, NetState)`: writes the fields **through engine functions** wherever the engine keeps derived state. Examples: moving a sprite relinks it in the collision grid; seating a ped in a car sets both sides of the link. Raw writes leave the grid and back-links stale.
-
-A starting set, refined by the correctness check below:
-
-| Type | Fields |
-|---|---|
-| Car | position, angle, velocity, angular velocity, model, remap, damage areas, health, doors, siren/horn, driver ref, trailer ref, engine/burning state |
-| Ped / Char | position, angle, state/sub-state, health, armour, weapon, occupation, car ref + seat, target ref, remap |
-| Object | position, angle, type, state/timer |
-| Player | ped ref, inputs (last), weapons and ammo, money, score, lives, wanted level, multiplier, power-up timers |
-| World | doors, cranes, crushers, trains and buses, traffic-light phase, generators, explosions, fires |
-
-**NetId** = `(pool, index, generation)`, about 16 bits. The generation is bumped on every pool allocation, so a stale id never points at a reused slot.
-
-**Correctness check.** This is the full-state comparison you asked for, using the existing state log tooling:
-1. Run the server and a client on loopback with no latency and no loss.
-2. After the client applies snapshot S, and before it resimulates, hash the client's world with `state_log`'s masked 64-byte chunks.
-3. Compare those hashes with the server's world at S, restricted to the interest set.
-4. Any chunk that differs is either a field the schema is missing, or something cosmetic that belongs in an `IGNORE` list (particles, render counters).
-
-This is the same loop as the attract-demo replay, with the server as the reference instead of 10.5.exe. The same check measures prediction error under simulated latency: the local player's state predicted for tick S against the server's state at S.
-
-## N0 measurements (native macOS, arm64, `-O2`)
-
-`GTA2_SIMBENCH=<flip>[:<ticks>]` or `GTA2_SIMBENCH=p<peds>[:<ticks>]` (`Port/headless/sim_bench.cpp`, every port build) runs that many sim ticks back to back once the game reaches that flip, or once that many peds are alive. It runs them without drawing, prints the cost of each service, the full-world size and save/restore time, and a rollback check, then exits. The busy scene below is an attract demo through Downtown traffic:
-
-```
-GTA2_HEADLESS=1 GTA2_SIMBENCH=p40:3000 Scripts/port/run_mac.sh
-```
-
-| | Result |
-|---|---|
-| World (registered globals and what they point to, players, light grid) | 1,763 blocks, **3.53 MB**; save **0.06 ms**, restore **0.055 ms** |
-| One sim tick, busy scene (73 cars, 39 peds, 176 objects) | **~30 µs** (30,000-43,000 ticks/s); an idle player in a quiet area is 9 µs |
-| A 10-tick resim (300 ms RTT) | ~0.3 ms plus one restore: ~2% of a 60 fps frame |
-| Rollback: save, 30 ticks, restore, the same 30 ticks | **Reproduces the world exactly** with `skip_audio`. With audio on, one byte of `gSound_obj` differs (the mixer's real-time sample status); nothing in the gameplay state does. |
-
-Cost by service:
-
-| Service | Share of a busy tick |
-|---|---|
-| cars (physics, AI, traffic) | 52% |
-| peds | 28% |
-| objects (projectiles, pickups) | 13% |
-| everything else together (HUD 2%, players 1.4%, ...) | ~7% |
-
-Whole-world rollback holds with a wide margin, so speed gives no reason to cut anything out of the client. The server simulates up to 16 interest areas, so its world is a few times larger, still well under a millisecond per tick.
-
-The check found two pieces of state outside the registry:
-- the `Player` objects (`Game::field_4_players`);
-- `gLightGrid_6F5400`, which points to an array of which the registry knows only one element.
-
-The bench adds both. To make the rollback set complete by construction, the client could allocate all game memory from one arena and snapshot the arena together with the globals.
-
-### What the client runs (client mode)
-
-Every service is one call in `Game::UpdateGame_4B9410`, and several already have a debug skip flag (`bSkip_mission`, `bSkip_police`, `bSkip_ambulance`, `bSkip_particles`, `bSkip_traffic_lights`). Cutting whole services is a flag each. The finer cuts are single calls inside the services.
-
-| Service | Client | Why |
+| Where | Hook | |
 |---|---|---|
-| players, cars, peds, objects (movement, physics, collisions, weapons) | **run** | This is the prediction, for the local player and for dead reckoning of the rest |
-| traffic spawn (`TrafficSpawner::GenerateTraffic_583670`, in the car service) and dummy peds (`PedManager::Dummies_470330`) | **off** | Only the server creates entities. Its limits are per player, up to 3 players' worth (`gPortSpawnPlayers`; 80 ambient peds at most: the ped pool holds 200, the traffic's drivers among them): 10.5.exe's 16 traffic cars and 50 peds were for the whole game, and the first players' cameras took them all. And it spawns for where a client shows its player: before anything spawns, each client's camera bounds grow ahead along the camera's motion by that client's lead (how early its commands come, and half the round trip from its acknowledgements: `engine::SetSpawnLead`, in the server's log as "spawned for N ticks ahead"), so a car or ped doesn't appear inside its view |
-| despawning of far entities (inside the per-entity updates) | **off** | Only the server destroys; these checks still have to be found |
-| scripts, police, ambulance, firefighters, emergency crews, generators, garages | **off** | They create entities or change game state; the results arrive replicated |
-| doors, cranes, crushers, trains/buses, traffic lights | run or off | Deterministic from their state, cheap; running them predicts them, and the snapshot corrects them. The traffic lights' phase, its timer and the cars' light state travel in the world entity (`kWorldLights`): each game ran its own cycle from its start, so a client's cars stopped at a red the server's drove through |
-| particles, tile animations, lights, HUD, sound | **run, cosmetic** | Client only, and muted during resim |
+| `Game.cpp` | `gPortAfterPlayersHook` | after the players' tick, before anything spawns: the server's camera lead |
+| `Game.cpp` | `gPortDrawOverlay` | drawn last: the status, the round's panel, chat completion |
+| `Car.cpp`, `Char_Pool.cpp` | `PortTrafficLimit()`, `gPortSpawnPlayers` | the spawn limits times the players |
+| `Frontend.cpp` | `gPortFrontendSetup`, `gPortFrontendInput` | the network page |
+| `winmain.cpp` | `gPortNextNetworkGame`, `gPortLeaveNetworkGame` | a map change goes to the next game; a client that left goes to the network page |
+| `map_0x370.cpp` | `gPortZoneRoundRobin` | the restart zones' turn, a function's static in the original: rolled back and sent |
+| `Ped.cpp` | `gPortKeepWantedPoints` | a client keeps the server's wanted points with its police off |
+| `Hud.cpp` | `Port_TypedChar` | the chat types the keyboard layout's characters |
+| `Pool.hpp`, `Car.cpp`, `Char_Pool.cpp`, `Game.cpp` | `PortRandScope` (`Port/rand/owner.hpp`) | who a random draw belongs to |
+| `sound_obj.*`, `ParticleManager.cpp`, `Particle_4C.cpp` | `Port/rand/sound.hpp`, `particle.hpp` | their own random streams; `SoundPosEntry` from the pool; `sound_obj`'s state public for the rollback |
+| `Pool.hpp` and the pools | `GTA2_POOL(n)` | pool sizes, `-DGTA2_POOL_SCALE=<k>` for benchmarks |
 
-## Whole-map simulation and tunable cleanup
+## Checks
 
-The server can keep everything that exists anywhere on the map, simulated and kept until a cleanup policy removes it. With many players the map then builds up its own history: wrecks, bodies, police chases nobody is watching. How much cleanup a server runs becomes a game mode:
-- **none**: the chaos builds over time;
-- **wrecks only**;
-- **stock GTA2**: clean up whatever no player sees.
-
-### Where GTA2 decides
-
-Every cleanup and spawn decision goes through one predicate: `Game::IsSpriteInPlayerBounds_4B9950`, the camera rectangles of the players. The `IsSpriteInAnyPlayerBounds_4B97E0` family, `Char::IsOnScreen_545700` and `Car::IsOnScreenForAnyPlayer_43B730` / `IsVisibleToAnyPlayer_43B750` all build on it. A headless server already has the cameras; drawing doesn't feed any of it. Every live entity is updated every tick, wherever it is.
-
-| What | Where | Rule now |
+| Check | | |
 |---|---|---|
-| Car despawn | `Car::ManageDespawning_442310`, `CanDespawn_442200`, `UpdateCarDespawnStatus_4424C0`, `IsCarInConditionsToDespawn_442170` | Marked after 130 ticks unseen (emergency vehicles 300), then removed once no player sees it. Never: trains, the 3 cars in a player's history, mission cars, special peds' cars. |
-| Wrecks | `HandleCarExplosion_43D840` → `StartWreckCountdown_441380` (50 ticks) → `TurnToWreck_4436A0` | No own timer: a wreck is a car at maximum damage and goes the normal 130-tick way. |
-| Ambient peds | `Ped::StateMachineTick_4626B0`, `field_20E_offscreen_counter` (reset in `UpdateOnScreenCounter_462620`) | Dummies after `gPedOffscreenDespawnTime_678656` = 40 ticks unseen (fleeing: 200); occupation and special peds after 100. Player and script peds never. |
-| Corpses | `Ped::PoolUpdate` (`Ped.cpp:4453`) | Any non-script ped more than 200 ticks off screen. |
-| Ped removal | `Ped::Deallocate_45EB60`, `DeallocateWithGroupCleanup_45EA00`, `PedPool::UpdatePool_445960` | |
-| Objects | `Object::PoolUpdate` (`Object_5C.cpp:1945`), `field_25_removal_state` | Timers and animations (debris, fire, explosions, pickups on touch); no camera except `RequestRemovalWhenOffScreen_5290B0`, used only by mission cleanup. Caps: 360 objects of kind 2, a FIFO of 88 of kind 3 (`TrimSpriteList_529300`). |
-| Particles | `Particle_4C::PoolUpdate` | Timers only; allocation checks for free particles and sprites. |
-| Traffic spawn | `TrafficSpawner::GenerateTraffic_583670` → `MakeTrafficForCurrCamera_5832C0` → `SpawnTrafficCar_582480` | At the edges of each player's camera, gated by: **16 ambient cars for the whole game** (`recycled + proto_recycled`, `CarManager::CanAllocateCarOfKind_446930`, which also caps parked 200, police 6, mission 24...), a cooldown (`CarManager::field_54_spawn_block`), the per-player pacing `Player::field_680_traffic_spawn_counter` (`SelectTrafficCarModel_444AB0`), and zone car density. `skip_recycling` turns generation off altogether. |
-| Ped spawn | `PedManager::Dummies_470330` → `SpawnDummies_46EB60` | At most `field_0_max_dummy_chars` = 50 dummies (halved above wanted level 3), at the camera edges, while the on-screen count is under the zone's ped density / 25. |
+| Unit tests | `ctest --test-dir build_port/mac -L net`, or with UBSan: `cmake --preset net-tests -S Port && cmake --build build_port/net_tests --target net_tests && ctest --test-dir build_port/net_tests` | the core's coding, the transport over loopback, the bots' navigation, the round flow |
+| The network check | `Scripts/port/net/net_check.sh [--quick] [step...]` (`BIN=<program>`: another build), about 6 minutes | PASS or FAIL per step, below |
 
-**Pools.** Every capacity is now `GTA2_POOL(n)` (`Pool.hpp`). It is the literal `n` except in a port build with `-DGTA2_POOL_SCALE=<k>`.
-- **They have to grow together.** Sprites (5031) and sprite shapes are the sum of cars 306 + chars 400 + objects 3825 + particles 500. CarAI and CarPhysics match the car pool. The collision grid's links (4096) and cells (6000) run out first: at 282 cars in the stock pools, `GridSpriteLink` was the pool that crashed.
-- **A full pool crashes.** Every `Allocate` dereferences an empty free list; only particles check for space first. The game is safe only because of its logical caps (16 traffic cars, 50 dummies, 360/88 objects).
-- **Size-dependent fields:**
-  - `PedRefTable[255]` with `u8` indices; it returns "no ped" when full.
-  - `PedManager`'s `char_type` counters (they overflow above 127).
-  - `Object::SaveObjects_52A500`'s literal 3825.
-  - `PedListNode` (100), shared by the threat list and every car's passengers.
+`net_check.sh`'s steps, on the macOS build; logs and fixtures in `build_port/net_check/`:
 
-**Linear scans that grow with the world:**
-- `Ped_List::FindClosestPedInViewCone_4713C0` and the threat-list add/remove (peds × threats);
-- `PedManager::PedById` (a full ped-pool scan, ~20 callers);
-- `CarManager::DoGetNearestCarFromCoord_444FC0`;
-- `Object::PoolTake_522360`;
-- the sorted per-row lists of the sprite grid.
+- **arena**: 24 bot matches of 5 minutes on the server alone (three maps, every brain, random seeds): none may crash.
+- **live**: a server and two bot clients at 100 ms, jitter and 2% loss, police on, with the grid check: no crash and
+  no `net: CHECK` line. Prints the corrections and the comparison check's worst fields.
+- **churn**: two bot clients stay while two others join and leave four times (stopped by SIGTERM and Ctrl-C): no
+  crash, no `CHECK` line, nobody turned away as the server being full.
+- **maps**: a three-map rotation, 15 s rounds at 4 times the clock: both clients follow every change.
+- **rounds**: two bot clients ready up, play a round, vote for map 2 and follow the server there (a check of where
+  the players stand: on the new map); a third joins during the results and plays round 2.
+- **soak**: a server and three bot clients at 10 times the clock: 10 minutes of play in 60 s, no crash.
+- **replay**: recorded sessions replayed against their saved logs: the same, or nondeterministic (a second replay
+  differs too), else a regression. `--record` makes new ones; `--save` takes the current build's logs as the baseline
+  after an intended change.
 
-### Benchmark: no cleanup, 4× pools (`build_port/mac_x4`)
+**The comparison check** (`GTA2_NET_COMPARE=1` on a client): on each snapshot, with the game restored to the
+snapshot's tick and before it is applied, every mapped entity is captured here and compared with the server's, field
+by field; every 300 frames the fields that differ most and how often. A measure, not a pass: remote players and AI
+peds are predicted, so they differ.
 
-```
-OUT=build_port/mac_x4 Scripts/port/build_mac.sh -DGTA2_POOL_SCALE=4
-GTA2_BIN=../../mac_x4/gta2_port GTA2_SIMBENCH_FILL=600 GTA2_SIMBENCH_FILL_PEDS=1 GTA2_LOCKSTEP=1 \
-  GTA2_DEBUG=skip_audio GTA2_HEADLESS=1 GTA2_SIMBENCH=300:3000 Scripts/port/run_mac.sh wil
-```
+**The divergence check** (`GTA2_NET_DIVERGE=<server tick>[:<ticks>]`, 300 by default): the client reconciles up to that
+tick, then runs on its own; each later snapshot is compared with its save of that tick, and at the end it prints per
+field after how many ticks each entity first differed. Below the fields, `GTA2_NET_DUMPPEDS` dumps every ped's bytes
+on both ends (`Scripts/port/net/ped_diff.py` names the members that differ) and `GTA2_NET_RANDLOG` each `rand()` draw's
+caller (`Scripts/port/net/rand_diff.py` counts them per tick and function).
 
-The fill moves the player's camera to random places in Wil and calls the game's own traffic and ped spawners there, with the caps, the cooldown and the pacing lifted. The traffic gets drivers, AI and routes. During the 3,000 measured ticks nothing is cleaned up: car recycling is off, and every ped's off-screen counter is reset each tick.
+### Environment variables
 
-| Cars | Peds | Tick | Cars per car | Peds per ped |
-|---|---|---|---|---|
-| 52 (start, idle) | 2 | 8 µs | | |
-| 149 | 58 | 72 µs | 0.34 µs | 0.30 µs |
-| 299 | 136 | 181 µs | 0.43 µs | 0.34 µs |
-| 599 | 329 | 447 µs | 0.52 µs | 0.38 µs |
-| 983 | 661 | **891 µs** | 0.61 µs | 0.42 µs |
+The session's (`session/env.cpp`) and the engine's (`engine/dev/checks.cpp`), all off by default:
 
-- **Scaling.** Slightly worse than linear: about n^1.3 for cars, n^1.2 for peds. The grid lists and the full-pool scans above are the likely causes.
-- **Budget.** A thousand cars and 660 peds take 2.7% of the 33 ms tick. Extrapolated, 4,000 cars and 2,600 peds are ~5 ms, still a sixth of the budget. Cars and peds are 99% of the cost.
-- **The client's rollback copy** with 4× pools is 9.3 MB; save 0.16 ms, restore 0.16 ms. The rollback is still exact.
-- **Grid links.** At 983 cars, 11,000 of 16,384 links were free. The pools at 4× hold ~1,200 cars (the fill stopped at the ped pool: every traffic car needs a driver).
-
-The bench also found a 64-bit bug that crashed the Mac build whenever a ped touched a save point. `CarThreadTriggerCmd` (script data) had `ScriptThread* field_8_thread` in a union, so its later fields moved on 64-bit; it is now `PTR32`. Separately, attract mode with `skip_audio` desyncs the demo replay, probably because sound code shares the game's `rand()` (not confirmed). Use the `wil` start for benches.
-
-### Effort
-
-| Step | Work | Size |
+| Variable | Where | Effect |
 |---|---|---|
-| 1. Pool sizes | Done for the benchmark (`GTA2_POOL`). For the server: a size per pool rather than one factor, and check the size-dependent fields above (`PedRefTable`, the `char_type` counters, `PedListNode`). | small |
-| 2. Allocation that can fail | `Allocate` returns NULL on an empty pool, in port builds; the ~40 unchecked callers (listed by the survey) back off; or simpler, **eviction under pressure** before every spawn, so the pools never fill. | medium: one central check plus eviction, or many call sites |
-| 3. Cleanup policy | One `Port/cleanup` module with the categories (traffic, ambient peds, wrecks, corpses, emergency, dropped items, burning objects), their "unseen for" timers, caps and oldest-first eviction, and the `sv_cleanup` modes. Hooks in the five decision points: car despawn, ped off-screen removal, corpse removal, object kind caps, traffic/ped caps. Each hook is a `#if GTA2_PORT` call at the existing check. | medium |
-| 4. Spawn by density per player | Replace the global 16-car and 50-dummy budgets with "cars/peds within N tiles of this camera" (the sprite grid can count them); keep the cooldown and pacing per player. | small to medium |
-| 5. Interest areas | The server's "seen" predicate becomes "inside any player's interest area", the same areas the snapshots use; `IsSpriteInPlayerBounds_4B9950` is the one place. | small |
-| 6. Hot spots | Only if the larger maps need it: `PedById` by a table, the threat list as a set, `DoGetNearestCarFromCoord` through the grid. | small each |
-| 7. Check | The bench in `GTA2_SIMBENCH_FILL` form per mode, plus a long soak (an hour of game time at 16 bot players), watching the pool headroom that `Counts` prints. | small |
+| `GTA2_NET_RECORD=<file>\|off` | client | the recording's file (default `recordings/session-<n>.rec`) |
+| `GTA2_NET_BLEND=<0..1>` | client | how far a correction is blended in each frame (0.2; 1: at once) |
+| `GTA2_NET_COMPARE=1` | client | the comparison check |
+| `GTA2_NET_DIVERGE=<tick>[:<ticks>]` | client | the divergence check |
+| `GTA2_NET_CORRLOG=1` | client | corrections over half a block or 45 degrees |
+| `GTA2_NET_JERKLOG=1\|2` | both | how jerky what is shown moves (2: and each jump) |
+| `GTA2_NET_MARKER=1` | client | a square where the newest snapshot has the local player |
+| `GTA2_NET_INPUTLOG=1`, `_ANIMLOG=1`, `_SELFLOG=1`, `_SOUNDLOG=1` | client | the input, the other players' animation, the local player around a death, the sound's channels |
+| `GTA2_NET_CARDIFF=1` | client | where the prediction of the local player's car differs from the snapshot |
+| `GTA2_NET_GANGLOG=1` | both | player 0's group every 15 ticks, by the server's ids |
+| `GTA2_NET_PICKUPLOG=1` | client | pickups made and removed |
+| `GTA2_NET_CHECKGRID=1` | both | the collision grid checked after every move (`net: CHECK` lines) |
+| `GTA2_NET_DUMPPEDS=<file>[:<from>:<to>]`, `GTA2_NET_RANDLOG=<file>:<from>:<to>` | both | the divergence check's dumps |
+| `GTA2_NET_NAVDUMP=<file.pgm>` | client bot | the bots' map as a picture |
+| `GTA2_NET_TESTKILL=<tick>:<victim>:<killer>,...` | server | a player killed by the game's own death |
+| `GTA2_NET_TESTPOWERUP=<tick>:<player>:<power-up>,...` | server | a power-up (12: an instant gang) |
+| `GTA2_NET_TESTCAR=<tick>:<player>:<model>,...` | server | a car beside the player (11: a bus) |
+| `GTA2_NET_TESTARM=<weapon>:<ammo>`, `GTA2_NET_TESTWANTED=<points>` | server | every player kept armed, or at least that wanted (600: a star) |
+| `GTA2_NET_SAY=<frame>:<command>;...` | client | commands sent at those frames |
+| `GTA2_SIMBENCH=...`, `GTA2_SIMBENCH_FILL=<cars>`, `GTA2_NETEVAL=...`, `GTA2_OFFLINE_MP=...` | game | the measurements below (`Port/net/eval`, `engine/netplay.cpp`) |
 
-Steps 1, 3 and 5 make the modes work; 2 makes "none" safe; 4 keeps the traffic around players right when the rest of the map is full.
+`GTA2_SPEED`, `GTA2_HEADLESS` and the port's others: `docs/port.md`, "Environment variables".
 
-## Evaluations (before building)
+## Measurements behind the design
 
-Measured with `Port/headless/neteval.cpp` (`GTA2_NETEVAL=heap,rand,churn,diverge,single,explode`), the offline multiplayer experiment in `Port/net/engine/netplay.cpp` (`GTA2_OFFLINE_MP`) and an ENet probe. The probe was built in a scratch folder and is not in the repo. None of this is netcode; it is what the design rests on. Native macOS, busy attract demo or Wil unless noted.
+Native macOS, arm64, `-O2`. `GTA2_SIMBENCH=<flip>[:<ticks>]` (`Port/net/eval/sim_bench.cpp`) runs that many ticks back
+to back without drawing, prints the cost of each service, the world's size and its save and restore time, and checks
+the rollback; `GTA2_SIMBENCH_FILL=<cars>` fills the map with traffic first, by the game's own spawner with its caps
+lifted. `GTA2_NETEVAL` (`Port/net/eval/neteval.cpp`) measures what changes per tick (`churn`), how fast two runs
+drift apart (`diverge`), the random draws (`rand`), sound in a rollback (`soundrollback`), a projectile advanced on its
+own (`single`) and rollback in scenes with explosions (`explode`).
 
-### 1. What changes per tick (schema and snapshot size)
-
-`GTA2_NETEVAL=churn` diffs every pool's slots tick by tick for 300 ticks. The fields come from clang's 64-bit record layouts (`-fdump-record-layouts`).
-
-| Type | Size | Fields that change | Bytes changed per changed entity per tick | The biggest changers |
-|---|---|---|---|---|
-| Car | 264 | 25 | 1.1 | `last_seen_timer` (local), doors, flash phase, damage |
-| CarPhysics | 192 | 33 | 6.2 | `cm1`/`cp1` (centre of mass points), velocity, linear velocity, gas, skids |
-| CarAI | 144 | 19 | 1.6 | timers (local), angle, speed |
-| Ped | 776 | 65 | 5.0 | position (`field_1AC_cam`), off-screen counter (local), move target, facing and aim angles |
-| Char | 208 | 42 | 3.7 | animation frame and timers, velocity, rotation, state |
-| Sprite | 80 | 14 | 2.7 | position, sprite index (animation), z, rotation |
-| Object | 64 | 10 | 15.6, but only 1.3 objects per tick | sprite, `pAny`, id: objects mostly appear and disappear |
-| Player | 2400 | 7 | 68 | the two cameras, scores |
-
-- **Mostly a few dynamic values.** The state that really moves per entity: position (x, y, z), rotation, the car's two physics points and two velocities, gas, the ped's targets and angles, the char's velocity, state and animation frame.
-- **A large share is local counters** that the client can run itself: off-screen counters, last-seen timers, animation frame timers, AI tick counters.
-- **Peds have the widest state** (65 fields in 5 minutes). That is the part of the schema to build first and check with the comparison oracle.
-- **Snapshot estimate.** The whole demo world changes ~830 bytes per tick, ~680 without the local counters, at byte granularity. The interest area holds about half of it: 15 cars, 35 peds on foot, 72 objects in 26 × 20 blocks. With an id and field mask per entity, that is **~500 bytes per snapshot at 30 Hz**, ~600 at 15 Hz. It fits the 1372-byte cap (see 7) with room to spare. Busier scenes rely on the priority cut.
-- **Join estimate.** A full state of the interest area, from the fields that ever change plus the static ones (model, remap, type), is **~20 KB** uncompressed: about 15 reliable messages of 1372 bytes.
-
-### 2. How fast a client's own simulation drifts (`diverge`)
-
-The same state is simulated K ticks twice, the second time with a different random stream: the worst case for a client simulating other entities itself.
-
-| After | Cars off by > 1 px | Cars > 1 block | Peds off by > 1 px | Peds > 1/4 block | Peds > 1 block |
-|---|---|---|---|---|---|
-| 1 tick (33 ms) | 0% | 0% | 0% | 0% | 0% |
-| 3 ticks (100 ms) | 0% | 0% | 0-3% | 0% | 0% |
-| 10 ticks (330 ms) | 0-0.3% | 0% | 0-17% | 0-1% | 0% |
-| 30 ticks (1 s) | 0.3-1.2% | 0-0.3% | 46% | 5-14% | 0% |
-| 90 ticks (3 s) | 2-5% | 2-4% | 55-70% | 18-42% | 0-27% |
-
-The local player doesn't drift at all (its input doesn't depend on randomness).
-- **Running the full sim on the client works well** for everything at normal latencies. Within 330 ms nearly everything stays within a pixel. So `cl_remote_mode extrap` (dead reckoning by the game's own sim) is a good default.
-- **Interpolation matters mostly for peds** past ~300 ms and for lossy links.
-- **Traffic cars hardly drift** (they follow the road arrows).
-
-### 3. Random numbers and sound (`rand`, `heap`)
-
-- **The sim draws 67 random numbers per tick; the sound service draws 5,** all from the game's one `rand()` stream. The 5 come from `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, which refills a 5-entry table every service. A client that mutes sound during a resim draws differently and mispredicts on its own. **Sound needs its own random stream** (a port-only `rand` for that table).
-- **During ticks, only sound uses the heap:** `sound_obj::AddSoundObject_419FA0` allocates a `SoundPosEntry` per sound entity, and `FreeSoundEntry_41A090` frees it. The sim itself allocates nothing.
-- **Sound breaks a rollback.** A restore brings back pointers to sound entries that were freed in between: heap corruption, and one "pointer being freed was not allocated" abort. Network games clear `skip_audio` (`ClearDebugFlags_4DB170`), so they hit it. **The client keeps sound out of the rollback set:** the sound entities as a separate, non-rolled-back layer, or a pool instead of `new`.
-
-### 4. A headless multiplayer game (`GTA2_OFFLINE_MP`)
-
-The offline stubs in `Port/netplay_offline.cpp` answer "connected, N players, settings, map" instead of "no network". With `-N` (`GTA2_ARGS=-N`) the game then starts a real network game without DirectPlay. This is the path a server takes.
-
-```
-GTA2_ARGS=-N GTA2_OFFLINE_MP=6:wil-multi.gmp:wil.sty:downtown-6P.scr:1 GTA2_LOCKSTEP=1 GTA2_HEADLESS=1 \
-  GTA2_SIMBENCH=300:3000 Scripts/port/run_mac.sh
-```
-
-- **Every multiplayer map boots with 6 players and spawns all six peds** at the script's positions, in all three game types: downtown, industrial, res, mp1, mp2 and mp5, frags/points/tag.
-- **Tick cost** with six idle players: 16-31 µs, against 13 µs for one.
-- **Stability.** 100 s of game time on every map; one abort (`res-6p`) was the sound rollback problem of 3.
-- **No debug path exists:** `-N` is the only trigger, and the stubs decide the rest (about nine return values, listed by the survey below).
-- **Above 6 players.** About 45-50 sites depend on the count:
-  - 13-14 arrays sized `MAX_PLAYERS`, several in structures with size asserts;
-  - about 13 loops, and 7 literal `6`s (for example `Car::ManageDespawning_442310`, winmain's give-up loops, `gCurrentInputsBufferSize = 48`);
-  - a `u8` disconnect bitmask (a cap of 8);
-  - the six-row results screen;
-  - colours from the ped remap (7 palettes);
-  - the 17-slot HUD arrow pool;
-  - **the number of `PLAYER_PED` declarations in each map's script** (6 in all of them): more players need more spawn points.
-
-  Nothing in the save data depends on it. A compile-time cap (say 32, port only) plus a runtime count covers most of it. That leaves fewer than 10 places with real logic: the bitmask, the results screen, colours, spawn points, and the two `< 6` loops.
-
-**Game rules.** Network games change some rules, all gated by `bStartNetworkGame_7081F0`:
-- police at most wanted level 1;
-- gangs use their basic weapon;
-- car weapons cost a tenth;
-- all car models spawn;
-- endless respawns at the Restart zones, round robin (`Player::RespawnPlayer_5670B0`).
-
-**Scoring.** Frags go through `GameSession::UpdateFrags_4C5CD0`, points through `PlayerScoreTracker::AddCash_592620` and tag through `TagGame`. The win check (frag or points limit) is at `PlayerScoreTracker.cpp:226`. Team modes and CTF don't exist and would be new mode code.
-
-### 5. Advancing one object on its own (`single`)
-
-Rockets are fired around the player. Then each moving object is advanced either with one full tick or with its own `Object::PoolUpdate` only, from the same state.
-- `PoolUpdate` alone gives the full tick's position for **15 of 15** moving objects, and the same bytes for 14.
-- So **projectile rewind-on-spawn can advance a projectile by itself.** Collisions with other entities then test against their current, not their rewound, positions unless a position history is added.
-
-The run afterwards ran the collision grid's link pool (4096) dry in `Particle_4C::UpdateObjectBeamLink_state_38_538AC0`, from the rockets' explosions and fire. That's one more reason the grid pools need headroom.
-
-### 6. Rollback in harder scenes (`explode`)
-
-| Scene | Result |
+| | |
 |---|---|
-| Wil, Industrial, Residential, each with 250 traffic cars, 100-126 peds and 20 explosions (fire, debris) | Rollback of 30 ticks exact in all three (with `skip_audio`) |
-| Six-player network games | Exact, except while sound is on (see 3) |
+| The world | 1,763 blocks, 3.5 MB; save 0.06 ms, restore 0.055 ms; the rollback reproduces it exactly |
+| A busy tick (73 cars, 39 peds, 176 objects) | about 30 µs: cars 52%, peds 28%, objects 13%; a 10-tick resimulation is about 2% of a 60 fps frame |
+| A full map (4 times the pools, 983 cars, 661 peds, no cleanup) | 0.9 ms a tick, slightly worse than linear; the collision grid's link pool is the first to run out |
+| What changes per tick | about 680 bytes for the whole attract demo's world, half of it in one interest area: about 500 bytes a snapshot |
+| Drift of a client's own simulation | within 330 ms nearly everything stays within a pixel; peds drift first (46% by a pixel after 1 s) |
+| ENet 1.3.18 | the largest unfragmented unreliable packet at `mtu` 1400 is 1372 bytes; a larger one goes as reliable fragments (seconds of delay under loss) |
+| A link at 150 ms, ±10 ms, 5% loss | commands 2 ticks early, none late; about 9 ticks resimulated per snapshot; the local player's prediction error 0.00 blocks |
 
-Residential was down to **46 free collision-grid links** with 250 cars: the grid pools are the first limit for a fuller world. Not covered yet: a running mission, cranes and trains moving during the window.
+## Open
 
-### 7. ENet 1.3.18 (probe in a scratch folder, not in the repo)
+- **Other players at car doors**: most of the remaining large corrections of other players are with the server at a
+  door. Next: a remote player the server has at a door put there at once instead of walked there by its predicted
+  inputs, measured on recorded sessions (`GTA2_NET_COMPARE`, `GTA2_NET_JERKLOG`).
+- **Cops** differ the most of any entity (health from hits a client predicts, animation and aim on foot): corrected by
+  the next snapshot; worth a look if players see cops jump.
+- **An instant gang doesn't board a bus** (on the server, so the game's own AI): the members walk to the doors and stay
+  there; normal cars work. To check against a traffic bus, then the original under wine.
+- **The game's results page** instead of the overlay's text; a minimum of players that counts people only.
+- **More than 6 players**: about 45-50 places in the game depend on the count (arrays sized `MAX_PLAYERS`, a few
+  literal 6s, a `u8` bitmask, the results screen, colours, the scripts' six `PLAYER_PED`s). A port-only cap with a
+  runtime count covers most; spawn points beyond the scripts' from the restart zones.
+- **Modes** beyond the game's frags, points and tag (team deathmatch, CTF) as a mode module, reusing the game's assets.
+- **Hardening**: the data files' hashes and the protocol version checked at the join, rate limits, fuzzed input.
+- **Tick rates above 30 Hz** would need every per-tick constant and timer scaled (a project of its own, port-only).
+- **Whole-map simulation**: a server could keep everything everywhere, with a cleanup policy as a server setting
+  (none, wrecks only, the game's own). Every cleanup and spawn decision goes through `Game::IsSpriteInPlayerBounds_4B9950`
+  and five places (car despawn, ped and corpse removal, the object caps, the traffic and ped caps); the pools would
+  need allocation that can fail or eviction before every spawn.
 
-**Limits and overhead:**
-- The largest unreliable packet that is not fragmented at `host->mtu = 1400` is **1372 bytes**: `mtu - 28`, because ENet fragments anything above `mtu - 4 - 24`. With CRC32 it is 1368.
-- ENet's MTU is the UDP payload: 1400 is a 1428-byte IPv4 packet. If 1400 has to be the IP packet, use `mtu = 1372` (payload 1344).
-- A snapshot-only datagram has 10 bytes of overhead. ENet bundles up to 32 commands per datagram (acks, reliables, pings).
-- There is no MTU setter: set `host->mtu` on both sides before connecting. The default is 1392, and there is no path-MTU discovery.
+### Setting up games (plan)
 
-**Larger packets:** an unreliable packet larger than the cap is **sent as reliable fragments** by default. Under 10% loss its latency went to a 207 ms median, 637 ms p95 and 820 ms max; at 2000 bytes, seconds, and the backlog grows. It also delays the separate reliable channel (p95 1.4 s), since all reliable data shares one send window. `ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT` keeps the fragments unreliable: losing one loses the whole packet.
+Both ways players know: **classic** (start a server, open a port, tell friends the address) and **central** (a master
+server lists them). One list, several views: the master's list is a public JSON API that a web app, the game and
+anyone's tools read.
 
-**Measured delivery** (proxy with 50 ms each way, ±10 ms jitter, reordering):
-- Capped snapshots arrive as often as the raw loss allows (97% at 5% loss, 89-92% at 10%), with p95 latency 60 ms.
-- Reliable 40-byte messages: median 52 ms. p95 85-180 ms at 5% loss and 190-310 ms at 10%. Worst case 0.5 s at 5% and 2 s at 10%, because the retransmit timeout doubles and there is no fast retransmit.
-
-**Throttle, RTT and compression:**
-- The packet throttle drops unreliable packets when the RTT rises: 3-8 of 900 snapshots in an RTT spike. Turning it off with `enet_peer_throttle_configure(peer, 5000, 32, 0)` lost nothing.
-- `peer->roundTripTime` is accurate (99-107 ms against 101-107 ms) but excludes send-queue delay.
-- The built-in range coder compresses whole datagrams after the fragmentation decision, so it doesn't raise the cap. Compress our own payload instead.
-
-**Settings for us:**
-- `host->mtu = 1400`; 2 channels; throttle off; `enet_host_flush` after each tick.
-- Channel 0 only unreliable (snapshots capped at **1372**, inputs with the last few commands repeated).
-- Channel 1 only reliable (events, join state in messages under the cap, chat).
-- Never mix reliable sends into the snapshot channel: at 10% loss that cost 6% of the snapshots and up to 450 ms of delay.
-- Lower `timeoutMaximum` (`enet_peer_timeout`).
-
-### 8. Bots
-
-**Bots are players whose inputs come from a bot brain.** That's the same path a network client's inputs take (`Player::SetInputs_565740`, then `ControlInputs_566820` and `Service_5687F0`). Everything downstream stays the game's own: frags, respawn, car entry, weapons.
-
-The ped objective AI can't simply drive a player ped:
-- walking reads `Player::field_8_turn_speed`/`field_C_move_direction` for `player_2` peds (`Char::state_0_54DDF0`);
-- `HandleControls_5668D0` clears attacking unless the attack bit is set;
-- `Car::AssignDriver_4406E0` removes the car AI when a player drives;
-- about 70 `player_2` checks in `Ped.cpp`/`char.cpp`.
-
-A bot brain can reuse:
-- auto-aim (`Ped::ComputeAimAngle_45C9D0`);
-- target searches (`FindBestTargetPed_466BF0`, the threat list);
-- the nearest car (`GetNearestFrontVehicle_445210`);
-- road routes (`RouteFinder::StartRoute_58A190`);
-- foot paths (`PathFinder::ComputePath_554AB0`, tied to a ped id);
-- the steering logic in `Ped::UpdateMovementTowardsTarget_4672E0` and `GotoAreaInCar_468310`, as a reference.
-
-The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attack, enter/exit, handbrake/jump, the weapons, three specials, plus a key code for chat.
-
-### What this changes in the plan
-
-- **Size cap:** 1372 bytes of payload, not ~1350 (`host->mtu = 1400`, throttle off, snapshots and reliables on separate channels).
-- **Sound:** its own random stream, and out of the rollback set, before client-side prediction.
-- **Remote entities:** extrapolation by the full sim as the default, interpolation as the option for peds and lossy links.
-- **The server's start path:** the offline stubs (as in the experiment) plus a port-only player cap. Spawn points beyond a script's `PLAYER_PED`s become part of the mode module.
-- **Projectiles:** rewind-on-spawn is possible with `Object::PoolUpdate` per object.
-- **The schema starts with peds:** the widest state.
-- **Collision-grid pools need headroom** on the server, even at 1×.
-
-## Wire format
-
-- **Encoding.** Little-endian bitstream, never `memcpy` of structs. Clients are 32- and 64-bit, and struct padding differs between them.
-- **Snapshot packet** (server to client, unreliable, ENet channel 0):
-
-  ```
-  server tick S | delta-from tick B (0 = from scratch) | client's last applied cmd tick | input buffer health
-  entity count, then per entity: NetId (+ type on create) | flags (create / destroy / update)
-                                 | field mask | changed fields at their bit widths
-  per-player block, events since the acked tick (unreliable copies of reliable ones, for latency)
-  ```
-
-- **Size cap.** Payload of at most **1372 bytes** with `host->mtu = 1400`, the largest unreliable packet ENet 1.3.18 doesn't fragment (see "Evaluations", 7). An oversized unreliable packet would silently go out as reliable fragments.
-- **Per-entity acked baselines** instead of Q3's single acked snapshot:
-  - For each client, the server remembers which entity states each sent snapshot carried.
-  - When the client acks that snapshot, those states become the client's baselines for those entities.
-  - This way a snapshot can carry **part of the world**: entities that don't fit within the budget are sent later, measured against their own baseline. An entity is never stuck on a lost packet.
-- **Priority.** Entities are sorted by a priority accumulator: distance to the player's camera, the player's own ped and car first, and the time since the entity was last sent.
-- **Join.** A full state of the interest area goes over the **reliable** channel (ENet fragments it, a few KB). Deltas then build on it.
-- **Budget check.** 16 players and a busy interest area of about 40 cars, 60 peds and 30 objects:
-  - A typical moving entity's delta is position plus angle (72 bits) plus mask and id, roughly 12 bytes.
-  - 130 entities, half moving, is about 800 bytes, which fits.
-  - In worse scenes the priority cut takes over. The N0 measurement replaces these guesses.
-- **Input packet** (client to server, unreliable):
-  - Carries the last **N commands** (tick and input bits), so losing one packet loses no input.
-  - Carries the client's ack of the last snapshot.
-  - Inputs are 32 bits, as `Network_InputData` uses now. Each command after the first is delta-coded against the one before.
-- **Reliable channel** (ENet channel 1): chat, join/leave, map change, script HUD events, kick, and the data-hash handshake.
-
-## Timing
-
-- **Clock sync.** The client estimates the server tick from RTT (an EWMA, as openGTA2 does). It runs its own commands at `server tick + RTT/2 + jitter margin`, so that they reach the server just before they're needed.
-- **Server input buffer.** The server reports per client how full that client's input buffer is. The client nudges its tick rate by ±2-5% to keep the buffer at 1-2 ticks.
-- **Late commands.** If a command arrives late, the server repeats the player's last input and says so. The client's resim then corrects for it.
-- **Remote view.** The modes are cvars, so the feel can be tuned:
-  - `cl_interp_ms`: render remote entities this far in the past, between two snapshots. This sets only the draw position, never sim state.
-  - `cl_remote_mode`: `interp` | `extrap` (show the predicted world as is: dead reckoning) | `interp_extrap` (interpolate, extrapolate when snapshots are late, up to `cl_extrap_max_ms`).
-  - The local player and its car always come from prediction.
-- **Projectiles.** Selected by `sv_projectile_mode`:
-  - `rewind`: the server spawns the projectile at the shooter's view time (the command's tick minus their interp), then fast-forwards it to the current tick. Rewind is capped by `sv_maxunlag_ms`, as in CS. During the fast-forward, hits are tested against a ~1 s history of entity positions.
-  - `predict`: the client spawns a cosmetic projectile at once, tagged with `(command tick, slot)`. The server spawns the real one when the command is processed. The snapshot names the command tick, so the client swaps its cosmetic copy for the real one or deletes it.
-
-## Milestones (each one verifiable on its own)
-
-| | Goal | Check |
-|---|---|---|
-| N0 | **Done**, see "N0 measurements". | Whole-world rollback holds: ~30 µs per busy tick, 0.06 ms save/restore, rollback exact. |
-| S | **Done.** Sound fixes before prediction: its own random stream for `sound_obj::GenerateIntegerRandomNumberTable_41BA90`, and sound kept out of the rollback set (`SoundPosEntry` from a pool, or the sound layer not rolled back at all). | The rollback check exact with sound on; the sim's draws unchanged by muting sound. |
-| N1 | Local rollback, no network: save every tick; every K ticks restore K back and resimulate with the same inputs. | The state log hash after resim equals the hash without it. Proves the restore set is complete and the resim is deterministic within one binary. |
-| N2 | **Done** (see "Status"; the comparison check is `GTA2_NET_COMPARE`, "Checks"). One binary with `--server`/`--connect`; the server starts its network game through the offline stubs (as `GTA2_OFFLINE_MP` does); ENet loopback, full snapshots (no delta), schema v1 starting with peds, client mode (spawners off). | The correctness check: client world at S equals server world at S, apart from `IGNORE`. |
-| N3 | **Done**: delta snapshots against each client's acked baseline, cut by priority at the packet's budget ("Filling a snapshot"); `--lag/--jitter/--loss`. Bitstream, field masks, per-entity acked baselines, priority and the 1372-byte cap, link conditioner (delay, jitter, loss, reordering in our ENet wrapper). | Bytes per snapshot logged; same check as N2 at 10% loss. |
-| N4 | **Done.** CSP: tick-stamped commands with redundancy, the server input buffer, clock sync, rollback on snapshot. | Prediction error 0 for the local player when it moves alone, at 150 ms RTT. |
-| N5 | Remote view modes, projectile modes, lag compensation history. | Tuning by playing; switch with cvars. |
-| N6 | Game flow: the mode module (frags first: join, spawn, score, win), join and leave mid-game, chat, script events, map change; a port-only player cap with a runtime count (~45-50 sites, see "Evaluations", 4); spawn points from restart zones and the per-map file; the network-game rules as server settings; new remaps if simple; the simple bot (`--bot`). | 16 bot clients on one map for an hour. |
-| N8 | Later modes: points, tag (both in the game), team deathmatch and CTF (new, with the game's assets). | One bot match per mode. |
-| N7 | Hardening: the server trusts only inputs; rate limits; protocol version; timeouts. | Fuzz input packets. |
-| N9 | Setting up games: hosting from the menu, the public address and UPnP, a password, the data check, then a master server (heartbeat, list, join links) with the web app, and the in-game parts a website can't do (LAN games, real pings). See "Setting up games". | A friend joins a game hosted from the menu over the internet with no router setup; a server registered with the master shows in the web app's list and its join link starts the game in it. |
-| N10 | **Done** (see "Round flow"; the game's results page instead of the overlay's text is left). Round flow: a warmup until enough players are in or all are ready, a countdown, the round, a results screen with a vote for the next map; votes to start, change map and kick, as the server allows. See "Round flow". | Bots ready up, play a round to its limit, vote and go on to the voted map; a player joining in the countdown or during the results gets in at the next round's start. |
-
-## Setting up games (plan, N9)
-
-Both ways to play, as the generation who played GTA2 knows them: **classic** (start a server, open a port, tell
-friends the IP) and **central** (GameSpy: anyone runs a server, registers it, and people find and join it). The
-web app with the lobby and the server registration is built separately; the master server's list is its public
-JSON API, read by the website, the game and anyone's tools alike: **one list, several views**, never two lists.
-
-### Classic
-
-1. **Host from the menu** (the frontend's step 2): a "Host game" page (map, players, police, time limit; the
-   frontend's unused page 13 or 15) starts a server in the background and joins it.
-2. **The address to share**: while hosting, the LAN address and the public one with the port ("friends join
-   81.2.3.4:27920"); the public address from a small endpoint of the web app.
-3. **Port forwarding by itself**: UPnP / NAT-PMP (`miniupnpc`, plain C) asks the router to open the UDP port; the page
-   says whether it did ("Port open", or "open UDP 27920 on your router").
-4. **A reachability test**: the web app sends one UDP packet to the server's public address and the server says
-   whether it arrived: the "is it my firewall?" question answered.
-5. **LAN games**: servers answer a broadcast UDP query; the network page lists them.
-6. **Join links**: `gta2://host:port` starts the game with `--connect` (a URL handler on Windows, `Info.plist` on
-   macOS, a `.desktop` file on Linux).
-7. **A password**, optional, for private games.
-8. **`server.ini`**: name, password, map rotation, message of the day, instead of a long command line.
-
-### Central (the master server)
-
-9. **Heartbeat**: a server with `--public` (or "list publicly" on the host page) sends name, map, players, version and
-   port every 30-60 s over UDP from its game socket, so the master sees its address after NAT; quiet servers drop off.
-10. **Verified listings**: before listing, the master sends a challenge to the address it saw and waits for the answer
-    (no dead or fake entries).
-11. **The list**: in the web app first (below); the game reads the same list with one UDP query to the master (no TLS
-    library in the game; the web app serves JSON to the website).
-12. **NAT punch-through**: the master introduces a client and a server, both send at once; ENet is UDP between two
-    addresses, so it works through most home NATs (not symmetric or carrier-grade ones).
-13. **A relay** as the last resort, shown as such ("via relay"): a snapshot is under 1 KB at 30 Hz, about 30 KB/s
-    per player, so a small VPS carries a fair number of games. Built when the reachability test (4) shows how many
-    hosts need it.
-14. **Accounts optional**: a name is enough to play; accounts in the web app add reserved names, friends, stats.
-
-### Games that work
-
-15. **The data check**: at join the client sends its protocol version and a hash of `data/` (maps, scripts,
-    styles); the server turns a mismatch away with a clear message, and the lists grey such servers out. Before
-    strangers play together (also N7).
-16. **Missing maps** downloaded from the server or the web app.
-17. **Updates**: the web app knows the current version; the game says when it is behind.
-18. **Quick play**: one button, the best-filled compatible server with a low ping.
-
-### Running servers for others
-
-19. **A server package**: the static Linux server (no GL, SDL's dummy drivers; a function table instead of `dlsym`
-    on itself for the renderer's functions, musl or numeric addresses only), a Dockerfile, a `server.ini` example.
-20. **Admin**: kick, ban, change map, say; a remote admin password, or the web app for registered servers.
-21. **Stats with the heartbeat** (players over time, maps, uptime) for the web app's server pages.
-
-### The list on the website and in the game
-
-Not redundant as long as both read the master: each does what the other can't. Only the game measures a real
-ping (a browser has no UDP), sees LAN games, and stays in full screen with a gamepad; only the website reaches
-people who haven't installed the game, gives a server a link to share, and holds accounts, stats and admin. GameSpy
-began as an external browser launching the game (GameSpy Arcade); Quake 3 and Unreal Tournament put it in the game.
-So:
-
-1. The web app's list with join links (6): little game work, and it works the day the master does.
-2. In the game, what the website can't do: LAN games (5), recent servers and favourites, and the **info query**:
-   every server answers a small "info" packet (name, map, players, version) on its game port outside ENet
-   (`ENetHost::intercept` sees non-ENet packets), so the game pings servers itself. The LAN broadcast is the same
-   query.
-3. The full in-game list later, if players ask: by then a small view on the master's list and the info query.
-
-**The in-game list, when built**, reuses the frontend, as the network page does (`Port/net/menu.cpp`): a page has
-10 options and 15 text elements, so 8 server rows, "Refresh" and "Back"; the list lives in our code and the 8
-visible entries are written into the rows each frame (scrolling at the edges); one label per row (name, map,
-players, ping), or columns as text elements or `DrawTextScaled_5D77A0` through a small frontend draw hook (the
-font is proportional); the status element shows the selected server's details. Labels are 50 characters,
-uppercase, in the font's characters. Selecting a row fills in the address and runs the join there is. Dear ImGui
-(the decomp's debug overlay, not in the port build) would give a real table quicker, but looks like a debug tool
-on a 1999 game and needs a GL backend: kept for admin and debug tools.
-
-### Order
-
-1. Classic hosting in the game: the host page, the address to share, UPnP, the password (1, 2, 3, 7).
-2. The data check (15).
-3. The master: heartbeat with verification, the web app's list, join links (9, 10, 11, 6).
-4. In the game: the info query, LAN games, recent servers (5).
-5. Connectivity: punch-through, then the relay, as the reachability test shows the need (4, 12, 13).
-6. Admin, quick play, the server package, the in-game list if asked for.
-
-## Round flow (N10)
-
-A match's rounds run in phases on the server (`session/round_flow.cpp`, `RoundFlow`), shown on every client. The flow is
-plain data in and actions out, with no game types: the server gives it each slot (in the game, a person or an arena
-bot, its name and score) every tick and each player's command, and carries out what it asks for (`engine::NewRound`,
-a map change, a kick, notices). Its state (`core/round_state.hpp`, `RoundState`: the phase and its seconds left, the
-minimum of players, the ready flags, an open vote and its tally, each player's map choice) goes to the clients in the
-world entity, as the round's number and seconds left did; a client draws it (`Client::ShowRound`, a text panel over
-the frame: `engine::SetNetPanel`). Protocol 16: `kMsgCommand` (client to server, a line of text) and `kMsgNotice`
-(server to client, a line shown for 4 s), the maps a vote chooses from in the welcome.
-
-**Phases**
-
-1. **Warmup**: the map played as usual, the scores reset when the round starts. It ends when `--minplayers` (2) are in
-   and all of them are ready, or `--warmup` (60) seconds after the minimum was reached (0: only when all are ready).
-   A lone player waits here. The panel: "Waiting for players: 1 of 2", or "1 of 2 ready, the round starts in 45 s
-   anyway", and "Press F1 when ready".
-2. **Countdown**: 5 s, "Round 2 starts in 3". Too few left: back to the warmup. At its end everyone is put at a
-   restart zone with no score, weapons or power-ups (`engine::NewRound`), "Round 2: go".
-3. **Round**: to the frag limit (points in a points game; the tag game: time only) or the time limit; the leader wins
-   (a tie at the time limit: a draw), "60 seconds left" and "10 seconds left" as before.
-4. **Results** (`--results`, 15 s): the winner, everyone's frags and deaths, and the maps with their votes. A player
-   chooses with `/map N` (or a name). Then the most chosen map; a tie or no votes: the rotation's next (`--maps`), else
-   the same map. A new map starts with its countdown (the warmup if too few are in).
-
-**Ready**: F1 in the warmup, or `/ready` in chat (F10); it toggles, and every client is told "TIM is ready (2 of 3)".
-Arena bots are always ready.
-
-**Votes**: `/start` (end the warmup), `/map N` (change now; in a round it ends without a winner), `/kick NAME` (out,
-and the name turned away for 10 minutes). One at a time, open 20 s, decided by a majority of the people in the game
-(those who don't vote count as no; the caller votes yes): Y or N while it shows, or `/yes`, `/no`. The panel: "Vote:
-kick TIM   2 yes, 0 no   14 s   Y / N". The server allows what `--votes` lists. A kicked client is told why and goes
-back to the frontend's network page.
-
-**Commands** are chat lines starting with `/`: a client sends its own line as a command when it is typed to its end
-(Enter); F1 and Y / N are commands too. They go to neither the game nor the server's chat while they are commands (F1
-in the warmup, Y / N while a vote is open, not while typing). The maps a vote chooses from: the rotation, else the six
-multiplayer maps the game ships that are in `data/` (with the server's own map if it isn't one of them).
-
-**Off** (`--rounds off`, and by default with `--arena`: bots playing on the server are tests and training): the round
-from the start and the next one at once, the rotation's next map after each, as before the flow.
-
-**Bots** (`--bot`) take part: ready 3 s into the warmup, `/map 2` in the results, yes on any vote but their own kick;
-`GTA2_NET_SAY=<frame>:<command>[;...]` has a client send commands at given frames (tests).
-
-**Checked**: `Port/net/tests/test_rounds.cpp` (in `net_tests.sh`) runs the flow on its own: the warmup waiting and
-ending on ready or its time, the countdown back to the warmup when a player leaves, a win at the frag limit, the
-results' map vote (2 to 1 changes the map, a tie keeps it), votes that pass, fail at their time or are turned away
-(one open already, off on the server), a change-map vote ending a round, the flow off. `net_check.sh rounds`: two bot
-clients ready up, play a 1-minute round (the clock 4 times as fast), vote for map 2 and follow the server there, where
-round 2 starts; a third joins during the results and is in round 2. By hand: a kick vote (2 of 3) put a bot out, its
-client back at the frontend, and a change-map vote in a round took both others to mp5-6p, round 2 there.
-
-Not yet: the game's own six-row results page instead of the overlay's text; a minimum of players that counts only
-people (arena bots count now, for a mixed server).
-
-## From openGTA2 (`openGTA2/network`)
-
-Keep from it:
-- the delta against the acked snapshot with a per-client ring;
-- entities keyed by id;
-- the 1400-byte MTU constant;
-- the RTT EWMA;
-- the handshake retries with the map and tickrate in the server info.
-
-Fix:
-- **Inputs are sent only when they change, and unreliably.** A lost packet leaves a key stuck down, or never pressed. Send the last N commands every packet.
-- **Commands carry no tick.** Without one the client can't reconcile, which is a prerequisite for CSP.
-- **No destroy message.** An entity missing from the delta means "unchanged", so a deleted entity never goes away on the client.
-- **The client merges each delta into its latest state.** The packet doesn't say which baseline it was made against, which breaks once destroys or field masks exist. Put the baseline tick in the header.
-- **No size cap.** The vectors go out however big they get. Cut at the byte budget, by priority.
-- **Structs are sent with `memcpy`.** `ped_state` has padding after its `int16_t id`, and the layout differs between compilers and architectures. Use a bitstream.
-- **Old acks.** An ack more than 127 snapshots old silently uses a ring slot that has been overwritten. Fall back to a full state.
-- **`Server::sendGameState` has `return` instead of `continue`.** One unconnected client stops the sends to every client after it.
-
-## Assumed, and deferred
-
-Assumed:
-- **The server is Linux, 64-bit**, from the port's headless build, and builds on Windows and macOS too. Its floats are SSE rather than x87, which doesn't matter for an authoritative server.
-- **No compatibility with the original game's multiplayer.** The DirectPlay `NetPlay` stays as decompiled, unused in the port.
-
-Wanted, but deferred:
-- a master server and server browser, NAT punch-through or a relay (planned in N9; the frontend page for joining is done);
-- anti-cheat beyond server authority (clients can't set state, only send inputs);
-- protocol versioning for mods (data-file hashes at connect come first: N9's data check, also N7's);
-- better bots;
-- simulation tick rates above 30 Hz (see "Tick rate");
-- cleanup modes other than stock (prepared by the hooks).
+1. **Hosting from the menu**: a "Host game" page that starts a server in the background and joins it; the LAN and
+   public address to share; UPnP / NAT-PMP to open the port, and a reachability test; an optional password;
+   `server.ini` for a server's settings.
+2. **The data check**: the client's protocol version and a hash of `data/` at the join, a mismatch turned away with a
+   clear message.
+3. **The master**: a heartbeat from `--public` servers over their game socket (so the master sees the address after
+   NAT), verified before listing; the web app's list with join links (`gta2://host:port`).
+4. **In the game**: an info query every server answers outside ENet (name, map, players, version: real pings), LAN
+   games by broadcast, recent servers.
+5. **Connectivity**: NAT punch-through through the master, a relay as the last resort.
+6. Admin (kick, ban, map, say), quick play, a server package (a static Linux build, a Dockerfile).

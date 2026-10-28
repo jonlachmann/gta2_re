@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Joining from the frontend"): a network page in the game's frontend. The main menu gets
+// Port/net (docs/netcode.md, "Playing"): a network page in the game's frontend. The main menu gets
 // "Network game" (between options and quit); its page takes a server's address and a name, and joins in the
 // background (NetMenu_Join, NetMenu_Poll: the menu runs on meanwhile). Once the server welcomes us the network game is
 // set up as the command line's --connect does, and the frontend boots it as it boots a level (Booting_Map_2), with

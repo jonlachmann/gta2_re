@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Client"): joins a server, starts the same network game, sends its input every frame
+// Port/net (docs/netcode.md, "The client"): joins a server, starts the same network game, sends its input every frame
 // (repeating the last few commands), and puts the server's snapshots into its game.
 #include "client.hpp"
 #include "env.hpp"
@@ -995,7 +995,7 @@ void net::Client::Step()
     }
 }
 
-// --- The round flow, a client's part (docs/netcode.md, "Round flow") ---
+// --- The round flow, a client's part (docs/netcode.md, "Playing") ---
 
 void net::Client::SendCommand(const std::string& text)
 {

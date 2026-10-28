@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Architecture"): the server. It runs the game, takes the clients' commands and sends each
+// Port/net (docs/netcode.md, "How it works"): the server. It runs the game, takes the clients' commands and sends each
 // client snapshots of what is around it; it runs the round flow (round_flow.hpp).
 #pragma once
 #include "../core/protocol.hpp"

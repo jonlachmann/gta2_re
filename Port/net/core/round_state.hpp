@@ -1,4 +1,4 @@
-// Port/net core (docs/netcode.md, "Round flow"): the state of a match's round as plain numbers. The server's round
+// Port/net core (docs/netcode.md, "Playing"): the state of a match's round as plain numbers. The server's round
 // flow (session/round_flow.cpp) keeps it, the world entity carries it to the clients (engine/world_entity.cpp), and a
 // client shows it. No game types: the session and the engine both use it.
 #pragma once

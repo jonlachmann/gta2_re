@@ -30,7 +30,7 @@ struct SoundPosEntry
     }
 
 #if defined(GTA2_PORT)
-    // Port (docs/netcode.md, milestone S): from a pool in the netcode's rollback set (Port/net/engine/sound_pool.cpp)
+    // Port (docs/netcode.md, "The rollback set"): from a pool in the netcode's rollback set (Port/net/engine/sound_pool.cpp)
     static void* operator new(size_t size);
     static void operator delete(void* p);
 #endif

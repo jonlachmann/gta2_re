@@ -1,5 +1,5 @@
 // Port/net transport over ENet 1.3.18 (Port/net/enet), with the settings the probe found (docs/netcode.md,
-// "Evaluations", 7): mtu 1400, two channels (unreliable and reliable never mixed), no packet throttle, a flush per
+// "Wire format"): mtu 1400, two channels (unreliable and reliable never mixed), no packet throttle, a flush per
 // tick, and unreliable packets capped at kMaxPayload so ENet never fragments them.
 #include "transport.hpp"
 #include "../core/protocol.hpp"

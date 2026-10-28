@@ -1,11 +1,11 @@
 #pragma once
 #include "types.hpp"
 #if defined(GTA2_PORT)
-#include "Port/port_rand_owner.h" // PortRandScope
+#include "Port/rand/owner.hpp" // PortRandScope
 #endif
 
 // A pool's capacity. Port builds with -DGTA2_POOL_SCALE=<k> multiply the entity, sprite and grid pools by k
-// (docs/netcode.md: a server that simulates the whole map); everywhere else it is the original size.
+// (docs/netcode.md, "Open": whole-map simulation); everywhere else it is the original size.
 #if defined(GTA2_PORT) && defined(GTA2_POOL_SCALE)
     #define GTA2_POOL(n) ((n) * GTA2_POOL_SCALE)
 #else

@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Architecture"): what the server (server.hpp) and the client (client.hpp) share. Both run
+// Port/net (docs/netcode.md, "How it works"): what the server (server.hpp) and the client (client.hpp) share. Both run
 // inside the game's network frame (engine::SetFrameHook): after a tick, before drawing.
 #pragma once
 #include "../core/snapshot.hpp"

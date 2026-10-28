@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Server"): the authoritative game. Every frame, after the tick: read the clients, set
+// Port/net (docs/netcode.md, "The server"): the authoritative game. Every frame, after the tick: read the clients, set
 // every player's input for the next tick, and send each client a snapshot of its area as a delta to the newest one
 // it has acknowledged.
 #include "server.hpp"

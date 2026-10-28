@@ -1,4 +1,4 @@
-// Port/net (docs/netcode.md, "Round flow"): a match's rounds, run by the server: a warmup until enough players are in
+// Port/net (docs/netcode.md, "Playing"): a match's rounds, run by the server: a warmup until enough players are in
 // and ready, a countdown, the round to its frag or time limit, the results with a vote for the next map; and the
 // players' votes to start, change map or kick. Plain data in, actions out: it knows nothing of the game (the server
 // turns the actions into engine calls), so it is tested on its own (Port/net/tests/test_rounds.cpp).

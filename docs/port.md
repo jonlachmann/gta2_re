@@ -30,6 +30,7 @@ cmake --preset mac -S Port && cmake --build build_port/mac && ctest --test-dir b
 |---|---|---|
 | `mac` | `build_port/mac/gta2_port` | Xcode's clang, `brew install sdl3 ninja` |
 | `mac-asan` | `build_port/mac_asan/gta2_port`, with AddressSanitizer | as `mac` |
+| `net-tests` | the netcode's unit tests only, with UBSan, in `build_port/net_tests` | a host clang (no SDL3) |
 | `linux64` | `build_port/linux64/gta2_port` (ELF x86-64) | `brew install lld`, a Debian sysroot in `build_port/linux64_sysroot` |
 | `linux32` | `build_port/linux/gta2_port` (ELF i386, x87 floats) | a Debian i386 sysroot in `build_port/linux_sysroot` |
 | `windows` | `build_port/windows/gta2_port.exe`, and in `gl/` the renderer DLLs and `nullvideo.dll` for `10.5.exe` | `brew install mingw-w64` (or `g++-mingw-w64-i686`), SDL3's MinGW package in `build_port/sdl3` (its `i686-w64-mingw32` folder), the install's `binkw32.dll` in `build_port/dlls` |
@@ -120,7 +121,7 @@ To look at a running game: `touch capture_now` in its folder writes the next fra
 | `sdl_dinput.cpp` | DirectInput: an `IDirectInputA` whose keyboard gives SDL key events as DIK events, buffered (`GetDeviceData`, the game) and as a state array (`GetDeviceState`, the frontend); the first SDL gamepad as the joystick |
 | `sdl_miles.cpp` | Miles (`mss32.dll`): the 52 `AIL_*` functions `cSampleManager.cpp` calls, as a software mixer in an SDL3 audio callback, WAV streams via `SDL_LoadWAV` |
 | `registry_ini.{hpp,cpp}` | the registry, on `gta2.ini` |
-| `port_rand.{hpp,cpp}` | `rand`/`srand`: VC6's generator, so replays play the same everywhere |
+| `rand/` | `rand`/`srand`: VC6's generator, so replays play the same everywhere (`rand.cpp`); the network game's owned draws and the sound's and particles' own streams (`owner.hpp`, `sound.hpp`, `particle.cpp`) |
 | `port_globals.{hpp,cpp}` | the registry of the game's globals with their `10.5.exe` addresses (`DEFINE_GLOBAL` registers each), for the state log |
 | `ptr_table.cpp` | 64-bit builds: the 32-bit handles of `PTR32` (`Source/ptr32.hpp`) |
 | `stubs.cpp` | game functions the port leaves out: the ImGui overlay; on non-Windows builds the DirectX and version checks of `winmain.cpp` |
@@ -149,8 +150,9 @@ through `validation.hpp` only):
 | `nullvideo.cpp` | `nullvideo.dll`: a video DLL for `10.5.exe` that draws nothing and runs the state log |
 | `scripted_input.cpp` | `GTA2_PORT_KEYS`, `GTA2_PORT_PAD`: input for tests without a person |
 
-`Port/tests/`: the tests (ctest). `Port/cmake/`: the toolchains. `Scripts/port/`: `run/` (the run scripts),
-`statecheck/` (the state check and its tools), `clang_check.sh` (the compile check of a decomp snapshot). The
+`Port/tests/`: the tests (ctest). `Port/cmake/`: the toolchains. `Port/net/`: the network game (docs/netcode.md,
+"Code layout"). `Scripts/port/`: `run/` (the run scripts), `statecheck/` (the state check and its tools), `net/` (the
+network check and its tools), `bots/` (the bots' trainer), `clang_check.sh` (the compile check of a decomp snapshot). The
 renderer has its own layout (`Renderers/OpenGL/README.md`): `core/` the renderer, `platform/` the GL contexts,
 `dll/` the Windows DLLs, `dev/` its development aids, `tools/` the reference tools, `tests/`.
 
@@ -166,7 +168,7 @@ All under `GTA2_PORT`, VC6-neutral:
 | `winmain.cpp` | the window on SDL3 (`Port/sdl_win32.hpp`); its Windows-only functions are `Port/stubs.cpp`'s elsewhere |
 | `registry.cpp`, `Frontend.cpp`, `NetUi.cpp`, `cSampleManager.cpp`, `winmain.cpp` | the registry on `gta2.ini` (`Port/registry_ini.hpp`) |
 | `Frontend.cpp` | the attract idle time from `gPortAttractIdleMs` (`GTA2_PORT_ATTRACT_MS`) |
-| `rng.cpp`, `sound_obj.cpp` | VC6's `rand` (`Port/port_rand.hpp`) |
+| `rng.cpp`, `sound_obj.cpp` | VC6's `rand` (`Port/rand/rand.hpp`) |
 | `3rdParty/mss.h` | Miles' declarations for the port's mixer |
 | `error.cpp` | the logs through C stdio (they only wrote through VC6's iostreams), and `gFile_67C530` is `gErrorLog_67C530`, as in `10.5.exe` |
 | `crt_stubs.cpp` | `malloc` zeroes, like `10.5.exe`'s fresh heap pages, so the state log can compare pools |
