@@ -1129,19 +1129,24 @@ void net::Client::ShowRound()
 {
     const engine::Round& r = engine::CurrentRound();
     const Snapshot& snap = mReceived[mLatestTick % kRing];
-    struct Row
-    {
-        int slot, frags, deaths;
-    };
-    std::vector<Row> rows;
+    std::vector<ScoreRow> rows;
     for (const EntityState& e : snap.entities)
     {
         int p = 0;
         uint32_t b = 0;
         if (engine::PlayerOf(e, &p, &b))
         {
-            rows.push_back(Row{p, engine::PlayerFrags(e), engine::PlayerDeaths(e)});
+            rows.push_back(ScoreRow{p, engine::PlayerFrags(e), engine::PlayerDeaths(e)});
         }
+    }
+    // The results show the scores the round ended with: the game goes on meanwhile, and so do the frags
+    if (r.phase == kPhaseResults && mResultsRows.empty())
+    {
+        mResultsRows = rows;
+    }
+    else if (r.phase != kPhaseResults)
+    {
+        mResultsRows.clear();
     }
     auto bits = [](unsigned v) {
         int n = 0;
@@ -1159,7 +1164,7 @@ void net::Client::ShowRound()
     else if (r.phase == kPhaseWarmup)
     {
         int ready = 0;
-        for (const Row& row : rows)
+        for (const ScoreRow& row : rows)
         {
             ready += row.slot < kRoundSlots && (r.ready >> row.slot & 1);
         }
@@ -1182,11 +1187,12 @@ void net::Client::ShowRound()
     else if (r.phase == kPhaseResults)
     {
         lines.push_back("Round " + std::to_string(r.number - 1) + ": " + (r.winner ? engine::PlayerName(r.winner - 1) + " wins" : std::string("a draw")));
-        std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.frags > b.frags; });
-        for (const Row& row : rows)
+        std::vector<ScoreRow> board = mResultsRows;
+        std::sort(board.begin(), board.end(), [](const ScoreRow& a, const ScoreRow& b) { return a.frags > b.frags; });
+        for (const ScoreRow& row : board)
         {
-            lines.push_back(engine::PlayerName(row.slot) + ":  " + std::to_string(row.frags) + " frags,  " + std::to_string(row.deaths) +
-                            (row.deaths == 1 ? " death" : " deaths"));
+            lines.push_back(engine::PlayerName(row.slot) + ":  " + std::to_string(row.frags) + (row.frags == 1 ? " frag,  " : " frags,  ") +
+                            std::to_string(row.deaths) + (row.deaths == 1 ? " death" : " deaths"));
         }
         lines.push_back("");
         std::string maps;

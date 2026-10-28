@@ -342,6 +342,11 @@ class Client
     uint32_t mMarkFrame = 0;
     bool mLeavePrompt = false, mLeft = false; // Escape's prompt (ChooseInput), and its yes: left the server
     std::vector<std::string> mMaps; // what a map vote chooses from (the welcome's)
+    struct ScoreRow
+    {
+        int slot, frags, deaths;
+    };
+    std::vector<ScoreRow> mResultsRows; // the scores as the results began
     bool mWasChatting = false;
     uint32_t mRoundKeyFrame = 0, mBotSentFrame = 0;
     std::string mLeftWhy;
