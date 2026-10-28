@@ -26,6 +26,9 @@
 #include "root_sound.hpp"
 #include "TextTable.hpp"
 #include "winmain.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_hooks.hpp"
+#endif
 
 DEFINE_GLOBAL(Hud*, gHud_2B00_706620, 0x706620);
 DEFINE_GLOBAL(s16, gDebugFont_706600, 0x706600);
@@ -1471,7 +1474,11 @@ bool Hud_ChatInput::HandleChatInputKey_5D15E0(s32 action, Player* pPlayer)
         }
         else
         {
+#if defined(GTA2_PORT)
+            const u16 char_value = gText_0x14_704DFC->RemapExtendedChar_5B58D0(Port_TypedChar(action));
+#else
             const u16 char_value = gText_0x14_704DFC->RemapExtendedChar_5B58D0(gKeybrd_0x204_6F52F4->GetKey_4D5F40(action));
+#endif
             if (char_value)
             {
                 if (pPlayer->field_838_chat_text_idx < 79)

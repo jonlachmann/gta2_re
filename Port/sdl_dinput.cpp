@@ -28,6 +28,7 @@ int gStickX, gStickY, gDpadX, gDpadY; // -1000..1000
 int gLastX, gLastY; // what the game was last told
 const GUID kPadGuid = {0x47544132, 0x5044, 0x0001, {'S', 'D', 'L', '3', 'P', 'A', 'D', 0}};
 unsigned char gKeyState[256]; // immediate state (GetDeviceState, the frontend)
+u16 gTypedChar[256]; // the character each key last typed, in the keyboard's layout with its shift (Port_TypedChar)
 DWORD gSequence;
 
 void AddKeyEvent(DWORD dik, bool down, DWORD time)
@@ -479,10 +480,24 @@ void OnKeyEvent(const SDL_Event& e)
     const DWORD dik = e.key.repeat ? 0 : ToDik(e.key.scancode);
     if (dik)
     {
+        if (e.type == SDL_EVENT_KEY_DOWN)
+        {
+            SDL_Keycode c = SDL_GetKeyFromScancode(e.key.scancode, e.key.mod, false);
+            if (c >= 'a' && c <= 'z')
+            {
+                c -= 'a' - 'A'; // the game's tables type capitals
+            }
+            gTypedChar[dik & 0xFF] = c > ' ' && c < 256 && c != SDLK_DELETE ? (u16)c : 0;
+        }
         AddKeyEvent(dik, e.type == SDL_EVENT_KEY_DOWN, (DWORD)SDL_GetTicks());
     }
 }
 } // namespace
+
+u16 Port_TypedChar(s32 dik)
+{
+    return gTypedChar[dik & 0xFF];
+}
 
 // Called with every SDL event the window loop sees (sdl_win32.cpp).
 void Port_DInputOnEvent(const SDL_Event& e)

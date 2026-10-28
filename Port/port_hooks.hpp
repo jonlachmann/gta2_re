@@ -7,6 +7,9 @@
 
 // DirectInput on SDL3 (Port/sdl_dinput.cpp), for input.cpp and InputRecorder_67F8B0.cpp
 HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE hinst, DWORD dwVersion, struct IDirectInputA** ppDI, struct IUnknown* punkOuter);
+// The character a key's last press typed, in the system's keyboard layout with shift (Latin-1, 0 none), for the chat
+// line (Hud.cpp): the game's tables (data/keyboard) are per key without shift, so a '/' behind shift never came
+u16 Port_TypedChar(s32 dik);
 
 namespace crt
 {
