@@ -1,5 +1,6 @@
 // Port/net: the session's GTA2_NET_* switches (env.hpp), read once.
 #include "env.hpp"
+#include <stdio.h>
 #include <stdlib.h>
 
 const net::SessionEnv& net::Env()
