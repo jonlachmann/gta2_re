@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the native macOS build (Scripts/port/build_mac.sh, docs/port.md) in build_port/mac/game, a copy of the install.
+# Run the native macOS build (cmake --preset mac -S Port, docs/port.md) in build_port/mac/game, a copy of the install.
 # usage: GTA2_DIR=~/Games/GTA2 Scripts/port/run_mac.sh [map]     map: e.g. wil (boots straight into data/wil.gmp)
 #   env as run_wine.sh: GTA2_DEBUG, GTA2_LOCKSTEP, GTA2_INI_EXTRA, GTA2GL_CAPTURE, GTA2_HEADLESS, GTA2_STATELOG...
 set -e

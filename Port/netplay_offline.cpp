@@ -1,8 +1,7 @@
-// Port (docs/port.md): non-Windows builds have no network game; DirectPlay (NetPlay.cpp) and the lobby
+// Port (docs/port.md): the port has no network game of the original's; DirectPlay (NetPlay.cpp) and the lobby
 // (NetUi.cpp) are left out. The game only uses them when a network game was started
 // (bStartNetworkGame_7081F0), which can't happen here; this single-player NetPlay answers the few calls
 // the rest of the game makes: no players, no messages.
-#if !defined(_WIN32)
 #include "Source/NetPlay.hpp"
 #include "Source/NetUi.hpp"
 #include <string.h>
@@ -106,4 +105,3 @@ char_type* NetUi::GetMapScrName_51CA90()
 {
     return GetMapName_51CA10();
 }
-#endif

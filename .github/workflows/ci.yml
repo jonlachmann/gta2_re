@@ -241,15 +241,18 @@ jobs:
 
     - name: Build and test
       run: |
-        make -C Renderers/OpenGL
-        make -C Renderers/OpenGL test
+        cmake -S Renderers/OpenGL -B build_gl -DCMAKE_TOOLCHAIN_FILE=$PWD/Port/cmake/mingw-gcc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake --build build_gl
+        cmake -S Renderers/OpenGL -B build_gl_test
+        cmake --build build_gl_test
+        ctest --test-dir build_gl_test --output-on-failure
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: opengl_renderer_dlls
         path: |
-          Renderers/OpenGL/build/glrender.dll
-          Renderers/OpenGL/build/glvideo.dll
+          build_gl/glrender.dll
+          build_gl/glvideo.dll
           Renderers/OpenGL/gta2gl.ini.example
         retention-days: 7

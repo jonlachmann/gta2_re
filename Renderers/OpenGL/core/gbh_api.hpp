@@ -1,4 +1,4 @@
-// gbh_* entry points. In the Windows render DLL they are exported undecorated (see Makefile).
+// gbh_* entry points. In the Windows render DLL they are exported undecorated (--kill-at, CMakeLists.txt).
 #pragma once
 
 #include "gta2_api.hpp"

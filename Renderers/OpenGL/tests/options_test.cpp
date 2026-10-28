@@ -1,4 +1,4 @@
-// Native (Linux) test of core/options.cpp: ini parsing, env overrides, reload on change, A/B toggle.
+// Native test of core/options.cpp: ini parsing, env overrides, reload on change, A/B toggle.
 #include "../core/options.hpp"
 #include <stdio.h>
 #include <stdlib.h>

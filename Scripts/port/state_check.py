@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Port check (docs/port.md, M2): the attract replay in gta2_port.exe and 10.5.exe, headless and sped up,
-# compared by their state logs (Port/headless/state_log.cpp, Scripts/port/state_diff.py). Padding is masked
+# compared by their state logs (Port/validation/state_log.cpp, Scripts/port/state_diff.py). Padding is masked
 # (Scripts/port/layout.py). When a chunk becomes different, both run again with a dump of those entries and
 # the differing fields are printed by name.
 # usage: state_check.py [until game frame, default 600]
@@ -10,7 +10,7 @@
 #   TRACE_FIELDS=<regex>: only those fields of *this
 #   TRACE=<a>-<b>:<name>,..  instead: both exes with a call trace of those functions (names or address parts as in
 #       og_function_data_v105.csv) at game frames a..b, then the first call or return that differs
-# Needs build_port/gta2_port.exe (Scripts/port/build.sh) and build_port/gl_clang (build_gl_dlls_clang.sh).
+# Needs the Windows build (cmake --preset windows -S Port): build_port/windows/gta2_port.exe and its gl/ DLLs.
 import difflib, os, re, subprocess, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import layout
@@ -21,7 +21,7 @@ UNTIL = int(sys.argv[1]) if len(sys.argv) > 1 else 600
 ATTRACT_MS = os.environ.get('ATTRACT_MS', '3000')
 BASE = dict(os.environ, WINEPREFIX=os.path.join(ROOT, 'build_port', 'wineprefix'), WINEDEBUG='-all',
             GTA2_SPEED=os.environ.get('SPEED', '10'), GTA2_PORT_ATTRACT_MS=ATTRACT_MS, GTA2_LOCKSTEP='1')
-# what state_diff.py ignores is no pointer target in the logs either (Port/headless/state_log.cpp)
+# what state_diff.py ignores is no pointer target in the logs either (Port/validation/state_log.cpp)
 BASE['GTA2_STATELOG_IGNORE'] = os.environ.get('IGNORE', 'gTileVerts_|gSound_obj_66F680|gSampManager_6FFF00')
 if os.environ.get('DUMP'):
     BASE['GTA2_STATELOG_DUMP'] = os.environ['DUMP']
@@ -72,7 +72,7 @@ def run(exe, log, extra, until=None):
     print('%s: up to game frame %d in %.0f s%s' % (os.path.basename(exe), last_frame(path), time.time() - start, note))
     return path
 
-EXE = os.path.join(ROOT, 'build_port', 'gta2_port.exe')
+EXE = os.path.join(ROOT, 'build_port', 'windows', 'gta2_port.exe')
 TABLE = os.path.join(GAME, 'state_port.log.globals')
 MASK = os.path.join(GAME, 'state.mask')
 if not os.path.exists(TABLE) or os.path.getmtime(TABLE) < os.path.getmtime(EXE):
@@ -248,7 +248,7 @@ def trace():
     print('call trace: the same (10.5 %d lines, port %d)' % (len(a), len(b)))
     sys.exit(0)
 
-og_extra = {'RENDERER': os.path.join(ROOT, 'build_port', 'gl_clang'), 'GTA2_VIDEO_DLL': 'nullvideo.dll',
+og_extra = {'RENDERER': os.path.join(ROOT, 'build_port', 'windows', 'gl'), 'GTA2_VIDEO_DLL': 'nullvideo.dll',
             'GTA2_STATELOG_TABLE': 'state_port.log.globals'}
 subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'patch_attract.py'),
                 os.path.join(ROOT, 'Scripts', 'bin_comp', '10.5.exe'), os.path.join(GAME, 'gta2_105_attract.exe'), ATTRACT_MS], check=True)

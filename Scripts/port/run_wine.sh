@@ -1,14 +1,15 @@
 #!/bin/bash
-# Run build_port/gta2_port.exe (or the exe given) under wine with PR #837's OpenGL renderer (docs/port.md).
+# Run the Windows build, build_port/windows/gta2_port.exe (or the exe given), under wine with the OpenGL renderer
+# (docs/port.md).
 # usage: GTA2_DIR=~/Games/GTA2 Scripts/port/run_wine.sh [exe] [map]
 #   gta2_port.exe has the renderer linked in; for another exe (10.5.exe) set RENDERER to the folder with
-#   glvideo.dll and glrender.dll (make -C Renderers/OpenGL).
+#   glvideo.dll and glrender.dll (build_port/windows/gl, or Renderers/OpenGL/CMakeLists.txt).
 #   map: e.g. wil (boots straight into data/wil.gmp, skipping the frontend); none = the frontend
 # Frames: set GTA2GL_CAPTURE=<dir>,<frame>,... (dir relative to the game folder), see the renderer README.
 set -e
 cd "$(dirname "$0")/../.."
 OUT=$PWD/build_port
-EXE=${1:-$OUT/gta2_port.exe}
+EXE=${1:-$OUT/windows/gta2_port.exe}
 MAP=$2
 export WINEPREFIX=${WINEPREFIX:-$OUT/wineprefix} WINEDEBUG=${WINEDEBUG:--all}
 : "${GTA2_DIR:?set GTA2_DIR to a GTA2 install (data/, mss32.dll, binkw32.dll)}"
@@ -17,7 +18,7 @@ if [ ! -d "$GAME/data" ]; then
   mkdir -p "$GAME" && cp -R "$GTA2_DIR"/. "$GAME"/
   wineboot -i > /dev/null 2>&1
 fi
-VIDEO_DLL=${GTA2_VIDEO_DLL:-glvideo.dll} # nullvideo.dll: headless (Port/headless/nullvideo.cpp)
+VIDEO_DLL=${GTA2_VIDEO_DLL:-glvideo.dll} # nullvideo.dll: draws nothing (Port/validation/nullvideo.cpp)
 [ -n "$RENDERER" ] && cp "$RENDERER/$VIDEO_DLL" "$RENDERER"/glrender.dll "$GAME"/
 [ "$(cd "$(dirname "$EXE")" && pwd)" = "$GAME" ] || cp "$EXE" "$GAME"/
 [ -f "$(dirname "$EXE")/SDL3.dll" ] && [ "$(cd "$(dirname "$EXE")" && pwd)" != "$GAME" ] && cp "$(dirname "$EXE")/SDL3.dll" "$GAME"/

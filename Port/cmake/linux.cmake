@@ -1,0 +1,20 @@
+# The port's Linux build (docs/port.md, "Building"), cross-compiled with clang and linked with lld against a Debian
+# sysroot (GTA2_LINUX_SYSROOT) with libc6-dev, libstdc++-14-dev, libgcc-14-dev, libsdl3-dev, libgl-dev and libegl-dev.
+# GTA2_LINUX_ARCH x86_64 (64-bit, as the macOS build) or i686 (32-bit with x87 floats, as the Windows build).
+set(CMAKE_SYSTEM_NAME Linux)
+if(NOT GTA2_LINUX_ARCH)
+  set(GTA2_LINUX_ARCH x86_64)
+endif()
+set(CMAKE_SYSTEM_PROCESSOR ${GTA2_LINUX_ARCH})
+set(CMAKE_SYSROOT ${GTA2_LINUX_SYSROOT})
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES GTA2_LINUX_ARCH GTA2_LINUX_SYSROOT)
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_C_COMPILER_TARGET ${GTA2_LINUX_ARCH}-linux-gnu)
+set(CMAKE_CXX_COMPILER_TARGET ${GTA2_LINUX_ARCH}-linux-gnu)
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
