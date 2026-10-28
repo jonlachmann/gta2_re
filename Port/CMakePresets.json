@@ -24,6 +24,17 @@
       }
     },
     {
+      "name": "net-tests",
+      "inherits": "base",
+      "displayName": "The netcode's tests only, with UBSan (no game, no SDL3)",
+      "binaryDir": "${sourceDir}/../build_port/net_tests",
+      "cacheVariables": {
+        "GTA2_GAME": "OFF",
+        "CMAKE_CXX_FLAGS": "-fsanitize=undefined -fno-sanitize-recover=undefined",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=undefined"
+      }
+    },
+    {
       "name": "linux64",
       "inherits": "base",
       "displayName": "Linux x86_64, cross-compiled (a Debian sysroot)",
