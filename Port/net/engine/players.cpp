@@ -328,7 +328,23 @@ void net::engine::ApplyWorld(const EntityState& w)
 {
     gpRng_67AB34->field_0_rng = w.f[kWorldCycle];
     gPortZoneRoundRobin = (short)w.f[kWorldZoneTurn];
-    CurrentRound() = Round{w.f[kWorldRound], w.f[kWorldWinner], w.f[kWorldSecondsLeft]};
+    Round& r = CurrentRound();
+    r.number = w.f[kWorldRound];
+    r.winner = w.f[kWorldWinner];
+    r.secondsLeft = w.f[kWorldSecondsLeft];
+    r.phase = (uint8_t)w.f[kWorldPhase];
+    r.phaseLeft = w.f[kWorldPhaseLeft];
+    r.minPlayers = (uint8_t)w.f[kWorldMinPlayers];
+    r.ready = (uint8_t)w.f[kWorldReady];
+    r.voteKind = (uint8_t)w.f[kWorldVote];
+    r.voteArg = (uint8_t)w.f[kWorldVoteArg];
+    r.voteYes = (uint8_t)w.f[kWorldVoteYes];
+    r.voteNo = (uint8_t)w.f[kWorldVoteNo];
+    r.voteLeft = (uint8_t)w.f[kWorldVoteLeft];
+    for (int i = 0; i < kRoundSlots; i++)
+    {
+        r.mapChoice[i] = (uint8_t)w.f[kWorldMapChoice + i];
+    }
     // The tag game's "it" is the server's, made the game's way (its weapons off, the arrow, "you're it")
     Player* it = GetPlayer(w.f[kWorldIt] - 1);
     if (it && it != gTagGame_6F8450.field_0_fugitive && gTagGame_6F8450.IsTagGame_434B20())

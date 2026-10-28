@@ -490,6 +490,7 @@ namespace
 {
 wchar_t gAnnouncement[128];
 long long gAnnouncementUntilMs;
+std::vector<std::vector<wchar_t>> gPanel; // SetNetPanel's lines, widened
 long long NowMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -502,6 +503,16 @@ void net::engine::ShowHudMessage(const char* text)
 {
     Widen(text, gAnnouncement, sizeof(gAnnouncement) / sizeof(gAnnouncement[0]));
     gAnnouncementUntilMs = NowMs() + 4000;
+}
+
+void net::engine::SetNetPanel(const std::vector<std::string>& lines)
+{
+    gPanel.resize(lines.size());
+    for (size_t i = 0; i < lines.size(); i++)
+    {
+        gPanel[i].assign(lines[i].size() + 1, 0);
+        Widen(lines[i], gPanel[i].data(), gPanel[i].size());
+    }
 }
 
 void net::engine::SetNetStatus(const std::string& corner, const std::string& centre)
@@ -524,9 +535,22 @@ void net::engine::DrawOverlay()
     {
         DrawTextScaled_5D77A0(gStatusCorner, w - 8 - Frontend::GetMaxTextWidth_5D8990(gStatusCorner, gStyleTextFont_703BAA), h - 24, gStyleTextFont_703BAA);
     }
+    // The panel near the top (the HUD's score and wanted level are above it), the announcement under it
+    const s32 kLine = 16;
+    s32 panelY = 56;
+    for (const std::vector<wchar_t>& line : gPanel)
+    {
+        if (line[0])
+        {
+            DrawTextScaled_5D77A0(line.data(), (w - Frontend::GetMaxTextWidth_5D8990(const_cast<wchar_t*>(line.data()), gStyleTextFont_703BAA)) / 2, panelY,
+                                  gStyleTextFont_703BAA);
+        }
+        panelY += kLine;
+    }
     if (gAnnouncement[0] && NowMs() < gAnnouncementUntilMs)
     {
-        DrawTextScaled_5D77A0(gAnnouncement, (w - Frontend::GetMaxTextWidth_5D8990(gAnnouncement, gStyleTextFont_703BAA)) / 2, h / 4, gStyleTextFont_703BAA);
+        const s32 ay = gPanel.empty() ? h / 4 : (panelY + 8 > h / 4 ? panelY + 8 : h / 4);
+        DrawTextScaled_5D77A0(gAnnouncement, (w - Frontend::GetMaxTextWidth_5D8990(gAnnouncement, gStyleTextFont_703BAA)) / 2, ay, gStyleTextFont_703BAA);
     }
     if (gStatusCentre[0])
     {

@@ -212,6 +212,20 @@ void net::engine::Capture(Snapshot& out)
     w.f[kWorldRound] = CurrentRound().number;
     w.f[kWorldWinner] = CurrentRound().winner;
     w.f[kWorldSecondsLeft] = CurrentRound().secondsLeft;
+    const Round& r = CurrentRound();
+    w.f[kWorldPhase] = r.phase;
+    w.f[kWorldPhaseLeft] = r.phaseLeft < 1023 ? r.phaseLeft : 1023;
+    w.f[kWorldMinPlayers] = r.minPlayers;
+    w.f[kWorldReady] = r.ready;
+    w.f[kWorldVote] = r.voteKind;
+    w.f[kWorldVoteArg] = r.voteArg;
+    w.f[kWorldVoteYes] = r.voteYes;
+    w.f[kWorldVoteNo] = r.voteNo;
+    w.f[kWorldVoteLeft] = r.voteLeft;
+    for (int i = 0; i < kRoundSlots; i++)
+    {
+        w.f[kWorldMapChoice + i] = r.mapChoice[i];
+    }
     w.f[kWorldGame] = GameGeneration() & 0xFFFF;
     w.f[kWorldRand] = (int32_t)PortRandState();
     w.f[kWorldSeed] = (int32_t)PortRandSeed();

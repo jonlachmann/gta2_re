@@ -61,6 +61,17 @@ net::Schema BuildSchema()
     world.fields.push_back(FieldDesc{"game", 16, false});
     world.fields.push_back(FieldDesc{"seed", 32, false}); // kWorldSeed
     world.fields.push_back(FieldDesc{"lights", 16, false}); // kWorldLights: phase 4 bits, timer 8, the cars' light state 4
+    // The round flow (core/round_state.hpp): kWorldPhase ..
+    world.fields.push_back(FieldDesc{"phase", 2, false});
+    world.fields.push_back(FieldDesc{"phase_left", 10, false});
+    world.fields.push_back(FieldDesc{"min_players", 4, false});
+    world.fields.push_back(FieldDesc{"ready", 8, false});
+    world.fields.push_back(FieldDesc{"vote", 2, false});
+    world.fields.push_back(FieldDesc{"vote_arg", 8, false});
+    world.fields.push_back(FieldDesc{"vote_yes", 8, false});
+    world.fields.push_back(FieldDesc{"vote_no", 8, false});
+    world.fields.push_back(FieldDesc{"vote_left", 7, false});
+    AppendNumbered(world.fields, "map_choice", net::kRoundSlots, 4);
     net::EntityType object = {"object", {{"x", 22, false}, {"y", 22, false}, {"z", 17, false}, {"rot", 11, false}, {"model", 9, false}, {"idx", 8, false},
                                          {"age", 6, false}}};
     s.types.push_back(player); // kEntityPlayer

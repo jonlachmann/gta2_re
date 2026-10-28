@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Code layout"): what the session sees of the game. Plain types only: the decomp's
 // types stay inside engine/, so the session and modes don't move when the decomp does.
 #pragma once
+#include "../core/round_state.hpp"
 #include "../core/snapshot.hpp"
 #include <stdint.h>
 #include <string>
@@ -139,15 +140,12 @@ void PutLocalChat(const LocalChat& chat);
 // --- Rounds (rounds.cpp, N6): the frag and time limits are the netcode's (the game gets none it would end on), a
 // round that reaches one starts the next on the same map. The server keeps the round; snapshots carry it ---
 
-struct Round
-{
-    int number = 1;
-    int winner = 0; // the last round's: player index + 1, 0 none (a draw, or no round over yet)
-    int secondsLeft = 0; // of this one, 0: no time limit
-};
+typedef RoundState Round; // the round's phase, votes and limits (session/round_flow.cpp keeps a server's)
 Round& CurrentRound();
 void NewRound(); // every slot in the game respawned with no score, weapons or power-ups
 void ShowHudMessage(const char* text); // a line over the frame for a few seconds (debug.cpp, with the status lines)
+// Lines drawn over the frame until changed, centred near the top (the round's warmup, votes, results; debug.cpp)
+void SetNetPanel(const std::vector<std::string>& lines);
 // The next map: the game ends after <pauseTicks> and the next starts at once on it, without the frontend
 // (winmain.cpp, gPortNextNetworkGame); KeepMapChange every frame until then. GameGeneration counts the games, for
 // the session to start over when it changes

@@ -67,6 +67,16 @@ enum WorldField
     kWorldGame, // the server's game since its start (GameGeneration): a client takes only its current one's
     kWorldSeed, // the seed of the entities' own random draws (Port/port_rand_owner.h)
     kWorldLights, // the traffic lights (one phase for all, TrafficLights): the phase, its timer, the cars' light state
+    kWorldPhase, // the round flow's state (core/round_state.hpp), as RoundState has it
+    kWorldPhaseLeft,
+    kWorldMinPlayers,
+    kWorldReady,
+    kWorldVote,
+    kWorldVoteArg,
+    kWorldVoteYes,
+    kWorldVoteNo,
+    kWorldVoteLeft,
+    kWorldMapChoice, // kRoundSlots of them
 };
 enum CarField
 {
