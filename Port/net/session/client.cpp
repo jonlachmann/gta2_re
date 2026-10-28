@@ -33,6 +33,7 @@ void net::CorrectionStats::Print(uint32_t frame, const char* what) const
 void net::Client::Welcomed(const Welcome& welcome, engine::NetworkGame* pGame)
 {
     mSlot = welcome.slot;
+    mMaps = welcome.maps;
     mConnected = true;
     pGame->players = welcome.players;
     pGame->localPlayer = welcome.slot;
@@ -556,6 +557,10 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
         mPromptKeyFrame = mFrame;
         local &= ~(kKeyDown | kKeyBits);
     }
+    if (!mReplay && !mLeavePrompt && (local & kKeyDown))
+    {
+        RoundKeys(local, key);
+    }
     if (Env().inputLog && local != mLastInput)
     {
         printf("net: frame %u, input 0x%x\n", mFrame, local);
@@ -629,6 +634,20 @@ void net::Client::HandleEvents(const std::vector<TransportEvent>& events)
             else if (type == kMsgWelcome && !mConnected && ReadWelcome(r, welcome))
             {
                 Rejoined(welcome);
+            }
+            else if (type == kMsgNotice)
+            {
+                std::string text;
+                if (ReadText(r, text))
+                {
+                    engine::ShowHudMessage(text.c_str());
+                    printf("net: frame %u, notice: %s\n", mFrame, text.c_str());
+                }
+            }
+            else if (type == kMsgReject && mConnected && ReadReject(r, reject))
+            {
+                printf("net: frame %u, the server put us out: %s\n", mFrame, reject.reason.c_str());
+                LeaveToMenu(reject.reason == "kicked by vote" ? "kicked by vote" : "the server put us out");
             }
             else if (type == kMsgReject && !mConnected && ReadReject(r, reject))
             {
@@ -707,17 +726,12 @@ void net::Client::Resync(const Snapshot& snap)
     engine::ApplyScores(snap);
 }
 
-// A new round (its number changed in a snapshot): who won the last one, on the HUD; and when time is short
+// When time is short, on the HUD (who won is the server's notice)
 void net::Client::AnnounceRound()
 {
     const engine::Round& now = engine::CurrentRound();
     std::string line;
-    if (now.number != mRound.number && now.number > 1)
-    {
-        line = now.winner ? engine::PlayerName(now.winner - 1) + " wins round " + std::to_string(now.number - 1)
-                          : "Round " + std::to_string(now.number - 1) + " is a draw";
-    }
-    else if (now.number == mRound.number && now.secondsLeft < mRound.secondsLeft && (now.secondsLeft == 60 || now.secondsLeft == 10))
+    if (now.number == mRound.number && now.secondsLeft < mRound.secondsLeft && (now.secondsLeft == 60 || now.secondsLeft == 10))
     {
         line = std::to_string(now.secondsLeft) + " seconds left";
     }
@@ -1028,6 +1042,9 @@ void net::Client::Frame()
     if (!mReplay)
     {
         ShowStatus();
+        ShowRound();
+        WatchChat();
+        BotRound();
     }
     if (!mConnected)
     {
@@ -1055,3 +1072,188 @@ void net::Client::Frame()
         SendPing();
     }
 }
+
+// --- The round flow, a client's part (docs/netcode.md, "Round flow") ---
+
+void net::Client::SendCommand(const std::string& text)
+{
+    if (mReplay || !mTransport || !mConnected)
+    {
+        return;
+    }
+    BitWriter w;
+    WriteText(w, kMsgCommand, text);
+    mTransport->Send(0, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+    printf("net: frame %u, command %s\n", mFrame, text.c_str());
+}
+
+// F1 in the warmup (ready), Y or N while a vote is open; not while typing a chat line, whose keys they are then. The
+// keys go to neither the game here nor the server
+void net::Client::RoundKeys(uint32_t& local, uint32_t key)
+{
+    const uint32_t kKeyDown = 0x200000, kKeyBits = 0x1FF000, kF1 = 0x3B, kYes = 0x15, kNo = 0x31; // DIK_F1, DIK_Y, DIK_N
+    const engine::Round& round = engine::CurrentRound();
+    const bool ready = key == kF1 && round.phase == kPhaseWarmup && round.minPlayers;
+    const bool vote = (key == kYes || key == kNo) && round.voteKind != kVoteNone;
+    if ((!ready && !vote) || engine::TakeLocalChat().chatting)
+    {
+        return;
+    }
+    if (mFrame != mRoundKeyFrame + 1) // held: once
+    {
+        SendCommand(ready ? "/ready" : key == kYes ? "/yes" : "/no");
+    }
+    mRoundKeyFrame = mFrame;
+    local &= ~(kKeyDown | kKeyBits);
+}
+
+void net::Client::WatchChat()
+{
+    const engine::LocalChat chat = engine::TakeLocalChat();
+    if (mWasChatting && !chat.chatting)
+    {
+        std::string line;
+        for (int i = 0; i < chat.length && i < 79; i++)
+        {
+            line += (char)(chat.text[i] & 0x7F);
+        }
+        if (!line.empty() && line[0] == '/')
+        {
+            SendCommand(line);
+        }
+    }
+    mWasChatting = chat.chatting != 0;
+}
+
+void net::Client::ShowRound()
+{
+    const engine::Round& r = engine::CurrentRound();
+    const Snapshot& snap = mReceived[mLatestTick % kRing];
+    struct Row
+    {
+        int slot, frags, deaths;
+    };
+    std::vector<Row> rows;
+    for (const EntityState& e : snap.entities)
+    {
+        int p = 0;
+        uint32_t b = 0;
+        if (engine::PlayerOf(e, &p, &b))
+        {
+            rows.push_back(Row{p, engine::PlayerFrags(e), engine::PlayerDeaths(e)});
+        }
+    }
+    auto bits = [](unsigned v) {
+        int n = 0;
+        for (; v; v &= v - 1)
+        {
+            n++;
+        }
+        return n;
+    };
+    std::vector<std::string> lines;
+    if (!mConnected || mLeft)
+    {
+        // nothing: the connection's own lines show
+    }
+    else if (r.phase == kPhaseWarmup)
+    {
+        int ready = 0;
+        for (const Row& row : rows)
+        {
+            ready += row.slot < kRoundSlots && (r.ready >> row.slot & 1);
+        }
+        lines.push_back("Warmup");
+        if ((int)rows.size() < r.minPlayers)
+        {
+            lines.push_back("Waiting for players: " + std::to_string(rows.size()) + " of " + std::to_string(r.minPlayers));
+        }
+        else
+        {
+            lines.push_back(std::to_string(ready) + " of " + std::to_string(rows.size()) + " ready" +
+                            (r.phaseLeft ? ", the round starts in " + std::to_string(r.phaseLeft) + " s anyway" : ""));
+        }
+        lines.push_back(mSlot < kRoundSlots && (r.ready >> mSlot & 1) ? "You are ready" : "Press F1 when ready");
+    }
+    else if (r.phase == kPhaseCountdown)
+    {
+        lines.push_back("Round " + std::to_string(r.number) + " starts in " + std::to_string(r.phaseLeft));
+    }
+    else if (r.phase == kPhaseResults)
+    {
+        lines.push_back("Round " + std::to_string(r.number - 1) + ": " + (r.winner ? engine::PlayerName(r.winner - 1) + " wins" : std::string("a draw")));
+        std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.frags > b.frags; });
+        for (const Row& row : rows)
+        {
+            lines.push_back(engine::PlayerName(row.slot) + ":  " + std::to_string(row.frags) + " frags,  " + std::to_string(row.deaths) +
+                            (row.deaths == 1 ? " death" : " deaths"));
+        }
+        lines.push_back("");
+        std::string maps;
+        for (size_t m = 0; m < mMaps.size(); m++)
+        {
+            int votes = 0;
+            for (int i = 0; i < kRoundSlots; i++)
+            {
+                votes += r.mapChoice[i] == m + 1;
+            }
+            maps += (m ? "   " : "") + std::to_string(m + 1) + " " + mMaps[m] + (votes ? " (" + std::to_string(votes) + ")" : "");
+            if (m % 3 == 2 || m + 1 == mMaps.size())
+            {
+                lines.push_back(maps);
+                maps.clear();
+            }
+        }
+        lines.push_back("Next map: type /map N (F10 to chat).  Next in " + std::to_string(r.phaseLeft) + " s");
+    }
+    if (r.voteKind != kVoteNone && mConnected && !mLeft)
+    {
+        const std::string what = r.voteKind == kVoteStart ? "start the round"
+                                 : r.voteKind == kVoteMap ? "change to " + (r.voteArg < mMaps.size() ? mMaps[r.voteArg] : std::string("a map"))
+                                                          : "kick " + engine::PlayerName(r.voteArg);
+        const bool mine = mSlot < kRoundSlots && ((r.voteYes | r.voteNo) >> mSlot & 1);
+        lines.push_back("");
+        lines.push_back("Vote: " + what + "   " + std::to_string(bits(r.voteYes)) + " yes, " + std::to_string(bits(r.voteNo)) + " no   " +
+                        std::to_string(r.voteLeft) + " s" + (mine ? "" : "   Y / N"));
+    }
+    engine::SetNetPanel(lines);
+}
+
+void net::Client::BotRound()
+{
+    // GTA2_NET_SAY=<frame>:<command>[;...]: test commands, at their frame
+    for (const char* k = Env().say; k && *k; k = strchr(k, ';'), k = k ? k + 1 : NULL)
+    {
+        const unsigned frame = (unsigned)atoi(k);
+        const char* colon = strchr(k, ':');
+        const char* end = strchr(k, ';');
+        if (colon && frame == mFrame && mConnected)
+        {
+            SendCommand(std::string(colon + 1, end ? end : colon + 1 + strlen(colon + 1)));
+        }
+    }
+    if (!mBot || !mConnected || mFrame < mBotSentFrame + 90)
+    {
+        return;
+    }
+    const engine::Round& r = engine::CurrentRound();
+    const bool ready = mSlot < kRoundSlots && (r.ready >> mSlot & 1);
+    if (r.phase == kPhaseWarmup && r.minPlayers && !ready)
+    {
+        SendCommand("/ready");
+    }
+    else if (r.phase == kPhaseResults && !mMaps.empty() && mSlot < kRoundSlots && !r.mapChoice[mSlot])
+    {
+        SendCommand(mMaps.size() > 1 ? "/map 2" : "/map 1"); // the same choice for every bot: a test sees the map change
+    }
+    else if (r.voteKind != kVoteNone && mSlot < kRoundSlots && !((r.voteYes | r.voteNo) >> mSlot & 1))
+    {
+        SendCommand(r.voteKind == kVoteKick && r.voteArg == mSlot ? "/no" : "/yes"); // anything but its own kick
+    }
+    else
+    {
+        return;
+    }
+    mBotSentFrame = mFrame;
+}
+

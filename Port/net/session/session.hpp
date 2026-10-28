@@ -8,6 +8,8 @@
 #include "bot.hpp"
 #include "jerk.hpp"
 #include "replay.hpp"
+#include "round_flow.hpp"
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,6 +34,7 @@ struct SessionEnv
     const char* testWanted; // <points>: every player kept at least that wanted on the server
     const char* testPowerUp; // <tick>:<player>:<power-up>[,...]: server test power-ups
     const char* testCar; // <tick>:<player>:<model>[,...]: server test cars beside players (11: a bus)
+    const char* say; // <frame>:<command>[;...]: a client's test commands to the server ("/kick r_b")
 };
 const SessionEnv& Env();
 
@@ -51,6 +54,9 @@ struct ServerConfig
     uint32_t endTick = 0; // the arena's result printed and the server ended at this tick (--ticks; 0: never)
     uint32_t seed = 0; // the game's random state at the start (--seed; 0: the game's own)
     std::vector<MapFiles> maps; // played in turn, a round each (--maps); fewer than two: the rounds stay on the map
+    RoundRules rules; // the round flow (session/round_flow.cpp): warmup, countdown, results, votes
+    std::vector<MapFiles> voteMaps; // what a vote chooses from: the rotation, else every multiplayer map there is
+    int currentMap = 0; // the first map's number in voteMaps
 };
 
 // The server's own bot players (arena.cpp), slots 0..n-1: a brain each, or a trainer's ("remote:<port>[:<teacher>]")
@@ -153,8 +159,13 @@ class Server
     void RunTestHooks();
     void SetNextInputs(const Snapshot& world);
     void FeedJerk(const Snapshot& world);
-    void CheckRound(const Snapshot& world);
-    void NextMap();
+    void RunRounds(const Snapshot& world); // the round flow's tick and what it asks for
+    void OnCommand(int slot, BitReader& r);
+    void Carry(const RoundActions& actions);
+    void ChangeToMap(int map); // voteMaps' <map>, for everyone
+    void Kick(int slot);
+    void Notice(int slot, const std::string& text); // to one client (slot) or all (-1)
+    std::vector<RoundPlayer> RoundPlayers(const Snapshot& world) const;
     void StartOver(); // a new game (the next map): its start, and every client's baseline, again
     void PrintStats(const Snapshot& world);
     void SendSnapshot(int slot, Slot& s, const Snapshot& world);
@@ -172,8 +183,10 @@ class Server
     Stats mStats;
     JerkMeter mJerk;
     Arena mArena;
-    uint32_t mRoundStart = 0; // the tick the round started at
-    size_t mMap = 0; // in mConfig.maps
+    RoundFlow mRounds;
+    std::vector<RoundPlayer> mRoundPlayers; // as of the last frame, for commands between frames
+    std::map<std::string, uint32_t> mBanned; // kicked names, until this tick
+    size_t mMap = 0; // in mConfig.voteMaps
     int mGeneration = 0; // engine::GameGeneration's, of the game running
 };
 
@@ -273,6 +286,12 @@ class Client
     void Rejoined(const Welcome& welcome);
     void LeaveToMenu(const char* why); // off the server, and the game back to the frontend's network page
     void ShowStatus(); // the ping, and an outage, over the frame
+    // The round flow (session/round_flow.cpp), a client's part: its commands to the server, its keys, the panel
+    void SendCommand(const std::string& text);
+    void RoundKeys(uint32_t& local, uint32_t key); // F1 ready in the warmup, Y / N on an open vote
+    void WatchChat(); // a chat line typed to its end that starts with '/' goes as a command
+    void ShowRound(); // the warmup, countdown, results and an open vote over the frame
+    void BotRound(); // a bot readies up and votes
     bool TakePong(const TransportEvent& e); // a pong (the ping's round trip measured): not for the frame
     void SendPing();
 
@@ -322,6 +341,9 @@ class Client
     int mServerGame = -1; // the server's game we take snapshots of: the next after a map change (-1: the first one's)
     uint32_t mMarkFrame = 0;
     bool mLeavePrompt = false, mLeft = false; // Escape's prompt (ChooseInput), and its yes: left the server
+    std::vector<std::string> mMaps; // what a map vote chooses from (the welcome's)
+    bool mWasChatting = false;
+    uint32_t mRoundKeyFrame = 0, mBotSentFrame = 0;
     std::string mLeftWhy;
     uint32_t mPromptKeyFrame = 0;
     std::vector<bool> mWasWasted; // the test log: deaths this game carried out per player

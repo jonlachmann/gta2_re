@@ -215,7 +215,8 @@ const std::string& NetMenu_DefaultName()
 
 int NetMain_Init(std::vector<std::string>& args)
 {
-    bool server = false, window = false; // a server runs headless (GTA2_HEADLESS) unless --window asks to watch it
+    bool server = false, window = false;
+    std::string rounds; // --rounds on|off // a server runs headless (GTA2_HEADLESS) unless --window asks to watch it
     std::string connect, map = "downtown-6p", replay, maps;
     net::ServerConfig sc;
     net::ClientConfig cc;
@@ -244,6 +245,28 @@ int NetMain_Init(std::vector<std::string>& args)
         else if (a == "--map" && more)
         {
             map = args[++i];
+        }
+        else if (a == "--minplayers" && more)
+        {
+            sc.rules.minPlayers = atoi(args[++i].c_str());
+        }
+        else if (a == "--warmup" && more)
+        {
+            sc.rules.warmupSec = atoi(args[++i].c_str());
+        }
+        else if (a == "--results" && more)
+        {
+            sc.rules.resultsSec = atoi(args[++i].c_str());
+        }
+        else if (a == "--votes" && more)
+        {
+            const std::string v = args[++i];
+            sc.rules.votes = (v.find("start") != std::string::npos ? 1u << net::kVoteStart : 0) |
+                             (v.find("map") != std::string::npos ? 1u << net::kVoteMap : 0) | (v.find("kick") != std::string::npos ? 1u << net::kVoteKick : 0);
+        }
+        else if (a == "--rounds" && more)
+        {
+            rounds = args[++i]; // on, off (default: on, off with --arena)
         }
         else if (a == "--maps" && more)
         {
@@ -377,6 +400,38 @@ int NetMain_Init(std::vector<std::string>& args)
         {
             fprintf(stderr, "net: --players 1-6, and --map must name a data/<map>.mmp (%s)\n", map.c_str());
             return -1;
+        }
+        // The round flow (session/round_flow.cpp): on unless the server plays its own bots (an arena: tests, training)
+        sc.rules.enabled = rounds.empty() ? sc.arena.empty() : rounds == "on";
+        sc.rules.gameType = sc.game.gameType;
+        sc.rules.fragLimit = sc.game.fragLimit;
+        sc.rules.timeLimitMin = sc.game.timeLimitMin;
+        sc.rules.ticksPerSecond = 1000 / (sc.game.tickMs > 0 ? sc.game.tickMs : 33);
+        sc.rules.rotation = sc.maps.size() > 1;
+        // What a vote chooses from: the rotation, else the game's multiplayer maps (those there are)
+        sc.voteMaps = sc.maps;
+        if (!sc.rules.rotation)
+        {
+            sc.voteMaps.clear();
+            // ponytail: the six maps the game ships, by name; a map folder's own list when there are custom maps
+            for (const char* name : {"mp1-6p", "mp2-6p", "mp5-6p", "downtown-6p", "industrial-6p", "res-6p"})
+            {
+                net::engine::NetworkGame files;
+                if (ReadMmp(name, files))
+                {
+                    sc.voteMaps.push_back(net::MapFiles{name, files.gmp, files.sty, files.scr});
+                }
+            }
+        }
+        sc.currentMap = -1;
+        for (size_t m = 0; m < sc.voteMaps.size(); m++)
+        {
+            sc.currentMap = sc.voteMaps[m].scr == sc.game.scr ? (int)m : sc.currentMap;
+        }
+        if (sc.currentMap < 0) // a map of its own: in the list too
+        {
+            sc.voteMaps.insert(sc.voteMaps.begin(), net::MapFiles{map, sc.game.gmp, sc.game.sty, sc.game.scr});
+            sc.currentMap = 0;
         }
         sc.game.localPlayer = 0; // nobody plays on the server: every slot's input comes from the network
         gServer = new net::Server();

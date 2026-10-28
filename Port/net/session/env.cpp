@@ -24,6 +24,7 @@ const net::SessionEnv& net::Env()
         }
         e.testPowerUp = getenv("GTA2_NET_TESTPOWERUP");
         e.testCar = getenv("GTA2_NET_TESTCAR");
+        e.say = getenv("GTA2_NET_SAY");
         e.testWanted = getenv("GTA2_NET_TESTWANTED");
         return e;
     }();

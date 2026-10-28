@@ -4,6 +4,7 @@
 #   live    a server and two bot clients over a bad link (100 ms, jitter, loss): no crash, no CHECK line
 #   churn   two bot clients staying while two others join and leave, four times (stopped: SIGTERM, Ctrl-C): no
 #           crash, no CHECK line, nobody turned away as the server being full
+#   rounds  the round flow: two bot clients ready up, play a round, vote for the next map and follow; a third joins late
 #   maps    a map rotation, a round of 15 s each (the clock 4 times as fast): two bot clients follow every map change,
 #           no crash, no CHECK line
 #   soak    a server and three bot clients, the clock 10 times as fast: 10 minutes of play in 60 s, no crash
@@ -26,7 +27,7 @@ for a in "$@"; do
     *) STEPS+=("$a") ;;
   esac
 done
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn maps soak replay)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn maps rounds soak replay)
 [ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: Scripts/port/build_mac.sh, then Scripts/port/run_mac.sh once"; exit 1; }
 mkdir -p "$OUT"
 trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (each job execs its game: killing it kills the game)
@@ -147,6 +148,42 @@ maps() {
   fi
 }
 
+# The round flow (session/round_flow.cpp), the clock 4 times as fast: two bot clients ready up, play a 1-minute round,
+# vote for map 2 in the results and follow the server there, where the next round starts; a third joins in the results
+rounds() {
+  local p=$((BASE + 205))
+  rm -f "$OUT"/rounds_*.log
+  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=4 exec "$BIN" --server --port $p --map mp1-6p --players 6 --timelimit 1 --results 5 \
+    > "$OUT/rounds_server.log" 2>&1) &
+  sleep 2
+  for b in rammer soldier; do
+    (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=4 GTA2_NET_CHECKGRID=1 exec "$BIN" --connect 127.0.0.1:$p --name r_$b --bot $b \
+      > "$OUT/rounds_$b.log" 2>&1) &
+  done
+  sleep 18
+  (cd "$GAME" && GTA2_HEADLESS=1 GTA2_SPEED=4 GTA2_NET_CHECKGRID=1 exec "$BIN" --connect 127.0.0.1:$p --name r_late --bot simple \
+    > "$OUT/rounds_late.log" 2>&1) &
+  sleep 17
+  kill $(jobs -p) 2>/dev/null
+  wait 2>/dev/null
+  local S="$OUT/rounds_server.log" crashes checks ok=1 b
+  crashes=$(grep -l "crashed" "$OUT"/rounds_*.log | wc -l | tr -d ' ')
+  checks=$(cat "$OUT"/rounds_*.log | grep -c "net: CHECK")
+  for line in "countdown (round 1)" "round (round 1)" "round 1 over" "results (round 2)" "votes for mp2-6p" "the next map, mp2-6p" \
+    "countdown (round 2)" "round (round 2)"; do
+    grep -q "$line" "$S" || { ok=0; echo "  rounds: no \"$line\" on the server"; }
+  done
+  for b in rammer soldier; do
+    grep -q "a new game" "$OUT/rounds_$b.log" || { ok=0; echo "  rounds: r_$b didn't follow to the next map"; }
+  done
+  grep -q "notice: Round 2: go" "$OUT/rounds_late.log" || { ok=0; echo "  rounds: the late client wasn't in round 2"; }
+  if [ "$crashes" != 0 ] || [ "$checks" != 0 ] || [ $ok = 0 ]; then
+    fail "rounds: $crashes crashed, $checks CHECK lines (build_port/net_check/rounds_*.log)"
+  else
+    pass "rounds: warmup, ready, a round, results with a map vote, the voted map, a player joining in the results"
+  fi
+}
+
 soak() {
   local secs=60 p=$((BASE + 202))
   [ -n "$QUICK" ] && secs=30
@@ -226,8 +263,8 @@ replay() {
 
 for s in "${STEPS[@]}"; do
   case $s in
-    arena | live | churn | maps | soak | replay) $s ;;
-    *) echo "no step $s (arena, live, churn, maps, soak, replay)"; FAILED=1 ;;
+    arena | live | churn | maps | rounds | soak | replay) $s ;;
+    *) echo "no step $s (arena, live, churn, maps, rounds, soak, replay)"; FAILED=1 ;;
   esac
 done
 exit $FAILED

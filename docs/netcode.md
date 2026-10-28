@@ -130,7 +130,6 @@ the passenger missing on the client every time), the client's ped corrections ha
 - **cops on foot** differ the most of any entity (animation, aim and position on 20-30% of them): their AI is
   predicted from the server's last state. Expected, but the noisiest type; worth a look if players see cops jump;
 - modes beyond the game's own frags, points and tag (N8);
-- the round's start and end beyond the limits: warmup, ready, countdown, results, votes (N10);
 - the player cap above 6.
 - **to investigate: an instant gang doesn't board a bus** (on the server, so the game's own AI, not the netcode). In a
   played test (`GTA2_NET_TESTCAR` bus, `GTA2_NET_GANGLOG`) the four members walked to doors 0-2 and stayed in states
@@ -146,7 +145,7 @@ GTA2_ARGS="--connect 127.0.0.1 --name me" Scripts/port/run_mac.sh               
 GTA2_HEADLESS=1 GTA2_ARGS="--connect 127.0.0.1 --bot --name bot1" Scripts/port/run_mac.sh   # a test bot
 ```
 
-Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--gametype 1-3`, `--fraglimit`, `--timelimit`, `--tickms`, `--police [N]` (the lobby's police box, off by default there too; N: the most wanted stars, 1-6, the game's own 1 by default), `--traffic N` (ambient traffic cars per player, 16 by default), `--packets N`.
+Server options: `--port` (27920), `--map <data/*.mmp>`, `--players 1-6`, `--gametype 1-3`, `--fraglimit`, `--timelimit`, `--tickms`, `--police [N]` (the lobby's police box, off by default there too; N: the most wanted stars, 1-6, the game's own 1 by default), `--traffic N` (ambient traffic cars per player, 16 by default), `--packets N`. The round flow ("Round flow"): `--minplayers N` (2), `--warmup S` (60), `--results S` (15), `--votes start,map,kick` (or `none`), `--rounds on|off` (on; off with `--arena`).
 
 **Jerkiness** (`GTA2_NET_JERKLOG=1`, 2 also prints each jump): per entity and frame, the change of its step, on each client (what is shown) and on the server (the game's own motion). Tiny Town, police on, two rammers, a fighter and a car hopper, 100 ms ±10 ms, 200 s: cars move as smoothly on the clients as on the server, peds have twice the server's small changes but as few large ones, remote players three times (prediction from their last input, eased by the blend, `GTA2_NET_BLEND`, 0.2 by default). Most steps over 0.4 blocks were a player getting into or out of a car. Starting other players' entries from the snapshot, and correcting the walk to the door (including the walk after a car that still moves, states 3/4, which isn't at the door yet), took them from 28 to 4 in four recorded sessions. What is left is a ped reaching the door about half a block from where the server's did.
 
@@ -156,12 +155,12 @@ Either end: `--lag`, `--jitter`, `--loss` (the link conditioner).
 
 ## Rounds
 
-A match is rounds on one map (`engine/rounds.cpp`, the round's end in `Server::CheckRound`). The game ends a network game at its frag limit (`PlayerScoreTracker`: frags >= the limit) and at its time limit (`ManageNetworkTimeAndHudPager_4DADA0`), and a dedicated server can't come back from that: it stopped ticking, and every client froze with it (the time limit, 10 minutes by default, ended every game). So the game gets neither (`NetUi::CopyGameSettings_51C7F0`: an unreachable frag limit, no timer), and the server applies `--fraglimit` (points in a points game; the tag game: time only) and `--timelimit` itself. A round that reaches one ends: the leader wins (at the time limit with a tie: a draw), and the next round starts at once on the same map, everyone at a restart zone with no score, weapons or power-ups. The world entity carries the round's number, the last round's winner and the seconds left; a client shows "X wins round N", and "60 seconds left", "10 seconds left", over the frame for 4 s as the netcode's other lines (the HUD's message line is in the rollback set: a restore took it back to before the message, which showed for a frame). **The next map** (`--maps a,b,c`): a round on each in turn. At a round's end the server sends the next map (`kMsgMapChange`, reliable), and after a pause of 3 s, with the winner on the HUD, the game ends on the server and on every client and the next starts at once: a port hook in `winmain.cpp` (`gPortNextNetworkGame`, under `GTA2_PORT`) goes straight to `InitializeGame_4DA4D0` on the next map instead of to the frontend. A client keeps the exit through its restores, takes only the new game's snapshots (the world entity carries the server's game, `world.game`) and syncs again from its first one, as after joining; the engine clears its maps of the old game's cars, peds and pickups (`ResetForNewGame`). What a new game in the same process needed besides:
+A match is rounds on one map (`engine/rounds.cpp`; when a round starts and ends is the round flow's, `session/round_flow.cpp`, "Round flow"). The game ends a network game at its frag limit (`PlayerScoreTracker`: frags >= the limit) and at its time limit (`ManageNetworkTimeAndHudPager_4DADA0`), and a dedicated server can't come back from that: it stopped ticking, and every client froze with it (the time limit, 10 minutes by default, ended every game). So the game gets neither (`NetUi::CopyGameSettings_51C7F0`: an unreachable frag limit, no timer), and the server applies `--fraglimit` (points in a points game; the tag game: time only) and `--timelimit` itself. A round that reaches one ends: the leader wins (at the time limit with a tie: a draw), and the next round starts at once on the same map, everyone at a restart zone with no score, weapons or power-ups. The world entity carries the round's number, the last round's winner and the seconds left; a client shows "X wins round N", and "60 seconds left", "10 seconds left", over the frame for 4 s as the netcode's other lines (the HUD's message line is in the rollback set: a restore took it back to before the message, which showed for a frame). **The next map** (`--maps a,b,c`): a round on each in turn. At a round's end the server sends the next map (`kMsgMapChange`, reliable), and after a pause of 3 s, with the winner on the HUD, the game ends on the server and on every client and the next starts at once: a port hook in `winmain.cpp` (`gPortNextNetworkGame`, under `GTA2_PORT`) goes straight to `InitializeGame_4DA4D0` on the next map instead of to the frontend. A client keeps the exit through its restores, takes only the new game's snapshots (the world entity carries the server's game, `world.game`) and syncs again from its first one, as after joining; the engine clears its maps of the old game's cars, peds and pickups (`ResetForNewGame`). What a new game in the same process needed besides:
 - the rollback set made again for every game: the new `Game` can come at the old one's address with its pools elsewhere;
 - the rollback set leaving out what the game's scratch pointers point to (the last ped processed, a collision's sprite, the map blocks around one): after a map change they point into the old game's freed pools and map, and a restore wrote there. A loader's cursor (`input_data_676170`) did that in every game. Found with Guard Malloc (`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib`) on a replay: it stops at the first read of freed memory. AddressSanitizer hangs at its start on this macOS;
 - a snapshot's weapon in hand only one the player has (the HUD reads it).
 
-Not yet: a results screen between maps, and the rest of a round's start and end (warmup, ready, countdown, votes): see "Round flow".
+The results between rounds, the warmup, ready, the countdown and the votes: "Round flow".
 
 ## Chat
 
@@ -300,7 +299,8 @@ Port/net/
                sound_pool.cpp   SoundPosEntry from a pool in the rollback set (milestone S)
                navmap.cpp    the static map for bots
                debug.cpp     checks, logs and statistics (the GTA2_NET_* switches)
-  session/     server, client, bots, the recording and replay, the jerk measure (env.cpp: the switches)
+  session/     server, client, bots, the recording and replay, the jerk measure (env.cpp: the switches), the round
+               flow (round_flow.cpp: no game types, its own test)
   enet/        ENet 1.3.18, vendored (MIT)
   tests/       core tests (Scripts/port/net_tests.sh)
   net_main.cpp the command line (--server, --connect, --bot) and the session's lifetime
@@ -722,7 +722,7 @@ The input bits are in `Source/input_bits.hpp`: forward, back, left, right, attac
 | N8 | Later modes: points, tag (both in the game), team deathmatch and CTF (new, with the game's assets). | One bot match per mode. |
 | N7 | Hardening: the server trusts only inputs; rate limits; protocol version; timeouts. | Fuzz input packets. |
 | N9 | Setting up games: hosting from the menu, the public address and UPnP, a password, the data check, then a master server (heartbeat, list, join links) with the web app, and the in-game parts a website can't do (LAN games, real pings). See "Setting up games". | A friend joins a game hosted from the menu over the internet with no router setup; a server registered with the master shows in the web app's list and its join link starts the game in it. |
-| N10 | Round flow: a warmup until enough players are in or all are ready, a countdown, the round, a results screen with a vote for the next map; votes to start, change map and kick, as the server allows. See "Round flow". | Bots ready up, play a round to its limit, vote and go on to the voted map; a player joining in the countdown or during the results gets in at the next round's start. |
+| N10 | **Done** (see "Round flow"; the game's results page instead of the overlay's text is left). Round flow: a warmup until enough players are in or all are ready, a countdown, the round, a results screen with a vote for the next map; votes to start, change map and kick, as the server allows. See "Round flow". | Bots ready up, play a round to its limit, vote and go on to the voted map; a player joining in the countdown or during the results gets in at the next round's start. |
 
 ## Setting up games (plan, N9)
 
@@ -811,54 +811,61 @@ on a 1999 game and needs a GL backend: kept for admin and debug tools.
 5. Connectivity: punch-through, then the relay, as the reachability test shows the need (4, 12, 13).
 6. Admin, quick play, the server package, the in-game list if asked for.
 
-## Round flow (plan, N10)
+## Round flow (N10)
 
-Today a round starts the moment the server's game does, and the next the moment one ends ("Rounds"): no waiting for
-players, no countdown, and between maps only a 3 s pause with the winner. The plan: a round in phases, run by the
-server, the phase and its time left carried in the world entity (as the round number and seconds left are now), so a
-client shows it and a client joining mid-phase knows where the game is.
+A match's rounds run in phases on the server (`session/round_flow.cpp`, `RoundFlow`), shown on every client. The flow is
+plain data in and actions out, with no game types: the server gives it each slot (in the game, a person or an arena
+bot, its name and score) every tick and each player's command, and carries out what it asks for (`engine::NewRound`,
+a map change, a kick, notices). Its state (`core/round_state.hpp`, `RoundState`: the phase and its seconds left, the
+minimum of players, the ready flags, an open vote and its tally, each player's map choice) goes to the clients in the
+world entity, as the round's number and seconds left did; a client draws it (`Client::ShowRound`, a text panel over
+the frame: `engine::SetNetPanel`). Protocol 16: `kMsgCommand` (client to server, a line of text) and `kMsgNotice`
+(server to client, a line shown for 4 s), the maps a vote chooses from in the welcome.
 
 **Phases**
 
-1. **Warmup**: the map is played, without scores (frags and deaths aren't counted, no limits), so the first ones in
-   can drive around and try weapons. It ends when `--minplayers N` are in (default 2) and either all of them are
-   ready or `--warmup S` seconds have passed since the minimum was reached (default 60; 0: wait for everyone ready).
-   A lone player on a server waits here, not in a round against nobody.
-2. **Countdown**: 5 s, "Round starts in 3, 2, 1" over the frame. Then everyone is put at a restart zone with no
-   score, weapons or power-ups, as a new round does now, and the scores start.
-3. **Round**: as now, to the frag limit or the time limit, with "60 seconds left" and "10 seconds left".
-4. **Results**: the round's winner and a scoreboard (frags, deaths, points per player) for `--results S` seconds
-   (default 15), and the vote for the next map while it shows. Then the next map or the same one, and the
-   countdown (not the warmup again, unless fewer than the minimum are left).
+1. **Warmup**: the map played as usual, the scores reset when the round starts. It ends when `--minplayers` (2) are in
+   and all of them are ready, or `--warmup` (60) seconds after the minimum was reached (0: only when all are ready).
+   A lone player waits here. The panel: "Waiting for players: 1 of 2", or "1 of 2 ready, the round starts in 45 s
+   anyway", and "Press F1 when ready".
+2. **Countdown**: 5 s, "Round 2 starts in 3". Too few left: back to the warmup. At its end everyone is put at a
+   restart zone with no score, weapons or power-ups (`engine::NewRound`), "Round 2: go".
+3. **Round**: to the frag limit (points in a points game; the tag game: time only) or the time limit; the leader wins
+   (a tie at the time limit: a draw), "60 seconds left" and "10 seconds left" as before.
+4. **Results** (`--results`, 15 s): the winner, everyone's frags and deaths, and the maps with their votes. A player
+   chooses with `/map N` (or a name). Then the most chosen map; a tie or no votes: the rotation's next (`--maps`), else
+   the same map. A new map starts with its countdown (the warmup if too few are in).
 
-**Ready**: a key (F1, say; F12 and the key under Esc already mark moments for recordings) toggles a
-player's ready flag, carried in its player entity; the HUD lists who is ready ("3 of 4 ready"). Joining sets it off.
+**Ready**: F1 in the warmup, or `/ready` in chat (F10); it toggles, and every client is told "TIM is ready (2 of 3)".
+Arena bots are always ready.
 
-**Votes**: one vote at a time, started by any player, open 20 s, decided by a majority of the players in the game
-(those who don't vote count as no). Each kind can be turned off on the server (`--votes map,kick,start` or `none`).
+**Votes**: `/start` (end the warmup), `/map N` (change now; in a round it ends without a winner), `/kick NAME` (out,
+and the name turned away for 10 minutes). One at a time, open 20 s, decided by a majority of the people in the game
+(those who don't vote count as no; the caller votes yes): Y or N while it shows, or `/yes`, `/no`. The panel: "Vote:
+kick TIM   2 yes, 0 no   14 s   Y / N". The server allows what `--votes` lists. A kicked client is told why and goes
+back to the frontend's network page.
 
-- **Next map** (during the results): the choices are the rotation (`--maps`) or the server's map list; most votes win,
-  ties go to the rotation's next. With nobody voting, the rotation goes on as now.
-- **Change map now**: the same, during a round; it ends the round without a winner.
-- **Start now**: ends the warmup (for a group that is all here, faster than everyone readying).
-- **Kick**: a player, by name; the server refuses its name for 10 minutes. Not against the server's own console.
+**Commands** are chat lines starting with `/`: a client sends its own line as a command when it is typed to its end
+(Enter); F1 and Y / N are commands too. They go to neither the game nor the server's chat while they are commands (F1
+in the warmup, Y / N while a vote is open, not while typing). The maps a vote chooses from: the rotation, else the six
+multiplayer maps the game ships that are in `data/` (with the server's own map if it isn't one of them).
 
-The vote is a reliable message (start, cast, result), the open vote and its tally in the world entity; the HUD shows
-"Vote: change map to MP2 (F1 yes, F2 no) 2 of 3, 14 s".
+**Off** (`--rounds off`, and by default with `--arena`: bots playing on the server are tests and training): the round
+from the start and the next one at once, the rotation's next map after each, as before the flow.
 
-**Who decides the settings**: the server's command line (or `server.ini`, N9) as now. A player hosting from the menu
-(N9) is the server, so its host page sets them. No in-game admin beyond the votes for now (N9's admin item adds it).
+**Bots** (`--bot`) take part: ready 3 s into the warmup, `/map 2` in the results, yes on any vote but their own kick;
+`GTA2_NET_SAY=<frame>:<command>[;...]` has a client send commands at given frames (tests).
 
-**Where it fits**: the phases are the server's (`Server::CheckRound` grows into a small state machine in a
-`session/round_flow.cpp`); the clients only show them. Scores outside a round: the server doesn't count frags and
-deaths in the warmup (the game's own counters, reset when the countdown ends, as `NewRound` does). The results screen
-can reuse the frontend's multiplayer results page (`MENUPAGE_MULTIPLAYER_RESULTS`, six rows) drawn over the game, or
-the overlay text first (cheaper), and the page later. Protocol: new world fields (phase, phase seconds, the open
-vote), a ready flag per player, vote messages: a protocol bump.
+**Checked**: `Port/net/tests/test_rounds.cpp` (in `net_tests.sh`) runs the flow on its own: the warmup waiting and
+ending on ready or its time, the countdown back to the warmup when a player leaves, a win at the frag limit, the
+results' map vote (2 to 1 changes the map, a tie keeps it), votes that pass, fail at their time or are turned away
+(one open already, off on the server), a change-map vote ending a round, the flow off. `net_check.sh rounds`: two bot
+clients ready up, play a 1-minute round (the clock 4 times as fast), vote for map 2 and follow the server there, where
+round 2 starts; a third joins during the results and is in round 2. By hand: a kick vote (2 of 3) put a bot out, its
+client back at the frontend, and a change-map vote in a round took both others to mp5-6p, round 2 there.
 
-**Checks**: bots that ready up after a few seconds and vote for a random map (`--bot` gets a "ready, vote" behaviour),
-in `net_check` as a new step: two bots warm up, ready, play a round to a short limit, vote, and both follow to the
-voted map; a third joining in the countdown and one during the results each get in at the next round's start.
+Not yet: the game's own six-row results page instead of the overlay's text; a minimum of players that counts only
+people (arena bots count now, for a mixed server).
 
 ## From openGTA2 (`openGTA2/network`)
 

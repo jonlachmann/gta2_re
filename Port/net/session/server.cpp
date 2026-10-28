@@ -106,6 +106,14 @@ bool net::Server::Start(const ServerConfig& config, std::string* error)
         mSlots[i].peer = kArenaPeer;
         mSlots[i].name = "bot" + std::to_string(i);
     }
+    std::vector<std::string> mapNames;
+    for (const MapFiles& m : mConfig.voteMaps)
+    {
+        mapNames.push_back(m.name);
+    }
+    mMap = (size_t)(mConfig.currentMap >= 0 ? mConfig.currentMap : 0);
+    mRounds.Start(mConfig.rules, mapNames, mConfig.currentMap);
+    engine::CurrentRound() = mRounds.State();
     mJerk.PrintJumps(Env().jerkLog >= 2);
     printf("net: server on port %u, %d player slots, %s\n", config.port, config.game.players, config.game.scr.c_str());
     return true;
@@ -145,7 +153,14 @@ void net::Server::OnHello(uint32_t peer, BitReader& r)
         {
             slot = mSlots[i].used ? slot : i;
         }
-        if (slot == (int)mSlots.size())
+        auto ban = mBanned.find(hello.name);
+        if (ban != mBanned.end() && mTick < ban->second)
+        {
+            Reject reject;
+            reject.reason = "kicked by vote, for a while";
+            WriteReject(w, reject);
+        }
+        else if (slot == (int)mSlots.size())
         {
             Reject reject;
             reject.reason = "the server is full";
@@ -170,6 +185,7 @@ void net::Server::OnHello(uint32_t peer, BitReader& r)
             welcome.sty = mConfig.game.sty;
             welcome.scr = mConfig.game.scr;
             welcome.serverTick = mTick;
+            welcome.maps = mRounds.Maps();
             WriteWelcome(w, welcome);
             engine::PutInGame(slot, true); // a fresh start at the next restart zone
             engine::SetPlayerName(slot, hello.name.c_str());
@@ -232,6 +248,10 @@ void net::Server::OnReceive(const TransportEvent& e)
     if (slot >= 0 && type == kMsgCommands) // else: not joined, or nothing a client sends
     {
         OnCommands(slot, r);
+    }
+    else if (slot >= 0 && type == kMsgCommand)
+    {
+        OnCommand(slot, r);
     }
 }
 
@@ -433,7 +453,7 @@ void net::Server::StartGameOnce()
     if (mGeneration > 0)
     {
         engine::NewRound(); // a new map: no scores, weapons or power-ups from the last
-        mRoundStart = mTick;
+        Carry(mRounds.NewGame(mTick, (int)mMap, RoundPlayers(Snapshot())));
     }
     mStarted = true;
 }
@@ -488,6 +508,7 @@ void net::Server::OnEvent(const TransportEvent& e)
             mSlots[slot] = Slot();
             mSlots[slot].name = name; // kept for its return
             engine::TakeOutOfGame(slot);
+            mRounds.Left(slot);
         }
     }
 }
@@ -597,62 +618,126 @@ void net::Server::FeedJerk(const Snapshot& world)
     }
 }
 
-// The round's end by the server's limits (the game has none: engine/rounds.cpp): the frag limit (points in a points
-// game; the tag game: time only) or the time limit. The leader wins (a draw at the time limit: nobody), and the next
-// round starts on the same map
-void net::Server::CheckRound(const Snapshot& world)
+// The round flow's view of the slots: who is in, a person or an arena bot, and the score that counts (frags, or
+// points in a points game)
+std::vector<net::RoundPlayer> net::Server::RoundPlayers(const Snapshot& world) const
 {
-    engine::Round& round = engine::CurrentRound();
-    const int limit = mConfig.game.fragLimit, minutes = mConfig.game.timeLimitMin, type = mConfig.game.gameType;
-    const uint32_t ticksPerSecond = 1000 / (mConfig.game.tickMs > 0 ? mConfig.game.tickMs : 33);
-    const int elapsed = (int)((mTick - mRoundStart) / ticksPerSecond);
-    round.secondsLeft = minutes ? std::max(0, minutes * 60 - elapsed) : 0;
-    int best = -1, bestScore = 0, second = -1; // second: the runner-up's score (-1: nobody else)
+    std::vector<RoundPlayer> players(mSlots.size());
+    for (size_t i = 0; i < mSlots.size(); i++)
+    {
+        players[i].in = mSlots[i].used && engine::SlotInGame((int)i);
+        players[i].voter = mSlots[i].used && mSlots[i].peer != kArenaPeer;
+        players[i].alwaysReady = mSlots[i].peer == kArenaPeer;
+        players[i].name = mSlots[i].name;
+    }
     for (const EntityState& e : world.entities)
     {
         int p = 0;
         uint32_t b = 0;
-        if (engine::PlayerOf(e, &p, &b) && p < (int)mSlots.size() && mSlots[p].used)
+        if (engine::PlayerOf(e, &p, &b) && p < (int)players.size())
         {
-            const int score = type == 2 ? engine::PlayerPoints(e) : engine::PlayerFrags(e);
-            if (best < 0 || score > bestScore)
-            {
-                second = best < 0 ? second : bestScore; // the leader so far is the runner-up now (the first: nobody yet)
-                best = p;
-                bestScore = score;
-            }
-            else if (score > second)
-            {
-                second = score;
-            }
+            players[p].score = mConfig.game.gameType == 2 ? engine::PlayerPoints(e) : engine::PlayerFrags(e);
         }
     }
-    const bool reached = limit > 0 && type != 3 && best >= 0 && bestScore >= limit;
-    if (!mStarted || engine::MapChangePending() || !(reached || (minutes && round.secondsLeft == 0)))
-    {
-        return;
-    }
-    const bool draw = !reached && bestScore == second;
-    printf("net: round %d over at tick %u: %s;%s\n", round.number, mTick,
-           draw ? "a draw" : (engine::PlayerName(best) + " (player " + std::to_string(best) + ") wins with " + std::to_string(bestScore)).c_str(),
-           Scoreboard(world).c_str());
-    round.number++;
-    round.winner = draw ? 0 : best + 1;
-    mRoundStart = mTick;
-    if (mConfig.maps.size() > 1)
-    {
-        NextMap(); // the new game starts the round (StartGameOnce)
-        return;
-    }
-    engine::NewRound();
+    return players;
 }
 
-// The next map in turn, for everyone: after a pause (the round's winner on the HUD), the game ends here and on the
-// clients and the next starts at once on it
-void net::Server::NextMap()
+// The round flow's tick (session/round_flow.cpp), its state for the snapshots, and what it asks for
+void net::Server::RunRounds(const Snapshot& world)
 {
-    mMap = (mMap + 1) % mConfig.maps.size();
-    const MapFiles& m = mConfig.maps[mMap];
+    mRoundPlayers = RoundPlayers(world);
+    if (!mStarted || engine::MapChangePending())
+    {
+        engine::CurrentRound() = mRounds.State();
+        return;
+    }
+    const int before = mRounds.State().number;
+    const RoundActions actions = mRounds.Tick(mTick, mRoundPlayers);
+    if (mRounds.State().number != before)
+    {
+        printf("net: round %d's scores:%s\n", before, Scoreboard(world).c_str());
+    }
+    Carry(actions);
+    engine::CurrentRound() = mRounds.State();
+}
+
+void net::Server::Carry(const RoundActions& actions)
+{
+    for (const auto& n : actions.notices)
+    {
+        Notice(n.first, n.second);
+    }
+    if (actions.newRound)
+    {
+        engine::NewRound();
+    }
+    if (actions.kick >= 0)
+    {
+        Kick(actions.kick);
+    }
+    if (actions.changeMap >= 0)
+    {
+        ChangeToMap(actions.changeMap);
+    }
+}
+
+void net::Server::OnCommand(int slot, BitReader& r)
+{
+    std::string text;
+    if (!ReadText(r, text) || !mStarted)
+    {
+        return;
+    }
+    printf("net: player %d (%s): %s\n", slot, mSlots[slot].name.c_str(), text.c_str());
+    RoundActions actions;
+    mRounds.Command(mTick, slot, text, mRoundPlayers, actions);
+    Carry(actions);
+    engine::CurrentRound() = mRounds.State();
+}
+
+void net::Server::Notice(int slot, const std::string& text)
+{
+    BitWriter w;
+    WriteText(w, kMsgNotice, text);
+    for (size_t i = 0; i < mSlots.size(); i++)
+    {
+        if (mSlots[i].used && mSlots[i].peer != kArenaPeer && (slot < 0 || slot == (int)i))
+        {
+            mTransport->Send(mSlots[i].peer, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+        }
+    }
+    printf("net: notice%s: %s\n", slot < 0 ? "" : (" to player " + std::to_string(slot)).c_str(), text.c_str());
+}
+
+// Out by vote: told why, disconnected, and its name turned away for 10 minutes
+void net::Server::Kick(int slot)
+{
+    Slot& s = mSlots[slot];
+    if (!s.used || s.peer == kArenaPeer)
+    {
+        return;
+    }
+    const uint32_t tps = 1000 / (mConfig.game.tickMs > 0 ? mConfig.game.tickMs : 33);
+    mBanned[s.name] = mTick + 600 * tps;
+    BitWriter w;
+    Reject reject;
+    reject.reason = "kicked by vote";
+    WriteReject(w, reject);
+    mTransport->Send(s.peer, kChannelReliable, w.Data().data(), w.ByteCount(), true);
+    mTransport->Flush();
+    mTransport->Disconnect(s.peer);
+    printf("net: player %d (%s) kicked\n", slot, s.name.c_str());
+    mRounds.Left(slot);
+    s = Slot(); // the name isn't kept for a return
+    engine::TakeOutOfGame(slot);
+}
+
+// A map for everyone: after a pause (the round's winner on the HUD), the game ends here and on the clients and the
+// next starts at once on it
+void net::Server::ChangeToMap(int map)
+{
+    mMap = (size_t)map;
+    const MapFiles& m = mConfig.voteMaps[mMap];
     mConfig.game.gmp = m.gmp; // for the welcome of those joining
     mConfig.game.sty = m.sty;
     mConfig.game.scr = m.scr;
@@ -737,7 +822,7 @@ void net::Server::Frame()
     engine::StartRandLog();
     SetNextInputs(world);
     FeedJerk(world);
-    CheckRound(world);
+    RunRounds(world);
     if (mConfig.endTick && mTick >= mConfig.endTick)
     {
         mArena.Finish(world);
