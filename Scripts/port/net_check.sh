@@ -177,6 +177,9 @@ rounds() {
     grep -q "a new game" "$OUT/rounds_$b.log" || { ok=0; echo "  rounds: r_$b didn't follow to the next map"; }
   done
   grep -q "notice: Round 2: go" "$OUT/rounds_late.log" || { ok=0; echo "  rounds: the late client wasn't in round 2"; }
+  # The game on the new map, not the old one again: Tiny Town (mp1) is within x 50..130, mp2's restart zones east of 140
+  sed -n '/the next map, mp2-6p/,$p' "$S" | grep "frags/deaths" | tail -1 | grep -Eq "@(1[4-9][0-9]|2[0-9][0-9])," ||
+    { ok=0; echo "  rounds: the server's players aren't on mp2-6p after the map change"; }
   if [ "$crashes" != 0 ] || [ "$checks" != 0 ] || [ $ok = 0 ]; then
     fail "rounds: $crashes crashed, $checks CHECK lines (build_port/net_check/rounds_*.log)"
   else

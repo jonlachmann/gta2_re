@@ -8,8 +8,10 @@
 #include "Source/NetPlay.hpp"
 #include "Source/NetUi.hpp"
 #include "Source/Game.hpp"
+#include "Source/GameSession.hpp"
 #include "Source/debug.hpp"
 #include "Port/port_hooks.hpp"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -128,6 +130,14 @@ bool NextNetworkGame()
         return false;
     }
     gNextPending = false;
+    // The game takes the map's files from its session, which Start_NetworkGame_5E5A30 set once for the first game
+    char path[260];
+    snprintf(path, sizeof(path), "data\\%s", gNetGame.gmp.c_str());
+    gGameSession_67E8E0.SetMapName_4C5870(path);
+    snprintf(path, sizeof(path), "data\\%s", gNetGame.sty.c_str());
+    gGameSession_67E8E0.SetStyleName_4C5890(path);
+    snprintf(path, sizeof(path), "data\\%s", gNetGame.scr.c_str());
+    gGameSession_67E8E0.SetScriptName_4C58B0(path);
     net::engine::ResetForNewGame();
     gGeneration++;
     return true;
