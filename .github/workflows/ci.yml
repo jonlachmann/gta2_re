@@ -256,3 +256,36 @@ jobs:
           build_gl/glvideo.dll
           Renderers/OpenGL/gta2gl.ini.example
         retention-days: 7
+
+    # ======================================
+    #      Port (Linux, native)
+    # ======================================
+
+  build-port-linux:
+    runs-on: ubuntu-latest
+    name: Port_Linux
+
+    steps:
+    - name: Checkout repository recursively
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install clang, lld and GL headers
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang lld ninja-build libgl-dev libegl-dev
+
+    # Ubuntu 24.04 has no SDL3 package; a console build is enough for the build and the tests
+    - name: Build SDL3
+      run: |
+        git -c advice.detachedHead=false clone --depth 1 -b release-3.2.0 https://github.com/libsdl-org/SDL /tmp/SDL
+        cmake -S /tmp/SDL -B /tmp/SDL/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_UNIX_CONSOLE_BUILD=ON
+        cmake --build /tmp/SDL/build
+        sudo cmake --install /tmp/SDL/build
+
+    - name: Build and test
+      run: |
+        cmake -S Port -B build_port/ci -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+        cmake --build build_port/ci
+        ctest --test-dir build_port/ci --output-on-failure

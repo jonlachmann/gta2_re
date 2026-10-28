@@ -114,9 +114,9 @@ elseif(WIN32)
   add_custom_command(TARGET gta2_port POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
                      ${GTA2_SDL3_DIR}/bin/SDL3.dll ${CMAKE_BINARY_DIR}/)
 else()
-  # --no-dependent-libraries: the game's #pragma comment(lib, ...) name Windows libraries. The C++ runtime is linked
-  # in, and the program finds libSDL3.so.0 next to itself first.
-  target_link_options(gta2_port PRIVATE -Wl,--no-dependent-libraries -Wl,--error-limit=0 -static-libstdc++ -static-libgcc
+  # lld's --no-dependent-libraries: the game's #pragma comment(lib, ...) name Windows libraries. The C++ runtime is
+  # linked in, and the program finds libSDL3.so.0 next to itself first.
+  target_link_options(gta2_port PRIVATE -fuse-ld=lld -Wl,--no-dependent-libraries -Wl,--error-limit=0 -static-libstdc++ -static-libgcc
                       "-Wl,-rpath,\$ORIGIN")
   target_link_libraries(gta2_port PRIVATE ${CMAKE_DL_LIBS} pthread m)
 endif()
