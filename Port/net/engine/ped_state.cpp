@@ -114,7 +114,7 @@ const int kCharAnimation = net::engine::MemberIndex(kCharValues, kCharCount, off
 const int kGroup = kChar + (int)kCharCount; // its group: leader (net id), its index (99: the leader), type, counts
 const int kWeapons = kGroup + 5; // its weapon and its second one: weapon_type + 1, 0 none
 const int kEnd = kWeapons + 2;
-static_assert(kEnd + 1 <= net::kMaxFields, "a ped's fields and its age (access.cpp)");
+static_assert(kEnd + 1 <= net::kMaxFields, "a ped's fields and its age (snapshot.cpp)");
 
 int32_t WeaponRef(const Weapon* w) // weapon_type + 1, 0 none
 {
@@ -443,7 +443,7 @@ bool StartCarTransition(Ped* p, const net::EntityState& e)
         return true;
     }
     const bool leaving = objective == objectives_enum::leave_car_36 || e.f[kStates + kState1] == ped_state_1::exiting_car_4 ||
-                         e.f[kStates + kState2] == ped_state_2::ped2_getting_out_a_car_7; // as LeavingCar (vehicles.cpp)
+                         e.f[kStates + kState2] == ped_state_2::ped2_getting_out_a_car_7; // as LeavingCar (car_entry.cpp)
     if (p->field_16C_car && RefCar(e.f[kPedCar]) == p->field_16C_car && leaving && p->field_16C_car->CanExitCar_43AF10())
     {
         StartLeaving(p);
@@ -463,7 +463,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
         {
             ForceOutOfCar(p, Raw(e.f[kPedX]), Raw(e.f[kPedY]), Raw(e.f[kPedZ]), Angle(e.f[kPedRot]));
         }
-        p->Kill_46F9D0(); // the server's death, the game's own way (as a player's, access.cpp)
+        p->Kill_46F9D0(); // the server's death, the game's own way (as a player's, snapshot.cpp)
         return true;
     }
     if (deadHere && !deadThere)

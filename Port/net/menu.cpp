@@ -71,7 +71,7 @@ void Save()
     RegCloseKey(key);
 }
 
-// Into one of the frontend's 50-character labels. ponytail: by hand, not with the C library's wide functions or
+// Into one of the frontend's 50-character labels. By hand, not with the C library's wide functions or
 // strings: the game's wchar_t is 2 bytes (-fshort-wchar), the library's 4
 void SetText(wchar_t* out, const std::string& text)
 {

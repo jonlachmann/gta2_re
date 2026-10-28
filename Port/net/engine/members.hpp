@@ -1,5 +1,5 @@
 // Port/net (docs/netcode.md, "Net schema"): a structure's members on the wire, by name and offset (the 64-bit layout
-// isn't the original's, so never by position). The car's physics (access.cpp), its AI (car_ai.cpp) and a ped's AI
+// isn't the original's, so never by position). The car's physics (cars.cpp), its AI (car_ai.cpp) and a ped's AI
 // state and char (ped_state.cpp) are such tables.
 #pragma once
 #include "../core/snapshot.hpp"

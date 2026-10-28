@@ -730,7 +730,7 @@ void net::Server::Frame()
     {
         mArena.Finish(world);
         fflush(stdout);
-        _Exit(0); // ponytail: no game shutdown; the trainer only reads the result line
+        _Exit(0); // No game shutdown; the trainer only reads the result line
     }
     int players = 0;
     for (size_t i = 0; i < mSlots.size(); i++)

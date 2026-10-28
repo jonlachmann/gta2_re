@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Health, deaths, weapons, scores", "Players in cars"): the players as snapshot entities,
 // and the server's put into a client's game: health, deaths, weapons, power-ups, its car, its place.
 #include "internal.hpp"
+#include "world.hpp"
 #include "dev/dev.hpp"
 #include "Port/port_rand_owner.h"
 #include "Port/port_hooks.hpp"
@@ -24,7 +25,6 @@
 #include <string>
 
 EXTERN_GLOBAL(Network_PlayerInputs, gPrevNetInputs_6F5B28);
-EXTERN_GLOBAL(u8, gNumDummyChars_6787E2);
 
 namespace
 {
@@ -221,22 +221,14 @@ void SettleCar(Player* p, Ped* ped, const net::EntityState& e)
     Car* serverCar = RefCar(e.f[kPlayerCar]);
     if (serverCar && ped->field_16C_car != serverCar)
     {
-        const bool before = DebugGridOk("before forcing into a car", serverCar);
+        const GridCheck check("forcing into a car", serverCar);
         ForceIntoCar(ped, serverCar);
-        if (before)
-        {
-            DebugGridOk("after forcing into a car", serverCar);
-        }
     }
     else if (!e.f[kPlayerCar] && ped->field_16C_car)
     {
         Car* was = ped->field_16C_car;
-        const bool before = DebugGridOk("before forcing out of a car", was);
+        const GridCheck check("forcing out of a car", was);
         ForceOutOfCar(ped, Raw(e.f[kPlayerX]), Raw(e.f[kPlayerY]), Raw(e.f[kPlayerZ]), Angle(e.f[kPlayerRot]));
-        if (before)
-        {
-            DebugGridOk("after forcing out of a car", was);
-        }
     }
 }
 
@@ -246,7 +238,7 @@ bool MovePlayer(int i, Ped* ped, const net::EntityState& e)
 {
     const Fix16 x = Raw(e.f[kPlayerX]), y = Raw(e.f[kPlayerY]), z = Raw(e.f[kPlayerZ]);
     const Ang16 rot = Angle(e.f[kPlayerRot]);
-    const bool before = DebugGridOk("before moving a player", ped->field_16C_car);
+    const GridCheck check("moving a player", ped->field_16C_car);
     Sprite* was = PedSprite(ped);
     const bool jump = i == LocalPlayer() && was && (abs(was->field_14_xy.x.mValue - x.mValue) > (8 << 14) || abs(was->field_14_xy.y.mValue - y.mValue) > (8 << 14));
     if (ped->field_16C_car)
@@ -256,10 +248,6 @@ bool MovePlayer(int i, Ped* ped, const net::EntityState& e)
     else
     {
         MovePed(ped, x, y, z, rot);
-    }
-    if (before)
-    {
-        DebugGridOk("after moving a player", ped->field_16C_car);
     }
     return jump;
 }
@@ -323,58 +311,6 @@ void net::engine::CapturePlayer(int i, Snapshot& out)
         e.f[kPlayerPowerUp + k] = p->field_6F4_power_up_timers[k];
     }
     out.entities.push_back(e);
-}
-
-void net::engine::ApplyWorld(const EntityState& w)
-{
-    gpRng_67AB34->field_0_rng = w.f[kWorldCycle];
-    gPortZoneRoundRobin = (short)w.f[kWorldZoneTurn];
-    Round& r = CurrentRound();
-    r.number = w.f[kWorldRound];
-    r.winner = w.f[kWorldWinner];
-    r.secondsLeft = w.f[kWorldSecondsLeft];
-    r.phase = (uint8_t)w.f[kWorldPhase];
-    r.phaseLeft = w.f[kWorldPhaseLeft];
-    r.minPlayers = (uint8_t)w.f[kWorldMinPlayers];
-    r.ready = (uint8_t)w.f[kWorldReady];
-    r.voteKind = (uint8_t)w.f[kWorldVote];
-    r.voteArg = (uint8_t)w.f[kWorldVoteArg];
-    r.voteYes = (uint8_t)w.f[kWorldVoteYes];
-    r.voteNo = (uint8_t)w.f[kWorldVoteNo];
-    r.voteLeft = (uint8_t)w.f[kWorldVoteLeft];
-    for (int i = 0; i < kRoundSlots; i++)
-    {
-        r.mapChoice[i] = (uint8_t)w.f[kWorldMapChoice + i];
-    }
-    // The tag game's "it" is the server's, made the game's way (its weapons off, the arrow, "you're it")
-    Player* it = GetPlayer(w.f[kWorldIt] - 1);
-    if (it && it != gTagGame_6F8450.field_0_fugitive && gTagGame_6F8450.IsTagGame_434B20())
-    {
-        gTagGame_6F8450.SetNewFugitive_516590(it);
-    }
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        gTagGame_6F8450.field_4_it_time_secs[i] = w.f[kWorldItTime + i];
-    }
-    PortRandSetState((unsigned int)w.f[kWorldRand]);
-    PortRandSetSeed((unsigned int)w.f[kWorldSeed]);
-    // The traffic lights as the server's: each game ran its own from its start, so a client's cars waited at a red
-    // the server's had as green (and were put back behind it by the next snapshot)
-    TrafficLights* lights = gTrafficLights_194_705958;
-    if (lights && gCarManager_6C_677930 && w.f[kWorldLights])
-    {
-        const u8 phase = (u8)(w.f[kWorldLights] & 0xF);
-        lights->field_193_timer = (u8)(w.f[kWorldLights] >> 4);
-        gCarManager_6C_677930->field_20_light_state_a = (w.f[kWorldLights] >> 12) & 0xF;
-        if (lights->field_192_phase != phase)
-        {
-            lights->field_192_phase = phase;
-            for (u32 i = 0; i < lights->field_190_array_used_count; i++)
-            {
-                lights->field_0_traffic_lights[i]->UpdateLightsFromPhase_5C27A0(phase);
-            }
-        }
-    }
 }
 
 void net::engine::ApplySlots(const Snapshot& snap)
@@ -493,12 +429,6 @@ int net::engine::PlayerHealth(const EntityState& e)
     return e.type == kEntityPlayer ? e.f[kPlayerHealth] : 0;
 }
 
-int net::engine::SnapshotGame(const Snapshot& snap)
-{
-    const EntityState* w = FindWorld(snap);
-    return w ? w->f[kWorldGame] : -1;
-}
-
 int net::engine::PlayerPoints(const EntityState& e)
 {
     return e.type == kEntityPlayer ? e.f[kPlayerPoints] : 0;
@@ -561,92 +491,6 @@ bool net::engine::PlayerInCar(int player)
 {
     Ped* ped = InGamePed(player);
     return ped && ped->field_16C_car;
-}
-
-float net::engine::PlayerViewRadius(int player)
-{
-    // How far its camera shows, centre to corner, at ground level (the inverse of Camera::ProjectWorldToScreen_4B90E0;
-    // the camera rises as the player drives faster)
-    Player* p = GetPlayer(player);
-    if (!p)
-    {
-        return 0;
-    }
-    const Camera& c = p->field_90_game_camera;
-    const float scale = c.field_60_screen_scale.x.ToFloat();
-    if (scale <= 0)
-    {
-        return 0;
-    }
-    const float depth = 8.0f + c.field_98_cur_pos.field_8_z.ToFloat(); // (8 - z) + camera z, at z 0
-    const float hw = c.field_70_screen_px_center_x * depth / scale, hh = c.field_74_screen_px_center_y * depth / scale;
-    return sqrtf(hw * hw + hh * hh);
-}
-
-namespace
-{
-int gSpawnLead[MAX_PLAYERS];
-
-// The camera's bounds out to where its client already shows it: grown ahead as the camera moves (its last tick's step), so the
-// traffic and peds spawn and go out of sight of what that player sees, not of where this game has it (Car.cpp,
-// TrafficSpawner::MakeTrafficForCurrCamera_5832C0; Char_Pool.cpp; Car::ManageDespawning_442310)
-void LeadCameras()
-{
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        Player* p = gSpawnLead[i] ? net::engine::GetPlayer(i) : NULL;
-        if (!p || !p->field_8E_in_use)
-        {
-            continue;
-        }
-        Camera* cams[2] = {&p->field_90_game_camera, &p->field_208_aux_game_camera};
-        for (Camera* c : cams)
-        {
-            const s32 stepX = c->field_98_cur_pos.field_0_x.mValue - c->field_88_prev_pos.field_0_x.mValue;
-            const s32 stepY = c->field_98_cur_pos.field_4_y.mValue - c->field_88_prev_pos.field_4_y.mValue;
-            if (abs(stepX) > 1 << 14 || abs(stepY) > 1 << 14)
-            {
-                continue; // a jump (a respawn), not a move
-            }
-            const s32 dx = stepX * gSpawnLead[i], dy = stepY * gSpawnLead[i];
-            // Its leading edges only: the others are where the client shows them too (moved, a spawn behind or beside the
-            // player came in its sight)
-            (dx < 0 ? c->field_78_view_bounds.field_0_left : c->field_78_view_bounds.field_4_right).mValue += dx;
-            (dy < 0 ? c->field_78_view_bounds.field_8_top : c->field_78_view_bounds.field_C_bottom).mValue += dy;
-        }
-    }
-}
-} // namespace
-
-// ponytail: up to 3 players' worth. A server's traffic cars have drivers of their own, and with 6 players' worth (96
-// of them, 120 ambient peds and the police) the ped pool (200) ran out: a crash in the game's AI. More wants a server
-// built with bigger pools (GTA2_POOL_SCALE)
-void net::engine::SetSpawnPlayers(int players)
-{
-    gPortSpawnPlayers = players < 1 ? 1 : players > 3 ? 3 : players;
-}
-
-void net::engine::SetSpawnLead(int player, int ticks)
-{
-    if (player >= 0 && player < MAX_PLAYERS)
-    {
-        gSpawnLead[player] = ticks < 0 ? 0 : ticks > 30 ? 30 : ticks;
-        gPortAfterPlayersHook = LeadCameras;
-    }
-}
-
-std::string net::engine::SpawnStats()
-{
-    char line[160];
-    const int dummies = gPedManager_6787BC ? gPedManager_6787BC->field_0_max_dummy_chars * gPortSpawnPlayers : 0;
-    snprintf(line, sizeof(line), "traffic %d of %d, ambient peds %d of %d", gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars,
-             PortTrafficLimit(), (int)gNumDummyChars_6787E2, dummies < 80 ? dummies : 80);
-    return line;
-}
-
-int net::engine::SpawnLead(int player)
-{
-    return player >= 0 && player < MAX_PLAYERS ? gSpawnLead[player] : 0;
 }
 
 std::string net::engine::PlayerName(int slot)

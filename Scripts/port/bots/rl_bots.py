@@ -2,7 +2,7 @@
 """Trains the bots with reinforcement learning (PPO, torch) by self-play (docs/netcode.md, "Bots").
 
 Headless arena servers (--arena remote:<port>,...) connect to this script; every 3 ticks each sends what its remote
-bots see and the reward since (Port/net/session/arena.cpp) and gets their buttons back. One policy plays all
+bots see and the reward since (Port/net/dev/arena.cpp) and gets their buttons back. One policy plays all
 learner slots; some matches put earlier versions of it (the pool) in two of them, and scripted bots (--scripted,
 "simple" by default) play the others, as opponents and a yardstick. At first the policy also learns to press what a scripted bot would
 (kickstarting, --teach), less with each update. The teacher, "hunter", takes a car when one is near and nobody is
@@ -208,7 +208,7 @@ def train(args):
         if listener in readable:
             conn, _ = listener.accept()
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            m = waiting.pop(0)  # ponytail: the oldest launch is taken to be the one that connected (only stats depend on it)
+            m = waiting.pop(0)  # The oldest launch is taken to be the one that connected (only stats depend on it)
             m.sock = conn
             matches[conn.fileno()] = m
             readable.remove(listener)

@@ -102,7 +102,7 @@ int port_rand_5EDEE1()
     gPortRandCalls++;
     if (gPortRandLog)
     {
-        gPortRandLog(__builtin_return_address(0)); // the divergence check's log of who draws (Port/net/engine/debug.cpp)
+        gPortRandLog(__builtin_return_address(0)); // the divergence check's log of who draws (Port/net/engine/dev/compare.cpp)
     }
     if (sOwner)
     {

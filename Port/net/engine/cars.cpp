@@ -127,29 +127,6 @@ void net::engine::SetCarPhysics(Car* car, const EntityState& e)
     }
 }
 
-void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
-{
-    const CarPhysics* m = car ? car->field_58_physics : NULL;
-    if (!Debug().carDiff || !m || !CarHasPhysics(e))
-    {
-        return;
-    }
-    char line[2048];
-    int n = 0;
-    for (size_t i = 0; i < kPhysicsCount && n < (int)sizeof(line) - 80; i++)
-    {
-        const int32_t here = GetMember(m, kPhysics[i]), there = e.f[kCarPhysics + i];
-        if (here != there)
-        {
-            n += snprintf(line + n, sizeof(line) - n, " %s %d/%d", kPhysics[i].name, here, there);
-        }
-    }
-    if (n)
-    {
-        printf("net: tick %u, our car predicted (here/server):%s\n", tick, line);
-    }
-}
-
 bool net::engine::IsWrecked(const Car* car)
 {
     return car->field_A9_wreck_countdown || car->field_74_damage >= 32000 || car->field_9C_engine_status == car_engine_status::destroyed_6;
@@ -198,4 +175,27 @@ bool net::engine::SetCarState(Car* car, const EntityState& e)
         }
     }
     return true;
+}
+
+void net::engine::DebugCarDiff(Car* car, const EntityState& e, uint32_t tick)
+{
+    const CarPhysics* m = car ? car->field_58_physics : NULL;
+    if (!Debug().carDiff || !m || !CarHasPhysics(e))
+    {
+        return;
+    }
+    char line[2048];
+    int n = 0;
+    for (size_t i = 0; i < kPhysicsCount && n < (int)sizeof(line) - 80; i++)
+    {
+        const int32_t here = GetMember(m, kPhysics[i]), there = e.f[kCarPhysics + i];
+        if (here != there)
+        {
+            n += snprintf(line + n, sizeof(line) - n, " %s %d/%d", kPhysics[i].name, here, there);
+        }
+    }
+    if (n)
+    {
+        printf("net: tick %u, our car predicted (here/server):%s\n", tick, line);
+    }
 }

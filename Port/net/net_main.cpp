@@ -389,7 +389,7 @@ int NetMain_Init(std::vector<std::string>& args)
         {
             map = sc.maps[0].name;
         }
-        // ponytail: up to the game's 6 players until the player cap is a port setting (N6)
+        // Up to the game's 6 players until the player cap is a port setting (N6)
         if (sc.game.players < 1 || sc.game.players > 6 || !ReadMmp(map, sc.game))
         {
             fprintf(stderr, "net: --players 1-6, and --map must name a data/<map>.mmp (%s)\n", map.c_str());
@@ -407,7 +407,7 @@ int NetMain_Init(std::vector<std::string>& args)
         if (!sc.rules.rotation)
         {
             sc.voteMaps.clear();
-            // ponytail: the six maps the game ships, by name; a map folder's own list when there are custom maps
+            // The six maps the game ships, by name; a map folder's own list when there are custom maps
             for (const char* name : {"mp1-6p", "mp2-6p", "mp5-6p", "downtown-6p", "industrial-6p", "res-6p"})
             {
                 net::engine::NetworkGame files;

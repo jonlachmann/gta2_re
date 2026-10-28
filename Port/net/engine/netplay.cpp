@@ -4,7 +4,7 @@
 // its settings, and NetPlay::SendToAll_521B20, which the game calls once per network frame after the tick, is the
 // netcode's frame hook. Remote players are never "in use" here, so the game never waits for their messages: the
 // netcode sets every player's input itself.
-#include "engine.hpp"
+#include "internal.hpp"
 #include "Source/NetPlay.hpp"
 #include "Source/NetUi.hpp"
 #include "Source/Game.hpp"
@@ -109,7 +109,7 @@ void net::engine::StopNetworkGame()
     gActive = false;
     gNetPlay_7071E8.field_5D4_player_idx = 0;
     gNetPlay_7071E8.field_758_n2.field_4_players_count = 0;
-    // ponytail: off, not as before: a network game cleared them at its start (ClearDebugFlags_4DB170)
+    // Off, not as before: a network game cleared them at its start (ClearDebugFlags_4DB170)
     bSkip_recycling_67D575 = false;
     bSkip_dummies_67D4EF = false;
     bSkip_mission_67D4E5 = false;

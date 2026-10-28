@@ -244,12 +244,8 @@ void ApplyCar(Pass& a, const EntityState& e)
     }
     if (!a.playerIn.count(car)) // a car a player sits in follows the player (players.cpp); one being entered, the server
     {
-        const bool before = DebugGridOk("before moving a car", car);
+        const GridCheck check("moving a car", car);
         MoveCar(car, Raw(e.f[kCarX]), Raw(e.f[kCarY]), Raw(e.f[kCarZ]), Angle(e.f[kCarRot]));
-        if (before)
-        {
-            DebugGridOk("after moving a car", car);
-        }
     }
     SetCarPhysics(car, e); // a player's car too: its place came with the player
     ApplyCarAi(car, e);
@@ -583,7 +579,7 @@ unsigned int ClientCarKey(const Car* c)
 
 void ClientTickStart()
 {
-    // ponytail: made again every tick (a few hundred entries); the maps change with every apply and restore
+    // Made again every tick (a few hundred entries); the maps change with every apply and restore
     gPedKeys.clear();
     gCarKeys.clear();
     for (const auto& kv : gPeds)

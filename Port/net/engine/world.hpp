@@ -23,5 +23,9 @@ std::vector<Block> WorldBlocks();
 size_t SaveWorld(const std::vector<Block>& blocks, std::vector<unsigned char>& out);
 void RestoreWorld(const std::vector<Block>& blocks, const std::vector<unsigned char>& in);
 unsigned long long HashWorld(const std::vector<Block>& blocks);
+
+// The game's state outside its globals that WorldBlocks takes as well: the netcode's own pools and counters
+void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize); // the deaths a client has carried out (players.cpp)
+void SoundPool_Memory(unsigned char** ppAddr, size_t* pSize); // the SoundPosEntry pool: entries, free list, head (sound_pool.cpp)
 } // namespace engine
 } // namespace net

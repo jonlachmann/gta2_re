@@ -65,7 +65,7 @@ void net::engine::SetNetStatus(const std::string& corner, const std::string& cen
 
 namespace
 {
-// <text> centred at <y>, wrapped at spaces to fit <w> less a margin; the y under it. ponytail: no std::wstring, whose
+// <text> centred at <y>, wrapped at spaces to fit <w> less a margin; the y under it. No std::wstring, whose
 // traits assume a 4-byte wchar_t (the port has -fshort-wchar)
 s32 DrawCentredWrapped(const wchar_t* text, s32 w, s32 y, s32 lineHeight)
 {

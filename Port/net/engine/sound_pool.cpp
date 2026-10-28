@@ -2,7 +2,7 @@
 // that needs one a SoundPosEntry from the heap; a client restoring an older world would bring back pointers to
 // entries freed since. From this fixed pool, which is part of the rollback set, they are restored with the rest.
 #include "Source/sound_obj.hpp"
-#include "sound_pool.hpp"
+#include "world.hpp"
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,7 +37,7 @@ void* SoundPosEntry::operator new(size_t size)
     }
     if (gPool.mHead < 0 || size > sizeof(SoundPosEntry))
     {
-        return calloc(1, size); // ponytail: full pool falls back to the heap (not rollback-safe), never seen
+        return calloc(1, size); // Full pool falls back to the heap (not rollback-safe), never seen
     }
     const int i = gPool.mHead;
     gPool.mHead = gPool.mNext[i];

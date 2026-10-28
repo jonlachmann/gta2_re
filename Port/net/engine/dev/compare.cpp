@@ -124,7 +124,7 @@ template <class Fn> void ForEachPair(const Snapshot& snap, Fn fn)
         }
         else if (s.type == kEntityObject)
         {
-            continue; // ponytail: pickups are matched by place (pickups.cpp), not compared here
+            continue; // Pickups are matched by place (pickups.cpp), not compared here
         }
         if (EntityAge(s))
         {
@@ -266,7 +266,7 @@ void net::engine::CompareDivergence(const Snapshot& snap, uint32_t age)
             }
         }
     });
-    gDivergeMissing[kEntityCar] += gMissing[kEntityCar] + gMissing[kEntityPed] - missingBefore; // ponytail: cars and peds together
+    gDivergeMissing[kEntityCar] += gMissing[kEntityCar] + gMissing[kEntityPed] - missingBefore; // Cars and peds together
     gMissing[kEntityCar] = gMissing[kEntityPed] = 0;
 }
 

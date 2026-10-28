@@ -2,6 +2,7 @@
 // session's logs. Each is off unless its GTA2_NET_* switch is set (Debug()), or called by a test hook only.
 #pragma once
 #include "../engine.hpp"
+#include <string>
 
 class Camera;
 class Car;
@@ -19,6 +20,27 @@ const DebugFlags& Debug();
 bool DebugGridOk(const char* where, Car* car); // GTA2_NET_CHECKGRID: the collision grid has no freed sprites
 void DebugCarDiff(Car* car, const EntityState& e, uint32_t tick); // GTA2_NET_CARDIFF: the physics members that differ (cars.cpp)
 void DebugDrawMarker(Camera* cam); // GTA2_NET_MARKER's square, over the frame (overlay.cpp)
+// GTA2_NET_CHECKGRID around a change of <car>: the grid checked before it ("before <what>") and, when sound then, after
+class GridCheck
+{
+  public:
+    GridCheck(const char* what, Car* car) :
+        mWhat(what), mCar(car), mOk(Debug().checkGrid && DebugGridOk(("before " + std::string(what)).c_str(), car))
+    {
+    }
+    ~GridCheck()
+    {
+        if (mOk)
+        {
+            DebugGridOk(("after " + std::string(mWhat)).c_str(), mCar);
+        }
+    }
+
+  private:
+    const char* mWhat;
+    Car* mCar;
+    bool mOk;
+};
 
 // Test cheats (test_hooks.cpp)
 // The game's own death for a player, credited to another (-1: nobody); a server's frags follow from it

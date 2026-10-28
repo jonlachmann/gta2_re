@@ -431,7 +431,7 @@ bool net::Client::TakePong(const TransportEvent& e)
     r.Bits(8);
     const uint32_t sent = r.Bits(32);
     const uint32_t sample = (uint32_t)NowMs() - sent;
-    if (sample < 10000) // ponytail: a pong from before a reconnect or a clock wrap, dropped
+    if (sample < 10000) // A pong from before a reconnect or a clock wrap, dropped
     {
         mPingMs = mPingMs ? (mPingMs * 3 + sample) / 4 : sample;
     }

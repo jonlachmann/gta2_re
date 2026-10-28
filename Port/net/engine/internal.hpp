@@ -123,7 +123,7 @@ enum ObjectField
     kObjIdx, // Object::field_26_ped_ref_idx (what kind, for some)
 };
 
-// Shared helpers (access.cpp)
+// Shared helpers (snapshot.cpp)
 Player* GetPlayer(int slot); // NULL past the game's players
 Ped* InGamePed(int slot); // its ped while the slot is in the game (Player::field_8E_in_use)
 inline Fix16 Raw(int32_t v) // a field's position value
@@ -161,26 +161,33 @@ class ReachArea
 // The one dummy ped every traffic car shares as its driver (Car::SpawnDriverPed, CarManager::field_4_spare_driver): no
 // ped of its own, never sent, moved, forced or removed
 bool IsSpareDriver(const Ped* ped);
-// Moved and turned at once, the collision grid kept right (cars.cpp, access.cpp)
+// Moved and turned at once, the collision grid kept right (cars.cpp, snapshot.cpp)
 void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void CapturePed(Ped* p, Car* driving, Car* riding, Snapshot& out);
 
+// The engine's own parts of engine.hpp's areas
+int MaxWantedStars(); // the booted game's police setting: the most stars, 0 with police off (netplay.cpp)
+int LocalPlayer(); // snapshot.cpp
+void ClearRandOwners(); // back to the game's own streams (a single-player game after a network one; replica.cpp)
+void KeepPlayerArrows(); // an arrow on the HUD to each other player in the game, made again when one is missing (guards.cpp)
+float SnapshotReach(const Snapshot& snap); // schema.cpp
+void ResetForNewGame(); // what the engine keeps of a game: the replicas, pickups, death counts (rounds.cpp)
+void SetNextMap(const std::string& gmp, const std::string& sty, const std::string& scr); // netplay.cpp: the next game's
 
 // Players (players.cpp)
 void CapturePlayer(int slot, Snapshot& out);
+void CaptureWorld(Snapshot& out); // the world entity (world_entity.cpp)
 void ApplyWorld(const EntityState& w);
 void ApplySlots(const Snapshot& snap); // the slots in the game: the snapshot's
 void ApplyPlayer(const EntityState& e);
-void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize); // the deaths a client has carried out (in the rollback set: world.cpp)
 void KillCredited(Ped* ped, int killerSlot); // the game's own death, credited to a player (-1: nobody)
-void SnapCamera(Player* p);
-void ResetDeaths(int slot); // the death count the snapshots carry (players.cpp) // the camera at its ped at once, not panning there
-// Player peds take no damage on a client: their health and deaths are the server's (client_mode.cpp)
-void ProtectPlayers();
-void SeenByAll(); // every ped and car counts as seen (client_mode.cpp): no removal off screen on a client
-// Before and after every tick (client_mode.cpp): what the server's game never has, this one can't run (a ped's on-foot
-// order in a car)
+void SnapCamera(Player* p); // the camera at its ped at once, not panning there
+void ResetDeaths(int slot); // the death count the snapshots carry
+
+// A client's game (client_mode.cpp)
+void ProtectPlayers(); // player peds take no damage on a client: their health and deaths are the server's
+void SeenByAll(); // every ped and car counts as seen: no removal off screen on a client
 
 // Cars (cars.cpp, car_ai.cpp)
 void CarPhysicsFields(std::vector<FieldDesc>& out);
@@ -197,7 +204,7 @@ void CarAiFields(std::vector<FieldDesc>& out); // after the physics
 void CaptureCarAi(const Car* car, EntityState& e);
 void ApplyCarAi(Car* car, const EntityState& e);
 
-// Getting into and out of cars (vehicles.cpp): at once, ending as the game's own entering and leaving do; or started as
+// Getting into and out of cars (car_entry.cpp): at once, ending as the game's own entering and leaving do; or started as
 // the enter key starts it
 bool InCarTransition(Ped* ped); // on its way into or out of a car: states, or an objective to do it
 bool LeavingCar(Ped* ped); // on its way out of one
@@ -217,7 +224,6 @@ Car* ReplicaCar(uint32_t netId); // this game's car for a server car, if it has 
 Ped* ReplicaPed(uint32_t netId); // and ped
 const std::unordered_map<uint32_t, Car*>& ReplicaCars();
 void ClearReplicas(); // a new game: nothing mapped (rounds.cpp)
-void ClearPickups();
 const std::unordered_map<uint32_t, Ped*>& ReplicaPeds();
 void ReplicaPoses(std::vector<Pose>& out); // the cars and peds of Poses/SetPose
 void SetReplicaPose(const Pose& p);
@@ -239,6 +245,7 @@ void ApplyPedGroups(const std::vector<std::pair<Ped*, const EntityState*>>& peds
 void CapturePickups(Snapshot& out);
 void ApplyPickups(const Snapshot& snap);
 std::unordered_map<uint32_t, Object*>& PickupMap(); // for the rollback (ReplicaState)
+void ClearPickups(); // a new game: none mapped
 extern int gPickupsMade, gPickupsRemoved; // for the log
 } // namespace engine
 } // namespace net

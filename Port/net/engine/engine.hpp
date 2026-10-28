@@ -11,7 +11,7 @@ namespace net
 {
 namespace engine
 {
-// --- The game (access.cpp, netplay.cpp, client_mode.cpp) ---
+// --- The game (snapshot.cpp, netplay.cpp, client_mode.cpp, guards.cpp) ---
 
 // A network game for the game to boot (netplay.cpp answers the game's network layer with it)
 struct NetworkGame
@@ -27,13 +27,11 @@ struct NetworkGame
 };
 // Before WinMain: the game boots this network game (with -N on its command line)
 void StartNetworkGame(const NetworkGame& game);
-int MaxWantedStars(); // the booted game's police setting: the most stars, 0 with police off
 // Once per network frame, after the tick and before drawing (NetPlay::SendToAll_521B20)
 typedef void (*FrameHook)(void* user);
 void SetFrameHook(FrameHook hook, void* user);
 bool GameRunning(); // a game with its players exists
 int PlayerCount();
-int LocalPlayer();
 uint32_t LocalInput(); // what this machine's controls give for the next tick
 void SetPlayerInput(int player, uint32_t buttons); // for the next tick
 // The length of a network tick (the game's own setting offers 50, 40 or 33 ms)
@@ -41,18 +39,15 @@ void SetTickMs(int ms);
 void SeedRandom(uint32_t seed); // the game's rand() state (a server's: clients take it from snapshots)
 // A network game's random draws: each entity's update and each server service its own (Port/port_rand_owner.h)
 void SetRandOwners(bool client);
-void ClearRandOwners(); // back to the game's own streams (a single-player game after a network one)
 // What a client doesn't simulate: spawning and despawning, scripts, police; called every frame
 void ClientModeFrame();
 // Cars' attached objects (a tank's turret, a fire engine's cannon) back on their cars, after the client moved the cars
 // (a snapshot, the blend): the game puts them there in the car's own update, before that (Object::UpdateMovementAndEffects_527070)
 void AnchorAttachments();
-// An arrow on the HUD to each other player in the game, made again when one is missing (client_mode.cpp)
-void KeepPlayerArrows();
-// After every tick, on the server too: what the game's own logic can leave behind that crashes it later (client_mode.cpp)
+// After every tick, on the server too: what the game's own logic can leave behind that crashes it later (guards.cpp)
 void GuardPeds();
 
-// --- Snapshots (schema.cpp, access.cpp) ---
+// --- Snapshots (schema.cpp, snapshot.cpp) ---
 
 // The net schema: entities as plain numbers
 const Schema& NetSchema();
@@ -91,7 +86,6 @@ void ApplyScores(const Snapshot& snap);
 // How far a snapshot's area reaches: the server sets it per client (the farthest entity it kept), a client removes
 // what is missing only within it (blocks)
 void SetSnapshotReach(Snapshot& snap, float blocks);
-float SnapshotReach(const Snapshot& snap);
 // The age field of cars, peds and pickups (-1: none): how many ticks old the state is. The server sends the far
 // entities of a busy area less often; a client applies only what is new (0) and predicts the rest on
 int AgeField(uint8_t type);
@@ -143,8 +137,8 @@ void PutLocalChat(const LocalChat& chat);
 typedef RoundState Round; // the round's phase, votes and limits (session/round_flow.cpp keeps a server's)
 Round& CurrentRound();
 void NewRound(); // every slot in the game respawned with no score, weapons or power-ups
-void ShowHudMessage(const char* text); // a line over the frame for a few seconds (debug.cpp, with the status lines)
-// Lines drawn over the frame until changed, centred near the top (the round's warmup, votes, results; debug.cpp)
+void ShowHudMessage(const char* text); // a line over the frame for a few seconds (overlay.cpp, with the status lines)
+// Lines drawn over the frame until changed, centred near the top (the round's warmup, votes, results; overlay.cpp)
 void SetNetPanel(const std::vector<std::string>& lines);
 // The next map: the game ends after <pauseTicks> and the next starts at once on it, without the frontend
 // (winmain.cpp, gPortNextNetworkGame); KeepMapChange every frame until then. GameGeneration counts the games, for
@@ -158,8 +152,6 @@ void StopNetworkGame();
 void KeepMapChange();
 int GameGeneration();
 int SnapshotGame(const Snapshot& snap); // the server's GameGeneration at it (-1: no world in it)
-void ResetForNewGame(); // what the engine keeps of a game: the replicas, pickups, death counts
-void SetNextMap(const std::string& gmp, const std::string& sty, const std::string& scr); // netplay.cpp: the next game's
 bool MapChangePending();
 // Player slots in a running network game (slots.cpp): out of the game as the game handles a player who left, in
 // again with a new ped at the next restart zone (and an empty score if <freshScore>)
@@ -187,7 +179,7 @@ void RestoreGame(const SavedWorld& in);
 // One tick without drawing or sound, with every player's buttons (count: players)
 void ResimTick(const uint32_t* buttons, int count);
 
-// --- A client's view (replica.cpp, access.cpp) ---
+// --- A client's view (replica.cpp, snapshot.cpp) ---
 
 // Where this game has its mapped cars and peds now: NetId and x, y in blocks
 struct ReplicaPos

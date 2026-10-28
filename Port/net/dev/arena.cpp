@@ -76,7 +76,7 @@ bool ReceiveAll(int s, void* data, size_t n)
     return true;
 }
 #else
-// ponytail: training runs on macOS and Linux; Windows has no remote slots
+// Training runs on macOS and Linux; Windows has no remote slots
 int Connect(int)
 {
     return -1;
@@ -242,7 +242,7 @@ void net::Arena::Score(const Snapshot& world)
                 continue;
             }
             nearest = d < nearest ? d : nearest;
-            // ponytail: who faces it (30 degrees, 10 blocks) or stands at it (3) hurt it; cars and fire mislead it
+            // Who faces it (30 degrees, 10 blocks) or stands at it (3) hurt it; cars and fire mislead it
             int err = (int)(atan2f(dx, dy) * 720.0f / 3.14159265f) - other.rot;
             err = ((err % 1440) + 2160) % 1440 - 720;
             if ((d < 3 || (d < 10 && abs(err) < 120)) && d < shooterDist)
@@ -255,7 +255,7 @@ void net::Arena::Score(const Snapshot& world)
         {
             bot.closeness += 1 - nearest / kNear;
             bot.reward += kNearReward * (1 - nearest / kNear);
-            const float closer = bot.last.nearest - nearest; // ponytail: the nearest one may be another than last tick's
+            const float closer = bot.last.nearest - nearest; // The nearest one may be another than last tick's
             bot.reward += bot.last.health > 0 && fabsf(closer) < 1 ? kApproachReward * closer : 0;
         }
         const int lost = bot.last.health - me.health;

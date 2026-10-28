@@ -44,7 +44,7 @@ class Conditioner : public net::Transport
         h.due = Now() + (delay > 0 ? delay : 0);
         if (!mHeld.empty() && h.due < mHeld.back().due)
         {
-            h.due = mHeld.back().due; // ponytail: one queue in order, so jitter never reorders (ENet's sequencing would drop them)
+            h.due = mHeld.back().due; // One queue in order, so jitter never reorders (ENet's sequencing would drop them)
         }
         h.peer = peer;
         h.channel = channel;

@@ -1,6 +1,7 @@
-// Port/net (docs/netcode.md, "Net schema"): the game as the session sees it. A snapshot is captured from and applied to
-// the game here; the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
-// (pickups.cpp) do the parts. Also the helpers the engine's files share.
+// Port/net (docs/netcode.md, "Net schema"): a snapshot captured from and applied to the game; the world entity
+// (world_entity.cpp), the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
+// (pickups.cpp) do the parts. Also the helpers the engine's files share, the game's controls the session uses
+// (running, the player count, the inputs, the tick) and a client's view of what is shown.
 #include "internal.hpp"
 #include "Port/port_rand_owner.h"
 #include "Port/port_hooks.hpp"
@@ -206,40 +207,7 @@ void net::engine::CapturePed(Ped* p, Car* driving, Car* riding, Snapshot& out)
 void net::engine::Capture(Snapshot& out)
 {
     out.entities.clear();
-    EntityState w = Entity(kWorldId, kEntityWorld);
-    w.f[kWorldCycle] = gpRng_67AB34->get_cur_rng_41CFE0();
-    w.f[kWorldZoneTurn] = gPortZoneRoundRobin;
-    w.f[kWorldRound] = CurrentRound().number;
-    w.f[kWorldWinner] = CurrentRound().winner;
-    w.f[kWorldSecondsLeft] = CurrentRound().secondsLeft;
-    const Round& r = CurrentRound();
-    w.f[kWorldPhase] = r.phase;
-    w.f[kWorldPhaseLeft] = r.phaseLeft < 1023 ? r.phaseLeft : 1023;
-    w.f[kWorldMinPlayers] = r.minPlayers;
-    w.f[kWorldReady] = r.ready;
-    w.f[kWorldVote] = r.voteKind;
-    w.f[kWorldVoteArg] = r.voteArg;
-    w.f[kWorldVoteYes] = r.voteYes;
-    w.f[kWorldVoteNo] = r.voteNo;
-    w.f[kWorldVoteLeft] = r.voteLeft;
-    for (int i = 0; i < kRoundSlots; i++)
-    {
-        w.f[kWorldMapChoice + i] = r.mapChoice[i];
-    }
-    w.f[kWorldGame] = GameGeneration() & 0xFFFF;
-    w.f[kWorldRand] = (int32_t)PortRandState();
-    w.f[kWorldSeed] = (int32_t)PortRandSeed();
-    if (gTrafficLights_194_705958 && gCarManager_6C_677930)
-    {
-        w.f[kWorldLights] = gTrafficLights_194_705958->field_192_phase | gTrafficLights_194_705958->field_193_timer << 4 |
-                            (gCarManager_6C_677930->field_20_light_state_a & 0xF) << 12;
-    }
-    w.f[kWorldIt] = gTagGame_6F8450.field_0_fugitive ? gTagGame_6F8450.field_0_fugitive->field_2E_player_idx + 1 : 0;
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        w.f[kWorldItTime + i] = gTagGame_6F8450.field_4_it_time_secs[i];
-    }
-    out.entities.push_back(w);
+    CaptureWorld(out);
     for (int i = 0; i < PlayerCount(); i++)
     {
         CapturePlayer(i, out);

@@ -1,7 +1,6 @@
 // Port/net (docs/netcode.md, "Code layout"): the rollback set, see world.hpp.
 #include "world.hpp"
 #include "internal.hpp"
-#include "sound_pool.hpp"
 #include "Source/Game.hpp"
 #include "Source/Light.hpp"
 #include "Source/Player.hpp"
