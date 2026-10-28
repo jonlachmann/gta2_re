@@ -52,6 +52,11 @@ void net::WriteWelcome(BitWriter& w, const Welcome& m)
     WriteString(w, m.sty);
     WriteString(w, m.scr);
     w.VarU(m.serverTick);
+    w.Bits((uint32_t)(m.maps.size() < 15 ? m.maps.size() : 15), 4);
+    for (size_t i = 0; i < m.maps.size() && i < 15; i++)
+    {
+        WriteString(w, m.maps[i]);
+    }
 }
 
 bool net::ReadWelcome(BitReader& r, Welcome& m)
@@ -64,8 +69,13 @@ bool net::ReadWelcome(BitReader& r, Welcome& m)
     m.timeLimitMin = (uint16_t)r.VarU();
     m.tickMs = (uint16_t)r.VarU();
     m.police = (uint8_t)r.Bits(8);
-    const bool ok = ReadString(r, m.gmp) && ReadString(r, m.sty) && ReadString(r, m.scr);
+    bool ok = ReadString(r, m.gmp) && ReadString(r, m.sty) && ReadString(r, m.scr);
     m.serverTick = r.VarU();
+    m.maps.resize(r.Bits(4));
+    for (size_t i = 0; ok && i < m.maps.size(); i++)
+    {
+        ok = ReadString(r, m.maps[i]);
+    }
     return ok && !r.Overflow() && m.slot < m.players;
 }
 
@@ -78,6 +88,17 @@ void net::WriteReject(BitWriter& w, const Reject& m)
 bool net::ReadReject(BitReader& r, Reject& m)
 {
     return ReadString(r, m.reason) && !r.Overflow();
+}
+
+void net::WriteText(BitWriter& w, MsgType type, const std::string& text)
+{
+    w.Bits(type, 8);
+    WriteString(w, text.size() > 120 ? text.substr(0, 120) : text);
+}
+
+bool net::ReadText(BitReader& r, std::string& text)
+{
+    return ReadString(r, text) && text.size() <= 120 && !r.Overflow();
 }
 
 void net::WriteMapChange(BitWriter& w, const MapChange& m)

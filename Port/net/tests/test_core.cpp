@@ -227,6 +227,7 @@ void TestMessages()
     w.sty = "wil.sty";
     w.scr = "downtown-6P.scr";
     w.serverTick = 123456;
+    w.maps = {"mp1-6p", "mp2-6p", "downtown-6p"};
     net::BitWriter bw;
     net::WriteWelcome(bw, w);
     net::BitReader br(bw.Data().data(), bw.ByteCount());
@@ -234,7 +235,22 @@ void TestMessages()
     net::Welcome got;
     CHECK(net::ReadWelcome(br, got));
     CHECK(got.slot == 2 && got.players == 6 && got.gameType == 3 && got.fragLimit == 25 && got.gmp == w.gmp &&
-          got.scr == w.scr && got.serverTick == 123456);
+          got.scr == w.scr && got.serverTick == 123456 && got.maps == w.maps);
+
+    // A command and a notice: a line of text each, cut at 120 characters
+    for (net::MsgType type : {net::kMsgCommand, net::kMsgNotice})
+    {
+        net::BitWriter tw;
+        net::WriteText(tw, type, "/map 2");
+        net::BitReader tr(tw.Data().data(), tw.ByteCount());
+        std::string text;
+        CHECK(tr.Bits(8) == type && net::ReadText(tr, text) && text == "/map 2");
+    }
+    net::BitWriter lw;
+    net::WriteText(lw, net::kMsgNotice, std::string(200, 'x'));
+    net::BitReader lr(lw.Data().data(), lw.ByteCount());
+    std::string longText;
+    CHECK(lr.Bits(8) == net::kMsgNotice && net::ReadText(lr, longText) && longText.size() == 120);
 
     net::MapChange mc;
     mc.gmp = "MP1-comp.gmp";

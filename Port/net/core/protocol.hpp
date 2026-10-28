@@ -8,7 +8,7 @@
 
 namespace net
 {
-const uint32_t kProtocolVersion = 15;
+const uint32_t kProtocolVersion = 16;
 const uint16_t kDefaultPort = 27920;
 const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (Evaluations, 7)
 const uint8_t kChannelUnreliable = 0; // snapshots, commands
@@ -27,6 +27,8 @@ enum MsgType : uint8_t
     kMsgMapChange = 7, // server -> client, reliable: the next map, after a round (engine/rounds.cpp)
     kMsgPing = 8, // client -> server, unreliable: the client's clock (ms, 32 bits), answered at once with
     kMsgPong = 9, // server -> client, unreliable: the same clock back (the ping: the network's round trip alone)
+    kMsgCommand = 10, // client -> server, reliable: a player's command ("/ready", "/yes", "/map 2"...: session/round_flow.cpp)
+    kMsgNotice = 11, // server -> client, reliable: a line to show (a vote started or decided, a player ready...)
 };
 
 struct Hello
@@ -48,6 +50,7 @@ struct Welcome
     uint8_t police = 0;
     std::string gmp, sty, scr; // file names in data/
     uint32_t serverTick = 0;
+    std::vector<std::string> maps; // the maps a vote can choose, by number (the round's state in the world entity counts them)
 };
 
 struct Reject
@@ -73,6 +76,9 @@ void WriteWelcome(BitWriter& w, const Welcome& m);
 bool ReadWelcome(BitReader& r, Welcome& m);
 void WriteReject(BitWriter& w, const Reject& m);
 bool ReadReject(BitReader& r, Reject& m);
+// A line of text: a player's command (kMsgCommand) or a notice to show (kMsgNotice), at most 120 characters
+void WriteText(BitWriter& w, MsgType type, const std::string& text);
+bool ReadText(BitReader& r, std::string& text);
 void WriteMapChange(BitWriter& w, const MapChange& m);
 bool ReadMapChange(BitReader& r, MapChange& m);
 
