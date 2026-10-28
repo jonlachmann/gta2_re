@@ -1,12 +1,16 @@
-// gbh_* render API on top of IRenderer. Logic ported from GTA2Hax d3ddll.cpp; portable C++.
-#include "gbh_api.hpp"
+// gbh_* render API on top of IRenderer. Logic ported from GTA2Hax d3ddll.cpp; portable C++. The scene, drawing
+// and the exports; the textures and lights are in gbh_textures.cpp and gbh_lighting.cpp.
 #include "../dev/gbh_log.hpp"
-#include "renderer.hpp"
-#include <math.h>
-#include <stdio.h>
+#include "gbh_internal.hpp"
 #include <stdlib.h>
 #include <string.h>
-#include <vector>
+
+namespace gbh
+{
+IRenderer* gRenderer;
+} // namespace gbh
+
+using namespace gbh;
 
 namespace
 {
@@ -25,81 +29,10 @@ struct SGlobals
 
 const u32 kSGlobalsValues[] = {10, 62, 62, 88, 1, 0, 110, 126, 126, 40, 10, 0};
 
-// Texture variants, as the original keeps two palettes per palette id: opaque draws use the
-// opaque texture format (RGB565 in the reference), draws with alpha flags the alpha format (ARGB4444).
-enum
-{
-    kOpaque = 0,
-    kAlpha = 1,
-};
-
-// field_18_pPaltData of a texture points at m565, the start of this struct.
-struct PalEntry
-{
-    u16 m565[512];
-    u32 mRgba[2][256];
-    u32 mRaw[256]; // game palette colours, 0x00RRGGBB
-};
-
-// field_1C_ptr of a texture.
-struct TexData
-{
-    RTexture* mTex[2];
-    bool mDirty[2];
-    bool mImage; // 16-bit TGA image, already converted to mPixels
-    u32 mEpoch; // gTextureEpoch of the last conversion
-    std::vector<u32> mPixels;
-};
-
-struct ImageEntry
-{
-    s32 mLoaded;
-    u32 mWidth;
-    u32 mHeight;
-    STexture* mTexture;
-};
-
-struct LightInternal
-{
-    u32 mFlags;
-    f32 mBrightness;
-    f32 mRadius;
-    f32 mRadiusSquared;
-    f32 mInvRadius;
-    f32 mX, mY, mZ;
-    f32 mR, mG, mB;
-};
-
-IRenderer* gRenderer;
 SGlobals gGlobals;
-PalEntry* gPals[16384];
-std::vector<ImageEntry> gImages;
-LightInternal gLights[256];
-u32 gNumLights;
-f32 gAmbient = 255.0f;
 f32 gWindow[4];
 s32 gScreenTable[1700];
-u32 gTextureId;
-
-// Enhancement state (gta2gl.ini).
-bool gTrueColour; // 8-bit palette channels instead of the original's 16-bit textures
 u32 gOptionsGeneration = ~0u;
-u32 gTextureEpoch; // bumped when every texture has to be converted again
-bool gLightsDirty = true;
-std::vector<u32> gConvertBuffer;
-
-// The original keeps textures in square cache slots of 8..256 texels (0xe107e0), with the last column
-// and row repeated once; UVs are normalised by the slot size. Same here, so UVs match bit for bit.
-s32 SlotSize(s32 w, s32 h)
-{
-    const s32 m = w > h ? w : h;
-    s32 slot = 8;
-    while (slot < m && slot < 256)
-    {
-        slot <<= 1;
-    }
-    return slot < m ? m : slot;
-}
 
 const u32 FLAG_FIT_TO_TEXTURE = 0x10000;
 const u32 FLAG_NO_FILTER = 0x20000;
@@ -119,120 +52,6 @@ void InitGlobals()
     }
 }
 
-u16 To565(u32 rgb)
-{
-    const u32 r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
-    return (u16)(((r * 31 / 255) << 11) | ((g * 63 / 255) << 5) | (b * 31 / 255));
-}
-
-TexData* Data(STexture* pTexture)
-{
-    return pTexture ? (TexData*)pTexture->field_1C_ptr : 0;
-}
-
-STexture* NewTexture(s32 width, s32 height, u8* pData)
-{
-    STexture* pTexture = (STexture*)malloc(sizeof(STexture));
-    if (!pTexture)
-    {
-        return 0;
-    }
-    memset(pTexture, 0, sizeof(STexture));
-    pTexture->field_0_id = (u16)gTextureId++;
-    pTexture->field_E_width = (u16)width;
-    pTexture->field_10_height = (u16)height;
-    pTexture->field_14_original_pixel_data_ptr = pData;
-    TexData* pData2 = new TexData();
-    pData2->mTex[kOpaque] = 0;
-    pData2->mTex[kAlpha] = 0;
-    pData2->mDirty[kOpaque] = pData2->mDirty[kAlpha] = true;
-    pData2->mImage = false;
-    pData2->mEpoch = gTextureEpoch;
-    pTexture->field_1C_ptr = pData2;
-    return pTexture;
-}
-
-// Converts on first use: the game registers textures whose pixels are only valid later (or never).
-RTexture* Resolve(STexture* pTexture, int variant)
-{
-    TexData* pData = Data(pTexture);
-    if (!pData || !gRenderer)
-    {
-        return 0;
-    }
-    if (pData->mImage)
-    {
-        variant = kOpaque;
-    }
-    if (!pData->mTex[variant])
-    {
-        pData->mTex[variant] = gRenderer->CreateTexture();
-    }
-    if (pData->mEpoch != gTextureEpoch)
-    {
-        pData->mEpoch = gTextureEpoch;
-        pData->mDirty[kOpaque] = pData->mDirty[kAlpha] = true;
-    }
-    if (pData->mDirty[variant])
-    {
-        const s32 w = pTexture->field_E_width;
-        const s32 h = pTexture->field_10_height;
-        if (pData->mImage)
-        {
-            gRenderer->UploadTexture(pData->mTex[variant], w, h, &pData->mPixels[0]);
-        }
-        else if (pTexture->field_14_original_pixel_data_ptr && pTexture->field_18_pPaltData && w > 0 && h > 0)
-        {
-            const u32* pal = ((const PalEntry*)pTexture->field_18_pPaltData)->mRgba[variant];
-            const s32 slot = SlotSize(w, h);
-            gConvertBuffer.assign((size_t)slot * slot, 0);
-            for (s32 y = 0; y < h; y++)
-            {
-                // Sprite and tile pages are 256 pixels wide.
-                const u8* src = pTexture->field_14_original_pixel_data_ptr + (size_t)y * 256;
-                u32* dst = &gConvertBuffer[(size_t)y * slot];
-                for (s32 x = 0; x < w; x++)
-                {
-                    dst[x] = pal[src[x]];
-                }
-                if (w < slot)
-                {
-                    dst[w] = dst[w - 1];
-                }
-            }
-            if (h < slot)
-            {
-                memcpy(&gConvertBuffer[(size_t)h * slot], &gConvertBuffer[(size_t)(h - 1) * slot], (size_t)slot * 4);
-            }
-            gRenderer->UploadTexture(pData->mTex[variant], slot, slot, &gConvertBuffer[0]);
-        }
-        else
-        {
-            return 0;
-        }
-        pData->mDirty[variant] = false;
-    }
-    return pData->mTex[variant];
-}
-
-void ConvertPalette(PalEntry* pPal)
-{
-    for (s32 i = 0; i < 256; i++)
-    {
-        const u32 c = pPal->mRaw[i];
-        const u32 r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
-        const u32 a = i == 0 ? 0 : 0xFF000000u;
-        if (gTrueColour) // enhancement
-        {
-            pPal->mRgba[kOpaque][i] = pPal->mRgba[kAlpha][i] = r | (g << 8) | (b << 16) | a;
-            continue;
-        }
-        // 16-bit textures: bits truncated, expanded by replication when sampled.
-        pPal->mRgba[kOpaque][i] = ((r & 0xF8) | (r >> 5)) | (((g & 0xFC) | (g >> 6)) << 8) | (((b & 0xF8) | (b >> 5)) << 16) | a;
-        pPal->mRgba[kAlpha][i] = ((r >> 4) * 17) | (((g >> 4) * 17) << 8) | (((b >> 4) * 17) << 16) | a;
-    }
-}
-
 // Enhancement: follows option changes (live toggle, ini edits); palettes and textures are converted again.
 void SyncOptions()
 {
@@ -241,123 +60,8 @@ void SyncOptions()
         return;
     }
     gOptionsGeneration = gRenderer->Options().mGeneration;
-    const bool trueColour = gRenderer->Options().mTrueColour;
-    if (trueColour != gTrueColour)
-    {
-        gTrueColour = trueColour;
-        for (s32 i = 0; i < 16384; i++)
-        {
-            if (gPals[i])
-            {
-                ConvertPalette(gPals[i]);
-            }
-        }
-        gTextureEpoch++;
-    }
-    gLightsDirty = true;
-}
-
-// Enhancement: the active lights for per pixel lighting.
-void UploadLights()
-{
-    static RLight sLights[256];
-    s32 n = 0;
-    for (u32 j = 0; j < gNumLights; j++)
-    {
-        const LightInternal& l = gLights[j];
-        if ((l.mFlags & 0x30000) != 0x10000)
-        {
-            continue;
-        }
-        RLight& o = sLights[n++];
-        o.x = l.mX, o.y = l.mY, o.z = l.mZ;
-        o.radius = l.mRadius;
-        o.invRadius = l.mInvRadius;
-        o.r = l.mR * l.mBrightness, o.g = l.mG * l.mBrightness, o.b = l.mB * l.mBrightness;
-    }
-    gRenderer->SetLights(sLights, n, gAmbient);
-    gLightsDirty = false;
-}
-
-// The original's table driven square root (12 bit mantissa index, 4096 entries).
-u32 gSqrtTable[4096];
-
-void InitSqrtTable()
-{
-    for (u32 i = 0; i < 2048; i++)
-    {
-        union
-        {
-            u32 u;
-            f32 f;
-        } a, b;
-        a.u = (i << 12) | 0x3F800000u; // [1, 2)
-        b.u = (i << 12) | 0x40000000u; // [2, 4)
-        a.f = (f32)sqrt((double)a.f);
-        b.f = (f32)sqrt((double)b.f);
-        gSqrtTable[i] = a.u & 0x7FFFFF;
-        gSqrtTable[2048 + i] = b.u & 0x7FFFFF;
-    }
-}
-
-f32 TableSqrt(f32 x)
-{
-    union
-    {
-        u32 u;
-        f32 f;
-    } v;
-    v.f = x;
-    u32 mant = v.u & 0x7FFFFF;
-    u32 exp = (v.u & 0x7F800000u) >> 1;
-    if (exp & 0x400000)
-    {
-        exp += 0x20000000u;
-    }
-    else
-    {
-        exp += 0x1F800000u;
-        mant |= 0x800000;
-    }
-    v.u = gSqrtTable[mant >> 12] | (exp & 0x7F800000u);
-    return v.f;
-}
-
-u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
-{
-    f32 lr = 0.0f, lg = 0.0f, lb = 0.0f;
-    for (u32 j = 0; j < gNumLights; j++)
-    {
-        const LightInternal& light = gLights[j];
-        if ((light.mFlags & 0x30000) != 0x10000)
-        {
-            continue;
-        }
-        const f32 dx = vert.x - light.mX;
-        const f32 dy = vert.y - light.mY;
-        const f32 dz = vert.z - light.mZ;
-        const f32 d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > light.mRadiusSquared)
-        {
-            continue;
-        }
-        const f32 att = (light.mRadius - TableSqrt(d2)) * light.mInvRadius;
-        if (att > 0.0f)
-        {
-            const f32 k = att * light.mBrightness;
-            lr += light.mR * k;
-            lg += light.mG * k;
-            lb += light.mB * k;
-        }
-    }
-    const f32 n = shade / 255.0f;
-    f32 r = n * ((colour >> 16) & 0xFF) * lr + gAmbient;
-    f32 g = n * ((colour >> 8) & 0xFF) * lg + gAmbient;
-    f32 b = n * (colour & 0xFF) * lb + gAmbient;
-    const u32 ri = r > 255.0f ? 255 : (u32)r;
-    const u32 gi = g > 255.0f ? 255 : (u32)g;
-    const u32 bi = b > 255.0f ? 255 : (u32)b;
-    return (colour & 0xFF000000u) | (ri << 16) | (gi << 8) | bi;
+    SetTrueColour(gRenderer->Options().mTrueColour);
+    MarkLightsDirty();
 }
 
 // D3D ARGB to the renderer's RGBA byte order.
@@ -438,7 +142,7 @@ void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 bas
             pVerts[i].diff = diffuse;
         }
     }
-    const bool lit = (flags & FLAG_LIGHTING) && gAmbient != 255.0f;
+    const bool lit = (flags & FLAG_LIGHTING) && LightingOn();
     const bool perPixel = lit && gRenderer->Options().mPerPixelLighting; // enhancement
     u32 unlit[4];
     if (lit)
@@ -448,9 +152,9 @@ void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 bas
             unlit[i] = pVerts[i].diff;
             pVerts[i].diff = LightVertex(pVerts[i + 4], shade, pVerts[i].diff);
         }
-        if (perPixel && gLightsDirty)
+        if (perPixel)
         {
-            UploadLights();
+            UploadLightsIfDirty();
         }
     }
 
@@ -574,7 +278,7 @@ GBH_EXPORT s32* GTA2_CC MakeScreenTable(s32 value, s32 elementSize, u32 size)
 GBH_EXPORT u32 GTA2_CC gbh_InitDLL(SVideo* pVideo)
 {
     InitGlobals();
-    InitSqrtTable();
+    InitLighting();
 #if defined(__i386__) || defined(_M_IX86)
     // As DMA's d3ddll: x87 single precision, rounding down, for the whole process (game code included).
     unsigned short cw;
@@ -673,157 +377,6 @@ GBH_EXPORT u32 GTA2_CC gbh_ConvertColour(u8 r, u8 g, u8 b)
 GBH_EXPORT u32 GTA2_CC gbh_Convert16BitGraphic(s32, u32, u16*, s32)
 {
     return 0;
-}
-
-GBH_EXPORT u32 GTA2_CC gbh_RegisterPalette(s32 palId, u32* pData)
-{
-    if (palId < 0 || palId >= 16384 || !pData)
-    {
-        return 0;
-    }
-    // Entries are stored in columns: entry i of a palette is 64 dwords after entry i - 1.
-    u32* p = pData;
-    for (s32 i = 0; i < 256; i++, p += 64)
-    {
-        if (i == 0)
-        {
-            *p = 0;
-        }
-        else if (*p == 0)
-        {
-            *p = 0x10000;
-        }
-    }
-    PalEntry* pPal = gPals[palId];
-    if (!pPal)
-    {
-        pPal = new PalEntry();
-        gPals[palId] = pPal;
-    }
-    p = pData;
-    for (s32 i = 0; i < 256; i++, p += 64)
-    {
-        pPal->mRaw[i] = *p & 0xFFFFFF;
-        pPal->m565[i] = To565(*p);
-        pPal->m565[i + 256] = pPal->m565[i];
-    }
-    ConvertPalette(pPal);
-    return palId;
-}
-
-GBH_EXPORT void GTA2_CC gbh_FreePalette(s32 palId)
-{
-    if (palId >= 0 && palId < 16384)
-    {
-        delete gPals[palId];
-        gPals[palId] = 0;
-    }
-}
-
-GBH_EXPORT STexture* GTA2_CC gbh_LockTexture(STexture* pTexture)
-{
-    pTexture->field_8_locked_pixels_ptr = pTexture->field_14_original_pixel_data_ptr;
-    pTexture->field_13_flags |= 1;
-    pTexture->field_6_pal_size = 256;
-    return pTexture;
-}
-
-GBH_EXPORT STexture* GTA2_CC gbh_UnlockTexture(STexture* pTexture)
-{
-    pTexture->field_6_pal_size = 0;
-    pTexture->field_8_locked_pixels_ptr = 0;
-    pTexture->field_13_flags &= 0xFE;
-    TexData* pData = Data(pTexture);
-    if (pData)
-    {
-        pData->mDirty[kOpaque] = pData->mDirty[kAlpha] = true;
-    }
-    return pTexture;
-}
-
-GBH_EXPORT void GTA2_CC gbh_AssignPalette(STexture* pTexture, s32 palId)
-{
-    const bool needUnlock = !(pTexture->field_13_flags & 1);
-    if (needUnlock)
-    {
-        gbh_LockTexture(pTexture);
-    }
-    PalEntry* pPal = (palId >= 0 && palId < 16384) ? gPals[palId] : 0;
-    pTexture->field_18_pPaltData = pPal ? pPal->m565 : 0;
-    pTexture->field_12_bPalIsValid = pPal ? 1 : 0;
-    if (needUnlock)
-    {
-        gbh_UnlockTexture(pTexture);
-    }
-}
-
-GBH_EXPORT STexture* GTA2_CC gbh_RegisterTexture(s32 width, s32 height, u8* pData, s32 palId, char)
-{
-    STexture* pTexture = NewTexture(width, height, pData);
-    if (pTexture)
-    {
-        PalEntry* pPal = (palId >= 0 && palId < 16384) ? gPals[palId] : 0;
-        pTexture->field_18_pPaltData = pPal ? pPal->m565 : 0;
-        pTexture->field_12_bPalIsValid = pPal ? 1 : 0;
-    }
-    return pTexture;
-}
-
-GBH_EXPORT void GTA2_CC gbh_FreeTexture(STexture* pTexture)
-{
-    if (!pTexture)
-    {
-        return;
-    }
-    TexData* pData = Data(pTexture);
-    if (pData)
-    {
-        for (int v = 0; v < 2; v++)
-        {
-            if (gRenderer && pData->mTex[v])
-            {
-                gRenderer->FreeTexture(pData->mTex[v]);
-            }
-        }
-        delete pData;
-    }
-    free(pTexture);
-}
-
-GBH_EXPORT void GTA2_CC gbh_ResetLights()
-{
-    gNumLights = 0;
-    gLightsDirty = true;
-}
-
-GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
-{
-    if (gNumLights >= 256)
-    {
-        return 0;
-    }
-    const u32 idx = gNumLights++;
-    gLightsDirty = true;
-    LightInternal& l = gLights[idx];
-    const f32 k = 1.0f / 255.0f;
-    l.mFlags = pLight->field_0;
-    l.mBrightness = (pLight->field_0 & 0xFF) * k;
-    l.mX = pLight->field_4_x;
-    l.mY = pLight->field_8_y;
-    l.mZ = pLight->field_C_z;
-    l.mR = ((pLight->field_10_colour >> 16) & 0xFF) * k;
-    l.mG = ((pLight->field_10_colour >> 8) & 0xFF) * k;
-    l.mB = (pLight->field_10_colour & 0xFF) * k;
-    l.mRadius = ((pLight->field_0 >> 8) & 0xFF) * k * 8.0f;
-    l.mRadiusSquared = l.mRadius * l.mRadius;
-    l.mInvRadius = l.mRadius > 0.0f ? 1.0f / l.mRadius : 0.0f;
-    return idx * 0x2C;
-}
-
-GBH_EXPORT void GTA2_CC gbh_SetAmbient(f32 ambient)
-{
-    gAmbient = ambient * 255.0f;
-    gLightsDirty = true;
 }
 
 GBH_EXPORT void GTA2_CC gbh_DrawQuad(s32 flags, STexture* pTexture, Vert* pVerts, s32 baseColour)
@@ -959,92 +512,15 @@ GBH_EXPORT s32 GTA2_CC gbh_BlitBuffer(s32, s32, s32, s32, s32, s32)
     return 0;
 }
 
-GBH_EXPORT s32 GTA2_CC gbh_InitImageTable(s32 tableSize)
-{
-    if (tableSize < 0)
-    {
-        return -1;
-    }
-    gImages.assign(tableSize, ImageEntry());
-    for (size_t i = 0; i < gImages.size(); i++)
-    {
-        memset(&gImages[i], 0, sizeof(ImageEntry));
-    }
-    return 0;
-}
-
-GBH_EXPORT s32 GTA2_CC gbh_FreeImageTable()
-{
-    for (size_t i = 0; i < gImages.size(); i++)
-    {
-        if (gImages[i].mLoaded)
-        {
-            gbh_FreeTexture(gImages[i].mTexture);
-        }
-    }
-    gImages.clear();
-    return 0;
-}
-
-// The buffer is a whole TGA file (type 2, 16 bpp X1R5G5B5); the game frees it right after the call.
-GBH_EXPORT s32 GTA2_CC gbh_LoadImage(SImage* pImage)
-{
-    s32 slot = -1;
-    for (size_t i = 0; i < gImages.size(); i++)
-    {
-        if (!gImages[i].mLoaded)
-        {
-            slot = (s32)i;
-            break;
-        }
-    }
-    if (slot < 0)
-    {
-        return -1;
-    }
-    if (!pImage || pImage->field_1_cmap_type || pImage->field_2_image_type != 2 || pImage->field_10_bpp != 16)
-    {
-        return -2;
-    }
-    const s32 w = pImage->field_C_width;
-    const s32 h = pImage->field_E_height;
-    STexture* pTexture = NewTexture(w, h, 0);
-    if (!pTexture)
-    {
-        return -3;
-    }
-    TexData* pData = Data(pTexture);
-    pData->mImage = true;
-    pData->mPixels.resize((size_t)w * h);
-    const u16* src = (const u16*)((const u8*)pImage + offsetof(SImage, field_12) + pImage->field_0_id_len);
-    const bool topDown = (pImage->field_11_descriptor & 0x20) != 0;
-    for (s32 y = 0; y < h; y++)
-    {
-        const u16* row = src + (size_t)(topDown ? y : (h - 1 - y)) * w;
-        u32* dst = &pData->mPixels[(size_t)y * w];
-        for (s32 x = 0; x < w; x++)
-        {
-            const u32 p = row[x];
-            // Green goes 5 -> 6 bits by a shift, as the original's 555 to 565 conversion.
-            const u32 r = (p >> 10) & 31, g = ((p >> 5) & 31) << 1, b = p & 31;
-            dst[x] = ((r << 3) | (r >> 2)) | (((g << 2) | (g >> 4)) << 8) | (((b << 3) | (b >> 2)) << 16) | 0xFF000000u;
-        }
-    }
-    gImages[slot].mLoaded = 1;
-    gImages[slot].mWidth = w;
-    gImages[slot].mHeight = h;
-    gImages[slot].mTexture = pTexture;
-    return slot;
-}
-
 GBH_EXPORT s32 GTA2_CC gbh_BlitImage(s32 imageIndex, s32 srcLeft, s32 srcTop, s32 srcRight, s32 srcBottom, s32 dstX, s32 dstY)
 {
     GbhLog_Call("BlitImage", imageIndex, 0, 0);
-    if (imageIndex < 0 || imageIndex >= (s32)gImages.size() || !gImages[imageIndex].mLoaded)
+    const ImageEntry* pImg = Image(imageIndex);
+    if (!pImg)
     {
         return -1;
     }
-    const ImageEntry& img = gImages[imageIndex];
+    const ImageEntry& img = *pImg;
     if (srcLeft < 0 || srcTop < 0 || srcRight <= srcLeft || srcBottom <= srcTop || srcRight > (s32)img.mWidth ||
         srcBottom > (s32)img.mHeight)
     {
