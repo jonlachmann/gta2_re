@@ -4,7 +4,7 @@
 // The first SDL gamepad is the game's joystick, in DirectInput's joystick layout (gInputDeviceFormat_601A6C):
 // offset 0/4 the X/Y axis in -1000..1000 (the game's DIPROP_RANGE), 48 + n button n. The left stick and the
 // d-pad drive the axes. Bindings to the pad are set in the game's Controls menu, as in the original.
-// ponytail: no mouse data (the game doesn't use the mouse for play); one pad.
+// No mouse data (the game doesn't use the mouse for play); one pad.
 #define DIRECTINPUT_VERSION 0x0700
 #include <SDL3/SDL.h>
 #include <deque>

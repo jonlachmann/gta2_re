@@ -1,7 +1,7 @@
 // Port (docs/port.md): registry keys as sections of gta2.ini. "SOFTWARE\DMA Design Ltd\GTA2\Screen" is
 // [Screen]; other keys keep their full path. Values are "name=dword:<n>", "name=str:<text>" or
 // "name=hex:<bytes>". The file is read once and written after every change.
-// ponytail: the whole file is rewritten on each set; fine for the few settings writes a session makes.
+// The whole file is rewritten on each set; fine for the few settings writes a session makes.
 #include "registry_ini.hpp"
 #include <map>
 #include <stdio.h>

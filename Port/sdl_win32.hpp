@@ -1,7 +1,7 @@
 // Port (docs/port.md): the window and message calls of winmain.cpp, on SDL3. winmain.cpp includes this
 // last under GTA2_PORT, so WinMain_5E53F0 and WindowProc_5E4EE0 run unchanged: SDL events become the few
 // window messages the game handles, and the window calls act on the one SDL window.
-// ponytail: a user32 subset for one window and about ten messages; rewrite WinMain on SDL directly if it grows.
+// A user32 subset for one window and about ten messages; rewrite WinMain on SDL directly if it grows.
 #pragma once
 
 #include <windows.h>

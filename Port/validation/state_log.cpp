@@ -182,7 +182,7 @@ void ParseMask()
             continue;
         }
         const unsigned char fill = kind[0] == 'p' ? kPointerMask : 0; // p: a pointer field, else padding
-        for (size_t i = 0; i < gEntries.size(); i++) // ponytail: linear search, a map if the mask grows
+        for (size_t i = 0; i < gEntries.size(); i++) // Linear search, a map if the mask grows
         {
             Entry& e = gEntries[i];
             if (e.name == name && off + len <= e.size)
@@ -393,7 +393,7 @@ void ParseTrace(const std::string& path)
         }
         start = comma + 1;
     }
-    gBreakpoints.reserve(gBreakpoints.size() + 4096); // ponytail: return breakpoints beyond that move the entries, Find() copes
+    gBreakpoints.reserve(gBreakpoints.size() + 4096); // Return breakpoints beyond that move the entries, Find() copes
     AddVectoredExceptionHandler(1, OnException);
 }
 

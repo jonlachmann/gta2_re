@@ -43,7 +43,7 @@ static double ClockSpeed()
 
 DWORD WINAPI timeGetTime(void)
 {
-    return (DWORD)(Uint64)(SDL_GetTicksNS() / 1e6 * ClockSpeed()); // ns: at a large k a millisecond holds many ticks. ponytail: wraps after 49 days / k (71 minutes at k = 1000): fine for a match
+    return (DWORD)(Uint64)(SDL_GetTicksNS() / 1e6 * ClockSpeed()); // ns: at a large k a millisecond holds many ticks. Wraps after 49 days / k (71 minutes at k = 1000): fine for a match
 }
 
 DWORD WINAPI GetTickCount(void)

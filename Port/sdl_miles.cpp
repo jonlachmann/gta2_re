@@ -1,7 +1,7 @@
 // Port (docs/port.md): the part of the Miles Sound System API that cSampleManager.cpp uses, on SDL3 audio.
 // A software mixer: 2D samples from the sound bank in memory, and streams (WAV files, PCM or IMA ADPCM,
 // decoded whole with SDL_LoadWAV). Handles point at our own voices; the game never looks inside them.
-// ponytail: no 3D provider is offered, so the game stays on its 2D (stereo pan) path; streams are decoded
+// No 3D provider is offered, so the game stays on its 2D (stereo pan) path; streams are decoded
 // whole on open (a few MB each). Add positional audio or streaming decode if either matters.
 #include "Source/3rdParty/mss.h"
 #include <SDL3/SDL.h>
