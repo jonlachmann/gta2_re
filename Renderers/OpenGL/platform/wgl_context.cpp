@@ -56,10 +56,6 @@ class WGLContext : public IGLContext
     {
         wglMakeCurrent(mDc, mRc);
     }
-    void* NativeWindow()
-    {
-        return mWnd;
-    }
 
   private:
     HWND mWnd;

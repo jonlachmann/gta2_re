@@ -1,35 +1,17 @@
-// Hooks GetDeviceData and GetDeviceState in the DirectInput keyboard vtable (shared by the game's device).
-// Always: drops NumLock and Scroll Lock events (see gDropLockKeys). Test tools: GTA2GL_INPUT=<frame>:<dik>[:<frames held>],...
-// feeds keys at those Vid_FlipBuffers counts (dik in hex or decimal); GTA2GL_KEYLOG=<file> logs what the game reads.
-#define DIRECTINPUT_VERSION 0x0700
+// Hooks GetDeviceData and GetDeviceState in the DirectInput keyboard vtable (shared by the game's device): drops
+// NumLock and Scroll Lock events (see gDropLockKeys), and runs the scripted keys and key log of dev/input_script.cpp.
 #include "dinput_hook.hpp"
-#include <dinput.h>
-#include <stdio.h>
+#include "../dev/input_script.hpp"
 #include <stdlib.h>
 #include <string.h>
-#include <vector>
-#include <windows.h>
 
 namespace
 {
-struct KeyEvent
-{
-    unsigned mFrame;
-    unsigned mDik;
-    bool mDown;
-};
-
 typedef HRESULT(__stdcall* TGetDeviceData)(IDirectInputDeviceA*, DWORD, LPDIDEVICEOBJECTDATA, LPDWORD, DWORD);
-typedef HRESULT(__stdcall* TGetCapabilities)(IDirectInputDeviceA*, LPDIDEVCAPS);
-
 typedef HRESULT(__stdcall* TGetDeviceState)(IDirectInputDeviceA*, DWORD, LPVOID);
 
 TGetDeviceData gRealGetDeviceData;
 TGetDeviceState gRealGetDeviceState;
-std::vector<KeyEvent> gEvents; // sorted by frame
-size_t gNext;
-const unsigned* gFrameCounter;
-FILE* gKeyLog; // GTA2GL_KEYLOG=<file>: every keyboard event the game reads, with the backlog left
 // Wine on XWayland can flood the keyboard buffer with NumLock or Scroll Lock pairs; GTA2 reads one event per
 // frame, so they delay every real key. GTA2 uses neither key. Opt-out: GTA2GL_KEEP_LOCK_KEYS=1.
 bool gDropLockKeys;
@@ -38,9 +20,6 @@ bool IsDroppedKey(DWORD dik)
 {
     return gDropLockKeys && (dik == DIK_NUMLOCK || dik == DIK_SCROLL);
 }
-DWORD gSequence = 1;
-
-HRESULT ReadKeyboard(IDirectInputDeviceA* pDev, DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD dwFlags);
 
 bool IsKeyboard(IDirectInputDeviceA* pDev)
 {
@@ -69,14 +48,24 @@ bool IsKeyboard(IDirectInputDeviceA* pDev)
     return kb;
 }
 
-DWORD DueCount()
+// The real read, without the dropped lock keys
+HRESULT ReadKeyboard(IDirectInputDeviceA* pDev, DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD dwFlags)
 {
-    DWORD n = 0;
-    for (size_t i = gNext; i < gEvents.size() && gEvents[i].mFrame <= *gFrameCounter; i++)
+    const DWORD requested = (pdwInOut && rgdod && !(dwFlags & DIGDD_PEEK)) ? *pdwInOut : 0;
+    HRESULT hr = gRealGetDeviceData(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
+    for (int i = 0; i < 256 && requested == 1 && SUCCEEDED(hr) && *pdwInOut == 1 && IsDroppedKey(rgdod->dwOfs); i++)
     {
-        n++;
+        InputScript_LogDropped(*rgdod);
+        *pdwInOut = 1;
+        hr = gRealGetDeviceData(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
     }
-    return n;
+    if (InputScript_Logging() && rgdod && SUCCEEDED(hr) && pdwInOut && *pdwInOut > 0)
+    {
+        DWORD left = INFINITE;
+        gRealGetDeviceData(pDev, cbObjectData, 0, &left, DIGDD_PEEK);
+        InputScript_LogRead(*rgdod, left);
+    }
+    return hr;
 }
 
 HRESULT __stdcall HookGetDeviceData(IDirectInputDeviceA* pDev,
@@ -89,11 +78,12 @@ HRESULT __stdcall HookGetDeviceData(IDirectInputDeviceA* pDev,
     {
         return gRealGetDeviceData(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
     }
-    if (gEvents.empty())
+    if (!InputScript_Scripted())
     {
         return ReadKeyboard(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
     }
-    const DWORD due = DueCount();
+    // Scripted keys come first, one per read, then the real ones
+    const DWORD due = InputScript_Due();
     if (!rgdod || (dwFlags & DIGDD_PEEK))
     {
         HRESULT hr = gRealGetDeviceData(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
@@ -107,14 +97,8 @@ HRESULT __stdcall HookGetDeviceData(IDirectInputDeviceA* pDev,
         }
         return DI_OK;
     }
-    if (due && pdwInOut && *pdwInOut >= 1)
+    if (due && pdwInOut && *pdwInOut >= 1 && InputScript_Take(rgdod, cbObjectData))
     {
-        const KeyEvent& e = gEvents[gNext++];
-        memset(rgdod, 0, cbObjectData);
-        rgdod->dwOfs = e.mDik;
-        rgdod->dwData = e.mDown ? 0x80 : 0;
-        rgdod->dwTimeStamp = GetTickCount();
-        rgdod->dwSequence = gSequence++;
         *pdwInOut = 1;
         return DI_OK;
     }
@@ -127,45 +111,11 @@ HRESULT __stdcall HookGetDeviceData(IDirectInputDeviceA* pDev,
     return hr;
 }
 
-HRESULT ReadKeyboard(IDirectInputDeviceA* pDev, DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD dwFlags)
-{
-    const DWORD requested = (pdwInOut && rgdod && !(dwFlags & DIGDD_PEEK)) ? *pdwInOut : 0;
-    HRESULT hr = gRealGetDeviceData(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
-    for (int i = 0; i < 256 && requested == 1 && SUCCEEDED(hr) && *pdwInOut == 1 && IsDroppedKey(rgdod->dwOfs); i++)
-    {
-        if (gKeyLog)
-        {
-            fprintf(gKeyLog,
-                    "%u frame %u dropped %02x %s\n",
-                    (unsigned)GetTickCount(),
-                    gFrameCounter ? *gFrameCounter : 0,
-                    (unsigned)rgdod->dwOfs,
-                    (rgdod->dwData & 0x80) ? "down" : "up");
-        }
-        *pdwInOut = 1;
-        hr = gRealGetDeviceData(pDev, cbObjectData, rgdod, pdwInOut, dwFlags);
-    }
-    if (gKeyLog && rgdod && SUCCEEDED(hr) && pdwInOut && *pdwInOut > 0)
-    {
-        DWORD left = INFINITE;
-        gRealGetDeviceData(pDev, cbObjectData, 0, &left, DIGDD_PEEK);
-        fprintf(gKeyLog,
-                "%u frame %u dik %02x %s left %u\n",
-                (unsigned)GetTickCount(),
-                gFrameCounter ? *gFrameCounter : 0,
-                (unsigned)rgdod->dwOfs,
-                (rgdod->dwData & 0x80) ? "down" : "up",
-                (unsigned)left);
-        fflush(gKeyLog);
-    }
-    return hr;
-}
-
-// Immediate mode (the frontend polls GetDeviceState): keys held between their down and up frames.
+// Immediate mode (the frontend polls GetDeviceState): the scripted keys held between their down and up frames.
 HRESULT __stdcall HookGetDeviceState(IDirectInputDeviceA* pDev, DWORD size, LPVOID data)
 {
     HRESULT hr = gRealGetDeviceState(pDev, size, data);
-    if (gEvents.empty() || size != 256 || !data || !IsKeyboard(pDev))
+    if (!InputScript_Scripted() || size != 256 || !data || !IsKeyboard(pDev))
     {
         return hr;
     }
@@ -174,84 +124,22 @@ HRESULT __stdcall HookGetDeviceState(IDirectInputDeviceA* pDev, DWORD size, LPVO
         memset(data, 0, size);
         hr = DI_OK;
     }
-    BYTE* keys = (BYTE*)data;
-    for (size_t i = 0; i < gEvents.size(); i++)
-    {
-        const KeyEvent& e = gEvents[i];
-        if (e.mDown && e.mFrame <= *gFrameCounter)
-        {
-            // Held until its matching up event.
-            for (size_t j = i + 1; j < gEvents.size(); j++)
-            {
-                if (!gEvents[j].mDown && gEvents[j].mDik == e.mDik)
-                {
-                    if (gEvents[j].mFrame > *gFrameCounter)
-                    {
-                        keys[e.mDik & 0xFF] = 0x80;
-                    }
-                    break;
-                }
-            }
-        }
-    }
+    InputScript_HoldKeys((BYTE*)data);
     return hr;
-}
-
-void Parse(const char* s)
-{
-    while (s && *s)
-    {
-        char* end = 0;
-        KeyEvent down;
-        down.mFrame = (unsigned)strtoul(s, &end, 10);
-        if (*end != ':')
-        {
-            break;
-        }
-        down.mDik = (unsigned)strtoul(end + 1, &end, 0);
-        down.mDown = true;
-        unsigned held = 2;
-        if (*end == ':')
-        {
-            held = (unsigned)strtoul(end + 1, &end, 10);
-        }
-        KeyEvent up = down;
-        up.mFrame += held;
-        up.mDown = false;
-        gEvents.push_back(down);
-        gEvents.push_back(up);
-        s = (*end == ',') ? end + 1 : 0;
-    }
-    // Stable insertion sort by frame keeps the down/up order of each key.
-    for (size_t i = 1; i < gEvents.size(); i++)
-    {
-        KeyEvent e = gEvents[i];
-        size_t j = i;
-        while (j > 0 && gEvents[j - 1].mFrame > e.mFrame)
-        {
-            gEvents[j] = gEvents[j - 1];
-            j--;
-        }
-        gEvents[j] = e;
-    }
 }
 } // namespace
 
 void InstallDInputHook(const unsigned* pFrameCounter)
 {
-    const char* env = getenv("GTA2GL_INPUT");
-    const char* keyLog = getenv("GTA2GL_KEYLOG");
-    gDropLockKeys = getenv("GTA2GL_KEEP_LOCK_KEYS") == NULL;
-    if (((!env || !*env) && (!keyLog || !*keyLog) && !gDropLockKeys) || gRealGetDeviceData)
+    if (gRealGetDeviceData)
     {
         return;
     }
-    if (keyLog && *keyLog)
+    gDropLockKeys = getenv("GTA2GL_KEEP_LOCK_KEYS") == NULL;
+    if (!InputScript_Init(pFrameCounter) && !gDropLockKeys)
     {
-        gKeyLog = fopen(keyLog, "w");
+        return;
     }
-    Parse(env);
-    gFrameCounter = pFrameCounter;
 
     // Any keyboard device created here shares its vtable with the game's.
     typedef HRESULT(WINAPI * TCreate)(HINSTANCE, DWORD, LPDIRECTINPUTA*, LPUNKNOWN);
@@ -275,7 +163,4 @@ void InstallDInputHook(const unsigned* pFrameCounter)
     vtbl[9] = (void*)HookGetDeviceState;
     VirtualProtect(&vtbl[9], sizeof(void*), old, &old);
     // pDev and pDi stay alive so the vtable stays valid.
-    char msg[128];
-    snprintf(msg, sizeof(msg), "dinput_hook: %u scheduled key events\n", (unsigned)gEvents.size());
-    OutputDebugStringA(msg);
 }

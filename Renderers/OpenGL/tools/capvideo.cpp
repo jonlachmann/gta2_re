@@ -1,5 +1,5 @@
 // Proxy for DMA's Dmavideo.dll that captures the back buffer before each flip (reference frames).
-#include "../core/capture.hpp"
+#include "../dev/capture.hpp"
 #include "../core/gta2_api.hpp"
 #include "../dll/dinput_hook.hpp"
 #include "d3dlog.hpp"

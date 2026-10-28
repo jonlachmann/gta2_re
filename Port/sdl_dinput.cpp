@@ -4,13 +4,14 @@
 // The first SDL gamepad is the game's joystick, in DirectInput's joystick layout (gInputDeviceFormat_601A6C):
 // offset 0/4 the X/Y axis in -1000..1000 (the game's DIPROP_RANGE), 48 + n button n. The left stick and the
 // d-pad drive the axes. Bindings to the pad are set in the game's Controls menu, as in the original.
-// ponytail: no mouse data (the game doesn't use the mouse for play); one pad.
+// No mouse data (the game doesn't use the mouse for play); one pad.
 #define DIRECTINPUT_VERSION 0x0700
 #include "sdl_dinput.hpp"
 #include "sdl_win32.hpp"
 #include "port_hooks.hpp"
 #include <deque>
 #include <dinput.h>
+#include "validation/scripted_input.hpp"
 
 namespace
 {
@@ -23,7 +24,7 @@ struct KeyEvent
 std::deque<KeyEvent> gKeyEvents; // buffered events (GetDeviceData, the game)
 std::deque<KeyEvent> gPadEvents; // the joystick's: dik is the data format offset
 SDL_Gamepad* gPad;
-bool gScriptedPad; // GTA2_PORT_PAD: tests without a pad
+bool gScriptedPad; // tests without a pad (validation/scripted_input.cpp)
 int gStickX, gStickY, gDpadX, gDpadY; // -1000..1000
 int gLastX, gLastY; // what the game was last told
 const GUID kPadGuid = {0x47544132, 0x5044, 0x0001, {'S', 'D', 'L', '3', 'P', 'A', 'D', 0}};
@@ -48,30 +49,6 @@ void AddPadEvent(DWORD ofs, DWORD data)
     {
         gPadEvents.push_back(ev);
     }
-}
-
-// The test hooks' lists, <ms>:<what>:<value>,...: hands each entry whose time has come to add, and keeps the rest.
-void QueueScripted(const char*& pNext, void (*add)(unsigned ms, unsigned what, int value))
-{
-    while (pNext && *pNext)
-    {
-        unsigned ms = 0, what = 0;
-        int value = 0;
-        if (SDL_sscanf(pNext, "%u:%u:%d", &ms, &what, &value) != 3 || ms > SDL_GetTicks())
-        {
-            return;
-        }
-        add(ms, what, value);
-        pNext = SDL_strchr(pNext, ',');
-        pNext = pNext ? pNext + 1 : NULL;
-    }
-}
-
-// Test hook: GTA2_PORT_PAD=<ms>:<offset>:<value>,... queues pad events (and makes the game see a pad).
-void QueueScriptedPad()
-{
-    static const char* pNext = SDL_getenv("GTA2_PORT_PAD");
-    QueueScripted(pNext, [](unsigned, unsigned ofs, int value) { AddPadEvent(ofs, (DWORD)value); });
 }
 
 // Stick to the game's range, with the 25% dead zone it sets (DIPROP_DEADZONE 2500 of 10000)
@@ -109,13 +86,6 @@ int PadButton(int b)
         case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return 9;
         default: return -1;
     }
-}
-
-// Test hook: GTA2_PORT_KEYS=<ms>:<dik>:<1 down|0 up>,... queues key events at those times after start.
-void QueueScriptedKeys()
-{
-    static const char* pNext = SDL_getenv("GTA2_PORT_KEYS");
-    QueueScripted(pNext, [](unsigned ms, unsigned dik, int down) { AddKeyEvent(dik, down != 0, ms); });
 }
 
 // SDL scancodes (USB HID) to DirectInput key codes (PC set 1 scancodes).
@@ -262,7 +232,7 @@ class Device : public IDirectInputDevice2A
         memset(pData, 0, cb);
         if (mKind == kKeyboard)
         {
-            QueueScriptedKeys();
+            ScriptedInput_Keys(AddKeyEvent);
             memcpy(pData, gKeyState, cb < sizeof(gKeyState) ? cb : sizeof(gKeyState));
         }
         return DI_OK;
@@ -275,7 +245,7 @@ class Device : public IDirectInputDevice2A
             *pdwInOut = 0;
             return DI_OK;
         }
-        mKind == kKeyboard ? QueueScriptedKeys() : QueueScriptedPad();
+        mKind == kKeyboard ? ScriptedInput_Keys(AddKeyEvent) : ScriptedInput_Pad(AddPadEvent);
         std::deque<KeyEvent>& events = mKind == kKeyboard ? gKeyEvents : gPadEvents;
         DWORD n = events.size() < *pdwInOut ? (DWORD)events.size() : *pdwInOut;
         for (DWORD i = 0; rgdod && i < n; i++)
@@ -521,7 +491,25 @@ HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE, DWORD, LPDIRECTINPUTA* ppDI, L
     {
         SDL_InitSubSystem(SDL_INIT_GAMEPAD); // headless: none, as its every event poll asks the system for new ones
     }
-    gScriptedPad = SDL_getenv("GTA2_PORT_PAD") != NULL;
+    gScriptedPad = ScriptedInput_HasPad();
     *ppDI = &gDInput;
     return DI_OK;
 }
+
+// The DirectInput GUIDs declared in compat/dinput.h (weak: the game defines GUID_SysKeyboard itself). Windows builds
+// get them from dxguid.
+#if !defined(_WIN32)
+DEFINE_GUID(GUID_SysMouse, 0x6F1D2B60, 0xD5A0, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_SysKeyboard, 0x6F1D2B61, 0xD5A0, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_XAxis, 0xA36D02E0, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_YAxis, 0xA36D02E1, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_ZAxis, 0xA36D02E2, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_RxAxis, 0xA36D02F4, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_RyAxis, 0xA36D02F5, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_RzAxis, 0xA36D02E3, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_Slider, 0xA36D02E4, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_Button, 0xA36D02F0, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_Key, 0x55728220, 0xD33C, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(GUID_POV, 0xA36D02F2, 0xC9F3, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+DEFINE_GUID(IID_IDirectInputDevice2A, 0x5944E682, 0xC92E, 0x11CF, 0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00);
+#endif

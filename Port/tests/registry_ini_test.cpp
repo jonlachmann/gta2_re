@@ -1,5 +1,4 @@
-// Port/registry_ini.cpp check: Scripts/port/build.sh builds it as build_port/registry_ini_test.exe;
-// run it under wine in an empty folder (it writes gta2.ini there).
+// Port/registry_ini.cpp check (ctest, Port/CMakeLists.txt; it writes gta2.ini in its working folder).
 #include "../registry_ini.hpp"
 #include <stdio.h>
 #include <string.h>

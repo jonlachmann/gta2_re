@@ -2,11 +2,9 @@
 // no boot-to-map debug switches; straight into the game's WinMain, whose window is SDL's.
 #include "Source/winmain.hpp"
 #include <SDL3/SDL_main.h>
-#include "headless/fast_clock.hpp"
 #include "net/net_main.hpp"
 #include "net/engine/engine.hpp"
-#include "port_hooks.hpp"
-#include <stdlib.h>
+#include "validation/validation.hpp"
 #include <string>
 #include <vector>
 
@@ -51,14 +49,9 @@ static void OnCrash(int sig, siginfo_t* info, void* context)
 }
 #endif
 
-u32 gPortAttractIdleMs = 60000;
-
 int main(int argc, char** argv)
 {
-    if (const char* ms = getenv("GTA2_PORT_ATTRACT_MS")) // a test aid: attract mode sooner (docs/port.md, M2)
-    {
-        gPortAttractIdleMs = (u32)atoi(ms);
-    }
+    Validation_Start();
 #if !defined(_WIN32)
     struct sigaction sa = {};
     sa.sa_sigaction = OnCrash;
@@ -69,9 +62,6 @@ int main(int argc, char** argv)
     sigaction(SIGTRAP, &sa, NULL); // a trap: clang's __builtin_trap, libc++ hardening
     sigaction(SIGILL, &sa, NULL);
     sigaction(SIGFPE, &sa, NULL);
-#endif
-#if defined(_WIN32)
-    FastClock_Install(); // GTA2_SPEED (docs/port.md, M2)
 #endif
     std::vector<std::string> args(argv + 1, argv + argc);
     const int net = NetMain_Init(args); // --server, --connect (docs/netcode.md)

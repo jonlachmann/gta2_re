@@ -49,3 +49,4 @@ build.log
 build_clang/
 build_port/
 recordings/
+build_gl*/

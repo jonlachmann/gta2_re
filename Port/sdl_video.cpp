@@ -4,8 +4,7 @@
 #include "Renderers/OpenGL/core/vid_system.hpp"
 #include "Renderers/OpenGL/platform/gl_context.hpp"
 #include "sdl_win32.hpp"
-#include "headless/sim_bench.hpp"
-#include "headless/state_log.hpp"
+#include "validation/validation.hpp"
 #include <SDL3/SDL.h>
 #include <stdio.h>
 
@@ -16,7 +15,7 @@ static unsigned gFlips;
 
 EXPORT SVideo* __stdcall Vid_Init_SYS(HINSTANCE hInstance, u16 flags)
 {
-    StateLog_Init();
+    Validation_VideoInit();
     VidSystem* pSys = new VidSystem();
     pSys->Init(hInstance, flags, gVidFuncs, "gta2gl.ini");
     return pSys->Video();
@@ -80,7 +79,6 @@ EXPORT void __stdcall Vid_FlipBuffers(SVideo* pVideo)
     {
         pSys->Flip(); // returns at once without a GL context (headless)
     }
-    StateLog_Frame(++gFlips);
-    SimBench_Frame(gFlips);
+    Validation_Frame(++gFlips);
 }
 

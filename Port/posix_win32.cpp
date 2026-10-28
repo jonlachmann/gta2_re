@@ -1,4 +1,4 @@
-// Port (docs/port.md): the Win32 functions of compat/port_win32_functions.h on POSIX and SDL3.
+// Port (docs/port.md): the Win32 functions of compat/posix_win32.h on POSIX and SDL3.
 #if !defined(_WIN32) // non-Windows builds only
 #include "compat/windows.h"
 #include <SDL3/SDL.h>
@@ -33,7 +33,7 @@ BOOL WINAPI FreeLibrary(HMODULE)
     return TRUE;
 }
 
-// GTA2_SPEED=<k>: the game's clock k times faster (as Port/headless/fast_clock.cpp on Windows); a large k runs a
+// GTA2_SPEED=<k>: the game's clock k times faster (as Port/validation/fast_clock.cpp on Windows); a large k runs a
 // network game's ticks back to back (the bots' training, Port/net/session/server.cpp)
 static double ClockSpeed()
 {
@@ -43,7 +43,7 @@ static double ClockSpeed()
 
 DWORD WINAPI timeGetTime(void)
 {
-    return (DWORD)(Uint64)(SDL_GetTicksNS() / 1e6 * ClockSpeed()); // ns: at a large k a millisecond holds many ticks. ponytail: wraps after 49 days / k (71 minutes at k = 1000): fine for a match
+    return (DWORD)(Uint64)(SDL_GetTicksNS() / 1e6 * ClockSpeed()); // ns: at a large k a millisecond holds many ticks. Wraps after 49 days / k (71 minutes at k = 1000): fine for a match
 }
 
 DWORD WINAPI GetTickCount(void)

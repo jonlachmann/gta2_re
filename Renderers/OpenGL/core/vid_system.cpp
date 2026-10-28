@@ -25,9 +25,7 @@ void* LoadGL(const char* name)
 }
 } // namespace
 
-VidSystem::VidSystem() :
-    mContext(0), mEnumIdx(0), mEnumBpp(0), mSurfaceW(0), mSurfaceH(0), mSurfaceGrabbed(false), mFrame(0), mStatsInterval(0), mStatsStart(0),
-    mPresentSeconds(0), mWaitSeconds(0), mStatsDraws(0), mStatsUploads(0), mStatsVerts(0)
+VidSystem::VidSystem() : mContext(0), mEnumIdx(0), mEnumBpp(0), mSurfaceW(0), mSurfaceH(0), mSurfaceGrabbed(false), mFrame(0)
 {
     memset(&mHeader, 0, sizeof(mHeader));
     mHeader.mMagic = kGLVideoMagic;
@@ -100,18 +98,9 @@ void VidSystem::Init(void* hInstance, u16 flags, void* pVidFuncs, const char* in
     v.field_6C = 5;
     v.field_70 = 0;
     v.field_10_found_rgb_bit_count = 16;
-    mCapture.Init("gl");
-    const char* pStats = getenv("GTA2GL_STATS");
-    mStatsInterval = pStats ? (u32)atoi(pStats) : 0;
+    mTools.Init();
     mOptions.Init(iniPath ? iniPath : "gta2gl.ini");
     mRenderer.SetOptions(mOptions.Effective());
-    if (const char* pToggle = getenv("GTA2GL_TOGGLE_AT"))
-    {
-        for (const char* p = pToggle; p && *p; p = strchr(p, ','), p = p ? p + 1 : 0)
-        {
-            mToggleFrames.push_back((u32)strtoul(p, 0, 10));
-        }
-    }
 }
 
 s32 VidSystem::CheckMode(s32 width, s32 height, s32 bpp)
@@ -262,61 +251,24 @@ void VidSystem::Flip()
         mSurfaceGrabbed = false;
     }
 
-    const double t0 = mStatsInterval ? Now() : 0.0;
+    mTools.BeginFrame();
     mRenderer.FinishFrame();
-    const bool listed = mCapture.WantFrame(mFrame), now = FrameCapture::WantNow(mFrame);
-    if (listed || now)
-    {
-        std::vector<u8> rgba;
-        mRenderer.ReadLogical(rgba);
-        FrameCapture::WriteBmp(listed ? mCapture.PathFor(mFrame) : std::string("capture.bmp"), &rgba[0], mRenderer.LogicalWidth(), mRenderer.LogicalHeight(), false);
-    }
+    mTools.Capture(mRenderer, mFrame);
 
     int w = 0, h = 0;
     mContext->GetDrawableSize(&w, &h);
     mRenderer.Present(w, h);
     mContext->SwapBuffers();
-    const double tw = mStatsInterval ? Now() : 0.0;
+    mTools.BeginWait();
     mRenderer.ThrottleFrames();
-    const double wait = mStatsInterval ? Now() - tw : 0.0;
-    for (size_t i = 0; i < mToggleFrames.size(); i++)
+    mTools.EndWait();
+    if (mTools.ToggleAt(mFrame))
     {
-        if (mToggleFrames[i] == mFrame)
-        {
-            ToggleFaithful();
-        }
+        ToggleFaithful();
     }
     mOptions.Poll(Now());
     ApplyOptions();
-    if (mStatsInterval)
-    {
-        const double t1 = Now();
-        mPresentSeconds += t1 - t0 - wait; // post effects + present + swap
-        mWaitSeconds += wait;
-        if (mFrame % mStatsInterval == 0)
-        {
-            if (mStatsStart > 0.0)
-            {
-                const double n = mStatsInterval;
-                fprintf(stderr,
-                        "glstats frame %u: %.1f fps, %.1f draw calls, %.0f vertices, %.1f uploads, post+present+swap %.3f ms, gpu wait "
-                        "%.3f ms per frame\n",
-                        mFrame,
-                        n / (t1 - mStatsStart),
-                        (mRenderer.GetDrawCallCount() - mStatsDraws) / n,
-                        (mRenderer.GetVertexCount() - mStatsVerts) / n,
-                        (mRenderer.GetUploadCount() - mStatsUploads) / n,
-                        mPresentSeconds * 1000.0 / n,
-                        mWaitSeconds * 1000.0 / n);
-            }
-            mStatsStart = t1;
-            mPresentSeconds = 0.0;
-            mWaitSeconds = 0.0;
-            mStatsDraws = mRenderer.GetDrawCallCount();
-            mStatsUploads = mRenderer.GetUploadCount();
-            mStatsVerts = mRenderer.GetVertexCount();
-        }
-    }
+    mTools.EndFrame(mRenderer, mFrame);
 }
 
 void VidSystem::Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 bottom)

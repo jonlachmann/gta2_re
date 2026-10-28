@@ -1,4 +1,4 @@
-// Native (Linux) test of core/gbh_api.cpp texture invalidation with a recording backend.
+// Native test of the gbh_* layer's texture invalidation (core/gbh_textures.cpp) with a recording backend.
 // Mirrors how the game updates textures (TextureCache in Source/): rolling score digits,
 // palette changes, car damage size changes, the shared texture and never drawn tiles.
 #include "../core/gbh_api.hpp"

@@ -6,8 +6,8 @@
 cd "$(dirname "$0")/../.."
 OUT=${OUT:-build_clang}
 rm -rf "$OUT"; mkdir -p "$OUT"
-. Scripts/port/build_common.sh
-INC=$(mingw_includes)
+# The MinGW g++ knows its C++ and C header directories, in the order libstdc++'s #include_next needs.
+INC=$(echo | i686-w64-mingw32-g++ -xc++ -E -v - 2>&1 | sed -n '/#include <...> search starts here:/,/End of search list./p' | grep '^ ' | grep -Ev '/lib/gcc/[^/]+/[^/]+/include(-fixed)?$' | sed 's/^ */-isystem /')
 FLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 -fsyntax-only -ferror-limit=0 -w -Wno-address-of-temporary -nostdinc++ -nostdlibinc $INC -ISource -I."
 files=("$@")
 [ ${#files[@]} -eq 0 ] && files=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp'))

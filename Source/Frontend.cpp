@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <wchar.h>
 #if defined(GTA2_PORT)
-#include "Port/port_hooks.hpp"
+#include "Port/port_hooks.hpp" // the port's hooks (docs/port.md)
 #include "Port/registry_ini.hpp" // the registry on gta2.ini (docs/port.md)
 #endif
 
@@ -900,7 +900,7 @@ s32 Frontend::Run_4AEDB0()
                 --remaining;
             } while (remaining);
 #if defined(GTA2_PORT)
-            if (Time - field_C9E4_last_input_time > gPortAttractIdleMs)
+            if (Time - field_C9E4_last_input_time > gPortAttractIdleMs) // 60000, or shorter for tests (Port/port_hooks.hpp)
 #else
             if (Time - field_C9E4_last_input_time > 60000)
 #endif

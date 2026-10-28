@@ -2,7 +2,7 @@
 // 10.5.exe, so replays compare exactly. With PortRandSound_Separate(true) (the netcode) sound draws from a stream
 // of its own: a client that resimulates without sound then draws the same numbers as the server.
 #pragma once
-#include "port_rand.h"
+#include "port_rand.hpp"
 
 int port_rand_sound();
 void PortRandSound_Separate(bool separate);

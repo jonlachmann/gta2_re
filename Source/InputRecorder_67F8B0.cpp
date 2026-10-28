@@ -16,7 +16,7 @@
 #include "GameSession.hpp"
 #include "input_bits.hpp"
 #if defined(GTA2_PORT)
-    #include "Port/port_hooks.hpp"
+#include "Port/port_hooks.hpp" // the port's hooks (docs/port.md)
 #endif
 
 #define ATTRACT_COUNT 3

@@ -1,15 +1,25 @@
-// Port (docs/port.md): the port's hooks in the game's code, declared once. The Source/ files that use them include
-// this under #if defined(GTA2_PORT), so VC6 never sees it; Port/ defines and sets them.
+// Port (docs/port.md, "`Source/` changes"): what the game's code (Source/, under GTA2_PORT) calls or reads in the port,
+// in one place. The Source/ files include this under #if defined(GTA2_PORT), so VC6 never sees it; Port/ defines and sets
+// them.
 #pragma once
 #include "Source/types.hpp"
 #include <stddef.h>
 #include <windows.h>
 
-// DirectInput on SDL3 (Port/sdl_dinput.cpp), for input.cpp and InputRecorder_67F8B0.cpp
+// ---- The platform layer
+
+// DirectInput on SDL3 (Port/sdl_dinput.cpp), in place of DirectInputCreateA (input.cpp, InputRecorder_67F8B0.cpp). The
+// interfaces are only named, so this doesn't include dinput.h before the game picks its DIRECTINPUT_VERSION.
 HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE hinst, DWORD dwVersion, struct IDirectInputA** ppDI, struct IUnknown* punkOuter);
 // The character a key's last press typed, in the system's keyboard layout with shift (Latin-1, 0 none), for the chat
 // line (Hud.cpp): the game's tables (data/keyboard) are per key without shift, so a '/' behind shift never came
 u16 Port_TypedChar(s32 dik);
+
+// ---- Validation and test aids
+
+// The idle time before attract mode in Frontend::Run_4AEDB0: 60 s, or GTA2_PORT_ATTRACT_MS for tests
+// (Port/validation/validation.cpp; the same as Scripts/port/statecheck/patch_attract.py does to 10.5.exe)
+extern u32 gPortAttractIdleMs;
 
 namespace crt
 {
@@ -18,9 +28,7 @@ namespace crt
 extern void (*gPortHeapHook)(size_t size);
 } // namespace crt
 
-// The idle time before attract mode in Frontend::Run_4AEDB0: 60 s, or GTA2_PORT_ATTRACT_MS for tests (Port/main.cpp; the
-// same as Scripts/port/patch_attract.py does to 10.5.exe)
-extern u32 gPortAttractIdleMs;
+// ---- The network game (docs/netcode.md)
 
 // Port/net/net_main.cpp's
 extern s32 gPortTrafficCap; // the ambient traffic cars per player (Car.cpp): 16, or a network server's --traffic

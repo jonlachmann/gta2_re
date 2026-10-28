@@ -1,584 +1,360 @@
-# Cross-platform port: progress and findings
+# The cross-platform port
 
-Notes for the plan in [issue #840](https://github.com/CriminalRETeam/gta2_re/issues/840) (a native
-GTA2 on SDL3 + the OpenGL renderer, built from the frozen decomp in a fork). The issue holds the plan;
-this file records what has been tried, what it found, and how to repeat it. The port is meant to be
-redone from a later, more complete decomp, so the **Repeating it** section matters more than the
-status snapshot.
+A native GTA2 on SDL3 and the OpenGL renderer (`Renderers/OpenGL`), built with clang from the decomp in
+`Source/`, for the plan in [issue #840](https://github.com/CriminalRETeam/gta2_re/issues/840). The game's code runs
+unchanged: every Windows and DirectX API it uses is replaced underneath it, in `Port/`, and the few changes to
+`Source/` are under `#if defined(GTA2_PORT)`, so the VC6 build and its matching are not affected.
 
-## Status (2026-10-23)
+The port is meant to be redone from a later, more complete decomp; "Redoing it on a later decomp" says how.
 
-| Milestone (issue #840) | State |
+| Build | State |
 |---|---|
-| M0. Compiles with clang | **All 109** game sources compile, and the whole game **links and runs**: a clang-built Windows exe (MinGW-w64), under wine on macOS with the OpenGL renderer. The frontend is bit-identical to `10.5.exe`'s; the first city plays at 30 fps. Network and tool removal, planned for M0, are deferred to M1 (see Remaining). |
-| M1. Plays on Linux, Windows | In progress. Windows (tested under wine): renderer linked in, SDL3 window, GL context, event loop, keyboard, settings file and sound; frontend still bit-identical to `10.5.exe`. **Linux (64-bit x86, as the macOS build): runs** (Debian trixie, headless and windowed with Mesa); the 32-bit build compiles and links, not run; DirectPlay left out, 2-byte wide strings and Windows paths handled. Gamepad and trig tables done. See "M1 so far" and "The Linux build". |
-| M2. Replay test | Started: `Scripts/port/state_check.py` compares the attract replay with `10.5.exe` field by field (and call by call), headless, in about a minute. Seven divergences found and fixed or explained; one is unfixable (the original reads stack garbage, particles only). With that cascade and two scratch values left out, the port matches **the whole first attract demo** (4,100 frames). See "M2: the replay test". |
-| M3-M6 | Not started as planned, but a **native macOS build (arm64, 64-bit) plays**: frontend, the three cities, attract demos. See "Native macOS". |
+| macOS, native arm64 (64-bit) | plays: frontend, the three cities, attract demos |
+| Linux x86_64 | plays (Debian trixie; headless, and in a window with Mesa) |
+| Linux i686 (x87 floats) | builds and links, not run |
+| Windows, 32-bit MinGW-w64 (tested under wine) | plays; the frontend is bit-identical to `10.5.exe`'s, and the first attract demo matches it field by field (see Validation) |
 
-Branches (local, not pushed yet):
+Not done: movies (Bink is stubbed), the 3D sound provider (the game uses its 2D path), the mouse. The original's
+DirectPlay network game is left out of every build; the port has its own, `Port/net` (docs/netcode.md).
 
-- `m0-clang` (from `master`): the M0 fixes below. Every commit keeps `[3423/3423] funcs OK`, and
-  `compare_builds.py` reports no changed function. None of them needs to wait for the freeze; they can go
-  to `master` as they are.
-- `port` (from `m0-clang`): what can't go to `master`. So far only additions: `Scripts/port/build.sh`,
-  `Scripts/port/run_wine.sh`, `Port/stubs.cpp`. See "The clang-built game under wine".
-- `sdl3-mac` (from PR #837, `parigi-n/claude/opengl-renderer`): the renderer's SDL3 port, a macOS
-  build, and the WGL fix wine on macOS needs. See Renderer.
-- Submodule `3rdParty/GTA2Hax`, branch `portable-includes`: forward slashes in two `#include`s. It has to
-  be merged in GTA2Hax before `m0-clang` can be pushed, since the submodule pointer refers to it.
+## Building
 
-## How the M0 state is measured
+CMake, with clang, from the repository root. One preset per target (`Port/CMakePresets.json`); the outputs go to
+`build_port/<target>/` (git-ignored):
 
 ```bash
-Scripts/port/clang_check.sh            # all of gta2_lib_src (CMakeLists.txt), about 4 s
-Scripts/port/clang_check.sh Source/Ped.cpp
+cmake --preset mac -S Port && cmake --build build_port/mac && ctest --test-dir build_port/mac
 ```
 
-It runs `clang++ --target=i686-w64-mingw32 -fshort-wchar -std=c++17 -fsyntax-only` on every game
-source, using the headers of the installed MinGW-w64 g++ (`brew install mingw-w64`, or
-`g++-mingw-w64-i686` on Debian/Ubuntu). It prints the failing files and every distinct error; logs go to
-`build_clang/` (git-ignored). Exit code 0 means M0 is done in terms of compiling.
-
-Notes on the check:
-
-- MinGW headers stand in for `<windows.h>` until the fork has its own compatibility header (issue
-  #840: "Small compatibility headers"). Compiling against MinGW checks the C++, not the Win32 use.
-- Syntax only: nothing is linked yet, so missing definitions and link-time duplicates are still unknown.
-- clang stops a file at its first missing include. A file that fails on an include can hide any number
-  of errors behind it, so the count of errors can go **up** after a fix. That happened twice here:
-  9301 errors right after the include fixes, down to 177 after the STL fix.
-- The tools (`cl_proxy`, `ExePatcher`, `HookLoader`, `WinMainProxy`) are not in `gta2_lib_src` and
-  are not checked; the plan removes them.
-- `-Wno-address-of-temporary` is on purpose, see below.
-
-Every change to `Source/` was then checked with the VC6 build, as `CLAUDE.md` describes:
-`compare_builds.py --save` on `master` first, then `build.py` + `compare_builds.py` after each step.
-
-## Findings, by error kind
-
-Error counts are from the first full run (916 errors, 102 of 113 files failing, before any fix) and
-the runs in between; they show what to expect from a later snapshot of the decomp.
-
-### 1. Include paths (fatal, hide everything else)
-
-- **Backslashes**: `3rdParty/GTA2Hax/DmaVideo/DmaVideo.{hpp,cpp}` included `"..\Common\Types.hpp"`.
-  Only Windows resolves that. Forward slashes work on VC6 too. (67 files failed on this alone, through
-  `gbh_graphics.hpp`.)
-- **Letter case**: `#include "Fix16.hpp"` (file is `fix16.hpp`, in `Car_BC.hpp`, `CarAI_78.hpp`,
-  `ExplodingScore_100.hpp`) and `"miss2_0x11c.hpp"` (file is `miss2_0x11C.hpp`). macOS and Windows
-  don't notice; Linux will. The check runs on macOS, so it does **not** catch this. Find them with:
-  ```bash
-  ls Source > /tmp/names; grep -ho '#include "[^"/]*"' Source/*.?pp | sed 's/#include "//; s/"$//' | sort -u |
-    while read i; do [ -e "Source/$i" ] && ! grep -qx "$i" /tmp/names && echo "$i"; done
-  ```
-- `<FSTREAM.H>` and `<VC98/Include/DPLAY.H>` are VC6 SDK headers, see the next item and Remaining.
-
-### 2. `#if defined(__clang__) || (_MSC_VER <= 1200)` picks the 1998 path
-
-These guards were written so that clang-cl (or an IDE's clangd) sees the VC6 code. For a non-Microsoft
-clang they select `<FSTREAM.H>`, the old iostreams, and the hand-rolled DirectInput path. Outside
-`#if defined(_MSC_VER)` blocks they became `#if defined(_MSC_VER) && _MSC_VER <= 1200` (`error.hpp`,
-`error.cpp`, `input.cpp`, `InputRecorder_67F8B0.cpp`). Note that an undefined `_MSC_VER` is 0 in `#if`, so
-`(_MSC_VER <= 1200)` alone is true on every non-Microsoft compiler. The guards inside
-`Function.hpp`'s `#if defined(_MSC_VER)` block only matter to clang-cl and were left alone.
-
-### 3. `Function.hpp`'s non-Microsoft branch
-
-It lacked `DEFINE_GLOBAL_ARRAY_INIT` (24 uses) and had `#define __stdcall` (empty), which turns every
-`WINAPI` declaration in the SDK headers into a syntax error. clang knows `__stdcall` on every target and
-ignores it where it has no meaning, so the define can just go.
-
-### 4. The fake `std::vector`/`std::set` (`gbh_graphics.hpp`)
-
-A matching device: GTA2Hax's `DmaVideo.hpp` includes `<set>`/`<vector>`, which pulls `<new>` into every TU
-and changes VC6's EH frames (see commit 4876ffb1 and `docs/matching_quirks.md`). The header pre-sets the
-include guards and declares placeholder templates. With a real STL these collide with libstdc++
-(5520 "too many template arguments" errors). Now VC6 only.
-
-### 5. Temporaries bound to non-const references (by far the biggest)
-
-1250 errors, all of `Fix16`, `Ang16` and `Fix16_Point`, from **48 declarations** (about 30 functions).
-MSVC allows binding a temporary to `T&`; standard C++ doesn't. Fix: make the **input** parameters
-`const&`. `Scripts/port/constref.py` does the declarations and definitions in one go:
-
-```bash
-Scripts/port/constref.py Max_41E130,SquareRoot_436A70,PolarToCartesian_451730 ret1,ret2
-```
-
-The second argument lists output parameters to leave alone. In this pass those were `ret1`, `ret2`
-(PolarToCartesian), `outX`, `outY` (ProjectOntoAxis), `pRotTransX`, `pRotTransY`
-(RotateAndTranslatePoint), and `angle`, `angle_speed` (SmoothApproachAngle_405CE0).
-
-The knock-on: a `const` parameter can only call `const` members. Three rounds of clang errors
-("'this' argument ... is not marked const", "invalid operands ... 'const Fix16'") led to:
-
-- `const` on the read-only members: `Ang16` comparisons, `operator*`, `operator+`, `Add_ool`, unary
-  `operator-`; `Fix16::operator+`, both `Fix16::operator/`; `Fix16_Point` `operator+`, `operator*`,
-  `operator/`, `Multiply_438FE0`, `Divide_442CB0`, `Sub_40AC80`, `MultBy_442C80`, `NormalizeSafe_442AD0`,
-  `GetLength_41E260`, `GetLength_inline_442AD0`, `atan2_40F790`.
-- `const` on the parameters these pass things to: `Fix16_Point_POD(const Fix16&, const Fix16&)`,
-  `Ang16(const Fix16&, u8)`, `Fix16_Point::operator+=/-=`, `SetMovementVector_5224E0`,
-  `NewObj3C_528130`, `ApplyForceAtPoint_55F800`/`ApplyForceAndIntegrate_55F7A0`/
-  `ApplyForceWithTrailerRedirect_55F740` (`const Fix16_Point*`), `Abs_436A50`, `DotProductOOL_49E500`.
-
-What we learned about VC6 here:
-
-- **Adding `const` to parameters and to member functions changed no generated code**, including the
-  functions whose comments say they depend on the inline budget (`SquareRoot`, `Max_41E130`, the
-  `GetLength_*` family). The budget counts `const` *locals* (see the comment on `Fix16::SquareRoot`), but
-  `const` on a parameter or on `this` cost nothing in this pass.
-- **Exception: overload resolution.** Making the member `Ang16::operator-(const Ang16&)` const made it
-  tie with the free `operator-(const Ang16&, const Ang16&)` (`ang16.hpp`), and VC6 rejected the calls
-  as ambiguous (C2593). It stays non-const. Watch for any member that has a free twin.
-- clang's `-fsyntax-only` and VC6 disagree in places: clang did not report the non-const operator uses
-  in `ang16.cpp`/`fix16.cpp` that VC6 rejected (C2678) after the first round. Always run the VC6 build too.
-- A `static inline` definition (`Camera.cpp`'s `Max_41E130`) after an `extern inline` declaration of it
-  (`Camera.hpp`) is an error in clang; the unused header declaration was dropped.
-- `throw()` on a declaration but not on the definition is an error in C++17 (`SquareRoot_436A70`). Adding
-  `throw()` to the definition didn't change VC6's code.
-
-When the decomp has grown, expect new instances: every new function taking `Fix16&` and every new caller
-passing `a - b` to one. Fix them the same way: run the check, collect the "passing argument to parameter
-here" notes, run `constref.py`, repeat until clean.
-
-### 6. Smaller items
-
-| Error | Where | Fix |
+| Preset | Output | Needs |
 |---|---|---|
-| extra qualification `Class::f` on a member declaration | `ang16.hpp`, `CarPhysics_B0.hpp` (2), `Frontend.hpp` | drop the `Class::` |
-| case value `0x8xxxxxxx` cannot be narrowed to `HRESULT` | `FatalDXError_4A3CF0` in `error.cpp` | `case (HRESULT)0x8...:` — not `switch ((u32)hr)`, which would change the compare signedness and the switch layout VC6 needs (see the comment there) |
-| cast from pointer to smaller type `char` | `error.cpp` (`%c` from a `va_arg` pointer) | `(char)(size_t)va_1` |
-| taking the address of a temporary | 10 calls in `Car_BC.cpp`, `CarPhysics_B0.cpp`, `Explosion_30.cpp` | none: `f(&temp())` is valid (the temporary lives until the call returns), only clang refuses it by default. The port build needs `-Wno-address-of-temporary`. |
-| taking the address of a temporary, **kept after the statement** | `sound_obj.cpp`, `pSpeed = &pCar->GetCarLinearSpeed_43A240()` | a real dangling read, done on purpose to match VC6. Now VC6 only; other compilers copy the value. |
-| inline asm | `sprite_delta::Delta_5ABA00`, `Delta_5ABA40` (`gtx_0x106C.cpp`), `get_rdtsc_5BEE90` (`SpriteRenderer_1C.cpp`) | plain C++ under `#else`, asm kept for MSVC. The delta loops are line-by-line translations but **untested** (32-bit x86 can't run on the Apple Silicon machine used). The M2 replay test, or a quick test under wine against the asm, should check them. `get_rdtsc` uses `__builtin_readcyclecounter` (clang only; the profiler display is its only user). |
-| dynamic exception specification `throw(std::bad_alloc)` | `crt_stubs.cpp` (`operator new`, `new[]`) | VC6 only, through a `THROW_BAD_ALLOC` macro |
+| `mac` | `build_port/mac/gta2_port` | Xcode's clang, `brew install sdl3 ninja` |
+| `mac-asan` | `build_port/mac_asan/gta2_port`, with AddressSanitizer | as `mac` |
+| `linux64` | `build_port/linux64/gta2_port` (ELF x86-64) | `brew install lld`, a Debian sysroot in `build_port/linux64_sysroot` |
+| `linux32` | `build_port/linux/gta2_port` (ELF i386, x87 floats) | a Debian i386 sysroot in `build_port/linux_sysroot` |
+| `windows` | `build_port/windows/gta2_port.exe`, and in `gl/` the renderer DLLs and `nullvideo.dll` for `10.5.exe` | `brew install mingw-w64` (or `g++-mingw-w64-i686`), SDL3's MinGW package in `build_port/sdl3` (its `i686-w64-mingw32` folder), the install's `binkw32.dll` in `build_port/dlls` |
 
-### 7. The last five files
+Other places: `-DGTA2_LINUX_SYSROOT=`, `-DGTA2_SDL3_DIR=`, `-DGTA2_DLL_DIR=`. A second macOS build with other flags:
+`cmake -S Port -B build_port/mac_x4 -G Ninja -DCMAKE_CXX_FLAGS=-DGTA2_POOL_SCALE=4`.
 
-`NetPlay.cpp`, `Network_20324.cpp`, `Player.cpp`, `winmain.cpp` stopped at `NetPlay.hpp`'s
-`<VC98/Include/DPLAY.H>`, `input.cpp` at an undeclared `Fn_DirectInputCreateA` (its `#if _MSC_VER > 1200`
-excluded clang). MinGW-w64 still ships `dplay.h`, `dplobby.h` and `dinput.h` with import libraries, so
-non-MSVC compilers now take those, and the declaration's guard became `!defined(_MSC_VER) || _MSC_VER >
-1200`. Nothing was hiding behind them: all 109 files compile.
+What it builds (`Port/CMakeLists.txt`):
 
-## Remaining for M0 (fork only, breaks matching)
+- **The game**: the root `CMakeLists.txt`'s `gta2_lib_src` (the VC6 build's list) without the ImGui overlay and
+  DirectPlay, plus `StdAfx.cpp`, the platform layer, `Port/validation` and the network game (`Port/net`, with ENet).
+  `Port/main.cpp` replaces `test.cpp`.
+- **The renderer**, linked in (`Renderers/OpenGL/sources.cmake`): the game's loaders take the program itself
+  instead of `d3ddll.dll` and `dmavideo.dll` (`gbh_graphics.cpp`, `dma_video.cpp`), and find the `gbh_*` and `Vid_*`
+  functions in it (exported with `--kill-at` on Windows, `-rdynamic` elsewhere).
+- **The tests** (ctest): `Port/tests` (the ini parser, the mixer, the POSIX file and wide string layers), the
+  netcode's (`Port/net/tests`) and the renderer's (`Renderers/OpenGL/tests`). The Windows build's run under wine.
 
-The plan removes these in M0. Since the clang build is a Windows exe for now, they still work there, and
-removing them fits better with M1, when the platform code moves to SDL3:
+Toolchains are in `Port/cmake/`: `mingw-clang.cmake` (clang compiles against the MinGW-w64 headers, the MinGW g++
+links), `linux.cmake` (clang and lld against a sysroot), and `mingw-gcc.cmake` (the renderer DLLs on their own,
+with g++; CI uses it).
 
-- DirectPlay and the lobby (`NetPlay.*`, `NetUi.*`, the network paths in `winmain.cpp`). Single
-  player still asks `gNetPlay_7071E8` for the player index, the player count and names, so removing it
-  means a small single-player replacement for those few methods, not just deleting files.
-- The matching tools (`build.py`, `Scripts/bin_comp`, reccmp, permuter, HookLoader, the `MATCH_FUNC`
-  markers' naked asm). The port build simply doesn't compile them.
+### Linux sysroots
 
-## The clang-built game under wine (branch `port`)
+The x86_64 sysroot is a Debian trixie amd64 container's files (`docker build` with `libc6-dev libstdc++-14-dev
+libgcc-14-dev libsdl3-dev libgl-dev libegl-dev`, then `docker export`): `usr/include`, `usr/lib/x86_64-linux-gnu`,
+`usr/lib/gcc`, `usr/lib/linux` (the kernel headers' `asm` links point there), `usr/lib64`, `lib`, `lib64`. The
+i386 one: Debian trixie's i386 packages unpacked without running anything (`libc6`, `libc6-dev`, `linux-libc-dev`,
+`libgcc-14-dev`, `libgcc-s1`, `libstdc++-14-dev`, `libstdc++6`, `libcrypt-dev`, `libcrypt1`, `libsdl3-0`,
+`libsdl3-dev`, `libgl-dev`, `libegl-dev`, `libglx-dev`; URLs from `dists/trixie/main/binary-i386/Packages.xz`,
+`tar xf x.deb && tar xf data.tar.* -C sysroot`), plus a `lib -> usr/lib` symlink (merged /usr: Debian's
+`libc.so` linker script names `/lib/...`).
+
+The Linux program needs only glibc and `libSDL3.so.0`, which it looks for next to itself first (`$ORIGIN`); the
+C++ runtime is linked in. A game folder needs `data/` and an existing `player/` (the game writes its save slots
+there but doesn't make it).
+
+### Compiler flags
+
+The game's code is VC6-era C++ that matches the original, undefined behaviour included, so the flags make clang
+behave like VC6 rather than the code being changed:
+
+| Flag | Why |
+|---|---|
+| `-fshort-wchar` | the game's strings and `L""` literals are 2-byte |
+| `-fwrapv` | signed overflow wraps, as the fixed-point and angle code expects |
+| `-ftrivial-auto-var-init=zero` | uninitialised locals the decomp keeps to match (clang otherwise deleted a null check that depended on one) |
+| `-fno-delete-null-pointer-checks`, `-fno-strict-aliasing` | as VC6 |
+| `-fno-strict-return` | a function without a `return` on some path (C4716 is off for the match) returns garbage instead of running into the next function |
+| `-mno-sse -mfpmath=387` (32-bit x86) | x87 floats under the control word the game sets (single precision, round down), as `10.5.exe` |
+| `-fno-optimize-sibling-calls` (Windows) | no tail calls, so the state check's call trace sees every return |
+| `-Wno-address-of-temporary` | `f(&temp())` is valid (the temporary lives until the call returns); clang refuses it by default |
+| `-DNDEBUG` | the original is a release build; one `assert` reads a variable before it is set |
+| `-D_USE_32BIT_TIME_T` | VC6's `time_t`; MinGW's `_findfirst` otherwise takes a struct of another layout |
+| `-fsjlj-exceptions` (Windows) | Homebrew's i686 MinGW uses SJLJ exceptions |
+| `-fms-extensions` (not Windows) | `__declspec`, `__forceinline`, `__int64` |
+| `-include Port/compat/posix_prefix.h` (not Windows) | the Windows names, before anything else |
+
+## Running
 
 ```bash
-Scripts/port/build.sh          # -> build_port/gta2_port.exe; incremental, FORCE=1 rebuilds everything
-GTA2_DIR=~/Documents/GTA2 RENDERER=<renderer>/Renderers/OpenGL/build \
-  GTA2GL_CAPTURE=cap,100,300 Scripts/port/run_wine.sh "" wil    # "" = gta2_port.exe; wil = boot into city 1
+GTA2_DIR=~/Games/GTA2 Scripts/port/run/run_mac.sh [map]       # build_port/mac/gta2_port in build_port/mac/game
+GTA2_DIR=~/Games/GTA2 Scripts/port/run/run_wine.sh [exe] [map] # build_port/windows/gta2_port.exe in build_port/game
 ```
 
-`build.sh` compiles the same sources as `decomp_main` (`gta2_lib_src`, `test.cpp`, `StdAfx.cpp`,
-`resources.rc`) plus `Port/*.cpp` with clang for `i686-w64-mingw32`, and links with the MinGW-w64 g++
-(Homebrew's LLVM has no `lld`). It needs the GTA2 install's `mss32.dll` and `binkw32.dll` in
-`build_port/dlls/` (or `GTA2_DLL_DIR`). `run_wine.sh` copies the install to `build_port/game/` and runs
-there, in its own wine prefix (`build_port/wineprefix`), so neither the install nor the VC6 prefix changes.
+Both copy the install to their game folder once, write its `gta2.ini` (the install's settings from
+`gta2_install.reg`, via `reg2ini.py`, then a 640x480 window, no movies, every area playable) and run there. `map`
+(for example `wil`) boots straight into `data/wil.gmp`. `run_wine.sh` runs in its own wine prefix
+(`build_port/wineprefix`); with another exe (`10.5.exe`) it sets the registry instead and takes the renderer DLLs
+from `RENDERER=<folder>` (`build_port/windows/gl`).
 
-What it took, in the order the problems appeared:
+The game keeps its settings in `gta2.ini` in its folder (`Port/registry_ini.cpp`): the registry's keys as sections
+(`[screen]`, `[control]`, ...) with `dword:`, `str:` and `hex:` values. Debug settings (`[debug]`) are on when the
+value exists, whatever it holds (`Get_Debug_Setting_586E20`). Without settings the game starts in full screen.
+
+To look at a running game: `touch capture_now` in its folder writes the next frame to `capture.bmp` (the renderer's
+`dev/capture.cpp`). Fatal errors go to `test/error.log` in the game folder.
+
+## Code layout
+
+`Port/` (the runtime, linked into the game):
+
+| File | What it replaces |
+|---|---|
+| `main.cpp` | `test.cpp`: SDL's `main`, straight into `WinMain_5E53F0` |
+| `sdl_win32.{hpp,cpp}` | the dozen user32 calls of `winmain.cpp` on one SDL window; SDL events become the window messages `WindowProc_5E4EE0` handles (close, focus, minimise, Alt+Enter). `GTA2_HEADLESS`: a hidden window, no sound |
+| `sdl_video.cpp` | `glvideo.dll`'s `Vid_*` functions, with an SDL GL context (`Renderers/OpenGL/platform/sdl_context.cpp`) |
+| `sdl_dinput.cpp` | DirectInput: an `IDirectInputA` whose keyboard gives SDL key events as DIK events, buffered (`GetDeviceData`, the game) and as a state array (`GetDeviceState`, the frontend); the first SDL gamepad as the joystick |
+| `sdl_miles.cpp` | Miles (`mss32.dll`): the 52 `AIL_*` functions `cSampleManager.cpp` calls, as a software mixer in an SDL3 audio callback, WAV streams via `SDL_LoadWAV` |
+| `registry_ini.{hpp,cpp}` | the registry, on `gta2.ini` |
+| `port_rand.{hpp,cpp}` | `rand`/`srand`: VC6's generator, so replays play the same everywhere |
+| `port_globals.{hpp,cpp}` | the registry of the game's globals with their `10.5.exe` addresses (`DEFINE_GLOBAL` registers each), for the state log |
+| `ptr_table.cpp` | 64-bit builds: the 32-bit handles of `PTR32` (`Source/ptr32.hpp`) |
+| `stubs.cpp` | game functions the port leaves out: the ImGui overlay; on non-Windows builds the DirectX and version checks of `winmain.cpp` |
+| `port_hooks.{hpp,cpp}` | what `Source/` calls or reads in the port (see "`Source/` changes") |
+| `posix_*.cpp`, `compat/` | non-Windows builds, see below |
+| `net/` | DirectPlay (`NetPlay.cpp`, `NetUi.cpp`): the port's network game, docs/netcode.md. Without one, `net/engine/netplay.cpp` answers the rest of the game as a single player |
+
+`Port/compat/` has headers under the Windows names (`windows.h`, `objbase.h`, `mmsystem.h`, `dinput.h`, `ddraw.h`,
+`dplay.h`, `io.h`, ...) with types, constants and declarations only; COM interfaces are C++ classes with virtual
+methods, the same layout as COM on 32-bit x86, and `DWORD` is `unsigned int`. `compat/posix_prefix.h` is
+force-included first in every game file. The POSIX layer comes in pairs:
+
+| Header | Implementation | |
+|---|---|---|
+| `compat/posix_files.h` | `posix_files.cpp` | `fopen`, `_findfirst` and friends, `_stat`, `_getcwd`: backslashes become slashes, and every path component is matched case-insensitively (the game asks for `data\audio\vocals\...`, the folder is `Vocals`) |
+| `compat/posix_wchar.h` | `posix_wchar.cpp` | the 9 wide string functions the game calls, for 2-byte `wchar_t` and with Microsoft's semantics (`swprintf(buf, fmt, ...)` without a size, `%s` wide) |
+| `compat/posix_win32.h` | `posix_win32.cpp` | the other Win32 calls: `LoadLibrary`/`GetProcAddress` as `dlopen(NULL)`/`dlsym`, time (`GTA2_SPEED`), mutexes (no single-instance check), the CD drive type (fixed), the computer name, the keyboard layout (US) |
+
+`Port/validation/` (linked in, off unless their environment variables are set; the platform layer calls them
+through `validation.hpp` only):
+
+| File | |
+|---|---|
+| `state_log.cpp` | the per-frame state log (`GTA2_STATELOG*`), see Validation |
+| `fast_clock.cpp` | `GTA2_SPEED` on Windows, through the program's import table (also inside `10.5.exe`, in `nullvideo.dll`) |
+| `nullvideo.cpp` | `nullvideo.dll`: a video DLL for `10.5.exe` that draws nothing and runs the state log |
+| `scripted_input.cpp` | `GTA2_PORT_KEYS`, `GTA2_PORT_PAD`: input for tests without a person |
+
+`Port/tests/`: the tests (ctest). `Port/cmake/`: the toolchains. `Scripts/port/`: `run/` (the run scripts),
+`statecheck/` (the state check and its tools), `clang_check.sh` (the compile check of a decomp snapshot). The
+renderer has its own layout (`Renderers/OpenGL/README.md`): `core/` the renderer, `platform/` the GL contexts,
+`dll/` the Windows DLLs, `dev/` its development aids, `tools/` the reference tools, `tests/`.
+
+### `Source/` changes
+
+All under `GTA2_PORT`, VC6-neutral:
+
+| Where | What |
+|---|---|
+| `Function.hpp` | `DEFINE_GLOBAL` registers the global (`Port/port_globals.hpp`) |
+| `gbh_graphics.cpp`, `dma_video.cpp` | the renderer's functions from the program itself (`GetModuleHandle(NULL)`) |
+| `input.cpp`, `InputRecorder_67F8B0.cpp` | `Port_DirectInputCreateA` (`Port/port_hooks.hpp`) |
+| `winmain.cpp` | the window on SDL3 (`Port/sdl_win32.hpp`); its Windows-only functions are `Port/stubs.cpp`'s elsewhere |
+| `registry.cpp`, `Frontend.cpp`, `NetUi.cpp`, `cSampleManager.cpp`, `winmain.cpp` | the registry on `gta2.ini` (`Port/registry_ini.hpp`) |
+| `Frontend.cpp` | the attract idle time from `gPortAttractIdleMs` (`GTA2_PORT_ATTRACT_MS`) |
+| `rng.cpp`, `sound_obj.cpp` | VC6's `rand` (`Port/port_rand.hpp`) |
+| `3rdParty/mss.h` | Miles' declarations for the port's mixer |
+| `error.cpp` | the logs through C stdio (they only wrote through VC6's iostreams), and `gFile_67C530` is `gErrorLog_67C530`, as in `10.5.exe` |
+| `crt_stubs.cpp` | `malloc` zeroes, like `10.5.exe`'s fresh heap pages, so the state log can compare pools |
+| `char.cpp` | `CanReachTile_550090`'s `bRes_1`, read before it is set: VC6 keeps it where `bRes_2` was just set true |
+| `fix16.cpp` | tan(90°) and tan(270°) take `10.5.exe`'s values (out of `s32` range, where VC6 keeps the low bits of an x87 value) |
+| `types.hpp`, `ptr32.hpp`, `file.hpp`, `Light.cpp`, `TextTable.cpp`, `gtx_0x106C.*`, `map_0x370.*`, `Function.hpp` | 64-bit builds, see below |
+| `Hud.cpp` | the chat line types the character the system's keyboard layout gives (`Port_TypedChar`) |
+| `Game.cpp`, `winmain.cpp`, `Frontend.cpp`, `Car.cpp`, `Char_Pool.*`, `Ped.cpp`, `map_0x370.cpp`, `Pool.hpp`, `sound_obj.*` | the network game's hooks, docs/netcode.md "The game's code" |
+
+## 64-bit builds
+
+The macOS and Linux x86_64 builds are 64-bit. Issue #840 planned ARM64 with 32-bit pointers (M4), but macOS has no
+such ABI: the kernel refuses a `__PAGEZERO` below 4 GB on arm64, and `mmap` won't hand out low addresses. Changes,
+all VC6-neutral (32-bit builds keep their types and code):
 
 | Problem | Fix |
 |---|---|
-| GTA2Hax's ImGui copy defines its own `vsnprintf` under `#if _MSC_VER <= 1200` (true without MSVC). ImGui is a submodule *inside* the GTA2Hax submodule. | The port build leaves ImGui and `ImGuiDebug.cpp` out (the overlay draws through GTA2Hax's D3D9 renderer, which the port doesn't use); `Port/stubs.cpp` has an empty `ImGuiDebugDraw`. |
-| `test.cpp`, `decomp_main`'s entry point, calls `EnableBoot2MapDebugOptions()` (in `ImGuiDebug.cpp`), which **turns off traffic lights and trains** for the standalone decomp build. | Empty in `Port/stubs.cpp`: the port plays the full game. Worth knowing when testing `decomp_main` itself. |
-| GNU `windres`: syntax error at `VALUE "Translation", 0x0000 0x04B0`. | A comma, on `m0-clang` (VC6 output unchanged). |
-| `_Unwind_Resume`, `__gxx_personality_v0` undefined. | Homebrew's i686 MinGW uses SJLJ exceptions (`__USING_SJLJ_EXCEPTIONS__`); clang needs `-fsjlj-exceptions`. |
-| `_imp__AIL_startup@0` undefined. The real `mss32.dll`/`binkw32.dll` export decorated names (`_AIL_startup@0`). | `build.sh` generates a `.def` from each DLL's exports with `AIL_startup@0 == _AIL_startup@0` lines and builds import libraries with `dlltool`. The repo's `Source/3rdParty/mss.cpp`/`bink.cpp` stubs aren't used. |
-| `GetFileVersionInfoA` undefined. | `-lversion`. |
-| "Couldn't open .seq file in the data directory": `fopen("data\\")`, the name from `_findfirst` was empty. MinGW maps `_findfirst` to `_findfirst64` (64-bit `time_t`), whose struct layout differs from the `_finddata_t` the code declares. | `-D_USE_32BIT_TIME_T`, which also matches VC6's 32-bit `time_t` everywhere else. |
-| Crash entering a city: read of address 0x14 in `Hud_Brief_704::FormatCurrentBrief_5D3470`. Its `num_chars` is returned uninitialised when there's no brief (VC6 returned garbage, and the decomp keeps it to match), so clang treated the null case as impossible and **deleted the `if (field_6F8_curr_briefs)` check**. | `-ftrivial-auto-var-init=zero`, plus `-fwrapv` (signed overflow wraps as on VC6; the fixed-point and angle code relies on it) and `-fno-delete-null-pointer-checks`. Fix the build flags, not the functions: the decomp is full of VC6-era undefined behaviour that matches the original. |
+| Structure size asserts (pointers grow) | off in 64-bit port builds, also GTA2Hax's `STATIC_ASSERT`. `-DGTA2_SIZE_SCAN` turns them on for a scan: 112 structures change, nearly all runtime objects; `SaveData` doesn't |
+| Integers that hold pointers | `uptr`/`sptr` (`types.hpp`): u32/s32 on 32-bit, pointer-sized on 64-bit. Clang lists them: `-Wpointer-to-int-cast -Wint-to-pointer-cast -Wvoid-pointer-to-int-cast` |
+| Script data keeps object pointers in 4-byte slots | `PTR32(T)` (`ptr32.hpp`): a 32-bit handle into a table (`Port/ptr_table.cpp`) on 64-bit, `T*` elsewhere |
+| File records with 4-byte offsets that become pointers | text keys and the sprite index are copied into larger entries on load |
+| Tables sized as `4 * n` | the map's zone list, the GTX delta container and deltas (`GTX_DELTAS_SIZE`), the light grid |
+| `u16** field_40008_pColumn` holds 32-bit column words | `MapColumnWord`, a **macro** on 32-bit: as a typedef, the new name moved one instruction in `Particle_4C::UpdateCollisionBurst_state_31_34_53BAC0` |
+| `size_t` is no longer `u32` | overloads for the `File`/`Map` calls that pass the other one |
+| C fallback of an inline asm block stepped by a `u32` | a signed step |
+| Static initialisation order | the settings file's sections are built on first use |
 
-Results on macOS 26, Apple Silicon, wine 9.0 (Homebrew `wine-stable`):
+Floats are IEEE single precision there instead of x87, so replays don't match `10.5.exe` bit for bit (playing is
+fine). Save games are interchangeable with the 32-bit builds only for the structures without pointers.
 
-- **Frontend: bit-identical** to `10.5.exe` with the same renderer, at frames 30, 100, 200 and 400
-  (`cmp` of the captured BMPs).
-- **City 1 (`wil`)**: plays at 30 fps, renders correctly. Not comparable frame by frame: two runs of
-  `10.5.exe` itself differ there (time-seeded randomness, timing). That needs M2's replays.
-- Untested so far: input (nobody pressed a key), sound output, cities 2 and 3, saving, the network game.
+## Validation: the state check
 
-### Wine on macOS: running GTA2 at all
-
-These are about the environment, not the port; `10.5.exe` behaves the same.
-
-- Wine 9 on macOS runs 32-bit programs in "experimental wow64 mode", in a 64-bit prefix. **A 32-bit
-  program reads the 32-bit registry view**: set GTA2's keys with `wine reg add ... /reg:32`, or the game
-  doesn't see them.
-- The game reads `HKLM\SOFTWARE\DMA Design Ltd\GTA2` (`registry.cpp`). The install's
-  `gta2_install.reg` writes `HKEY_CURRENT_USER`; `run_wine.sh` imports nothing from it, it sets the few
-  values that matter.
-- **DMA's own video DLL can't run here**: windowed mode needs a 16-bit desktop and full screen a 16-bit
-  display mode, and wine's mac driver offers neither. `test/error.log` then says `Fatal Error 3003 in
-  video.cpp(1359)` (`VideomodeNotAvailable`). Use the OpenGL renderer (or capvideo + d3ddll, which fails
-  the same way).
-- After that failure the game saves `start_mode` = 1 (full screen) and fails the same way on every later
-  run. `run_wine.sh` resets it.
-- PR #837's `glvideo.dll` needed `WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB`: the mac driver only creates
-  3.2+ contexts that are forward compatible (the same rule as SDL3 on macOS). Fixed on `sdl3-mac`.
-- The `gta2.exe` in a typical install isn't the 10.5 exe the decomp targets (different hash, other
-  registry handling). Compare against `Scripts/bin_comp/10.5.exe`.
-- Finding out why it stopped without seeing the screen: the game's fatal errors go to `test/error.log` in
-  the game folder; message box texts show up with `WINEDEBUG=+relay` and
-  `HKCU\Software\Wine\Debug\RelayInclude` = `user32.MessageBoxA`; CRT calls the same way with
-  `ucrtbase.fopen` and so on (the MinGW build uses the UCRT, not `msvcrt`); crash addresses resolve with
-  `i686-w64-mingw32-addr2line -f -C -e build_port/gta2_port.exe <addr>`. To look at the game, use
-  `GTA2GL_CAPTURE` rather than screen captures.
-
-## M1 so far (branch `port`)
-
-One pattern throughout: **keep the game's code, replace the library under it.** Each Windows API the
-game uses is redirected, in the files that use it and only under `GTA2_PORT`, to a small
-implementation on SDL3 in `Port/`. The game's functions run unchanged, which keeps the port's
-behaviour tied to the decomp (and the replays of M2 meaningful). Each step was checked under wine with
-`Scripts/port/run_wine.sh`: the frontend frames stay bit-identical to `10.5.exe`'s.
-
-| Step | Files | How |
-|---|---|---|
-| Renderer linked in | `Source/gbh_graphics.cpp`, `Source/dma_video.cpp` (one guarded line each) | The renderer is compiled into the exe with its exports kept (`-Wl,--kill-at`); the loaders take `GetModuleHandle(NULL)` instead of `LoadLibrary`, so `GetProcAddress` finds the `gbh_*`/`Vid_*` functions in the exe. On Linux the same is `dlsym` on the program. |
-| Entry point | `Port/main.cpp` | SDL's `main`, straight into `WinMain_5E53F0`. `test.cpp` isn't used. |
-| Window, GL, event loop | `Port/sdl_win32.{hpp,cpp}`, included by `winmain.cpp` | The dozen user32 calls of `winmain.cpp` (`CreateWindowExA`, `PeekMessageA`, `DispatchMessageA`, `SetWindowPos`, `ShowCursor`, ...) act on one SDL window. SDL events become the window messages `WindowProc_5E4EE0` handles: close, focus, minimise, Alt+Enter. `GetDeviceCaps(BITSPIXEL)` says 16, so windowed mode is offered on any desktop. |
-| `Vid_*` | `Port/sdl_video.cpp`, `Renderers/OpenGL/platform/sdl_context.cpp` | `glvideo.cpp`'s functions, with an SDL GL context on that window (`CreateGLContextForSDLWindow`) instead of WGL. |
-| Keyboard | `Port/sdl_dinput.cpp`, `Source/input.cpp`, `Source/InputRecorder_67F8B0.cpp` | An `IDirectInputA` whose keyboard returns SDL key events as DIK events: buffered (`GetDeviceData`, the game) and as a state array (`GetDeviceState`, the frontend). No gamepad or mouse data yet. |
-| Settings | `Port/registry_ini.{hpp,cpp}`, included by the 5 files that use the registry | `Reg*` on `gta2.ini`: `[screen]`, `[control]`, ... with `dword:`/`str:`/`hex` values. |
-| Sound | `Port/miles_sdl.cpp`, `Source/3rdParty/mss.h` | The 52 `AIL_*` functions `cSampleManager.cpp` calls, as a software mixer in an SDL3 audio callback, plus WAV streams via `SDL_LoadWAV`. No 3D provider, so the game uses its 2D path. |
-
-Tests: `Port/tests/*_test.cpp` (the ini parser, the mixer), built by `build.sh` into `build_port/*.exe`
-and run under wine; `Port/tests/native/` (wide strings, the POSIX file layer) build and run on the host with
-`Scripts/port/native_tests.sh`. Scripted input for checks without a person: `GTA2_PORT_KEYS=<ms>:<dik>:<1|0>,...`.
-Sound without speakers: `SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=sdlaudio.raw` writes the mix
-(float stereo, 44.1 kHz) to the game folder.
-
-Checks so far: the frontend is bit-identical at frames 30/100/200/400 after every step; Return on the
-main menu opens the play menu; holding Up in city 1 walks the player into the church (its "Get lost, ya
-bum!" brief appears); 20 s of city 1 give sound without clipping (not listened to yet).
-
-Findings:
-
-- **The issue's caution about faking Windows messages** ("would cost more") holds for the whole message
-  API, but the game's own window needs about ten messages; translating SDL events into those was less
-  code than rewriting `WinMain_5E53F0` and `WindowProc_5E4EE0`, and leaves them as decompiled.
-- `GetDeviceCaps(BITSPIXEL)` decides whether the game offers windowed mode at all (16-bit desktops
-  only, a DirectDraw limit).
-- GTA2's debug settings are on when the value **exists**, whatever its value (`Get_Debug_Setting_586E20`):
-  to turn `skip_frontend` off, delete it.
-- Without settings, the game defaults to **full screen** (`start_mode` 1).
-- The frontend reads the keyboard with `GetDeviceState` (immediate), the game with `GetDeviceData`
-  (buffered, one event per frame; the PR's README explains why that lagged under wine with DMA's DLLs).
-- Miles plays centred 2D sounds at full volume in both channels: an equal-power pan (+3 dB at the
-  centre) clipped constantly.
-- Apple clang's `cpuid.h` clashes with MinGW's `intrin.h` (`__cpuidex`), which SDL's headers include:
-  `build.sh` presets `__CPUID_H`. And `-static` links `libwinpthread` statically, but then SDL's import
-  library must be given by path (`libSDL3.dll.a`), as `-static` ignores `-lSDL3`.
-
-### Trig tables and gamepad
-
-- **Trig tables**: the sine, cosine and tangent tables (1440 entries each) are computed at start-up from
-  the C library. Dumped from a running `10.5.exe` (with winedbg): every entry is at
-  least 1e-6 from a truncation boundary, far more than any difference between correct `sin`/`cos`/`tan`,
-  except tan(90°) and tan(270°). Those are out of `s32` range, where VC6's conversion keeps the low 32
-  bits of an x87-precision value; in C++ the conversion is undefined (and traps on some targets). Under
-  `GTA2_PORT` those two entries take `10.5.exe`'s values. The port's tables are identical in all 4320.
-- **Gamepad**: the first SDL gamepad, behind the same DirectInput replacement as the keyboard, in
-  DirectInput's joystick layout (X/Y at offsets 0/4 in -1000..1000 with a 25% dead zone, button n at
-  48 + n). Pad bindings come from the game's Controls menu (bit 15 of a `[control]` value), as in the
-  original. `GTA2_PORT_PAD=<ms>:<offset>:<value>,...` scripts pad input for tests.
-
-## M2: the replay test (branch `port`)
-
-GTA2 records replays of its inputs and random seeds, and attract mode plays `data\attract\attr1.rep` and
-the others after 60 s idle on the start menu. Played by two exes, they must give the same frames.
-
-The first comparisons were of frames (captured with `GTA2GL_CAPTURE` from both exes, a script since replaced by
-the state check below). What it takes to compare fairly:
-
-- **The same settings.** The first comparisons failed on configuration, not code: the port rendered at
-  960x720 (frames can't match the original's 640x480), and lacked the install's `do_blood` and
-  `exploding_on = 0`, so kills showed score pop-ups instead of blood. `run_wine.sh` now gives both exes
-  the install's settings (`reg2ini.py` turns `gta2_install.reg` into `gta2.ini`) and a 640x480 window.
-- **The same renderer code.** PR #837's DLLs built with MinGW's gcc round some vertices differently from
-  the port's clang build: single-pixel differences. `build_gl_dlls_clang.sh` builds them with clang.
-- **A short wait.** Attract mode starts after 60 s of wall-clock idle; `GTA2_PORT_ATTRACT_MS` and a
-  patched copy of `10.5.exe` (`patch_attract.py`, 2 bytes in `Frontend::Run_4AEDB0`) shorten it for both.
-- `10.5.exe` against itself gives identical frames, so the replay is deterministic.
-
-Fixes it found in the port:
-
-- **x87, not SSE.** clang compiled the game's float code with SSE2, which ignores the x87 control word
-  the game runs with (single precision, round down; `gbh_InitDLL`). `-mno-sse -mfpmath=387` for the game
-  code; the frames then match for 87 more frames.
-- **VC6's `rand`.** glibc's `rand` is another generator (`Port/port_rand.h`; Windows' UCRT happens to use
-  the same LCG).
-- **Logs.** `ErrorLog` only wrote through VC6's iostreams, so the port wrote no `test\error.log` or
-  `warning.log`; and the decomp's `gFile_67C530` was a separate, never-opened object, while in `10.5.exe`
-  it is `gErrorLog_67C530` (0x67C530). Both fixed under `GTA2_PORT`, so `log_random` works.
-
-**The first divergence: a false match.** With `GTA2_DEBUG=log_random` both exes log every random draw;
-the first 10,106 were identical, the first difference at game frame 187: one pedestrian (pool slot 13)
-spawned in `10.5.exe` and was freed right away in the port, through `SpawnPedestrianAt_46E380`'s exit for
-walking cops, because `gNumberWalkingCopsSpawned_6787CD` was still 1. A day of winedbg breakpoints got that
-far. The state check below then found the cause in one run: `Ped::Deallocate_45EB60` decremented the
-counter for `guard` (28), while 10.5.exe's byte index table sends `walking_guard_29` to that block. The
-function was `MATCH_FUNC`, since the verifier doesn't compare jump table data (`docs/matching_quirks.md`).
-
-### The state check: field-level diffs in under a minute
-
-Frames and debuggers are slow and indirect. `Scripts/port/state_check.py` runs the attract replay headless
-in both exes and compares the whole game state after every frame:
+GTA2 records replays of its inputs and random seeds; attract mode plays `data\attract\attr1.rep` and the others.
+Played by the port and by `10.5.exe`, they must give the same game state. `Scripts/port/statecheck/state_check.py`
+runs the attract replay headless in both and compares the whole game state after every frame, in about a minute:
 
 ```bash
-Scripts/port/build.sh && Scripts/port/build_gl_dlls_clang.sh    # gta2_port.exe and nullvideo.dll
-GTA2_DIR=~/Documents/GTA2 python3 Scripts/port/state_check.py 1100   # up to game frame 1100
+cmake --preset windows -S Port && cmake --build build_port/windows
+GTA2_DIR=~/Games/GTA2 python3 Scripts/port/statecheck/state_check.py 1100   # up to game frame 1100
 ```
 
 ```
 compared game frames 1-174 (174 frames, 52679 chunks, 508 noisy)
 game frame 174: 1 chunks became different: gNumberWalkingCopsSpawned_6787CD+0x0
-...
 game frame 186 *gChar_B4_Pool_6FDB44: field_0_pool.field_4_pool[13].field_98_velocity_vector.x.mValue (+0x9c0 10.5 000001ec port 00000400); ...
 ```
 
-How it works, and what each part is for:
+How it works:
 
-- **The state.** Every `DEFINE_GLOBAL` of a `GTA2_PORT` build registers its name, original address and size
-  (`Port/port_globals.hpp`), and for a pointer to a complete type the size of what it points to (so a pool
-  global covers the whole pool). That is about 1,800 entries and 3.3 MB, cut into 64-byte chunks.
-- **The log.** `Port/headless/state_log.cpp`, after every flip: `F <flip> <game frame>`, then a hash for
-  each chunk that changed. The port takes the list from its registry and writes it out (`.globals`);
-  `nullvideo.dll`, a video DLL that draws nothing, reads the list inside `10.5.exe` and hashes the same
-  entries at the original addresses. Values that look like pointers are masked (they differ per process).
-- **Headless and fast.** `GTA2_HEADLESS` skips the GL context and uses SDL's dummy video and audio drivers.
-  `GTA2_SPEED` (`fast_clock.cpp`) speeds up the clock through the exe's import table, for the start menu's
-  attract wait. One run to frame 1000 takes about 12 s, and the whole check, with a second `10.5.exe` run
-  as a noise reference and the field dump below, takes under a minute.
-- **Lockstep frames.** `RunGameFrame_4DA850` skips draws when it runs late, and drawing fills caches
-  (sprite shapes, the map's, `Mike_A80`), so two runs of `10.5.exe` differed. `max_frame_rate = 0` and
-  `min_frame_rate = 0` (`GTA2_LOCKSTEP`, in `run_wine.sh`) make it alternate one logic frame and one draw
-  whatever the clock says; then `10.5.exe` matches itself in everything but sound.
-- **No junk bytes.** The port's allocations are zeroed like `10.5.exe`'s fresh heap (`crt::malloc`), and
-  padding is left out of the hashes: clang writes junk into padding (a byte field stored as a dword), VC6
-  doesn't. `layout.py` reads the port's DWARF (`llvm-dwarfdump`) for the padding and for field names.
-- **Onset, not difference.** `state_diff.py` reports the first chunk that was identical and became
-  different, leaving out chunks that never matched (memory the decomp lays out differently, slots the game
-  never filled) and chunks that differ between two `10.5.exe` runs. Sound (`gSound_obj_66F680`,
-  `gSampManager_6FFF00`) follows the real audio device, and `gTileVerts_7036D0` is render scratch whose
-  floats differ in the last bits; both are ignored by default (`IGNORE=<regex>`).
-- **Fields.** For the onset chunks `state_check.py` reruns both with `GTA2_STATELOG_DUMP` (full bytes of
-  those entries at the frame before and at the onset) and prints each differing field by name. To dump
-  other entries: `DUMP='170-175:*gPedPool_6787B8,gGame_0x40_67E008' NO_FIELDS=1 state_check.py 176`; the
-  dumps are `build_port/game/state_{port,og}.log.dump`.
+- **The state**: every global the decomp defines, registered with its `10.5.exe` address and size
+  (`Port/port_globals.hpp`), and for a pointer to a complete type what it points to (so a pool global covers the
+  pool): about 1,800 entries and 3.3 MB, cut into 64-byte chunks.
+- **The log** (`Port/validation/state_log.cpp`), after every flip: `F <flip> <game frame>`, then a hash of each
+  chunk that changed. The port writes its list of entries (`.globals`); `nullvideo.dll`, loaded by `10.5.exe` as
+  its video DLL, reads the list and hashes the same entries at the original addresses.
+- **Headless and fast**: `GTA2_HEADLESS` (no GL context, SDL's dummy drivers) and `GTA2_SPEED`. A patched copy of
+  `10.5.exe` (`patch_attract.py`, 2 bytes in `Frontend::Run_4AEDB0`) and `GTA2_PORT_ATTRACT_MS` shorten the wait
+  for attract mode in both.
+- **Lockstep frames**: `RunGameFrame_4DA850` skips draws when it runs late, and drawing fills caches, so two runs
+  of `10.5.exe` differed. `GTA2_LOCKSTEP` (`max_frame_rate = 0`, `min_frame_rate = 0`) alternates one logic frame
+  and one draw whatever the clock says; then `10.5.exe` matches itself in everything but sound.
+- **The same renderer code**: `10.5.exe` uses `build_port/windows/gl`'s DLLs, built with the port's clang (MinGW's
+  gcc rounds some vertices differently).
+- **No junk bytes**: the port's allocations are zeroed like `10.5.exe`'s fresh heap, and padding is left out of
+  the hashes (clang writes junk into padding). `layout.py` reads the padding and the field names from the port's
+  DWARF (`llvm-dwarfdump`). Pointer fields are hashed as what they point into (entry, offset).
+- **Onset, not difference**: `state_diff.py` reports the first chunk that was identical and became different,
+  leaving out chunks that never matched and chunks that differ between two `10.5.exe` runs (the noise run).
+  Sound and render scratch are ignored by default (`IGNORE=<regex>`).
+- **Fields**: for the onset chunks both run again with `GTA2_STATELOG_DUMP` and each differing field is printed
+  by name. Other entries: `DUMP='170-175:*gPedPool_6787B8,gGame_0x40_67E008' NO_FIELDS=1 state_check.py 176`.
+- **Calls**: `TRACE=<a>-<b>:<function>,..` traces calls instead: an int3 at each function's entry and return
+  address (`10.5.exe`'s from `og_function_data_v105.csv`, the port's from its symbols) logs `this`, the arguments
+  and the return value, and the first call or return that differs is printed with context.
+  `TRACE_THIS=<n>` adds the first n bytes of `*this`. `Class::*` traces a whole class.
 
-The renderer's command log (`GTA2GL_CMDLOG`) would be the other clean interface to compare, but the game
-state is upstream of it, and a state diff names the field and frame where a render diff only shows the
-symptom.
-
-- **Calls.** When frame-end state isn't enough, `TRACE=<a>-<b>:<function>,..` traces calls instead:
-  an int3 at each function's entry (10.5.exe address from `og_function_data_v105.csv`, the port's from
-  its symbols, which carry the address) and at the return address logs `this`, the arguments and the
-  return value, sized by the port's DWARF; the first call or return that differs is printed with context:
-  `TRACE='180-186:CanReachTile_550090,ChooseNextMovementTile_551400,state_1_5504F0' state_check.py`.
-
-**Found so far:**
-
-1. Frame 174: `Ped::Deallocate_45EB60`, a false match (wrong case label, above).
-2. Frame 186: a pedestrian sidestepped in the port. The call trace showed `CanReachTile_550090` making
-   three of the original's four recursive checks and returning 0: in its (+1, +1) case `bRes_1` is read
-   before it is set. VC6 keeps it in the same place as `bRes_2`, set true just before; clang doesn't. A
-   matching function can depend on such VC6 behaviour, so the port sets it under `GTA2_PORT`.
-3. Frame 291: a pedestrian turned the wrong way. `Char::sub_54C090` had two constants swapped between its
-   cases: a false match like 1, which the verifier can't see because it renames globals in order of use.
-   That made `Scripts/bin_comp/check_match_refs.py` (globals, callees and switch targets of every MATCH
-   function against 10.5.exe): its first run found five more (script `<`/`>`, car damage areas, a network
-   setting, a sound case). These decomp fixes are also on branch `decomp-fixes` (off master) for a PR.
-4. Frame 308: debris particles fly elsewhere. **Not fixable**: `Car::HandleCarHitByObject_43F130` passes an
-   `impact_vec` it never sets; in 10.5.exe that stack slot holds `pFoundPed`, a heap address. The particles,
-   grids and render counters differ from then on; with them left out (`IGNORE=`) everything else matches.
-5. Frame 721: the port crashed. `PedGroup::GroupAttackPed_4C9B60` has no `return` on one path (C4716 is off
-   for the match); clang made that path unreachable and ran into the next function. All port builds use
-   `-fno-strict-return`. Found with the call trace's stack check (`^esp` in the trace lines).
-6. Frame 795: `gCarInfo_48_6FE258`, the car being simulated, ends on another car. The explosion impulse
-   visits nearby cars through the sprite grid, which holds the debris particles of 4: a scratch pointer, the
-   cars themselves match. Frame 3094: the map's zone-search cursor (`field_364`/`field_368`) ends elsewhere,
-   with the same zone calls and results on both sides: scratch too.
-7. The stall at frame 1040 was an `assert` (the port didn't define `NDEBUG`; the original is a release build).
-
-**Result:** with the particle cascade of 4 and those two scratch values left out, the port matches 10.5.exe
-for the whole first attract demo (4,100 game frames):
+**Result**: the port matches `10.5.exe` for the whole first attract demo (4,100 game frames) and the second
+(4,711), with these left out:
 
 ```bash
 IGNORE='gTileVerts_|gSound_obj_66F680|gSampManager_6FFF00|gParticle_4C_Pool|gSpritePool_703818|gSpriteShapePool|gGridSpriteLink_Pool|gGridCell_Pool|gSpriteTreeNodePool|gSpriteTreeStack|gParticlePos|gSpriteGrid_|gpGBH_Globals|gLight_1D4CC|gCarInfo_48_6FE258|gCarInfo_2C_6FE0E4|gMap_0x370_6F6268\+0x340' \
-  GTA2_DIR=~/Documents/GTA2 python3 Scripts/port/state_check.py 4100
+  GTA2_DIR=~/Games/GTA2 python3 Scripts/port/statecheck/state_check.py 4100
 ```
 
-The later demos (`DEMO=n SECONDS=150`; the files rotate attr1, attr2, attr3): demo 2 matched completely in
-one run (4,711 frames). Demo 3 differs from frame 968 in the HUD arrows: 10.5.exe copies an arrow target from
-an uninitialised stack temporary (a heap-address-like `aim_x`, a `field_24` nothing in the decomp writes), so
-like the debris it can't match; it only affects drawing the arrows (`gHud_2B00_706620\+0x(1f|2[0-5])`).
-**Open:** across runs the later demos aren't exactly reproducible: demo 2 once diverged at frame 578 in the
-ped pool, and a rerun dumping that frame found it identical. Something timing-dependent is left after the
-first demo. The port itself is deterministic: two port runs match each other through demos 2 and 3 (with
-input, FPS and draw-timing state left out), so it is on 10.5.exe's side or in how the noise run lines up.
+What is left out, and why it can't match:
 
-The state log also compares **pointer fields by what they point to**: layout.py marks pointer-typed fields
-(not where a union overlays something else) in the mask, and the log hashes them as (entry, offset).
-Other pointer-looking values are still left out. More trace notes: a crash keeps the trace (unbuffered);
-`Class::*` traces a whole class; calls one side inlined are aligned away; clang's tail calls are off in the
-port build (`-fno-optimize-sibling-calls`) so every return is seen.
+- Debris particles from frame 308: `Car::HandleCarHitByObject_43F130` passes an `impact_vec` it never sets; in
+  `10.5.exe` that stack slot holds a heap address. The particles, the sprite grids and the render counters differ
+  from then on.
+- `gCarInfo_48_6FE258` (the car being simulated) and the map's zone-search cursor: scratch values that end
+  elsewhere with the same calls and results.
+- Demo 3, from frame 968, the HUD arrows: `10.5.exe` copies an arrow target from an uninitialised stack temporary.
 
-The scripts from before the state check (frames compared, and memory at a frame and the trig tables read through
-winedbg) are gone: the state check and `GTA2_STATELOG_DUMP` do their jobs. winedbg notes: attaching to a running
-32-bit process faults under macOS wine's wow64 mode, so start the exe under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run_wine.sh`);
-`cont N` is slow per hit, so break on `RunGameFrame_4DA850` with a condition on the frame counter
-(`*(int*)(*(int*)0x67ab34)`) first; casts make dereferences work (`x /4x *(unsigned int*)0x676978`).
+Open: across runs the later demos aren't exactly reproducible on `10.5.exe`'s side (the port matches itself
+through demos 2 and 3).
 
-## Native macOS (branch `port`)
+The decomp bugs the check found are fixed on `master` or the `decomp-fixes` branch: false matches the verifier
+can't see (wrong case labels in jump tables, swapped constants; `Scripts/bin_comp/check_match_refs.py` now checks
+the globals, callees and switch targets of every `MATCH_FUNC` against `10.5.exe`). The others are port fixes:
+`CanReachTile_550090`'s unset `bRes_1`, the x87 and `rand` differences, the missing returns and asserts above.
 
-`Scripts/port/build_mac.sh` builds `build_port/mac/gta2_port`, a **native arm64, 64-bit** program (Homebrew
-SDL3, the system OpenGL, the Linux build's POSIX layer), and `Scripts/port/run_mac.sh [map]` runs it in a
-copy of the install. CMake builds the same program, and the netcode's tests: `cmake -S Port -B build_port/mac && cmake --build
-build_port/mac -j`, then `ctest --test-dir build_port/mac` (`Port/CMakeLists.txt`, clang on macOS or Linux; the Windows
-build stays `Scripts/port/build.sh`). It plays the frontend, all three cities and the attract demos. Issue #840 planned ARM64
-with 32-bit pointers (M4), but macOS has no such ABI for programs: the kernel refuses a `__PAGEZERO` below
-4 GB on arm64, and `mmap` won't hand out low addresses, so every pointer is above 4 GB. It is a 64-bit build,
-then, which issue #840 called possible later (117 structures, 168 conversions). What it took:
+winedbg: attaching to a running 32-bit process faults under macOS wine's wow64 mode, so start the exe
+under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run/run_wine.sh`); break on `RunGameFrame_4DA850` with a
+condition on the frame counter (`*(int*)(*(int*)0x67ab34)`) rather than `cont N`.
 
-| Problem | Fix (all VC6-neutral: 32-bit builds keep their types and code) |
+## Environment variables
+
+The game's (all builds):
+
+| Variable | Effect |
 |---|---|
-| Structure size asserts (pointers grow) | off in 64-bit port builds, also GTA2Hax's `STATIC_ASSERT`. `-DGTA2_SIZE_SCAN` turns them on for a scan: 112 structures change, nearly all runtime objects; `SaveData` doesn't. |
-| Integers that hold pointers | `uptr`/`sptr` (`types.hpp`): u32/s32 on 32-bit, pointer-sized on 64-bit. The aligned allocator, car triggers, collided char, police target, Kanji outline. Clang's cast warnings list them: `-Wpointer-to-int-cast -Wint-to-pointer-cast -Wvoid-pointer-to-int-cast` (pointer to int casts are only warnings with `-fms-extensions`). |
-| Script data keeps object pointers in 4-byte slots | `PTR32(T)` (`ptr32.hpp`): a 32-bit handle into a table (`Port/ptr_table.cpp`) on 64-bit, `T*` elsewhere. |
-| File records with 4-byte offsets that become pointers | text keys and the sprite index are copied into the larger entries on load. |
-| Tables sized as `4 * n` | the map's zone list, the GTX delta container and deltas (`GTX_DELTAS_SIZE`), the light grid. |
-| `u16** field_40008_pColumn` holds 32-bit column words | `MapColumnWord`. A **macro** on 32-bit: as a typedef, the new name moved one instruction in `Particle_4C::UpdateCollisionBurst_state_31_34_53BAC0` (3422/3423). |
-| `size_t` is no longer `u32` | overloads for the `File`/`Map` calls that pass the other one. |
-| Asserts | `-DNDEBUG` (the original was a release build): one read a variable before setting it. |
-| C fallback of an inline asm block stepped by a `u32` | signed step (a negative `u32` is +4 GB on a 64-bit pointer). |
-| Static initialisation order | the settings file's sections are built on first use. |
+| `GTA2_HEADLESS=1` | no window content, no GL context, no sound; the game and the gbh layer still run |
+| `GTA2_SPEED=<k>` | the game's clock k times faster |
+| `GTA2_STATELOG=<file>` and `GTA2_STATELOG_*` | the state log and its options (`Port/validation/state_log.cpp` lists them) |
+| `GTA2_PORT_KEYS=<ms>:<dik>:<1\|0>,...` | key events at those times after the start |
+| `GTA2_PORT_PAD=<ms>:<offset>:<value>,...` | pad events (and the game sees a pad) |
+| `GTA2_PORT_ATTRACT_MS=<ms>` | the idle time before attract mode (60000) |
+| `SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=<file>` | the mix written to a file (float stereo, 44.1 kHz) |
+| `GTA2GL_*` | the renderer's: capture, command log, statistics, enhancements (`Renderers/OpenGL/README.md`) |
 
-Not done: float code runs on ARM's IEEE single precision instead of x87, so replays won't match 10.5.exe
-bit for bit (playing is fine); network and movies are left out as on Linux; save games of the 32-bit builds
-and this one are interchangeable only for the structures without pointers.
+The run scripts': `GTA2_DIR` (the install), `GTA2_DEBUG="skip_frontend log_random ..."` (debug settings),
+`GTA2_LOCKSTEP=1`, `GTA2_INI_EXTRA='[control]\n0=dword:32994'` (more settings), `GTA2_BIN` (`run_mac.sh`: another
+build), `RENDERER`, `GTA2_VIDEO_DLL`, `WINE_LAUNCHER` (`run_wine.sh`).
 
-## The Linux build (branch `port`)
+## Redoing it on a later decomp
 
-Cross-built on the Mac. **64-bit x86 by default**, as the macOS build (its 64-bit work is shared): runs on Debian
-trixie (in colima's amd64 VM), headless and in a window under Xvfb with Mesa (with the netcode on its branch: a
-server and two clients, one of them windowed, joined and played). Needs only glibc and `libSDL3.so.0` (found next to the program first:
-`$ORIGIN`; Debian's own links sndio, libdecor, PipeWire and more, so it isn't bundled); the C++ runtime is linked in.
-A game folder needs `data/` and an existing `player/` (the game writes its save slots there but doesn't make it).
+1. Branch from the current `master`.
+2. `Scripts/port/clang_check.sh` compiles every game source with clang for `i686-w64-mingw32`, syntax only,
+   against the MinGW-w64 headers (about 4 s), and lists the failing files and every distinct error (logs in
+   `build_clang/`). Fix in the order below, since earlier kinds hide later ones (clang stops a file at its first
+   missing include, so the error count can go **up** after a fix).
+3. After every few fixes, check the VC6 build as `CLAUDE.md` describes (`build.py`, `compare_builds.py` against a
+   baseline saved on `master`); expect no changed function. Commit per kind of fix.
+4. Then the port: `cmake --preset windows -S Port`, `run_wine.sh` (once with no map for the frontend, once with
+   `wil`), and compare frontend captures with `10.5.exe`'s; they should be identical. Then the state check. A new
+   crash: `i686-w64-mingw32-addr2line -f -C -e build_port/windows/gta2_port.exe <addr>`, and suspect undefined
+   behaviour VC6 tolerated before suspecting the decomp.
 
-```bash
-brew install lld
-Scripts/port/build_linux.sh            # -> build_port/linux64/gta2_port, ELF x86-64
-ARCH=i686 Scripts/port/build_linux.sh  # -> build_port/linux/gta2_port, ELF i386 with x87 floats (not run)
-```
+The kinds of error the first snapshot had, and their fixes (all on `master` now):
 
-The 64-bit sysroot is a Debian trixie amd64 container's files (`docker build` with `libc6-dev libstdc++-14-dev
-libgcc-14-dev libsdl3-dev libgl-dev libegl-dev`, then `docker export`): `usr/include`, `usr/lib/x86_64-linux-gnu`,
-`usr/lib/gcc`, `usr/lib/linux` (the kernel headers' `asm` links point there), `usr/lib64`, `lib`, `lib64`, in
-`build_port/linux64_sysroot`. The i386 one:
+1. **Include paths**: backslashes (`"..\Common\Types.hpp"` in GTA2Hax) and letter case (`"Fix16.hpp"` for
+   `fix16.hpp`). macOS doesn't notice case; find them with
+   `ls Source > /tmp/names; grep -ho '#include "[^"/]*"' Source/*.?pp | sed 's/#include "//; s/"$//' | sort -u | while read i; do [ -e "Source/$i" ] && ! grep -qx "$i" /tmp/names && echo "$i"; done`.
+2. **`#if defined(__clang__) || (_MSC_VER <= 1200)`** selects the VC6 path on any clang (an undefined `_MSC_VER` is
+   0): `#if defined(_MSC_VER) && _MSC_VER <= 1200`.
+3. **`Function.hpp`'s non-Microsoft branch**: a missing `DEFINE_GLOBAL_ARRAY_INIT`, and `#define __stdcall` (clang
+   knows `__stdcall`).
+4. **The placeholder `std::vector`/`std::set`** in `gbh_graphics.hpp` (a matching device: GTA2Hax's real ones
+   change VC6's EH frames) collide with a real STL: VC6 only.
+5. **Temporaries bound to non-const references** (by far the most errors, all `Fix16`, `Ang16` and `Fix16_Point`):
+   make the input parameters `const&`, and then the read-only members they call `const`. This changed no VC6 code,
+   except where a member gained a free twin of the same signature (`Ang16::operator-`): VC6 then rejects the calls
+   as ambiguous (C2593), so it stays non-const. clang's `-fsyntax-only` misses some uses VC6 rejects (C2678):
+   always run the VC6 build too.
+6. **Smaller ones**: extra qualification on member declarations; `case 0x8xxxxxxx` narrowed to `HRESULT` (cast the
+   case value, not the switch, which would change VC6's compare); `(char)(size_t)` for a `%c` from a pointer;
+   a `static inline` definition after an `extern inline` declaration; `throw()` on a declaration but not the
+   definition; inline asm (plain C++ under `#else`, the asm kept for MSVC); `throw(std::bad_alloc)` (VC6 only); a
+   dangling `&pCar->GetCarLinearSpeed_43A240()` kept after the statement to match VC6 (other compilers copy the
+   value).
+7. **DirectPlay** (`<VC98/Include/DPLAY.H>`): MinGW-w64 ships `dplay.h`, `dplobby.h` and `dinput.h`.
 
-Debian trixie's i386 packages, unpacked without running anything: `libc6`,
-`libc6-dev`, `linux-libc-dev`, `libgcc-14-dev`, `libgcc-s1`, `libstdc++-14-dev`, `libstdc++6`,
-`libcrypt-dev`, `libcrypt1`, `libsdl3-0`, `libsdl3-dev`, `libgl-dev`, `libegl-dev`, `libglx-dev`
-(URLs from `dists/trixie/main/binary-i386/Packages.xz`; `tar xf x.deb && tar xf data.tar.* -C sysroot`), plus
-a `lib -> usr/lib` symlink (merged /usr).
+When the decomp has grown, expect new instances of 5: every new function taking `Fix16&` and every new caller
+passing `a - b` to one.
 
-How the game compiles without Windows: `Port/compat/` has headers under the Windows names
-(`windows.h`, `objbase.h`, `mmsystem.h`, `dinput.h`, `ddraw.h`, `dplay.h`, `io.h`, ...), with types,
-constants and declarations only, and `port_linux.h` is force-included first in every game file:
+## Platform notes
 
-| Difference | Where | How |
-|---|---|---|
-| Windows types, COM | `compat/windows.h`, `objbase.h` | 32-bit definitions (`DWORD` is `unsigned int`, not `unsigned long`); interfaces are C++ classes with virtual methods, the same layout as COM on 32-bit x86. |
-| Microsoft keywords | build flags | `-fms-extensions` (`__declspec`, `__forceinline`, `__int64`); `-Wl,--no-dependent-libraries` ignores `#pragma comment(lib, ...)`. |
-| 2-byte `wchar_t` | `port_wchar.cpp` | `-fshort-wchar` keeps the game's strings and `L""` literals 2-byte, but glibc's wide functions take 4-byte ones: `swprintf` and the 8 other wide functions the game calls are our own, with Microsoft's semantics (`swprintf(buf, fmt, ...)` without a size; `%s` wide). |
-| Windows paths | `posix_files.cpp` | `fopen`, `_findfirst` and friends, `_stat`, `_getcwd`: backslashes become slashes, and every path component is matched case-insensitively (the game asks for `data\audio\vocals\...`, the folder is `Vocals`). |
-| Window, input, settings, sound | `sdl_win32.cpp`, `sdl_dinput.cpp`, `registry_ini.cpp`, `miles_sdl.cpp` | the same as on Windows. |
-| The renderer's "DLLs" | `posix_win32.cpp` | `LoadLibrary`/`GetProcAddress` are `dlopen(NULL)`/`dlsym`; the program is linked with `-rdynamic`. |
-| Network | `net/engine/netplay.cpp`, `compat/dplay.h` | `NetPlay.cpp` and `NetUi.cpp` aren't built (no DirectPlay); the port's network layer stands in for them (docs/netcode.md). Without a network game it answers as a single player. |
-| Windows-only checks | `port_winmain.cpp` | DirectX and DirectMusic versions, exe version info, the GTA2 Manager launch. |
-| Movies | `Source/3rdParty/bink.cpp` | its stubs (no movies until M5). |
-| Other Win32 calls | `posix_win32.cpp` | time, mutexes (no single-instance check), CD drive type (always fixed), computer name, keyboard layout (US). |
+**Wine on macOS** (Homebrew `wine-stable` 9, wow64 mode; `10.5.exe` behaves the same):
 
-Findings:
+- A 32-bit program reads the 32-bit registry view: `wine reg add ... /reg:32`.
+- DMA's own video DLL can't run: windowed mode needs a 16-bit desktop and full screen a 16-bit display mode, and
+  wine's mac driver offers neither (`Fatal Error 3003 in video.cpp(1359)` in `test/error.log`). After that failure
+  the game saves `start_mode = 1` (full screen) and fails on every later run; `run_wine.sh` resets it.
+- The renderer's WGL context needs `WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB` there (the same rule as SDL3 on macOS).
+- The `gta2.exe` in a typical install isn't the 10.5 exe the decomp targets: compare against
+  `Scripts/bin_comp/10.5.exe`.
+- Message box texts: `WINEDEBUG=+relay` with `HKCU\Software\Wine\Debug\RelayInclude` = `user32.MessageBoxA`; CRT
+  calls the same way with `ucrtbase.fopen` (the MinGW build uses the UCRT).
 
-- libstdc++'s `<cwchar>` and `<cstdio>` `#undef` the C names, so redirect macros defined before them are
-  lost: `port_linux.h` includes them first and redirects after.
-- `struct _stat` can't have an `st_mtime` member: it's a macro in both glibc and macOS.
-- Debian's `libc.so` linker script names `/lib/...`; with merged /usr the sysroot needs `lib -> usr/lib`.
-- **Calling conventions**: clang honours `__stdcall` on Linux i386 (the callee pops its arguments). The
-  renderer declared its `gbh_*` functions `__stdcall` only on `_WIN32`, so the Linux build would have
-  corrupted the stack on the first renderer call. Everything the game calls through a pointer has to use
-  the same convention on both sides; Miles, Bink and DirectInput share one header with the game, so they do.
-- The game compiles with all its `GTA2_ASSERT_SIZEOF` checks passing on Linux i386, as the issue predicted.
+**The VC6 build on macOS** (`wine-stable`, through Rosetta):
 
-Not verified until it runs on Linux: anything at runtime. Expected trouble spots: paths the game builds
-in ways `posix_files.cpp` doesn't cover, uninitialised-memory differences, and the frame pacing on the
-first frames.
+- `vc6_setup.py` handles only Windows and Linux; the build works without it.
+- wineserver can crash during full rebuilds with all cores: `python3 build.py --cores 4`. After a crash the link
+  can leave a truncated `decomp_main.exe` (512 KiB) with an older `output.map`, and the verify prints `[0/3423]`:
+  delete both and rebuild. `compare_builds.py` happily compares a stale exe, so check `build.py`'s exit code first.
+- A full rebuild after a change to `fix16.hpp`, `ang16.hpp` or `Fix16_Point.hpp` takes over 10 minutes; the clang
+  check takes 4 seconds. Iterate with clang, verify with VC6.
 
-## Renderer on SDL3 and macOS (branch `sdl3-mac`)
-
-PR #837's renderer has a portable `core/` and an SDL2 platform file meant for the native port. Moving
-it to SDL3 and building it natively on macOS (Apple Silicon, SDL 3.4 from Homebrew):
-
-- SDL2 → SDL3 changes that mattered: `SDL_CreateWindowFrom` is gone (a foreign HWND now goes through
-  `SDL_CreateWindowWithProperties` and `SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER`),
-  `SDL_GL_GetDrawableSize` → `SDL_GetWindowSizeInPixels`, `SDL_GL_DeleteContext` →
-  `SDL_GL_DestroyContext`, init functions and event filters return `bool`,
-  `SDL_HINT_VIDEO_FOREIGN_WINDOW_OPENGL` and `SDL_HINT_WINDOWS_DISABLE_THREAD_NAMING` no longer exist.
-- macOS only gives a core 3.2+ context with `SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG`.
-- macOS has no `GL/glcorearb.h`. `<OpenGL/gl3.h>` declares the same 3.3 core API as prototypes, so
-  `gl_funcs.hpp` takes the function pointer types from them with `decltype(&::glFoo)`.
-- The SDL platform file installed an event filter that drops all events, which is right for the DLL (the
-  game's own message loop owns the window) but makes an SDL-owned window impossible to close. The filter
-  now applies only to the adopted native window.
-- `make demo` builds `tools/sdl_demo.cpp`, which draws through `IRenderer` in an SDL3 window: about 52
-  fps (paced by a 16 ms sleep), frame capture correct. The shaders are `#version 330 core` and work
-  unchanged on macOS's GL 4.1.
-- Ubuntu 24.04 (current `ubuntu-latest`) has no `libsdl3-dev`, so `make test` skips the SDL compile
-  check when SDL3 is missing.
-- Apple Silicon can't run 32-bit code at all, and the game is 32-bit only (issue #840, "Why 32-bit"). A
-  native macOS game needs M4 (ARM64 with 32-bit pointers). Until then, on a Mac the game only runs under
-  wine with the renderer DLLs.
-
-## Working on macOS (VC6 under wine)
-
-The VC6 build works on Apple Silicon with Homebrew's `wine-stable` (9.0, through Rosetta). Things that
-went wrong:
-
-- `vc6_setup.py` only handles Windows and Linux, and crashes on Darwin (`result` unbound in
-  `import_reg_file`). The build worked without it here.
-- **wineserver crashed** twice during full rebuilds with all cores. `python3 build.py --cores 4` held up.
-- After a crash the link can leave a **truncated `decomp_main.exe`** (exactly 512 KiB instead of about 1.6
-  MB) with an older `output.map`. `msvc_dump_new_data.py` then fails with `IndexError`, and the verify
-  prints `[0/3423]`. Delete both and rebuild.
-- `compare_builds.py` happily compares a **stale** exe when the build failed. Check `build.py`'s exit code
-  (or the absence of `error C`) before trusting it.
-- A full VC6 rebuild after a change to `fix16.hpp`/`ang16.hpp`/`Fix16_Point.hpp` takes over 10 minutes
-  under wine on this machine; the clang check takes 4 seconds. Iterate with clang, verify with VC6.
-
-## Repeating it
-
-1. Branch from the current `master` (and the current renderer branch).
-2. `Scripts/port/clang_check.sh`. Expect the same kinds of error as above; each section says how it was
-   fixed.
-3. Fix in this order, since earlier ones hide later ones: includes (1), `__clang__` guards (2),
-   `Function.hpp` (3), fake STL (4), then `const&` (5) round by round, then the small items (6).
-4. Every few steps: `python3 build.py --cores 4` and `compare_builds.py` against a baseline saved on
-   `master`. Expect "changed: 0"; a change means the edit was not neutral (so far only overload
-   resolution did that).
-5. Commit per kind of fix, so a regression can be bisected.
-6. On a branch for the fork: `Scripts/port/build.sh`, then `Scripts/port/run_wine.sh` (once with no map
-   for the frontend, once with `wil`). Compare frontend captures with `10.5.exe`'s; they should be
-   identical. Any new crash: `addr2line`, and suspect undefined behaviour that VC6 tolerated before
-   suspecting the decomp.
+**Calling conventions**: clang honours `__stdcall` on Linux i386 (the callee pops its arguments), so everything the
+game calls through a pointer has to use the same convention on both sides: the renderer's `gbh_*` are `__stdcall`
+on every 32-bit x86 build; Miles, Bink and DirectInput share one header with the game.

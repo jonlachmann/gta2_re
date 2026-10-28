@@ -343,6 +343,6 @@ typedef struct _SYSTEMTIME
 #define REG_CREATED_NEW_KEY 1
 #define REG_OPENED_EXISTING_KEY 2
 
-#include "port_win32_functions.h"
+#include "posix_win32.h"
 #include "objbase.h"
 #include "mmsystem.h"
