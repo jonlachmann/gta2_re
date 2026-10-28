@@ -482,11 +482,7 @@ void OnKeyEvent(const SDL_Event& e)
     {
         if (e.type == SDL_EVENT_KEY_DOWN)
         {
-            SDL_Keycode c = SDL_GetKeyFromScancode(e.key.scancode, e.key.mod, false);
-            if (c >= 'a' && c <= 'z')
-            {
-                c -= 'a' - 'A'; // the game's tables type capitals
-            }
+            const SDL_Keycode c = SDL_GetKeyFromScancode(e.key.scancode, e.key.mod, false);
             gTypedChar[dik & 0xFF] = c > ' ' && c < 256 && c != SDLK_DELETE ? (u16)c : 0;
         }
         AddKeyEvent(dik, e.type == SDL_EVENT_KEY_DOWN, (DWORD)SDL_GetTicks());
