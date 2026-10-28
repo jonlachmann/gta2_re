@@ -2,7 +2,7 @@
 """Compares two GTA2_NET_RANDLOG logs (a server's and a client's, docs/netcode.md "Checks"): per function that drew,
 the rand() draws per tick on each side.
 
-usage: Scripts/port/rand_diff.py <program> <server log> <client log>
+usage: Scripts/port/net/rand_diff.py <program> <server log> <client log>
 
 Each log line is: cycle, the caller of rand(), and the two above it, as offsets in the program. A function is named
 by the first frame that isn't an rng wrapper (rng::get_int_4F7AE0 and the like). Names come from atos (macOS) or

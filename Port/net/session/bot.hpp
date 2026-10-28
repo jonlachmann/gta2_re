@@ -75,7 +75,7 @@ class BotBrain
 // "rammer": gets into the nearest car and drives at the nearest player to hit it
 // "hunter": the rammer when a car is near and nobody is close (and once in a car), the simple one otherwise
 // "soldier": a weapon, then a car, then to the nearest player: runs it over or gets out and shoots, whichever suits
-// "nn:<file>": a neural network's (bot_nn.cpp), its weights from the file (Scripts/port/train_bots.py)
+// "nn:<file>": a neural network's (bot_nn.cpp), its weights from the file (Scripts/port/bots/rl_bots.py)
 std::unique_ptr<BotBrain> CreateBotBrain(const std::string& kind);
 std::unique_ptr<BotBrain> CreateNeuralBrain(const std::string& path); // NULL if the file is no network of this shape
 

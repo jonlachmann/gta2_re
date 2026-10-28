@@ -1,4 +1,4 @@
-// Port/net bot navigation test (Scripts/port/net_tests.sh): FindPath on made-up maps, no game.
+// Port/net bot navigation test (ctest): FindPath on made-up maps, no game.
 #include "check.hpp"
 #include "../session/bot.hpp"
 #include <stdio.h>

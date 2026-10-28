@@ -1,5 +1,5 @@
 // Port/net (docs/netcode.md, "Code layout"): the game world as a list of memory blocks: what a client saves every
-// tick and restores to resimulate. Shared with the sim bench (Port/headless/sim_bench.cpp), whose rollback check
+// tick and restores to resimulate. Shared with the sim bench (Port/net/eval/sim_bench.cpp), whose rollback check
 // proves the list complete.
 #pragma once
 #include <stddef.h>

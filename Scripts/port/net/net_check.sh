@@ -1,5 +1,5 @@
 #!/bin/bash
-# The netcode's checks in one go (docs/netcode.md, "Checks"), on the macOS build (Scripts/port/build_mac.sh):
+# The netcode's checks in one go (docs/netcode.md, "Checks"), on the macOS build (cmake --preset mac -S Port):
 #   arena   bot matches on the server alone, several maps, brains and seeds: none may crash
 #   live    a server and two bot clients over a bad link (100 ms, jitter, loss): no crash, no CHECK line
 #   churn   two bot clients staying while two others join and leave, four times (stopped: SIGTERM, Ctrl-C): no
@@ -10,13 +10,13 @@
 #   soak    a server and three bot clients, the clock 10 times as fast: 10 minutes of play in 60 s, no crash
 #   replay  recorded client sessions replayed against their saved logs: the same, or nondeterministic (it differs
 #           from itself too), else a regression
-# usage: Scripts/port/net_check.sh [--quick] [--record] [--save] [arena|live|replay ...]
+# usage: Scripts/port/net/net_check.sh [--quick] [--record] [--save] [arena|live|churn|maps|rounds|soak|replay ...]
 #   --record  new fixtures (recorded sessions) and their logs; --save: the current build's replay logs as the baseline
 # Fixtures and logs: build_port/net_check/. Exit 1 if anything failed.
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 ROOT=$PWD
 GAME=$ROOT/build_port/mac/game
-BIN=$ROOT/build_port/mac/gta2_port
+BIN=${BIN:-$ROOT/build_port/mac/gta2_port} # BIN=<program>: another build
 OUT=$ROOT/build_port/net_check
 QUICK= RECORD= SAVE= STEPS=()
 for a in "$@"; do
@@ -28,7 +28,7 @@ for a in "$@"; do
   esac
 done
 [ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn maps rounds soak replay)
-[ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: Scripts/port/build_mac.sh, then Scripts/port/run_mac.sh once"; exit 1; }
+[ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: cmake --preset mac -S Port && cmake --build build_port/mac, then Scripts/port/run/run_mac.sh once"; exit 1; }
 mkdir -p "$OUT"
 trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (each job execs its game: killing it kills the game)
 FAILED=0

@@ -1,4 +1,4 @@
-// Port/net core tests (Scripts/port/net_tests.sh): no game, no network; a failed CHECK prints and exits 1.
+// Port/net core tests (ctest): no game, no network; a failed CHECK prints and exits 1.
 #include "check.hpp"
 #include "../core/bitstream.hpp"
 #include "../core/protocol.hpp"

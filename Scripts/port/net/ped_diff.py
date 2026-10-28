@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compares a server's GTA2_NET_DUMPPEDS dump with a client's (the divergence check, docs/netcode.md "Checks").
 
-usage: Scripts/port/ped_diff.py <server dump> <client dump> [--peds N]
+usage: Scripts/port/net/ped_diff.py <server dump> <client dump> [--peds N]
 
 Both hold every ped's Ped, Char and Sprite bytes per tick, by the server's ids. The members come from clang's record
 layouts of this build (64-bit: the decomp's field_XX offsets are the 32-bit ones). Pointers are left out (they differ
@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 FLAGS = ("-fshort-wchar -std=c++17 -fms-extensions -IPort/compat -include Port/compat/port_linux.h -ISource -I. "
          "-I/opt/homebrew/include -D_CRT_SECURE_NO_WARNINGS -D_USE_32BIT_TIME_T -DGTA2_PORT -DNDEBUG -DBUILD_MSS").split()
 

@@ -1,4 +1,4 @@
-// Port/net transport test (Scripts/port/net_tests.sh): a server and a client in one process over loopback.
+// Port/net transport test (ctest): a server and a client in one process over loopback.
 #include "check.hpp"
 #include "../core/protocol.hpp"
 #include "../transport/transport.hpp"

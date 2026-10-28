@@ -14,7 +14,7 @@
 //   GTA2_STATELOG_DUMP=<a>-<b>:<n>,.. full bytes of those entries (names, *name for pointees) at game frames a..b
 //   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
 //                                     a..b, caught with int3 breakpoints, so the same in 10.5.exe and in the port
-//                                     (Scripts/port/state_check.py, TRACE=), to <log>.trace:
+//                                     (Scripts/port/statecheck/state_check.py, TRACE=), to <log>.trace:
 //                                     C <game frame> <label> <ecx> <6 stack dwords> at the entry and
 //                                     R <game frame> <label> <eax> <dword at eax> at the return; both end in ^<esp>.
 //   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords>

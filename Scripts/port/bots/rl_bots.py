@@ -8,8 +8,8 @@ learner slots; some matches put earlier versions of it (the pool) in two of them
 (kickstarting, --teach), less with each update. The teacher, "hunter", takes a car when one is near and nobody is
 close and drives at people, and fights on foot otherwise. Weapons come from the map's pickups (--armed: pistols for all, a start).
 
-  build_port/rlvenv/bin/python Scripts/port/rl_bots.py [--updates N] [--envs N] [--spectate K]
-  build_port/rlvenv/bin/python Scripts/port/rl_bots.py --watch [file.nn] [--scripted hunter,hunter,hunter]
+  build_port/rlvenv/bin/python Scripts/port/bots/rl_bots.py [--updates N] [--envs N] [--spectate K]
+  build_port/rlvenv/bin/python Scripts/port/bots/rl_bots.py --watch [file.nn] [--scripted hunter,hunter,hunter]
                                                        a match in a window, against those scripted bots
 
 Out: build_port/rl/ (latest.nn for the game's nn: brain, policy.pt to continue, pool/, log.csv).
@@ -31,7 +31,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 GAME = os.path.join(ROOT, "build_port", "mac", "game")
 BIN = os.path.join(ROOT, "build_port", "mac", "gta2_port")
 OUT = os.path.join(ROOT, "build_port", "rl")
@@ -369,7 +369,7 @@ def main():
     ap.add_argument("--watch", nargs="?", const=os.path.join(OUT, "latest.nn"), metavar="NN", help="watch a match in a window instead")
     args = ap.parse_args()
     if not os.path.exists(os.path.join(GAME, "data")):
-        sys.exit("no game in %s: run Scripts/port/run_mac.sh once" % GAME)
+        sys.exit("no game in %s: run Scripts/port/run/run_mac.sh once" % GAME)
     if args.watch:
         watch_match(args.watch, scripted=args.scripted)
         return
