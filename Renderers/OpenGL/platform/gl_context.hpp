@@ -11,8 +11,6 @@ class IGLContext
     virtual void GetDrawableSize(int* pW, int* pH) = 0;
     virtual void SwapBuffers() = 0;
     virtual void MakeCurrent() = 0;
-    // Native handle of the window (HWND on Windows), NULL if the context owns an SDL window.
-    virtual void* NativeWindow() = 0;
 };
 
 // Adopts an existing native window (the game's HWND) and creates the GL context on it.

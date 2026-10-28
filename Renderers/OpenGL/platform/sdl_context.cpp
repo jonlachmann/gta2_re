@@ -12,8 +12,7 @@ bool SDLCALL DropAllEvents(void*, SDL_Event*)
 class SDLGLContext : public IGLContext
 {
   public:
-    SDLGLContext(SDL_Window* pWindow, SDL_GLContext ctx, void* pNative, bool owned) :
-        mWindow(pWindow), mContext(ctx), mNative(pNative), mOwned(owned)
+    SDLGLContext(SDL_Window* pWindow, SDL_GLContext ctx, bool owned) : mWindow(pWindow), mContext(ctx), mOwned(owned)
     {
     }
 
@@ -44,15 +43,10 @@ class SDLGLContext : public IGLContext
     {
         SDL_GL_MakeCurrent(mWindow, mContext);
     }
-    void* NativeWindow()
-    {
-        return mNative;
-    }
 
   private:
     SDL_Window* mWindow;
     SDL_GLContext mContext;
-    void* mNative;
     bool mOwned;
 };
 
@@ -76,7 +70,7 @@ bool InitVideo(const char** ppError)
     return true;
 }
 
-IGLContext* Finish(SDL_Window* pWindow, void* pNative, bool owned, const char** ppError)
+IGLContext* Finish(SDL_Window* pWindow, bool owned, const char** ppError)
 {
     if (!pWindow)
     {
@@ -98,7 +92,7 @@ IGLContext* Finish(SDL_Window* pWindow, void* pNative, bool owned, const char** 
     SDL_GL_MakeCurrent(pWindow, ctx);
     // The game paces itself.
     SDL_GL_SetSwapInterval(0);
-    return new SDLGLContext(pWindow, ctx, pNative, owned);
+    return new SDLGLContext(pWindow, ctx, owned);
 }
 } // namespace
 
@@ -115,7 +109,7 @@ IGLContext* CreateGLContextFromNativeWindow(void* pNativeWindow, const char** pp
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
     SDL_Window* pWindow = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
-    return Finish(pWindow, pNativeWindow, false, ppError);
+    return Finish(pWindow, false, ppError);
 }
 
 IGLContext* CreateGLContextWindow(const char* title, int w, int h, const char** ppError)
@@ -124,9 +118,8 @@ IGLContext* CreateGLContextWindow(const char* title, int w, int h, const char** 
     {
         return NULL;
     }
-    SDL_Window* pWindow =
-        SDL_CreateWindow(title, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-    return Finish(pWindow, NULL, true, ppError);
+    SDL_Window* pWindow = SDL_CreateWindow(title, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    return Finish(pWindow, true, ppError);
 }
 
 IGLContext* CreateGLContextForSDLWindow(void* pSDLWindow, const char** ppError)
@@ -135,5 +128,5 @@ IGLContext* CreateGLContextForSDLWindow(void* pSDLWindow, const char** ppError)
     {
         return NULL;
     }
-    return Finish((SDL_Window*)pSDLWindow, NULL, false, ppError);
+    return Finish((SDL_Window*)pSDLWindow, false, ppError);
 }
