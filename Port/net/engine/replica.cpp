@@ -3,6 +3,7 @@
 // start), else created; moved to the server's state every snapshot; removed when the server no longer sends it.
 // Local cars and peds the server doesn't know (other than the players' own) are removed.
 #include "internal.hpp"
+#include "dev/dev.hpp"
 #include "Port/port_rand_owner.h"
 #include "Source/Car.hpp"
 #include "Source/Char_Pool.hpp"

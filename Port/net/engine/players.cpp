@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Health, deaths, weapons, scores", "Players in cars"): the players as snapshot entities,
 // and the server's put into a client's game: health, deaths, weapons, power-ups, its car, its place.
 #include "internal.hpp"
+#include "dev/dev.hpp"
 #include "Port/port_rand_owner.h"
 #include "Port/port_hooks.hpp"
 #include "Port/port_rand_state.h"
@@ -639,7 +640,7 @@ std::string net::engine::SpawnStats()
     char line[160];
     const int dummies = gPedManager_6787BC ? gPedManager_6787BC->field_0_max_dummy_chars * gPortSpawnPlayers : 0;
     snprintf(line, sizeof(line), "traffic %d of %d, ambient peds %d of %d", gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars,
-             gPortTrafficCap * gPortSpawnPlayers, (int)gNumDummyChars_6787E2, dummies < 80 ? dummies : 80);
+             PortTrafficLimit(), (int)gNumDummyChars_6787E2, dummies < 80 ? dummies : 80);
     return line;
 }
 
@@ -699,62 +700,4 @@ void net::engine::SetPlayerName(int slot, const char* name)
     }
     p->field_83C_player_name[k] = 0;
     gGameSession_67E8E0.SetPlayerName_4C5C30((u16)slot, p->field_83C_player_name); // as Player.cpp sets it up
-}
-
-void net::engine::DebugKill(int victim, int killer)
-{
-    Player* p = GetPlayer(victim);
-    Ped* ped = p ? p->field_2C4_player_ped : NULL;
-    if (ped && !ped->isDead_403B60())
-    {
-        KillCredited(ped, killer);
-    }
-}
-
-void net::engine::DebugWanted(int player, int points)
-{
-    Player* p = GetPlayer(player);
-    Ped* ped = p ? p->field_2C4_player_ped : NULL;
-    if (ped && !ped->isDead_403B60() && ped->field_20A_wanted_points < points)
-    {
-        ped->field_20A_wanted_points = (s16)points;
-    }
-}
-
-void net::engine::DebugPowerUp(int player, int powerUp)
-{
-    Player* p = GetPlayer(player);
-    if (p && p->field_2C4_player_ped && powerUp >= 0 && powerUp < kPowerUps)
-    {
-        p->CollectPowerUp_564D60(powerUp);
-    }
-}
-
-void net::engine::DebugCar(int player, int model)
-{
-    Player* p = GetPlayer(player);
-    Ped* ped = p ? p->field_2C4_player_ped : NULL;
-    if (ped && !ped->field_16C_car && gCarManager_6C_677930)
-    {
-        // Beside the player, as the debug menu spawns one (ImGuiDebug.cpp): scale 1, counted as recycled
-        Fix16 scale;
-        scale.mValue = 0x4000;
-        Fix16 off;
-        off.FromInt(2);
-        Car* car = gCarManager_6C_677930->SpawnCarAt_446230(ped->get_cam_x() + off, ped->get_cam_y(), ped->get_cam_z(), 0, model, scale);
-        if (car)
-        {
-            car->IncrementCarStats_443D70(car_kind::recycled_1);
-        }
-    }
-}
-
-void net::engine::DebugArm(int player, int weapon, int ammo)
-{
-    Player* p = GetPlayer(player);
-    if (p && p->field_2C4_player_ped && weapon >= 0 && weapon < kPlayerWeapons && p->field_718_weapons[weapon] &&
-        p->field_718_weapons[weapon]->field_0_ammo == 0)
-    {
-        p->AddWeaponWithAmmo_564960(weapon, (u8)ammo);
-    }
 }

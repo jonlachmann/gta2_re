@@ -4,6 +4,7 @@
 // (Object_5C::NewPhysicsObj_5299B0, as the game drops one) and removes those the server no longer has (collected, or
 // its own: one it collected in a prediction comes back while the server still has it).
 #include "internal.hpp"
+#include "dev/dev.hpp"
 #include "Source/Object_5C.hpp"
 #include "Source/ObjectPool.hpp"
 #include "Source/sprite.hpp"

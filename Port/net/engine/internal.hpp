@@ -166,14 +166,6 @@ void MoveCar(Car* car, const Fix16& x, const Fix16& y, const Fix16& z, const Ang
 void MovePed(Ped* ped, const Fix16& x, const Fix16& y, const Fix16& z, const Ang16& rot);
 void CapturePed(Ped* p, Car* driving, Car* riding, Snapshot& out);
 
-// The debug switches (GTA2_NET_*), read once (debug.cpp)
-struct DebugFlags
-{
-    bool carDiff, selfLog, animLog, soundLog, checkGrid, pickupLog;
-};
-const DebugFlags& Debug();
-bool DebugGridOk(const char* where, Car* car); // GTA2_NET_CHECKGRID: the collision grid has no freed sprites
-void DebugCarDiff(Car* car, const EntityState& e, uint32_t tick); // GTA2_NET_CARDIFF: the physics members that differ (cars.cpp)
 
 // Players (players.cpp)
 void CapturePlayer(int slot, Snapshot& out);
