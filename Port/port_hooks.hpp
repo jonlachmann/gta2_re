@@ -1,4 +1,4 @@
-// Port (docs/port.md, "Hooks"): what the game's code (Source/, under GTA2_PORT) calls or reads in the port, in one
+// Port (docs/port.md, "`Source/` changes"): what the game's code (Source/, under GTA2_PORT) calls or reads in the port, in one
 // place. Defined in port_hooks.cpp unless noted.
 #pragma once
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Port check (docs/port.md, M2): compares two state logs (Port/validation/state_log.cpp) of the same replay,
+# Port check (docs/port.md, "Validation"): compares two state logs (Port/validation/state_log.cpp) of the same replay,
 # game frame by game frame, in 64-byte chunks of every global and of what pointer globals point to.
 # A chunk that was identical and becomes different marks a divergence; chunks that never match (memory the
 # game never initialised, or where the decomp's layout differs from 10.5.exe's) are only listed.

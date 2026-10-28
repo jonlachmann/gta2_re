@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Port check (docs/port.md, M2): the field layout of every state log entry, from the DWARF of gta2_port.exe
+# Port check (docs/port.md, "Validation"): the field layout of every state log entry, from the DWARF of gta2_port.exe
 # (llvm-dwarfdump). Used for two things:
 #  - padding masks: clang may store junk into padding (a byte field written as a dword), where 10.5.exe leaves
 #    zeroes, so the state log skips padding bytes (GTA2_STATELOG_MASK, written by write_mask)

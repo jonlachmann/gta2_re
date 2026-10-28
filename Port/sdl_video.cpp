@@ -13,7 +13,7 @@
 static void* gVidFuncs;
 static unsigned gFlips;
 
-// GTA2_HEADLESS=1: no GL context and no drawing; the gbh_* layer still runs (docs/port.md, M2)
+// GTA2_HEADLESS=1: no GL context and no drawing; the gbh_* layer still runs (docs/port.md, "Validation")
 static bool Headless()
 {
     return SDL_getenv("GTA2_HEADLESS") != NULL;

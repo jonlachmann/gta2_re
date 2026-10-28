@@ -1,8 +1,9 @@
-# GTA2 OpenGL renderer (prototype)
+# GTA2 OpenGL renderer
 
 Two drop-in DLLs that replace DMA's `d3ddll.dll` (gbh_* API) and `dmavideo.dll` (Vid_* API) with
 OpenGL 3.3 core. They work with the decomp build (`decomp_main.exe`) and with the original exe:
-the game picks its render and video DLLs from the registry, so no game code changes.
+the game picks its render and video DLLs from the registry, so no game code changes. The native port
+(`docs/port.md`) links the same code into the game, with an SDL3 GL context.
 
 This directory is not part of the VC6 build and has no effect on matching.
 
@@ -13,19 +14,20 @@ differences are rasteriser rounding (see Fidelity). Optional enhancements are of
 
 ## Build
 
-Needs MinGW-w64 (i686). `make test` needs a host g++ and the SDL3 development headers.
+CMake. The DLLs with MinGW-w64 (i686), the native tests on any other host:
 
 ```bash
-make                  # build/glvideo.dll build/glrender.dll build/capvideo.dll
-make test             # native tests of the portable core
-make OUT=/path/to/gta2
+cmake -S Renderers/OpenGL -B build_gl -DCMAKE_TOOLCHAIN_FILE=$PWD/Port/cmake/mingw-gcc.cmake && cmake --build build_gl
+cmake -S Renderers/OpenGL -B build_gl_test && cmake --build build_gl_test && ctest --test-dir build_gl_test
 ```
 
-`make demo` builds `build/sdl_demo`, a native SDL3 window that draws through the GL core (no game
-needed; F12 toggles the enhancements). On macOS: `brew install sdl3` and
-`PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig make demo`.
+The first gives `glvideo.dll`, `glrender.dll` and `capvideo.dll` (the reference proxy, see Development tools);
+they link the MinGW runtime statically and only need system DLLs. The port's Windows build
+(`cmake --preset windows -S Port`) builds them too, with clang, in `build_port/windows/gl`.
 
-The DLLs link the MinGW runtime statically and only need system DLLs.
+The second runs the tests (the gbh layer's texture updates, the ini options), compiles the GL core, and with SDL3
+found builds `sdl_demo`, a native SDL3 window that draws through the GL core (no game needed; F12 toggles the
+enhancements).
 
 ## Install and switch
 
@@ -81,16 +83,18 @@ acting after release. `glvideo.dll` drops NumLock and Scroll Lock events from th
 
 ## Development tools
 
-Used to compare with DMA's renderer; all inactive unless their variable is set.
+Used to compare with DMA's renderer; all inactive unless their variable is set. They are in `dev/`, called from
+the frame flow (`dev/frame_tools.cpp`), the gbh layer (`dev/gbh_log.cpp`) and the keyboard hook
+(`dev/input_script.cpp`).
 
 | variable | effect |
 |---|---|
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames (Vid_FlipBuffers count) as BMP |
 | (a file `capture_now` in the working directory) | the next frame (checked every 30) written to `capture.bmp`, and the file removed: a look at a running game |
 | `GTA2GL_CMDLOG=<dir>,<frames>` | log every gbh call and the primitives it produced |
-| `GTA2GL_INPUT=<frame>:<dik>[:<held>],...` | feed DirectInput key events at fixed frames |
+| `GTA2GL_INPUT=<frame>:<dik>[:<held>],...` | feed DirectInput key events at fixed frames (the DLLs only) |
 | `GTA2GL_TOGGLE_AT=<frame>,...` | press the F12 switch at those frames |
-| `GTA2GL_KEYLOG=<file>` | log every keyboard event the game reads and the backlog left |
+| `GTA2GL_KEYLOG=<file>` | log every keyboard event the game reads and the backlog left (the DLLs only) |
 | `GTA2GL_STATS=<n>` | log fps, draw calls, uploads and frame times every n frames |
 
 `capvideo.dll` is a proxy for DMA's `Dmavideo.dll` (register it as `videoname`, keep
@@ -101,16 +105,21 @@ debug keys (`skip_frontend`, `mapname`...), so the two runs can be compared fram
 
 ## Layout
 
-- `core/` portable C++ and OpenGL, no Windows headers. `gbh_api.cpp` is the gbh_* layer,
-  `gl_renderer.*` the faithful renderer, `gl_enhanced.cpp` the optional enhancements,
-  `vid_system.*` the Vid_* logic, `renderer.hpp` the interface between the two DLLs.
-- `platform/` the GL context: WGL on the game's window for the DLLs, SDL3 for a future native port.
-- `dll/` Windows glue: Vid_* exports, window handling, the DirectInput hook.
-- `tools/` development tools, `tests/` native tests.
+- `core/` the renderer, portable C++ and OpenGL, no Windows headers: `gl_renderer.*` the faithful renderer,
+  `gl_enhanced.cpp` the optional enhancements, `options.*` their settings, `vid_system.*` the Vid_* logic (modes,
+  the CPU surface, the frame flow); the gbh_* layer in `gbh_api.cpp` (the scene, drawing, the exports),
+  `gbh_textures.cpp` (palettes, textures, images) and `gbh_lighting.cpp` (the lights); `renderer.hpp` the interface
+  between the two sides; `gta2_api.hpp` the game's types.
+- `platform/` the GL context: WGL on the game's window for the DLLs, SDL3 for the native port.
+- `dll/` the Windows DLLs: `glvideo.cpp` (the Vid_* exports), `glrender.cpp` (DllMain only; the gbh_* exports are
+  in `core/gbh_api.cpp`), `dinput_hook.cpp` (the lock key filter, see Keyboard under wine).
+- `dev/` the development aids above. `tools/` the reference tools: `capvideo.cpp` and `d3dlog.cpp` (the proxy),
+  `compare_frames.py`. `tests/` the native tests and `sdl_demo.cpp`.
+- `sources.cmake` the source lists, for `CMakeLists.txt` and the port's.
 
-The video DLL owns the window, the GL context and the renderer. The game passes the SVideo it got
+The video side owns the window, the GL context and the renderer. The game passes the SVideo it got
 from `Vid_Init_SYS` to `gbh_InitDLL`; that SVideo heads a larger object carrying an `IRenderer*`,
-which is how the render DLL reaches the renderer.
+which is how the render side reaches the renderer.
 
 ## Fidelity
 

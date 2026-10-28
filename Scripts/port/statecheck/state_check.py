@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Port check (docs/port.md, M2): the attract replay in gta2_port.exe and 10.5.exe, headless and sped up,
+# Port check (docs/port.md, "Validation"): the attract replay in gta2_port.exe and 10.5.exe, headless and sped up,
 # compared by their state logs (Port/validation/state_log.cpp, Scripts/port/statecheck/state_diff.py). Padding is masked
 # (Scripts/port/statecheck/layout.py). When a chunk becomes different, both run again with a dump of those entries and
 # the differing fields are printed by name.
