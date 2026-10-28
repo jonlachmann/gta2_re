@@ -19,8 +19,6 @@
 EXTERN_GLOBAL(HINSTANCE, gHInstance_708220);
 EXTERN_GLOBAL(SoundObject, snd1_67D818); // the frontend's sound: 1 up, 2 down, 5 enter, 6 back, 7 a key, 8 a deletion
 
-void (*gPortFrontendSetup)(Frontend* pFrontend);
-bool (*gPortFrontendInput)(Frontend* pFrontend);
 
 namespace
 {

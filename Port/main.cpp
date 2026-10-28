@@ -3,7 +3,7 @@
 #include "Source/winmain.hpp"
 #include <SDL3/SDL_main.h>
 #include "net/net_main.hpp"
-#include "net/engine/engine.hpp"
+#include "port_hooks.hpp"
 #include "validation/validation.hpp"
 #include <string>
 #include <vector>
@@ -39,10 +39,10 @@ static void OnCrash(int sig, siginfo_t* info, void* context)
     const int n = backtrace(frames, 64);
     backtrace_symbols_fd(frames, n, 2);
     static bool sOnce;
-    if (!sOnce) // the netcode's view of the game, not signal-safe but worth it once
+    if (!sOnce && gPortCrashHook) // the netcode's view of the game, not signal-safe but worth it once
     {
         sOnce = true;
-        net::engine::DebugOnCrash();
+        gPortCrashHook();
     }
     signal(sig, SIG_DFL);
     raise(sig);

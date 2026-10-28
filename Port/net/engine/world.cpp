@@ -6,11 +6,11 @@
 #include "Source/Light.hpp"
 #include "Source/Player.hpp"
 #include "Port/port_globals.hpp"
+#include "Port/port_hooks.hpp" // gPortZoneRoundRobin: a function's static in the original (map_0x370.cpp), not a registered global
 #include <string.h>
 
 EXTERN_GLOBAL(Light**, gLightGrid_6F5400);
 void PortRandParticle_Memory(unsigned char** ppAddr, unsigned int* pSize); // Port/port_rand.cpp
-extern short gPortZoneRoundRobin; // a function's static in the original (map_0x370.cpp): not a registered global
 
 namespace
 {

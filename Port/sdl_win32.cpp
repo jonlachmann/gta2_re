@@ -298,7 +298,6 @@ BOOL Port_PeekMessageA(LPMSG pMsg, HWND, UINT, UINT, UINT)
     return FALSE;
 }
 
-void (*gPortIdleHook)() = NULL;
 
 BOOL Port_TranslateMessage(const MSG*)
 {

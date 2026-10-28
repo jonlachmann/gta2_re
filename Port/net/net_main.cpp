@@ -7,7 +7,7 @@
 //            [--traffic N]  (the ambient traffic cars for the whole game, 16 as in the original)
 //            [--packets N]  (a snapshot's packets at most, 1..8, 4 by default: a busy area's goes in parts)
 //            [--arena brain,brain,...]  (bots on the server itself in the first slots, e.g. nn:best.nn,simple)
-//            [--ticks N]  (prints the arena's result and ends at tick N: Scripts/port/train_bots.py)
+//            [--ticks N]  (prints the arena's result and ends at tick N: Scripts/port/bots/rl_bots.py)
 //            [--seed N]  (the game's random state at the start: another match from the same start)
 //   --connect host[:port] [--name <name>] [--bot [brain]]  (brain: simple, carhop, rammer, nn:<file>)
 //   either: [--lag ms] [--jitter ms] [--loss percent]  a link conditioner on this end's sends (tests)
@@ -15,7 +15,9 @@
 // The map is a multiplayer map's .mmp in data/ (default downtown-6p). The game then starts that network game.
 #include "net_main.hpp"
 #include "Port/port_hooks.hpp" // the hooks defined here, as the game declares them
-#include "session/session.hpp"
+#include "engine/dev/dev.hpp"
+#include "session/client.hpp"
+#include "session/server.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <ctype.h>
@@ -23,12 +25,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-int gPortTrafficCap = 16; // Source/Car.cpp, CarManager::CanAllocateCarOfKind_446930
-int gPortSpawnPlayers = 1;
-void (*gPortAfterPlayersHook)();
-void (*gPortDrawOverlay)() = NULL; // Source/Game.cpp, Game::Draw_4B92D0
-short gPortZoneRoundRobin; // Source/map_0x370.cpp, Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0 (respawn zones)
 
 // Port/port_rand.cpp, Port/port_rand_particle.cpp (not their headers: those rename rand and gRng_6F6784)
 void PortRandSound_Separate(bool separate);
@@ -55,9 +51,6 @@ void OnFrame(void*)
     if (gClient)
     {
         gClient->Frame();
-        net::engine::GuardPeds(); // again: the snapshot this frame applied comes before the next tick
-        net::engine::AnchorAttachments(); // the frame is drawn next
-        net::engine::GangLog(false);
     }
 }
 
@@ -159,7 +152,6 @@ int LeaveNetworkGame()
     printf("net: back to the frontend\n");
     return NetMenu_Page();
 }
-int (*gPortLeaveNetworkGame)() = LeaveNetworkGame;
 
 bool NetMenu_Join(const std::string& address, const std::string& name, std::string* error)
 {
@@ -215,6 +207,8 @@ const std::string& NetMenu_DefaultName()
 
 int NetMain_Init(std::vector<std::string>& args)
 {
+    gPortLeaveNetworkGame = LeaveNetworkGame;
+    gPortCrashHook = net::engine::DebugOnCrash; // the crash report's last: the netcode's view of the game
     bool server = false, window = false;
     std::string rounds; // --rounds on|off // a server runs headless (GTA2_HEADLESS) unless --window asks to watch it
     std::string connect, map = "downtown-6p", replay, maps;

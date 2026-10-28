@@ -1675,7 +1675,7 @@ bool CarManager::CanAllocateCarOfKindWithSpare_446870(s32 type) const
             return this->field_44_parked_cars < 200;
         case car_kind::recycled_1:
 #if defined(GTA2_PORT)
-            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap * gPortSpawnPlayers - 1;
+            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < PortTrafficLimit() - 1;
 #else
             return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < 15;
 #endif
@@ -1705,7 +1705,7 @@ bool CarManager::CanAllocateCarOfKind_446930(s32 type) const
             return this->field_44_parked_cars < 200;
         case car_kind::recycled_1:
 #if defined(GTA2_PORT)
-            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap * gPortSpawnPlayers;
+            return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < PortTrafficLimit();
 #else
             return gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < 16;
 #endif
@@ -6942,7 +6942,7 @@ void TrafficSpawner::MakeTrafficForCurrCamera_5832C0()
 #if defined(GTA2_PORT)
     // The same limit as CarManager::CanAllocateCarOfKind_446930's (16 for the whole game in 10.5.exe)
     if ((!bLimit_recycling_67D4CA || gCarManager_6C_677930->field_28_recycled_cars < 2) &&
-        gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < gPortTrafficCap * gPortSpawnPlayers)
+        gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars < PortTrafficLimit())
 #else
     if ((!bLimit_recycling_67D4CA || gCarManager_6C_677930->field_28_recycled_cars < 2) &&
         gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars != 16)
@@ -7163,7 +7163,7 @@ bool TrafficSpawner::SpawnTrafficCar_582480(s32 spawn_type, s32 arrow_direction,
     Fix16 ground_z;
 
 #if defined(GTA2_PORT)
-    if (gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars >= gPortTrafficCap * gPortSpawnPlayers ||
+    if (gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars >= PortTrafficLimit() ||
         arrow_direction == blocked_direction || gCarManager_6C_677930->field_54_spawn_block > 0)
 #else
     if (gCarManager_6C_677930->field_28_recycled_cars + gCarManager_6C_677930->field_40_proto_recycled_cars == 16 || arrow_direction == blocked_direction ||
