@@ -521,6 +521,45 @@ void net::engine::SetNetStatus(const std::string& corner, const std::string& cen
     Widen(centre, gStatusCentre, sizeof(gStatusCentre) / sizeof(gStatusCentre[0]));
 }
 
+namespace
+{
+// <text> centred at <y>, wrapped at spaces to fit <w> less a margin; the y under it. ponytail: no std::wstring, whose
+// traits assume a 4-byte wchar_t (the port has -fshort-wchar)
+s32 DrawCentredWrapped(const wchar_t* text, s32 w, s32 y, s32 lineHeight)
+{
+    std::vector<wchar_t> line(1, 0); // 0-terminated
+    size_t lineEnd = 0; // the last fitting word's end
+    for (const wchar_t* c = text;; c++)
+    {
+        if (*c == ' ' || !*c)
+        {
+            if (Frontend::GetMaxTextWidth_5D8990(line.data(), gStyleTextFont_703BAA) > w - 32 && lineEnd)
+            {
+                // over: draw up to the last word that fitted, start again after it
+                std::vector<wchar_t> rest(line.begin() + lineEnd + 1, line.end());
+                line.resize(lineEnd);
+                line.push_back(0);
+                DrawTextScaled_5D77A0(line.data(), (w - Frontend::GetMaxTextWidth_5D8990(line.data(), gStyleTextFont_703BAA)) / 2, y, gStyleTextFont_703BAA);
+                y += lineHeight;
+                line = rest;
+            }
+            lineEnd = line.size() - 1;
+            if (!*c)
+            {
+                break;
+            }
+        }
+        line.insert(line.end() - 1, *c);
+    }
+    if (line[0])
+    {
+        DrawTextScaled_5D77A0(line.data(), (w - Frontend::GetMaxTextWidth_5D8990(line.data(), gStyleTextFont_703BAA)) / 2, y, gStyleTextFont_703BAA);
+        y += lineHeight;
+    }
+    return y;
+}
+} // namespace
+
 void net::engine::DrawOverlay()
 {
     Camera* cam = gViewCamera_676978;
@@ -540,17 +579,12 @@ void net::engine::DrawOverlay()
     s32 panelY = 56;
     for (const std::vector<wchar_t>& line : gPanel)
     {
-        if (line[0])
-        {
-            DrawTextScaled_5D77A0(line.data(), (w - Frontend::GetMaxTextWidth_5D8990(const_cast<wchar_t*>(line.data()), gStyleTextFont_703BAA)) / 2, panelY,
-                                  gStyleTextFont_703BAA);
-        }
-        panelY += kLine;
+        panelY = line[0] ? DrawCentredWrapped(line.data(), w, panelY, kLine) : panelY + kLine;
     }
     if (gAnnouncement[0] && NowMs() < gAnnouncementUntilMs)
     {
         const s32 ay = gPanel.empty() ? h / 4 : (panelY + 8 > h / 4 ? panelY + 8 : h / 4);
-        DrawTextScaled_5D77A0(gAnnouncement, (w - Frontend::GetMaxTextWidth_5D8990(gAnnouncement, gStyleTextFont_703BAA)) / 2, ay, gStyleTextFont_703BAA);
+        DrawCentredWrapped(gAnnouncement, w, ay, kLine);
     }
     if (gStatusCentre[0])
     {
