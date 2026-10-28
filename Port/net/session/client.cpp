@@ -1,6 +1,7 @@
 // Port/net (docs/netcode.md, "Client"): joins a server, starts the same network game, sends its input every frame
 // (repeating the last few commands), and puts the server's snapshots into its game.
-#include "session.hpp"
+#include "client.hpp"
+#include "env.hpp"
 #include <algorithm>
 #include <chrono>
 #include <math.h>
@@ -47,7 +48,7 @@ void net::Client::Welcomed(const Welcome& welcome, engine::NetworkGame* pGame)
     pGame->sty = welcome.sty;
     pGame->scr = welcome.scr;
     mScr = welcome.scr;
-    mJerk.PrintJumps(Env().jerkLog >= 2);
+    mProbe.Start();
 }
 
 bool net::Client::StartReplay(const char* path, engine::NetworkGame* pGame, std::string* error)
@@ -284,9 +285,9 @@ void net::Client::TakePlayerStates(const Snapshot& snap)
             continue;
         }
         mRemote[player] = buttons;
-        if (player == mSlot && Env().marker)
+        if (player == mSlot)
         {
-            engine::SetServerMarker(e.f[0], e.f[1], e.f[2]);
+            mProbe.Marker(e);
         }
         if (player == mSlot && rec.tick == snap.tick)
         {
@@ -305,9 +306,9 @@ void net::Client::Reconcile(const Snapshot& snap)
     MeasureShownError(snap);
     TakePlayerStates(snap);
     engine::SavedWorld* saved = s <= mTick && s + kSaves > mTick ? mSaves[s % kSaves].get() : NULL;
-    if (mAloneFrom)
+    if (mProbe.Alone())
     {
-        CompareAlone(snap, saved);
+        mProbe.CompareAlone(snap, saved, *mSaves[mTick % kSaves]);
         return;
     }
     if (!saved || !saved->valid || saved->tick != s)
@@ -320,28 +321,15 @@ void net::Client::Reconcile(const Snapshot& snap)
     engine::Poses(before);
     const engine::LocalChat chat = engine::TakeLocalChat();
     engine::RestoreGame(*saved);
-    engine::DebugCheckPlayerCars("after the restore");
-    engine::DebugOwnCarDiff(snap);
-    if (Env().compare)
-    {
-        engine::ComparePrediction(snap);
-    }
+    mProbe.AfterRestore(snap);
     engine::Apply(snap);
-    engine::DebugCheckPlayerCars("after the apply");
-    if (Env().divergeTick && s >= Env().divergeTick)
-    {
-        engine::CompareDivergence(snap, 0); // as applied: what the snapshot didn't carry over
-        engine::DumpPeds(s, false);
-        mAloneFrom = s;
-        engine::StartRandLog(); // from here on each tick runs once (the resimulation below, then live)
-        printf("net: divergence check, on our own from server tick %u (our tick %u)\n", s, mTick);
-    }
+    mProbe.AfterApply(snap, mTick);
     std::vector<uint32_t> buttons(mRemote);
     for (uint32_t t = s + 1; t <= mTick; t++)
     {
         buttons[mSlot] = mHist[t % kRing].tick == t ? mHist[t % kRing].buttons : 0;
         engine::ResimTick(buttons.data(), (int)buttons.size());
-        engine::DebugCheckPlayerCars("after a resimulated tick");
+        mProbe.AfterResim();
         engine::SaveGame(*mSaves[t % kSaves], t);
         mStats.resimTicks++;
     }
@@ -349,37 +337,6 @@ void net::Client::Reconcile(const Snapshot& snap)
     mStats.rollbacks++;
     engine::ApplyScores(snap);
     Blend(before);
-}
-
-// The divergence check, once on our own: each snapshot against our game at its tick (a save), then back to now
-void net::Client::CompareAlone(const Snapshot& snap, engine::SavedWorld* saved)
-{
-    const uint32_t s = snap.tick;
-    if (saved && saved->valid && saved->tick == s && s > mAloneFrom)
-    {
-        engine::RestoreGame(*saved);
-        engine::CompareDivergence(snap, s - mAloneFrom);
-        engine::DumpPeds(s, false);
-        engine::RestoreGame(*mSaves[mTick % kSaves]);
-    }
-    if (s >= mAloneFrom + Env().divergeTicks)
-    {
-        engine::PrintDivergence();
-        exit(0);
-    }
-}
-
-// GTA2_NET_CORRLOG: corrections of over half a block or 45 degrees (players: a quarter block)
-void net::Client::LogCorrection(const engine::Pose& n, int32_t dx, int32_t dy, int32_t dr) const
-{
-    const int32_t kFar = 2 << 14;
-    if (!Env().corrLog || !(abs(dx) > 8192 || abs(dy) > 8192 || abs(dr) > 180 || (engine::IsPlayerId(n.id) && (abs(dx) > 4096 || abs(dy) > 4096))))
-    {
-        return;
-    }
-    printf("net: frame %u, correction of %u: %.2f blocks, %d degrees%s%s\n", mFrame, n.id, sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f,
-           dr / 4, abs(dx) > kFar || abs(dy) > kFar ? " (jumped)" : "",
-           engine::IsPlayerId(n.id) ? ("; " + engine::DebugPlayerCar((int)n.id - 1, mReceived[mLatestTick % kRing])).c_str() : "");
 }
 
 // The correction in steps: what is shown moves from where it was a part of the way to the corrected state each frame
@@ -419,7 +376,7 @@ void net::Client::Blend(const std::vector<engine::Pose>& shown)
                 stats->Add(sqrtf((float)dx * dx + (float)dy * dy) / 16384.0f, jumped);
             }
         }
-        LogCorrection(n, dx, dy, dr);
+        mProbe.Correction(mFrame, n, dx, dy, dr, mReceived[mLatestTick % kRing]);
         if (jumped || abs(dz) > kFar || (!dx && !dy && !dz && !dr))
         {
             continue;
@@ -562,11 +519,7 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
         CompleteChat(local, key);
         RoundKeys(local, key);
     }
-    if (Env().inputLog && local != mLastInput)
-    {
-        printf("net: frame %u, input 0x%x\n", mFrame, local);
-        mLastInput = local;
-    }
+    mProbe.Input(mFrame, local);
     return local;
 }
 
@@ -760,7 +713,7 @@ void net::Client::TakeSnapshot()
     // How far our commands are from two ticks early. ENet's round trip doesn't see a link conditioner, and the server's
     // word is better anyway: it says which tick's command it had last
     const int off = mSynced && mSlackKnown ? mSlack - 2 : 0;
-    if (!mAloneFrom && (!mSynced || mLatestTick > mTick || off < -3 || off > 12))
+    if (!mProbe.Alone() && (!mSynced || mLatestTick > mTick || off < -3 || off > 12))
     {
         Resync(snap);
     }
@@ -777,10 +730,7 @@ void net::Client::TakeSnapshot()
 
 void net::Client::PrintStats(const Snapshot& snap)
 {
-    if (Env().compare)
-    {
-        engine::PrintPredictionStats(mFrame);
-    }
+    mProbe.PrintStats(mFrame);
     int cars = 0, peds = 0;
     float drift = 0;
     engine::ReplicaStats(snap, &cars, &peds, &drift);
@@ -817,32 +767,6 @@ void net::Client::PrintStats(const Snapshot& snap)
     st.players.Print(mFrame, "players");
     st.cars.Print(mFrame, "cars");
     mStats = Stats();
-}
-
-// GTA2_NET_JERKLOG: what can be seen (within 12 blocks; a camera shows 6 to 8)
-void net::Client::FeedJerk()
-{
-    if (!Env().jerkLog || !mSynced)
-    {
-        return;
-    }
-    std::vector<engine::Pose> all, shown;
-    engine::Poses(all);
-    float lx = 0, ly = 0;
-    engine::PlayerPosition(mSlot, &lx, &ly);
-    for (const engine::Pose& q : all)
-    {
-        const float dx = engine::Blocks(q.x) - lx, dy = engine::Blocks(q.y) - ly;
-        if (dx * dx + dy * dy < 12 * 12)
-        {
-            shown.push_back(q);
-        }
-    }
-    mJerk.Feed(mFrame, shown, (uint32_t)mSlot + 1);
-    if (mFrame % 900 == 0)
-    {
-        mJerk.Report("client", mFrame);
-    }
 }
 
 // Keep our commands about two ticks early: a little faster when they are late, slower when far ahead
@@ -992,25 +916,21 @@ void net::Client::LeaveToMenu(const char* why)
 
 void net::Client::Frame()
 {
+    Step();
+    engine::GuardPeds(); // again: the snapshot this frame applied comes before the next tick
+    engine::AnchorAttachments(); // the frame is drawn next
+    mProbe.FrameEnd();
+}
+
+void net::Client::Step()
+{
     mFrame++;
     engine::KeepMapChange();
     if (engine::GameGeneration() != mGeneration)
     {
         StartOver();
     }
-    engine::DebugSetFrame(mFrame);
-    engine::DebugSoundChannels(mFrame);
-    engine::DebugAnimLog(mFrame);
-    engine::DebugSelfLog(mFrame);
-    if (Env().animLog && mFrame % 3 == 0)
-    {
-        printf("net: frame %u, remote buttons:", mFrame);
-        for (size_t i = 0; i < mRemote.size(); i++)
-        {
-            printf(" 0x%x", mRemote[i]);
-        }
-        printf("\n");
-    }
+    mProbe.Frame(mFrame, mRemote);
     std::vector<TransportEvent> events;
     uint32_t recordedInput = 0;
     if (!TakeEvents(events, &recordedInput))
@@ -1034,7 +954,7 @@ void net::Client::Frame()
         mRemote.assign(engine::PlayerCount(), 0);
     }
     CountTestStats();
-    engine::DebugCheckPlayerCars("after the frame's tick");
+    mProbe.AfterTick();
     if (mSynced)
     {
         RecordTick();
@@ -1045,6 +965,7 @@ void net::Client::Frame()
         ShowStatus();
         ShowRound();
         WatchChat();
+        mProbe.Say(mFrame, mConnected, [this](const std::string& command) { SendCommand(command); });
         BotRound();
     }
     if (!mConnected)
@@ -1061,7 +982,7 @@ void net::Client::Frame()
         TakeSnapshot();
         AnnounceRound();
     }
-    FeedJerk();
+    mProbe.Jerk(mFrame, mSlot, mSynced);
     engine::SetTickMs(mReplay ? 1 : PacedTickMs()); // every frame: a restore brings back the game's tick length too (a replay: no waiting)
     SetNextInputs(local);
     if (mSynced)
@@ -1270,17 +1191,6 @@ void net::Client::ShowRound()
 
 void net::Client::BotRound()
 {
-    // GTA2_NET_SAY=<frame>:<command>[;...]: test commands, at their frame
-    for (const char* k = Env().say; k && *k; k = strchr(k, ';'), k = k ? k + 1 : NULL)
-    {
-        const unsigned frame = (unsigned)atoi(k);
-        const char* colon = strchr(k, ':');
-        const char* end = strchr(k, ';');
-        if (colon && frame == mFrame && mConnected)
-        {
-            SendCommand(std::string(colon + 1, end ? end : colon + 1 + strlen(colon + 1)));
-        }
-    }
     if (!mBot || !mConnected || mFrame < mBotSentFrame + 90)
     {
         return;

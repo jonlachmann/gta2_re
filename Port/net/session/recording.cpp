@@ -1,7 +1,7 @@
 // Port/net: see replay.hpp. The file: "GTA2NETR", a version, the welcome as the protocol writes it (size first),
 // then per frame: frame, round trip, input, event count, and per event its type, channel, size and bytes.
 // Little-endian 32-bit numbers throughout.
-#include "replay.hpp"
+#include "recording.hpp"
 #include <string.h>
 #if defined(_WIN32)
 #include <direct.h>

@@ -1,7 +1,7 @@
 // Port/net (docs/netcode.md, "Server"): the authoritative game. Every frame, after the tick: read the clients, set
 // every player's input for the next tick, and send each client a snapshot of its area as a delta to the newest one
 // it has acknowledged.
-#include "session.hpp"
+#include "server.hpp"
 #include <algorithm>
 #include <math.h>
 #include <stdio.h>
@@ -30,12 +30,6 @@ const net::EntityState* InBase(const net::Snapshot* base, const net::EntityState
     return it != base->entities.end() && it->id == e.id && it->type == e.type ? &*it : NULL;
 }
 
-// Tests: GTA2_NET_TESTKILL=<tick>:<victim>:<killer>[,...] kills players through the game's own death
-struct TestKill
-{
-    unsigned tick;
-    int victim, killer;
-};
 // A client's Escape (the key's code in the input: Source/input_bits.hpp) is its own (Client::ChooseInput: its leave
 // prompt): here it would open the server's quit prompt for that player, whose yes ended the server's game
 uint32_t WithoutEscape(uint32_t buttons)
@@ -44,19 +38,6 @@ uint32_t WithoutEscape(uint32_t buttons)
     return ((buttons & kKeyBits) >> 12) == kEscape ? buttons & ~(kKeyDown | kKeyBits) : buttons;
 }
 
-std::vector<TestKill> TestKills()
-{
-    std::vector<TestKill> out;
-    for (const char* k = net::Env().testKill; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
-    {
-        TestKill t = {0, 0, -1};
-        if (sscanf(k, "%u:%d:%d", &t.tick, &t.victim, &t.killer) >= 2)
-        {
-            out.push_back(t);
-        }
-    }
-    return out;
-}
 } // namespace
 
 std::string net::Scoreboard(const Snapshot& snap)
@@ -114,7 +95,7 @@ bool net::Server::Start(const ServerConfig& config, std::string* error)
     mMap = (size_t)(mConfig.currentMap >= 0 ? mConfig.currentMap : 0);
     mRounds.Start(mConfig.rules, mapNames, mConfig.currentMap);
     engine::CurrentRound() = mRounds.State();
-    mJerk.PrintJumps(Env().jerkLog >= 2);
+    mProbe.Start();
     printf("net: server on port %u, %d player slots, %s\n", config.port, config.game.players, config.game.scr.c_str());
     return true;
 }
@@ -513,59 +494,6 @@ void net::Server::OnEvent(const TransportEvent& e)
     }
 }
 
-void net::Server::RunTestHooks()
-{
-    static const std::vector<TestKill> sKills = TestKills();
-    for (const TestKill& k : sKills)
-    {
-        if (k.tick == mTick)
-        {
-            printf("net: test kill of player %d by %d at tick %u\n", k.victim, k.killer, mTick);
-            engine::DebugKill(k.victim, k.killer);
-        }
-    }
-    // GTA2_NET_TESTPOWERUP=<tick>:<player>:<power-up>[,...] gives players power-ups (12: an instant gang)
-    for (const char* k = Env().testPowerUp; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
-    {
-        unsigned tick = 0;
-        int player = 0, powerUp = 0;
-        if (sscanf(k, "%u:%d:%d", &tick, &player, &powerUp) == 3 && tick == mTick)
-        {
-            printf("net: test power-up %d for player %d at tick %u\n", powerUp, player, mTick);
-            engine::DebugPowerUp(player, powerUp);
-        }
-    }
-    // GTA2_NET_TESTCAR=<tick>:<player>:<model>[,...] puts a car beside players (11: a bus)
-    for (const char* k = Env().testCar; k && *k; k = strchr(k, ','), k = k ? k + 1 : NULL)
-    {
-        unsigned tick = 0;
-        int player = 0, model = 0;
-        if (sscanf(k, "%u:%d:%d", &tick, &player, &model) == 3 && tick == mTick)
-        {
-            printf("net: test car %d for player %d at tick %u\n", model, player, mTick);
-            engine::DebugCar(player, model);
-        }
-    }
-    // GTA2_NET_TESTWANTED=<points> keeps every player at least that wanted (600: a star, the network game's most)
-    if (const char* wanted = Env().testWanted)
-    {
-        for (size_t i = 0; i < mSlots.size(); i++)
-        {
-            engine::DebugWanted((int)i, atoi(wanted));
-        }
-    }
-    // GTA2_NET_TESTARM=<weapon>:<ammo> keeps every player armed (weapon_type, 0 pistol, 1 smg, ...)
-    if (const char* arm = Env().testArm)
-    {
-        int weapon = 0, ammo = 50;
-        sscanf(arm, "%d:%d", &weapon, &ammo);
-        for (size_t i = 0; i < mSlots.size(); i++)
-        {
-            engine::DebugArm((int)i, weapon, ammo);
-        }
-    }
-}
-
 // Inputs for the next tick: its command, or the last one again if it is late, or the arena bot's; nobody's slot
 // stands still
 void net::Server::SetNextInputs(const Snapshot& world)
@@ -596,28 +524,6 @@ void net::Server::SetNextInputs(const Snapshot& world)
 }
 
 // GTA2_NET_JERKLOG: the same measure as the clients', on the server's own state
-void net::Server::FeedJerk(const Snapshot& world)
-{
-    if (!Env().jerkLog)
-    {
-        return;
-    }
-    std::vector<engine::Pose> poses;
-    for (const EntityState& e : world.entities)
-    {
-        engine::Pose p;
-        if (engine::PoseOf(e, &p))
-        {
-            poses.push_back(p);
-        }
-    }
-    mJerk.Feed(mTick, poses);
-    if (mTick % 900 == 0)
-    {
-        mJerk.Report("server", mTick);
-    }
-}
-
 // The round flow's view of the slots: who is in, a person or an arena bot, and the score that counts (frags, or
 // points in a points game)
 std::vector<net::RoundPlayer> net::Server::RoundPlayers(const Snapshot& world) const
@@ -811,17 +717,14 @@ void net::Server::Frame()
         StartOver();
     }
     engine::GuardPeds();
-    engine::GangLog(true);
     StartGameOnce();
     PollTransport();
-    RunTestHooks();
+    mProbe.Tests(mTick, (int)mSlots.size());
     Snapshot world;
     engine::Capture(world);
     world.tick = mTick;
-    engine::DumpPeds(mTick, true);
-    engine::StartRandLog();
+    mProbe.Captured(mTick, world);
     SetNextInputs(world);
-    FeedJerk(world);
     RunRounds(world);
     if (mConfig.endTick && mTick >= mConfig.endTick)
     {
