@@ -16,7 +16,7 @@ SDLINC="-I$SDL3_DIR/include -D__CPUID_H"
 CXXFLAGS="--target=i686-w64-mingw32 -fshort-wchar -std=c++17 ${OPT:--O2 -fno-optimize-sibling-calls} -g -w -Wno-address-of-temporary -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fno-strict-return -mno-sse -mfpmath=387 -fsjlj-exceptions -nostdinc++ -nostdlibinc $INC -ISource -I. -D_CRT_SECURE_NO_WARNINGS -D_CRT_NON_CONFORMING_SWPRINTFS -D_USE_32BIT_TIME_T -DGTA2_PORT -DNDEBUG -DBUILD_MSS -DSTATELOG_IN_PORT $SDLINC $*"
 RENFLAGS="--target=i686-w64-mingw32 -std=c++11 ${OPT:--O2} -g -w -nostdinc++ -nostdlibinc $INC -fsjlj-exceptions -DGTA2GL_BUILD_DLL $SDLINC"
 # gta2_lib_src without the ImGui overlay, plus StdAfx.cpp and Port/ (main.cpp replaces test.cpp)
-SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v ImGuiDebug.cpp) StdAfx.cpp Port/*.cpp Port/headless/state_log.cpp Port/headless/fast_clock.cpp)
+SRC=($(sed -n '/set *(gta2_lib_src/,/)/p' CMakeLists.txt | grep -o 'Source/[^ ]*\.cpp' | grep -v ImGuiDebug.cpp) StdAfx.cpp Port/*.cpp Port/validation/state_log.cpp Port/validation/fast_clock.cpp)
 TESTS=(Port/tests/*.cpp)
 # The OpenGL renderer (PR #837), linked in: its gbh_* exports and Port/sdl_video.cpp's Vid_* ones are found in the
 # exe itself.
@@ -38,7 +38,7 @@ wait
 for o in "${OBJS[@]}"; do [ -f "$o" ] || fail=1; done
 [ $fail -eq 0 ] || { echo "compile failed"; exit 1; }
 i686-w64-mingw32-windres -I. resources.rc -O coff -o $OUT/obj/resources.o
-# Import library for the game's own binkw32.dll (Miles is Port/miles_sdl.cpp) (from the GTA2 install): their exports are
+# Import library for the game's own binkw32.dll (Miles is Port/sdl_miles.cpp) (from the GTA2 install): their exports are
 # decorated stdcall names (_AIL_startup@0), which the "name == export" form of a .def maps to.
 for dll in binkw32; do
   { echo "LIBRARY $dll.dll"; echo EXPORTS

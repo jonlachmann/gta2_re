@@ -17,6 +17,6 @@ build() { # name sources... libs
 }
 SOURCES="$R/dll/glvideo.cpp $R/dll/dinput_hook.cpp $R/platform/wgl_context.cpp $CORE" build glvideo -lopengl32 -lgdi32 -ldinput -ldxguid
 SOURCES="$R/dll/glrender.cpp $R/core/gbh_api.cpp $R/core/cmdlog.cpp $R/core/capture.cpp" build glrender
-# Port/headless/nullvideo.cpp: draws nothing, for fast state comparisons (GTA2_SPEED, GTA2_STATELOG)
-SOURCES="Port/headless/nullvideo.cpp Port/headless/state_log.cpp Port/headless/fast_clock.cpp $CORE" build nullvideo
+# Port/validation/nullvideo.cpp: draws nothing, for fast state comparisons (GTA2_SPEED, GTA2_STATELOG)
+SOURCES="Port/validation/nullvideo.cpp Port/validation/state_log.cpp Port/validation/fast_clock.cpp $CORE" build nullvideo
 ls -la $OUT/*.dll

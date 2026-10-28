@@ -1,5 +1,4 @@
-// Port/miles_sdl.cpp check: the mixer's volume, pan, loops, loop block and playback rate.
-// Built by Scripts/port/build.sh as build_port/miles_sdl_test.exe (needs SDL3.dll), runs under wine.
+// Port/sdl_miles.cpp check: the mixer's volume, pan, loops, loop block and playback rate (ctest, Port/CMakeLists.txt).
 #include "Source/3rdParty/mss.h"
 #include <math.h>
 #include <stdio.h>
@@ -55,6 +54,6 @@ int main(int, char**)
     CHECK(NEAR(out[2 * 3], 0.5f) && NEAR(out[2 * 4], -0.5f) && NEAR(out[2 * 7], -0.5f));
 
     AIL_release_sample_handle(s);
-    printf(gFailures ? "miles_sdl_test: %d failures\n" : "miles_sdl_test: OK\n", gFailures);
+    printf(gFailures ? "sdl_miles_test: %d failures\n" : "sdl_miles_test: OK\n", gFailures);
     return gFailures != 0;
 }

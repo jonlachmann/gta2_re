@@ -1,7 +1,7 @@
-// Port (docs/port.md): 2-byte wide string functions with Microsoft's semantics, see compat/port_wchar.h.
+// Port (docs/port.md): 2-byte wide string functions with Microsoft's semantics, see compat/posix_wchar.h.
 // Characters above 0xFF become '?' when narrowed; the game's text is Latin-1 and its own wide encoding.
 #if !defined(_WIN32) // non-Windows builds only: Windows' C runtime has these
-#include "compat/port_wchar.h"
+#include "compat/posix_wchar.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

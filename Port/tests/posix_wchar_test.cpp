@@ -1,6 +1,5 @@
-// Port/port_wchar.cpp check. Runs natively (no Windows needed):
-//   clang++ -fshort-wchar -std=c++17 -IPort Port/tests/native/port_wchar_test.cpp Port/port_wchar.cpp && ./a.out
-#include "compat/port_wchar.h"
+// Port/posix_wchar.cpp check (ctest, Port/CMakeLists.txt).
+#include "compat/posix_wchar.h"
 #include <stdio.h>
 
 static int gFailures;
@@ -42,6 +41,6 @@ int main()
     CHECK(mbstowcs(a, "hey", 8) == 3 && Eq(a, "hey"));
     CHECK(Eq(_itow(-120, a, 10), "-120") && Eq(_itow(255, a, 16), "ff"));
 
-    printf(gFailures ? "port_wchar_test: %d failures\n" : "port_wchar_test: OK\n", gFailures);
+    printf(gFailures ? "posix_wchar_test: %d failures\n" : "posix_wchar_test: OK\n", gFailures);
     return gFailures != 0;
 }

@@ -1,5 +1,5 @@
 // Port (docs/port.md): Win32 functions the game still calls on non-Windows builds (Port/posix_win32.cpp).
-// The window ones (CreateWindowExA, PeekMessageA, ...) are Port/sdl_win32.hpp's, included by port_linux.h.
+// The window ones (CreateWindowExA, PeekMessageA, ...) are Port/sdl_win32.hpp's, included by posix_prefix.h.
 #pragma once
 #include <strings.h>
 

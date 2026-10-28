@@ -1,6 +1,6 @@
 // Port (docs/port.md): every DEFINE_GLOBAL of a GTA2_PORT build registers here with its name, 10.5.exe
 // address and size, and for a pointer to a complete type the size of what it points to. The state log
-// (Port/headless/state_log.cpp) compares them with 10.5.exe's memory, frame by frame.
+// (Port/validation/state_log.cpp) compares them with 10.5.exe's memory, frame by frame.
 #pragma once
 
 #include <stddef.h>

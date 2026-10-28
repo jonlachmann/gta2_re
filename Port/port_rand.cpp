@@ -1,5 +1,5 @@
-// Port (docs/port.md): VC6's rand()/srand(), see port_rand.h.
-#include "port_rand.h"
+// Port (docs/port.md): VC6's rand()/srand(), see port_rand.hpp.
+#include "port_rand.hpp"
 #include "port_globals.hpp"
 
 // 10.5.exe keeps it at 0x626FE0 (a single-threaded CRT): registered, so the state log compares it

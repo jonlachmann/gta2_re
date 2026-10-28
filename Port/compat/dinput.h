@@ -201,7 +201,7 @@ DECLARE_INTERFACE_(IDirectInputA, IUnknown)
 };
 typedef IDirectInputA* LPDIRECTINPUTA;
 
-// The standard DirectX GUIDs, defined in Port/dinput_guids.cpp (the game defines GUID_SysKeyboard itself too)
+// The standard DirectX GUIDs, defined in Port/sdl_dinput.cpp (the game defines GUID_SysKeyboard itself too)
 extern "C" const GUID GUID_SysMouse;
 extern "C" const GUID GUID_SysKeyboard;
 extern "C" const GUID GUID_XAxis;

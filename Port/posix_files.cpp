@@ -1,6 +1,6 @@
-// Port (docs/port.md): Windows-style file access on POSIX, see compat/port_files.h.
+// Port (docs/port.md): Windows-style file access on POSIX, see compat/posix_files.h.
 #if !defined(_WIN32) // non-Windows builds only
-#include "compat/port_files.h"
+#include "compat/posix_files.h"
 #include <dirent.h>
 #include <fnmatch.h>
 #include <string.h>

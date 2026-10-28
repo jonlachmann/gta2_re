@@ -1,6 +1,5 @@
-// Port/posix_files.cpp check. Runs natively in a scratch folder:
-//   clang++ -std=c++17 -IPort Port/tests/native/posix_files_test.cpp Port/posix_files.cpp && (cd /tmp/x && ./a.out)
-#include "compat/port_files.h"
+// Port/posix_files.cpp check (ctest, Port/CMakeLists.txt; it writes files in its working folder).
+#include "compat/posix_files.h"
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>

@@ -111,7 +111,7 @@ void SDLCALL Mix(void*, SDL_AudioStream* stream, int additional, int);
 } // namespace
 
 // Mixes all playing voices into out (stereo float, frames * 2 values, 44.1 kHz). Also used by
-// Port/tests/miles_sdl_test.cpp.
+// Port/tests/sdl_miles_test.cpp.
 void Port_MilesMix(float* out, int frames)
 {
     memset(out, 0, frames * 2 * sizeof(float));

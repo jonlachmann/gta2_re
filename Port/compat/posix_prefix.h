@@ -13,8 +13,8 @@
     #include <string>
 #endif
 #include "windows.h"
-#include "port_files.h"
-#include "port_wchar.h"
+#include "posix_files.h"
+#include "posix_wchar.h"
 #ifdef __cplusplus
     #include "../sdl_win32.hpp"
 #endif

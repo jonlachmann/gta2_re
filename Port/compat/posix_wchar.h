@@ -1,6 +1,6 @@
 // Port (docs/port.md): the game's wide strings are 2-byte (-fshort-wchar), as on Windows, but the C
 // library's wide functions on Linux and macOS take 4-byte wchar_t. The game's calls go to
-// Port/port_wchar.cpp instead, with Microsoft's meaning: swprintf(buf, fmt, ...) without a size, and %s/%c
+// Port/posix_wchar.cpp instead, with Microsoft's meaning: swprintf(buf, fmt, ...) without a size, and %s/%c
 // for wide strings/characters (%S/%C narrow).
 #pragma once
 #include <stdarg.h>
