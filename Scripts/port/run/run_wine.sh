@@ -1,13 +1,13 @@
 #!/bin/bash
 # Run the Windows build, build_port/windows/gta2_port.exe (or the exe given), under wine with the OpenGL renderer
 # (docs/port.md).
-# usage: GTA2_DIR=~/Games/GTA2 Scripts/port/run_wine.sh [exe] [map]
+# usage: GTA2_DIR=~/Games/GTA2 Scripts/port/run/run_wine.sh [exe] [map]
 #   gta2_port.exe has the renderer linked in; for another exe (10.5.exe) set RENDERER to the folder with
 #   glvideo.dll and glrender.dll (build_port/windows/gl, or Renderers/OpenGL/CMakeLists.txt).
 #   map: e.g. wil (boots straight into data/wil.gmp, skipping the frontend); none = the frontend
 # Frames: set GTA2GL_CAPTURE=<dir>,<frame>,... (dir relative to the game folder), see the renderer README.
 set -e
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 OUT=$PWD/build_port
 EXE=${1:-$OUT/windows/gta2_port.exe}
 MAP=$2

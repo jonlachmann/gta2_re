@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Port check (docs/port.md, M2): the attract replay in gta2_port.exe and 10.5.exe, headless and sped up,
-# compared by their state logs (Port/validation/state_log.cpp, Scripts/port/state_diff.py). Padding is masked
-# (Scripts/port/layout.py). When a chunk becomes different, both run again with a dump of those entries and
+# compared by their state logs (Port/validation/state_log.cpp, Scripts/port/statecheck/state_diff.py). Padding is masked
+# (Scripts/port/statecheck/layout.py). When a chunk becomes different, both run again with a dump of those entries and
 # the differing fields are printed by name.
 # usage: state_check.py [until game frame, default 600]
 #   env GTA2_DIR (the install), SPEED (default 10), ATTRACT_MS (default 3000), DUMP (GTA2_STATELOG_DUMP for all runs)
@@ -15,7 +15,7 @@ import difflib, os, re, subprocess, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import layout
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 GAME = os.path.join(ROOT, 'build_port', 'game')
 UNTIL = int(sys.argv[1]) if len(sys.argv) > 1 else 600
 ATTRACT_MS = os.environ.get('ATTRACT_MS', '3000')
@@ -52,7 +52,7 @@ def run(exe, log, extra, until=None):
     env = dict(BASE, GTA2_STATELOG=log, **extra)
     start = time.time()
     out = open(path + '.out', 'w')  # wine's messages, such as a crash's "Unhandled page fault"
-    p = subprocess.Popen([os.path.join(ROOT, 'Scripts', 'port', 'run_wine.sh'), exe], env=env, stdout=out, stderr=out)
+    p = subprocess.Popen([os.path.join(ROOT, 'Scripts', 'port', 'run', 'run_wine.sh'), exe], env=env, stdout=out, stderr=out)
     # A crash opens winedbg's dialog and the game sits there: stop when the log stops growing
     size, moved, note = -1, time.time(), ''
     limit = float(os.environ.get('SECONDS', '600'))  # SECONDS=n: stop each run after n s (later demos, DEMO=)
@@ -250,14 +250,14 @@ def trace():
 
 og_extra = {'RENDERER': os.path.join(ROOT, 'build_port', 'windows', 'gl'), 'GTA2_VIDEO_DLL': 'nullvideo.dll',
             'GTA2_STATELOG_TABLE': 'state_port.log.globals'}
-subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'patch_attract.py'),
+subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'statecheck', 'patch_attract.py'),
                 os.path.join(ROOT, 'Scripts', 'bin_comp', '10.5.exe'), os.path.join(GAME, 'gta2_105_attract.exe'), ATTRACT_MS], check=True)
 if os.environ.get('TRACE'):
     trace()
 port = run(EXE, 'state_port.log', PORT)
 og = run(os.path.join(GAME, 'gta2_105_attract.exe'), 'state_og.log', og_extra)
 og2 = run(os.path.join(GAME, 'gta2_105_attract.exe'), 'state_og2.log', og_extra)
-diff = subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'state_diff.py'), og, port, TABLE],
+diff = subprocess.run(['python3', os.path.join(ROOT, 'Scripts', 'port', 'statecheck', 'state_diff.py'), og, port, TABLE],
                       env=dict(os.environ, NOISE=og2), stdout=subprocess.PIPE, text=True).stdout
 print(diff, end='')
 m = re.search(r'game frame (\d+): \d+ chunks became different: (.*)', diff)

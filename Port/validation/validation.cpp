@@ -9,7 +9,7 @@ void Validation_Start()
 #if defined(_WIN32)
     FastClock_Install();
 #endif
-    // A shorter idle time before attract mode (see Scripts/port/patch_attract.py)
+    // A shorter idle time before attract mode (see Scripts/port/statecheck/patch_attract.py)
     if (const char* ms = getenv("GTA2_PORT_ATTRACT_MS"))
     {
         gPortAttractIdleMs = (unsigned)atoi(ms);

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # Port check (docs/port.md): the sine, cosine and tangent tables of a running exe, dumped with winedbg,
 # against 10.5.exe's. The game fills them at start-up from the C library; any difference makes replays drift.
-# usage: Scripts/port/trig_check.py <exe in build_port/game> [<exe> ...]   (GTA2 copied there by run_wine.sh)
+# usage: Scripts/port/statecheck/trig_check.py <exe in build_port/game> [<exe> ...]   (GTA2 copied there by run_wine.sh)
 # The addresses come from the exe's symbols (gSin_table_667A80, ...) or, for 10.5.exe, the decomp's.
 import os, re, subprocess, sys, time
 
-GAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'build_port', 'game')
+GAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'build_port', 'game')
 ENV = dict(os.environ, WINEPREFIX=os.path.abspath(os.path.join(GAME, '..', 'wineprefix')), WINEDEBUG='-all')
 TABLES = ['gSin_table_667A80', 'gCos_table_669260', 'gTanTable_6663C8']
 

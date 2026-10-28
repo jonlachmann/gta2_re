@@ -6,7 +6,7 @@
 # (the ..._<address> suffix). env: GTA2_PORT_ATTRACT_MS for both (the original via patch_attract.py).
 import os, re, subprocess, sys, time
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 GAME = os.path.join(ROOT, 'build_port', 'game')
 ENV = dict(os.environ, WINEPREFIX=os.path.join(ROOT, 'build_port', 'wineprefix'), WINEDEBUG='-all')
 
@@ -43,7 +43,7 @@ for w in wants:
         cmds += ['x /%sx 0x%x' % (n, addr(int(a, 16)))]
 cmds += ['kill', 'quit']
 subprocess.run(['wineserver', '-k'], env=ENV)
-out = subprocess.run([os.path.join(ROOT, 'Scripts', 'port', 'run_wine.sh'), exe], input='\n'.join(cmds) + '\n',
+out = subprocess.run([os.path.join(ROOT, 'Scripts', 'port', 'run', 'run_wine.sh'), exe], input='\n'.join(cmds) + '\n',
                      capture_output=True, text=True, errors='replace', env=dict(ENV, WINE_LAUNCHER='winedbg'), timeout=900).stdout
 subprocess.run(['wineserver', '-k'], env=ENV)
 print('\n'.join(l for l in out.split('\n') if l.strip() and 'fixme' not in l))

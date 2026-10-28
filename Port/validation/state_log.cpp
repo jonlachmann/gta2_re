@@ -6,18 +6,18 @@
 //
 //   GTA2_STATELOG=<file>              one line per frame: F <flip> <game frame> then <chunk>:<hash> for every
 //                                     64-byte chunk whose hash changed since the previous line (entries are cut
-//                                     into chunks in table order: Scripts/port/state_diff.py does the same)
+//                                     into chunks in table order: Scripts/port/statecheck/state_diff.py does the same)
 //   GTA2_STATELOG_TABLE=<file>        (nullvideo.dll) the list written by a port run
 //   GTA2_STATELOG_MASK=<file>         lines <name> <hex offset> <hex length> [p]: padding bytes, left out of the
 //                                     hashes, or with p pointer fields, hashed as what they point to
-//                                     (Scripts/port/layout.py writes it from the port's DWARF)
+//                                     (Scripts/port/statecheck/layout.py writes it from the port's DWARF)
 //   GTA2_STATELOG_DUMP=<a>-<b>:<n>,.. full bytes of those entries (names, *name for pointees) at game frames a..b
 //   GTA2_STATELOG_TRACE=<a>-<b>:<label>=<hex address>,..  (Windows) calls of those functions at game frames
 //                                     a..b, to <log>.trace:
 //                                     C <game frame> <label> <ecx> <6 stack dwords> at the entry and
 //                                     R <game frame> <label> <eax> <dword at eax> at the return; both end in ^<esp>.
 //   GTA2_STATELOG_TRACE_THIS=<n>      and the first n bytes of *this (ecx) with each call, as | <dwords> int3 breakpoints, so the
-//                                     same in 10.5.exe and in the port (Scripts/port/state_check.py, TRACE=)
+//                                     same in 10.5.exe and in the port (Scripts/port/statecheck/state_check.py, TRACE=)
 //
 // Pointer fields (marked p in GTA2_STATELOG_MASK) are hashed as what they point into: (entry, offset) when that is
 // one of the logged entries, else nothing, so a pointer to the wrong object shows up. Other values that look like

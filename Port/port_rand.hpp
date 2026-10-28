@@ -4,7 +4,7 @@
 #pragma once
 
 // VC6's: a linear congruential generator, 15 bits per call. Out of line, named after 10.5.exe's _rand, so
-// the call trace (Scripts/port/state_check.py TRACE=...:_rand) can follow it in both exes.
+// the call trace (Scripts/port/statecheck/state_check.py TRACE=...:_rand) can follow it in both exes.
 void port_srand_5EDED7(unsigned int seed);
 int port_rand_5EDEE1();
 
