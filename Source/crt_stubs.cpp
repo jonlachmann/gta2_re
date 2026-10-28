@@ -1,24 +1,13 @@
 #include "crt_stubs.hpp"
 #include "Function.hpp"
 #include <memory>
-#if defined(GTA2_PORT)
-    #include "Port/port_hooks.hpp"
-#endif
 
 namespace crt
 {
-#if defined(GTA2_PORT)
-void (*gPortHeapHook)(size_t size) = 0; // Port/port_hooks.hpp
-#endif
-
 STUB_FUNC(0x5ED3BB)
 void* __cdecl malloc(size_t Size)
 {
 #if defined(GTA2_PORT)
-    if (gPortHeapHook)
-    {
-        gPortHeapHook(Size);
-    }
     // Port (docs/port.md): zeroed like 10.5.exe's fresh heap pages, so unset fields and padding are
     // the same in both and the state log (Port/validation/state_log.cpp) can compare pools
     return ::calloc(1, Size);
@@ -30,12 +19,6 @@ void* __cdecl malloc(size_t Size)
 STUB_FUNC(0x5ED478)
 void __cdecl free(void* Block)
 {
-#if defined(GTA2_PORT)
-    if (gPortHeapHook && Block)
-    {
-        gPortHeapHook(0);
-    }
-#endif
     ::free(Block);
 }
 

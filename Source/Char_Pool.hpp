@@ -76,11 +76,7 @@ class PedListNodePool
 
 class PedManager
 {
-#if defined(GTA2_PORT)
-  public: // the port's simulation benchmark spawns them (Port/headless/sim_bench.cpp)
-#else
   private:
-#endif
     EXPORT void SpawnDummies_46EB60(Camera* pCam);
 
   public:

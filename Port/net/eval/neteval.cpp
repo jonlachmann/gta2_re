@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, "Evaluations"): GTA2_NETEVAL=heap,rand,soundrollback,churn,diverge,single,explode, measurements
+// Port (docs/netcode.md, "Evaluations"): GTA2_NETEVAL=rand,soundrollback,churn,diverge,single,explode, measurements
 // for the netcode design. The sim bench (sim_bench.cpp) runs them after its fill (if any) and before the tick
 // benchmark. GTA2_NETEVAL_OUT=<file>: the per-offset churn.
 #include "neteval.hpp"
@@ -17,13 +17,7 @@
 #include "explosion_type.hpp"
 #include "root_sound.hpp"
 #include "Port/port_rand_sound.h"
-#include "Port/port_hooks.hpp"
 #include "Port/port_rand_state.h"
-#if !defined(_WIN32)
-    #include <cxxabi.h>
-    #include <dlfcn.h>
-    #include <execinfo.h>
-#endif
 #include <map>
 #include <stdio.h>
 #include <stdlib.h>
@@ -259,62 +253,6 @@ void Diverge(const std::vector<Block>& blocks)
     RestoreWorld(blocks, s0);
 }
 
-// Which game functions use the heap during ticks: anything allocated or freed there lives outside the rollback set
-std::map<std::string, std::pair<unsigned, unsigned> > gHeapUse; // caller -> (allocations, frees)
-bool gInHook;
-
-void HeapHook(size_t size)
-{
-    if (gInHook)
-    {
-        return;
-    }
-    gInHook = true;
-    std::string who = "?"; // Windows: no caller names (ponytail: CaptureStackBackTrace + DbgHelp if needed there)
-#if !defined(_WIN32)
-    void* frames[8];
-    const int n = backtrace(frames, 8);
-    for (int i = 2; i < n; i++) // skip the hook and crt::malloc/free
-    {
-        Dl_info info;
-        if (dladdr(frames[i], &info) && info.dli_sname)
-        {
-            int status = 0;
-            char* d = abi::__cxa_demangle(info.dli_sname, 0, 0, &status);
-            std::string name = status == 0 && d ? d : info.dli_sname;
-            free(d);
-            if (name.find("operator new") == 0 || name.find("operator delete") == 0)
-            {
-                continue;
-            }
-            who = name.substr(0, name.find('('));
-            break;
-        }
-    }
-#endif
-    std::pair<unsigned, unsigned>& c = gHeapUse[who];
-    (size ? c.first : c.second)++;
-    gInHook = false;
-}
-
-void HeapUse(int ticks)
-{
-    gHeapUse.clear();
-    crt::gPortHeapHook = HeapHook;
-    for (int t = 0; t < ticks; t++)
-    {
-        Tick();
-        gRoot_sound_66B038.Service_40EFA0();
-    }
-    crt::gPortHeapHook = 0;
-    fprintf(stderr, "neteval heap: %zu callers used the heap in %d ticks (with the sound service)%s\n", gHeapUse.size(), ticks,
-            gHeapUse.empty() ? "" : ":");
-    for (std::map<std::string, std::pair<unsigned, unsigned> >::iterator it = gHeapUse.begin(); it != gHeapUse.end(); ++it)
-    {
-        fprintf(stderr, "  %-60s %6u allocations %6u frees\n", it->first.c_str(), it->second.first, it->second.second);
-    }
-}
-
 // Who draws random numbers: the sim tick against the sound service, and whether a resimulation with sound draws the same
 void RandUse(int ticks)
 {
@@ -483,10 +421,6 @@ void NetEval(const std::vector<Block>& blocks, const char* what)
         Explode(20);
     }
     InterestCounts();
-    if (HAS("heap"))
-    {
-        HeapUse(300);
-    }
     if (HAS("rand"))
     {
         RandUse(300);

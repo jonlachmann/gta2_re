@@ -201,8 +201,7 @@ void Counts(const char* when)
 // GTA2_SIMBENCH_FILL=<cars>: before measuring, fill the map with traffic by the game's own spawner. The first
 // player's camera moves to random places, the traffic cap (16 ambient cars for the whole game,
 // CarManager::CanAllocateCarOfKind_446930) and the cooldown between spawns are lifted for the call, and recycling is off so nothing despawns.
-// GTA2_SIMBENCH_FILL_PEDS: walking peds as well. Stops at <cars> cars, or before the ped pool runs out (every traffic car has a driver).
-bool gPeds;
+// Stops at <cars> cars, or before the ped pool runs out (every traffic car has a driver).
 
 // The camera's view, padded view and position, moved by (dx, dy) from where they were
 void ShiftCamera(Camera* cam, const WorldRect& padded, const WorldRect& view, const CameraPos& pos, const Fix16& dx, const Fix16& dy)
@@ -221,7 +220,6 @@ void ShiftCamera(Camera* cam, const WorldRect& padded, const WorldRect& view, co
 
 void Fill(int targetCars)
 {
-    gPeds = getenv("GTA2_SIMBENCH_FILL_PEDS") != NULL;
     Camera* cam = gGame_0x40_67E008->IteratePlayerCamera_4B9BC0();
     Player* player = gGame_0x40_67E008->IterateFirstPlayer_4B9CD0();
     TrafficSpawner* sp = gTrafficSpawner_14_677934;
@@ -254,13 +252,6 @@ void Fill(int targetCars)
         sp->MakeTrafficForCurrCamera_5832C0();
         gCarManager_6C_677930->field_28_recycled_cars += traffic;
         gCarManager_6C_677930->field_40_proto_recycled_cars += proto;
-        if (gPeds) // walking peds too (PedManager::Dummies_470330 without its cap of 50 and the on-screen density)
-        {
-            spawnSideLocked_6787D5 = 0;
-            spawnCountLimit_6787D6 = 2;
-            gPedManager_6787BC->field_6_num_peds_on_screen = 0;
-            gPedManager_6787BC->SpawnDummies_46EB60(cam);
-        }
     }
     cam->field_20_padded_view_bounds = padded;
     cam->field_78_view_bounds = view;
