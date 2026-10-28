@@ -1,6 +1,6 @@
 // gbh_* render API on top of IRenderer. Logic ported from GTA2Hax d3ddll.cpp; portable C++.
 #include "gbh_api.hpp"
-#include "cmdlog.hpp"
+#include "../dev/gbh_log.hpp"
 #include "renderer.hpp"
 #include <math.h>
 #include <stdio.h>
@@ -80,49 +80,7 @@ f32 gAmbient = 255.0f;
 f32 gWindow[4];
 s32 gScreenTable[1700];
 u32 gTextureId;
-CmdLog gCmd;
-const u32* gFlipCounter;
 
-void LogCall(const char* func, u32 flags, STexture* t, u32 colour)
-{
-    if (gFlipCounter)
-    {
-        gCmd.Update(*gFlipCounter);
-    }
-    gCmd.Call(func, flags, t ? t->field_0_id : 0, t ? t->field_E_width : 0, t ? t->field_10_height : 0, colour & 0xFF);
-}
-
-// Same fields as the reference log of the D3D calls: D3D render state values, texel units.
-void LogPrim(const Vert* pVerts, s32 count, u32 state, STexture* t, bool blit)
-{
-    if (!gCmd.Active())
-    {
-        return;
-    }
-    u32 st[5] = {0, 0, 0, 2, 2};
-    if (state & RS_BLEND_ADD)
-    {
-        st[0] = 1, st[1] = 2, st[2] = 2;
-    }
-    else if (state & RS_BLEND_ALPHA)
-    {
-        st[0] = 1, st[1] = 5, st[2] = 6;
-    }
-    if (!(state & RS_FILTER_LINEAR))
-    {
-        st[3] = st[4] = 1;
-    }
-    gCmd.Prim(blit ? "blit" : (count == 4 ? "fan" : "list"),
-              count,
-              st,
-              t ? t->field_0_id : 0,
-              t ? t->field_E_width : 0,
-              t ? t->field_10_height : 0);
-    for (s32 i = 0; i < count; i++)
-    {
-        gCmd.Vertex(pVerts[i].x, pVerts[i].y, pVerts[i].z, pVerts[i].w, pVerts[i].diff, pVerts[i].spec, pVerts[i].u, pVerts[i].v);
-    }
-}
 // Enhancement state (gta2gl.ini).
 bool gTrueColour; // 8-bit palette channels instead of the original's 16-bit textures
 u32 gOptionsGeneration = ~0u;
@@ -516,7 +474,7 @@ void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 bas
         state |= RS_PIXEL_EXACT;
     }
 
-    LogPrim(pVerts, count, state, pTexture, (flags & FLAG_INTERNAL_BLIT) != 0);
+    GbhLog_Prim(pVerts, count, state, pTexture, (flags & FLAG_INTERNAL_BLIT) != 0);
 
     RVertex rv[4];
     for (s32 i = 0; i < count; i++)
@@ -631,8 +589,7 @@ GBH_EXPORT u32 GTA2_CC gbh_InitDLL(SVideo* pVideo)
         return 0;
     }
     gRenderer = pHeader->mRenderer;
-    gFlipCounter = pHeader->mFlipCounter;
-    gCmd.Init("gl");
+    GbhLog_Init(pHeader->mFlipCounter);
     return 1;
 }
 
@@ -871,13 +828,13 @@ GBH_EXPORT void GTA2_CC gbh_SetAmbient(f32 ambient)
 
 GBH_EXPORT void GTA2_CC gbh_DrawQuad(s32 flags, STexture* pTexture, Vert* pVerts, s32 baseColour)
 {
-    LogCall("DrawQuad", flags, pTexture, baseColour);
+    GbhLog_Call("DrawQuad", flags, pTexture, baseColour);
     RenderVerts((u32)flags, pTexture, pVerts, 4, (u32)baseColour & 0xFF);
 }
 
 GBH_EXPORT void GTA2_CC gbh_DrawTriangle(s32 flags, STexture* pTexture, Vert* pVerts, s32 diffuseColour)
 {
-    LogCall("DrawTriangle", flags, pTexture, diffuseColour);
+    GbhLog_Call("DrawTriangle", flags, pTexture, diffuseColour);
     RenderVerts((u32)flags, pTexture, pVerts, 3, (u32)diffuseColour & 0xFF);
 }
 
@@ -967,7 +924,7 @@ static s32 DrawTileImpl(u32 flags, STexture* pTexture, Vert* pData, s32 diffuseC
 
 GBH_EXPORT s32 GTA2_CC gbh_DrawTilePart(u32 flags, STexture* pTexture, Vert* pData, s32 diffuseColour)
 {
-    LogCall("DrawTilePart", flags, pTexture, diffuseColour);
+    GbhLog_Call("DrawTilePart", flags, pTexture, diffuseColour);
     return DrawTileImpl(flags, pTexture, pData, diffuseColour);
 }
 
@@ -977,7 +934,7 @@ GBH_EXPORT void GTA2_CC gbh_DrawQuadClipped(s32, s32, s32, s32, s32)
 
 GBH_EXPORT s32 GTA2_CC gbh_DrawFlatRect(Vert* pVerts, s32 colour)
 {
-    LogCall("DrawFlatRect", 0, 0, colour);
+    GbhLog_Call("DrawFlatRect", 0, 0, colour);
     if (!pVerts)
     {
         return 0;
@@ -1082,7 +1039,7 @@ GBH_EXPORT s32 GTA2_CC gbh_LoadImage(SImage* pImage)
 
 GBH_EXPORT s32 GTA2_CC gbh_BlitImage(s32 imageIndex, s32 srcLeft, s32 srcTop, s32 srcRight, s32 srcBottom, s32 dstX, s32 dstY)
 {
-    LogCall("BlitImage", imageIndex, 0, 0);
+    GbhLog_Call("BlitImage", imageIndex, 0, 0);
     if (imageIndex < 0 || imageIndex >= (s32)gImages.size() || !gImages[imageIndex].mLoaded)
     {
         return -1;
@@ -1115,6 +1072,6 @@ GBH_EXPORT s32 GTA2_CC gbh_BlitImage(s32 imageIndex, s32 srcLeft, s32 srcTop, s3
 
 GBH_EXPORT s32 GTA2_CC gbh_DrawTile(u32 flags, STexture* pTexture, Vert* pData, s32 diffuseColour)
 {
-    LogCall("DrawTile", flags, pTexture, diffuseColour);
+    GbhLog_Call("DrawTile", flags, pTexture, diffuseColour);
     return DrawTileImpl(flags, pTexture, pData, diffuseColour);
 }

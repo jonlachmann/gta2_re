@@ -1,7 +1,7 @@
-// Portable side of the Vid_* API: modes, the CPU surface the game writes to, frame flow and capture.
+// Portable side of the Vid_* API: modes, the CPU surface the game writes to and the frame flow.
 #pragma once
 
-#include "capture.hpp"
+#include "../dev/frame_tools.hpp"
 #include "gl_renderer.hpp"
 #include "options.hpp"
 #include "renderer.hpp"
@@ -74,17 +74,7 @@ class VidSystem
     s32 mSurfaceH;
     bool mSurfaceGrabbed;
     u32 mFrame;
-    FrameCapture mCapture;
     OptionsFile mOptions;
-    std::vector<u32> mToggleFrames; // GTA2GL_TOGGLE_AT=<frame>,...: scripted ToggleFaithful for tests
+    FrameTools mTools; // development aids: capture, scripted F12, statistics
     void ApplyOptions();
-
-    // GTA2GL_STATS=<frames>: logs frame rate, draw calls, uploads and present time every <frames> flips.
-    u32 mStatsInterval;
-    double mStatsStart;
-    double mPresentSeconds;
-    double mWaitSeconds;
-    u32 mStatsDraws;
-    u32 mStatsUploads;
-    u32 mStatsVerts;
 };

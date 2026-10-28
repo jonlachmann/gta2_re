@@ -1,9 +1,9 @@
-// Draw command log shared by the reference proxy (D3D calls of DMA's d3ddll) and glrender (pre-GL),
+// Development aid (README "Development tools"): the draw command log shared by the reference proxy (D3D calls of DMA's d3ddll) and glrender (pre-GL),
 // so both streams can be diffed draw by draw. GTA2GL_CMDLOG=<dir>,<frame>,<a>-<b>,...
 // Frame N holds the calls made before the Nth Vid_FlipBuffers.
 #pragma once
 
-#include "capture.hpp"
+#include "frame_list.hpp"
 #include <stdio.h>
 
 class CmdLog
@@ -30,8 +30,7 @@ class CmdLog
     void Note(const char* text);
 
   private:
-    FrameCapture mFrames;
+    FrameList mFrames;
     FILE* mFile = 0;
     u32 mOpenFrame = 0;
-    char mPrefix[16];
 };

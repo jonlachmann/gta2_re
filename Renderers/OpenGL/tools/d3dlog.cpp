@@ -2,7 +2,7 @@
 // DMA's d3ddll.dll (through the exe's GetProcAddress import) and hooks the IDirect3DDevice3 that
 // d3ddll draws with, so each gbh call is followed by the D3D primitives it produced.
 #include "d3dlog.hpp"
-#include "../core/cmdlog.hpp"
+#include "../dev/cmdlog.hpp"
 #include "../core/gta2_api.hpp"
 #include <ddraw.h>
 #include <string.h>

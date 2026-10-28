@@ -1,10 +1,7 @@
 #include "cmdlog.hpp"
-#include <string.h>
 
 void CmdLog::Init(const char* prefix)
 {
-    strncpy(mPrefix, prefix, sizeof(mPrefix) - 1);
-    mPrefix[sizeof(mPrefix) - 1] = 0;
     mFrames.InitFromEnv("GTA2GL_CMDLOG", prefix);
 }
 
@@ -16,11 +13,9 @@ void CmdLog::Update(u32 flipsDone)
         fclose(mFile);
         mFile = 0;
     }
-    if (!mFile && mFrames.WantFrame(frame))
+    if (!mFile && mFrames.Contains(frame))
     {
-        std::string path = mFrames.PathFor(frame);
-        path.replace(path.size() - 4, 4, ".txt");
-        mFile = fopen(path.c_str(), "w");
+        mFile = fopen(mFrames.PathFor(frame, ".txt").c_str(), "w");
         mOpenFrame = frame;
     }
 }
