@@ -1,5 +1,5 @@
 // The Vid_* exports that every video module on top of VidSystem answers the same way: glvideo.dll (WGL),
-// Port/sdl_video.cpp (the port's SDL window) and Port/headless/nullvideo.cpp (no drawing). Included once by each,
+// Port/sdl_video.cpp (the port's SDL window) and Port/validation/nullvideo.cpp (no drawing). Included once by each,
 // after vid_system.hpp and <windows.h>, with VID_EXPORTS_NAME set to its version string. The including file defines
 // the ones that differ: Vid_Init_SYS, Vid_SetMode and Vid_FlipBuffers.
 #define EXPORT extern "C" __declspec(dllexport)

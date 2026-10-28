@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 #define VID_EXPORTS_NAME "OpenGL 3.3 video (SDL3)"
-#include "Renderers/OpenGL/core/vid_exports.inl"
+#include "Renderers/OpenGL/dll/vid_exports.inl"
 
 static unsigned gFlips;
 

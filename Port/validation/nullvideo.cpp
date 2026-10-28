@@ -8,7 +8,7 @@
 #include <windows.h>
 
 #define VID_EXPORTS_NAME "headless video"
-#include "../../Renderers/OpenGL/core/vid_exports.inl"
+#include "../../Renderers/OpenGL/dll/vid_exports.inl"
 
 static unsigned gFlips;
 

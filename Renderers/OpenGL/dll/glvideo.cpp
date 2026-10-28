@@ -8,7 +8,7 @@
 #include <windows.h>
 
 #define VID_EXPORTS_NAME "OpenGL 3.3 video"
-#include "../core/vid_exports.inl"
+#include "vid_exports.inl"
 
 static void Log(const char* fmt, ...)
 {

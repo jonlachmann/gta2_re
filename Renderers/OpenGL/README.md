@@ -112,7 +112,8 @@ debug keys (`skip_frontend`, `mapname`...), so the two runs can be compared fram
   between the two sides; `gta2_api.hpp` the game's types.
 - `platform/` the GL context: WGL on the game's window for the DLLs, SDL3 for the native port.
 - `dll/` the Windows DLLs: `glvideo.cpp` (the Vid_* exports), `glrender.cpp` (DllMain only; the gbh_* exports are
-  in `core/gbh_api.cpp`), `dinput_hook.cpp` (the lock key filter, see Keyboard under wine).
+  in `core/gbh_api.cpp`), `dinput_hook.cpp` (the lock key filter, see Keyboard under wine); `vid_exports.inl` the
+  Vid_* exports every video module answers the same way, which the port's `sdl_video.cpp` and `nullvideo.cpp` include too.
 - `dev/` the development aids above. `tools/` the reference tools: `capvideo.cpp` and `d3dlog.cpp` (the proxy),
   `compare_frames.py`. `tests/` the native tests and `sdl_demo.cpp`.
 - `sources.cmake` the source lists, for `CMakeLists.txt` and the port's.
