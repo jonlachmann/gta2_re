@@ -15,6 +15,8 @@
 
 EXTERN_GLOBAL(SoundObject, snd1);
 
+void port_UpdateGameResolution();
+
 void __stdcall SetStartMode(s32 startMode);
 void __stdcall SetVideoModeFromSettings();
 void OnVideoModeChanged();
@@ -38,10 +40,15 @@ enum Action
     kGoTo,
     kSfxVolume,
     kMusicVolume,
+    k3dSound,
+    kTextSpeed,
+    kLanguage,
     kDisplay,
-    kFullSize,
-    kWindowSize,
+    kViewSize,
     kBrightness,
+    kLighting,
+    kExplodingScores,
+    kFrameLimit,
     kBinding,
     kDefaultKeys,
 };
@@ -68,12 +75,6 @@ const s32 kPadRight = 225;
 const s32 kPadUp = 226;
 const s32 kPadDown = 227;
 
-struct Mode
-{
-    s32 mWidth;
-    s32 mHeight;
-};
-std::vector<Mode> sModes;
 
 s32 sCapturing = -1; // control index waiting for a key or pad button
 bool sCaptureArmed; // every key released since capture started
@@ -196,37 +197,62 @@ void Bind(s32 control, s32 binding)
     SetControl(control, binding);
 }
 
-void LoadModes()
+// view_height: lines of the game resolution, its width following the screen's shape; 0 is the
+// screen's own resolution.
+const s32 kViewHeights[] = {480, 540, 600, 720, 768, 900, 1080, 0};
+const s32 kNumViewHeights = sizeof(kViewHeights) / sizeof(kViewHeights[0]);
+
+struct Language
 {
-    sModes.clear();
-    if (!gVidSys)
+    char mCode;
+    const wchar_t* mName;
+};
+const Language kLanguages[] = {{'e', L"ENGLISH"}, {'f', L"FRANCAIS"}, {'g', L"DEUTSCH"}, {'i', L"ITALIANO"}, {'s', L"ESPANOL"}};
+const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
+
+const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
+
+void SetOptionValue(const char* name, DWORD type, const void* pData, DWORD size)
+{
+    HKEY hKey;
+    if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Option", 0, NULL, 0, KEY_ALL_ACCESS, NULL,
+                        &hKey, NULL) == ERROR_SUCCESS)
     {
-        return;
-    }
-    for (s32 id = pVid_FindFirstMode(gVidSys, 16); id; id = pVid_FindNextMode(gVidSys))
-    {
-        SDisplayMode* pMode = pVid_FindMode(gVidSys, id);
-        if (pMode)
-        {
-            sModes.push_back(Mode{static_cast<s32>(pMode->field_8_width), static_cast<s32>(pMode->field_C_height)});
-        }
-    }
-    if (sModes.empty())
-    {
-        sModes.push_back(Mode{640, 480});
+        RegSetValueExA(hKey, name, 0, type, static_cast<const BYTE*>(pData), size);
+        RegCloseKey(hKey);
     }
 }
 
-s32 ModeIndex(s32 width, s32 height)
+s32 LanguageIndex()
 {
-    for (size_t i = 0; i < sModes.size(); i++)
+    char code[16] = "e";
+    gRegistry.Get_Option("language", reinterpret_cast<BYTE*>(code), sizeof(code));
+    for (s32 i = 0; i < kNumLanguages; i++)
     {
-        if (sModes[i].mWidth == width && sModes[i].mHeight == height)
+        if (kLanguages[i].mCode == code[0])
         {
-            return static_cast<s32>(i);
+            return i;
         }
     }
     return 0;
+}
+
+s32 ViewIndex()
+{
+    const s32 view = gRegistry.Get_Screen_Setting("view_height", 720);
+    for (s32 i = 0; i < kNumViewHeights; i++)
+    {
+        if (kViewHeights[i] == view)
+        {
+            return i;
+        }
+    }
+    return 3;
+}
+
+s32 Wrap(s32 i, s32 n)
+{
+    return (i % n + n) % n;
 }
 
 // Volumes are shown 0 to 10, stored 0 to 127.
@@ -289,6 +315,23 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
             }
             break;
         }
+        case k3dSound:
+            gRegistry.Clear_Or_Delete_Sound_Setting("do_3d_sound", !gRegistry.Sound_Setting_Exists("do_3d_sound"));
+            break;
+        case kTextSpeed:
+        {
+            s32 speed = gRegistry.Get_Option_Int("text_speed", 3) + delta;
+            speed = speed < 1 ? 1 : (speed > 5 ? 5 : speed);
+            const DWORD value = speed;
+            SetOptionValue("text_speed", REG_DWORD, &value, sizeof(value));
+            break;
+        }
+        case kLanguage:
+        {
+            const char code[2] = {kLanguages[Wrap(LanguageIndex() + delta, kNumLanguages)].mCode, 0};
+            SetOptionValue("language", REG_SZ, code, sizeof(code));
+            break;
+        }
         case kDisplay:
             // As Alt+Enter: start_mode 1 is full screen, 0 a window.
             if (IsWindowedModeAvailable())
@@ -298,24 +341,24 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
                 OnVideoModeChanged();
             }
             break;
-        case kFullSize:
-        case kWindowSize:
-        {
-            const bool full = item.mAction == kFullSize;
-            const char* wName = full ? "full_width" : "window_width";
-            const char* hName = full ? "full_height" : "window_height";
-            const s32 n = static_cast<s32>(sModes.size());
-            const s32 i = (ModeIndex(gRegistry.Get_Screen_Setting(wName, 640), gRegistry.Get_Screen_Setting(hName, 480)) + delta + n) % n;
-            gRegistry.Set_Screen_Setting(wName, sModes[i].mWidth);
-            gRegistry.Set_Screen_Setting(hName, sModes[i].mHeight);
+        case kViewSize:
+            gRegistry.Set_Screen_Setting("view_height", kViewHeights[Wrap(ViewIndex() + delta, kNumViewHeights)]);
+            port_UpdateGameResolution();
             break;
-        }
         case kBrightness:
         {
             s32 gamma = gRegistry.Get_Screen_Setting("gamma", 10) + delta;
             gamma = gamma < 1 ? 1 : (gamma > 20 ? 20 : gamma);
             gRegistry.Set_Screen_Setting("gamma", gamma);
             SetGamma(gamma);
+            break;
+        }
+        case kLighting:
+        case kExplodingScores:
+        case kFrameLimit:
+        {
+            const char* name = item.mAction == kLighting ? "lighting" : (item.mAction == kExplodingScores ? "exploding_on" : "max_frame_rate");
+            gRegistry.Set_Screen_Setting(name, gRegistry.Get_Screen_Setting(name, 1) ? 0 : 1);
             break;
         }
         default:
@@ -414,13 +457,18 @@ void Setup(Frontend* pFrontend)
     AddOption(pFrontend, kOptionsPage, L"CONTROLS", kGoTo, kControlsPage);
     AddOption(pFrontend, kOptionsPage, L"SOUND EFFECTS", kSfxVolume, 0, true);
     AddOption(pFrontend, kOptionsPage, L"MUSIC", kMusicVolume, 0);
+    AddOption(pFrontend, kOptionsPage, L"3D SOUND", k3dSound, 0);
+    AddOption(pFrontend, kOptionsPage, L"TEXT SPEED", kTextSpeed, 0, true);
+    AddOption(pFrontend, kOptionsPage, L"LANGUAGE", kLanguage, 0);
     AddOption(pFrontend, kOptionsPage, L"BACK", kGoTo, MENUPAGE_START_MENU, true);
 
     SetTitle(&pFrontend->mMenuPagesArray[kScreenPage], L"SCREEN", title);
     AddOption(pFrontend, kScreenPage, L"DISPLAY", kDisplay, 0);
-    AddOption(pFrontend, kScreenPage, L"RESOLUTION", kFullSize, 0);
-    AddOption(pFrontend, kScreenPage, L"WINDOW SIZE", kWindowSize, 0);
+    AddOption(pFrontend, kScreenPage, L"GAME RESOLUTION", kViewSize, 0);
     AddOption(pFrontend, kScreenPage, L"BRIGHTNESS", kBrightness, 0);
+    AddOption(pFrontend, kScreenPage, L"LIGHTING", kLighting, 0, true);
+    AddOption(pFrontend, kScreenPage, L"EXPLODING SCORES", kExplodingScores, 0);
+    AddOption(pFrontend, kScreenPage, L"FRAME LIMIT", kFrameLimit, 0);
     AddOption(pFrontend, kScreenPage, L"BACK", kGoTo, kOptionsPage, true);
 
     SetTitle(&pFrontend->mMenuPagesArray[kControlsPage], L"CONTROLS", title);
@@ -449,10 +497,6 @@ bool Update(Frontend* pFrontend)
     if (!IsOurs(pageIdx))
     {
         return false;
-    }
-    if (sModes.empty())
-    {
-        LoadModes();
     }
     if (sKeyNames.empty())
     {
@@ -548,17 +592,37 @@ bool GetOptionText(Frontend* pFrontend, u16 page, u16 option, wchar_t** ppText)
         case kMusicVolume:
             swprintf(value, L"%d", VolumeStep(gRegistry.Get_Sound_Setting(item.mAction == kSfxVolume ? "SFXVol" : "CDVol", 127)));
             break;
+        case k3dSound:
+            wcscpy(value, gRegistry.Sound_Setting_Exists("do_3d_sound") ? L"ON" : L"OFF");
+            break;
+        case kTextSpeed:
+        {
+            const s32 speed = gRegistry.Get_Option_Int("text_speed", 3);
+            wcscpy(value, kTextSpeeds[speed < 1 ? 0 : (speed > 5 ? 4 : speed - 1)]);
+            break;
+        }
+        case kLanguage:
+            wcscpy(value, kLanguages[LanguageIndex()].mName);
+            break;
         case kDisplay:
             wcscpy(value, gRegistry.Get_Screen_Setting("start_mode", 1) ? L"FULL SCREEN" : L"WINDOW");
             break;
-        case kFullSize:
-        case kWindowSize:
+        case kViewSize:
         {
-            const bool full = item.mAction == kFullSize;
+            const bool full = gRegistry.Get_Screen_Setting("start_mode", 1) != 0;
             swprintf(value, L"%d X %d", gRegistry.Get_Screen_Setting(full ? "full_width" : "window_width", 640),
                      gRegistry.Get_Screen_Setting(full ? "full_height" : "window_height", 480));
             break;
         }
+        case kLighting:
+            wcscpy(value, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
+            break;
+        case kExplodingScores:
+            wcscpy(value, gRegistry.Get_Screen_Setting("exploding_on", 1) ? L"ON" : L"OFF");
+            break;
+        case kFrameLimit:
+            wcscpy(value, gRegistry.Get_Screen_Setting("max_frame_rate", 1) ? L"ON" : L"OFF");
+            break;
         case kBrightness:
             swprintf(value, L"%d", gRegistry.Get_Screen_Setting("gamma", 10));
             break;
