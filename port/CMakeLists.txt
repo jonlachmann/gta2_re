@@ -34,7 +34,7 @@ if(WIN32)
     target_compile_definitions(binkw32 PRIVATE BUILD_BINK)
 
     add_executable(gta2 WIN32 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
-        src/debug_stubs.cpp ${CMAKE_CURRENT_LIST_DIR}/resources.rc)
+        src/debug_stubs.cpp src/options_menu.cpp ${CMAKE_CURRENT_LIST_DIR}/resources.rc)
     target_link_libraries(gta2 PRIVATE mss32 binkw32
         ddraw dinput dxguid dplayx winmm ole32 oleaut32 user32 gdi32 advapi32 version shell32 comdlg32)
     target_link_options(gta2 PRIVATE -static -static-libgcc -static-libstdc++ -lpthread)
@@ -52,7 +52,7 @@ else()
     file(GLOB compat_src ${CMAKE_CURRENT_LIST_DIR}/compat/src/*.cpp)
     add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
         ${ROOT}/Source/3rdParty/bink.cpp
-        src/debug_stubs.cpp ${compat_src})
+        src/debug_stubs.cpp src/options_menu.cpp ${compat_src})
     target_compile_options(gta2 PRIVATE -include ${CMAKE_CURRENT_LIST_DIR}/compat/prelude.hpp)
     target_compile_definitions(gta2 PRIVATE __NT__ GTA2_PORT_SDL)
     # LLVM turns wide string loops into calls to the C library, whose wchar_t is 4 bytes.

@@ -34,6 +34,10 @@
 #include <stdio.h>
 #include <wchar.h>
 
+#if defined(GTA2_PORT)
+#include "../port/src/options_menu.hpp"
+#endif
+
 #pragma comment(lib, "dxguid.lib")
 
 void Start_GTA2Manager();
@@ -753,6 +757,12 @@ void Frontend::ChangeMenuPage(u16 menu_page_idx)
 MATCH_FUNC(0x4B3AF0)
 void Frontend::GetOptionText(u16 menu_page_idx, u16 option_idx, wchar_t** w_buffer)
 {
+#if defined(GTA2_PORT)
+    if (PortOptionsMenu::GetOptionText(this, menu_page_idx, option_idx, w_buffer))
+    {
+        return;
+    }
+#endif
     MenuPage* pPage = &mMenuPagesArray[menu_page_idx];
     MenuItem* pOption = &pPage->mOptionsArray[option_idx];
 
@@ -1576,6 +1586,12 @@ void Frontend::Update()
             break;
 
         case FrontendState::Menu_Navigation_1:
+#if defined(GTA2_PORT)
+            if (PortOptionsMenu::Update(this))
+            {
+                break;
+            }
+#endif
             if (mCurrentPageIdx == MENUPAGE_CREDITS)
             {
                 snd1.mbStatus = true;
@@ -4080,6 +4096,9 @@ void Frontend::SetupMenuStringsOptionsElements()
     pPage->mCurrentOptionIdx = 0;
     pPage->mDefaultOptionIdx = 0;
     mCredits.LoadCredits();
+#if defined(GTA2_PORT)
+    PortOptionsMenu::Setup(this);
+#endif
 }
 
 // The GMP/STY/SCR names read from a MAIN or BONUS block of the .seq file. A struct (not three
