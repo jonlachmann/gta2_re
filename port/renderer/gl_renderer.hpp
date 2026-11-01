@@ -28,6 +28,10 @@ class GLRenderer : public IRenderer
     void SetLogicalSize(s32 width, s32 height);
     s32 LogicalWidth() const { return mLogicalW; }
     s32 LogicalHeight() const { return mLogicalH; }
+    // The render target: the logical frame at the size it is shown (sharp scaling), or the logical
+    // size itself with GTA2GL_NATIVE=0.
+    s32 TargetWidth() const { return mTargetW; }
+    s32 TargetHeight() const { return mTargetH; }
 
     // Rectangle in logical pixels, right/bottom exclusive. Empty rect means everything.
     void Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 bottom);
@@ -81,6 +85,11 @@ class GLRenderer : public IRenderer
     bool mReady;
     s32 mLogicalW;
     s32 mLogicalH;
+    s32 mTargetW;
+    s32 mTargetH;
+    s32 mDrawableW;
+    s32 mDrawableH;
+    void UpdateTargetSize();
 
     GLuint mFbo;
     GLuint mFboTex;      // scene colour (attachment 0)

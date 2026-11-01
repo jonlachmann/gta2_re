@@ -298,7 +298,7 @@ void VidSystem::Flip()
     {
         std::vector<u8> rgba;
         mRenderer.ReadLogical(rgba);
-        FrameCapture::WriteBmp(mCapture.PathFor(mFrame), &rgba[0], mRenderer.LogicalWidth(), mRenderer.LogicalHeight(), false);
+        FrameCapture::WriteBmp(mCapture.PathFor(mFrame), &rgba[0], mRenderer.TargetWidth(), mRenderer.TargetHeight(), false);
     }
 
     int w = 0, h = 0;

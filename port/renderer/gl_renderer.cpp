@@ -188,7 +188,7 @@ const s32 kMaxLights = 256;
 } // namespace
 
 GLRenderer::GLRenderer()
-    : mReady(false), mLogicalW(640), mLogicalH(480), mFbo(0), mFboTex(0), mBloomSrcTex(0), mPostFbo(0), mPostTex(0), mBlurW(0),
+    : mReady(false), mLogicalW(640), mLogicalH(480), mTargetW(640), mTargetH(480), mDrawableW(0), mDrawableH(0), mFbo(0), mFboTex(0), mBloomSrcTex(0), mPostFbo(0), mPostTex(0), mBlurW(0),
       mBlurH(0), mTargetsTrueColour(false), mTargetsBloom(false), mPostValid(false), mFrameFence(0), mProgram(0), mPresentProgram(0),
       mDownProgram(0), mBlurProgram(0), mComposeProgram(0), mVao(0), mVbo(0), mLightUbo(0), mSamplerNearest(0), mSamplerLinear(0),
       mWhiteTex(0), mSurfaceTex(0), mSurfaceW(0), mSurfaceH(0), mBatchTex(0), mBatchState(0), mAppliedState(0), mStateValid(false),
@@ -426,9 +426,35 @@ void GLRenderer::SetLogicalSize(s32 width, s32 height)
         return;
     }
     Flush();
-    const bool changed = width != mLogicalW || height != mLogicalH;
     mLogicalW = width;
     mLogicalH = height;
+    UpdateTargetSize();
+}
+
+void GLRenderer::UpdateTargetSize()
+{
+    static const char* sNative = getenv("GTA2GL_NATIVE");
+    s32 w = mLogicalW;
+    s32 h = mLogicalH;
+    if ((!sNative || atoi(sNative)) && mDrawableW > 0 && mDrawableH > 0)
+    {
+        // The logical frame fitted into the window, keeping its shape; never smaller than logical.
+        w = mDrawableW;
+        h = (s32)((long long)mDrawableW * mLogicalH / mLogicalW);
+        if (h > mDrawableH)
+        {
+            h = mDrawableH;
+            w = (s32)((long long)mDrawableH * mLogicalW / mLogicalH);
+        }
+        if (w < mLogicalW || h < mLogicalH)
+        {
+            w = mLogicalW;
+            h = mLogicalH;
+        }
+    }
+    const bool changed = w != mTargetW || h != mTargetH;
+    mTargetW = w;
+    mTargetH = h;
     if (mReady && changed)
     {
         CreateTargets();
@@ -437,7 +463,7 @@ void GLRenderer::SetLogicalSize(s32 width, s32 height)
 
 void GLRenderer::CreateTargets()
 {
-    const s32 width = mLogicalW, height = mLogicalH;
+    const s32 width = mTargetW, height = mTargetH;
     gl.glBindTexture(GL_TEXTURE_2D, mFboTex);
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
     bool complete = false;
@@ -490,7 +516,7 @@ void GLRenderer::CreateTargets()
 void GLRenderer::BindTarget()
 {
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
-    gl.glViewport(0, 0, mLogicalW, mLogicalH);
+    gl.glViewport(0, 0, mTargetW, mTargetH);
 }
 
 void GLRenderer::Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 bottom)
@@ -506,7 +532,9 @@ void GLRenderer::Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 botto
     if (!full)
     {
         gl.glEnable(GL_SCISSOR_TEST);
-        gl.glScissor(left, top, right - left, bottom - top);
+        const f32 sx = (f32)mTargetW / mLogicalW;
+        const f32 sy = (f32)mTargetH / mLogicalH;
+        gl.glScissor((GLint)(left * sx), (GLint)(top * sy), (GLsizei)((right - left) * sx), (GLsizei)((bottom - top) * sy));
     }
     const GLfloat colour[4] = {r / 255.0f, g / 255.0f, b / 255.0f, 1.0f};
     gl.glClearBufferfv(GL_COLOR, 0, colour);
@@ -754,7 +782,6 @@ void GLRenderer::CompositeSurface(const u16* pPixels, s32 pitchBytes, s32 width,
     BindTarget();
     const GLenum one[1] = {GL_COLOR_ATTACHMENT0};
     gl.glDrawBuffers(1, one);
-    gl.glViewport(0, 0, width, height);
     gl.glUseProgram(mPresentProgram);
     gl.glUniform3f(mUniGamma, 1.0f, 1.0f, 1.0f);
     gl.glUniform1i(mUniFlipY, 0);
@@ -791,7 +818,7 @@ void GLRenderer::FinishFrame()
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mBlurFbo[0]);
     gl.glViewport(0, 0, mBlurW, mBlurH);
     gl.glUseProgram(mDownProgram);
-    gl.glUniform2f(mUniDownTexel, 1.0f / mLogicalW, 1.0f / mLogicalH);
+    gl.glUniform2f(mUniDownTexel, 1.0f / mTargetW, 1.0f / mTargetH);
     gl.glBindTexture(GL_TEXTURE_2D, mBloomSrcTex);
     DrawFullscreen();
 
@@ -805,7 +832,7 @@ void GLRenderer::FinishFrame()
     }
 
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mPostFbo);
-    gl.glViewport(0, 0, mLogicalW, mLogicalH);
+    gl.glViewport(0, 0, mTargetW, mTargetH);
     gl.glUseProgram(mComposeProgram);
     gl.glUniform1f(mUniBloomIntensity, mOptions.mBloom);
     gl.glBindTexture(GL_TEXTURE_2D, mFboTex);
@@ -853,16 +880,22 @@ void GLRenderer::Present(s32 drawableW, s32 drawableH)
     gl.glUniform1i(mUniFlipY, 1);
     gl.glActiveTexture(GL_TEXTURE0);
     gl.glBindTexture(GL_TEXTURE_2D, mPostValid ? mPostTex : mFboTex);
-    const bool exact = (w == mLogicalW && h == mLogicalH) || (w % mLogicalW == 0 && h % mLogicalH == 0);
+    const bool exact = (w == mTargetW && h == mTargetH) || (w % mTargetW == 0 && h % mTargetH == 0);
     gl.glBindSampler(0, exact ? mSamplerNearest : mSamplerLinear);
     gl.glDisable(GL_BLEND);
     DrawFullscreen();
     mStateValid = false;
+    if (drawableW != mDrawableW || drawableH != mDrawableH)
+    {
+        mDrawableW = drawableW;
+        mDrawableH = drawableH;
+        UpdateTargetSize();
+    }
 }
 
 void GLRenderer::ReadLogical(std::vector<u8>& out)
 {
-    out.resize((size_t)mLogicalW * mLogicalH * 4);
+    out.resize((size_t)mTargetW * mTargetH * 4);
     if (!mReady)
     {
         return;
@@ -870,5 +903,5 @@ void GLRenderer::ReadLogical(std::vector<u8>& out)
     Flush();
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mPostValid ? mPostFbo : mFbo);
     gl.glReadBuffer(GL_COLOR_ATTACHMENT0);
-    gl.glReadPixels(0, 0, mLogicalW, mLogicalH, GL_RGBA, GL_UNSIGNED_BYTE, &out[0]);
+    gl.glReadPixels(0, 0, mTargetW, mTargetH, GL_RGBA, GL_UNSIGNED_BYTE, &out[0]);
 }
