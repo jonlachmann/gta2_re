@@ -24,6 +24,11 @@ unsigned port_FrameCount();
 void port_InitTestInput();
 void port_InjectTestInput(unsigned frame);
 
+// Whether the gamepad gave the last input (for button hints), and its state as DirectInput has it:
+// buttons 0..11, axes -1000..1000 with the d-pad on the stick. False without a gamepad.
+bool port_PadMode();
+bool port_PadInput(BYTE* pButtons, LONG* pX, LONG* pY);
+
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);
 

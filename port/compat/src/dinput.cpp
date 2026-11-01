@@ -130,6 +130,8 @@ DWORD Dik(SDL_Scancode sc)
 
 const size_t kDefaultBufferSize = 64;
 
+void AddPadMenuKeys(BYTE* pKeys);
+
 class Device : public IDirectInputDevice2A
 {
   public:
@@ -252,6 +254,7 @@ class Device : public IDirectInputDevice2A
         else if (size >= 256)
         {
             memcpy(pData, mKeys, 256);
+            AddPadMenuKeys(static_cast<BYTE*>(pData));
         }
         return DI_OK;
     }
@@ -385,6 +388,7 @@ class Device : public IDirectInputDevice2A
 
 std::vector<Device*> sDevices;
 SDL_Gamepad* sGamepad;
+bool sPadMode; // the last input came from the gamepad
 Sint16 sStick[2];
 bool sDpad[4]; // up, down, left, right
 
@@ -558,8 +562,99 @@ class DirectInput : public IDirectInputA
 DirectInput sDirectInput;
 } // namespace
 
+namespace
+{
+// Only the frontend reads the keyboard's state (the game reads its buffered events): the gamepad
+// drives the menus as the arrows, Enter (A, Start) and Escape (B, Back).
+void AddPadMenuKeys(BYTE* pKeys)
+{
+    if (!sGamepad)
+    {
+        return;
+    }
+    const Sint16 x = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX);
+    const Sint16 y = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY);
+    const Sint16 kStick = 16000;
+    const struct
+    {
+        bool mDown;
+        DWORD mDik;
+    } keys[] = {
+        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) || y < -kStick, DIK_UP},
+        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || y > kStick, DIK_DOWN},
+        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || x < -kStick, DIK_LEFT},
+        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || x > kStick, DIK_RIGHT},
+        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_SOUTH) || SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_START), DIK_RETURN},
+        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_EAST) || SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_BACK), DIK_ESCAPE},
+    };
+    for (const auto& k : keys)
+    {
+        if (k.mDown)
+        {
+            pKeys[k.mDik] = 0x80;
+        }
+    }
+}
+} // namespace
+
+bool port_PadMode()
+{
+    return sPadMode;
+}
+
+bool port_PadInput(BYTE* pButtons, LONG* pX, LONG* pY)
+{
+    if (!sGamepad)
+    {
+        return false;
+    }
+    for (int b = 0; b < 32; b++)
+    {
+        const int index = b;
+        pButtons[b] = 0;
+        for (int sdl = 0; sdl < SDL_GAMEPAD_BUTTON_COUNT; sdl++)
+        {
+            if (ButtonIndex((Uint8)sdl) == index && SDL_GetGamepadButton(sGamepad, (SDL_GamepadButton)sdl))
+            {
+                pButtons[b] = 0x80;
+            }
+        }
+    }
+    if (SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384)
+    {
+        pButtons[10] = 0x80;
+    }
+    if (SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16384)
+    {
+        pButtons[11] = 0x80;
+    }
+    Sint16 x = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX);
+    Sint16 y = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY);
+    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) != SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
+    {
+        x = SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -32767 : 32767;
+    }
+    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) != SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN))
+    {
+        y = SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) ? -32767 : 32767;
+    }
+    *pX = x * 1000 / 32767;
+    *pY = y * 1000 / 32767;
+    return true;
+}
+
 void port_OnInputEvent(const SDL_Event& e)
 {
+    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
+    {
+        sPadMode = false;
+    }
+    else if (sGamepad && ((e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.which == SDL_GetGamepadID(sGamepad)) ||
+                          (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e.gaxis.which == SDL_GetGamepadID(sGamepad) &&
+                           (e.gaxis.value > 16000 || e.gaxis.value < -16000))))
+    {
+        sPadMode = true;
+    }
     switch (e.type)
     {
         case SDL_EVENT_KEY_DOWN:
