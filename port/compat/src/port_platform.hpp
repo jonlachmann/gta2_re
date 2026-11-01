@@ -11,6 +11,7 @@ void port_SetFullscreen(HWND h, bool fullscreen);
 unsigned port_FrameCount();
 
 // Scripted key presses and exit (GTA2_INPUT, GTA2_EXIT_AT), checked as the message loop pumps.
+void port_InitTestInput();
 void port_InjectTestInput(unsigned frame);
 
 // Every SDL event, as the message loop pumps them.

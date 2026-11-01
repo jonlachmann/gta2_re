@@ -397,17 +397,24 @@ ULONG STDMETHODCALLTYPE Device::Release()
     return 0;
 }
 
+// The first gamepad, or the first whose name contains $GTA2_GAMEPAD.
 void OpenGamepad()
 {
     if (sGamepad)
     {
         return;
     }
+    const char* wanted = getenv("GTA2_GAMEPAD");
     int count = 0;
     SDL_JoystickID* pIds = SDL_GetGamepads(&count);
-    if (pIds && count > 0)
+    for (int i = 0; pIds && i < count; i++)
     {
-        sGamepad = SDL_OpenGamepad(pIds[0]);
+        const char* name = SDL_GetGamepadNameForID(pIds[i]);
+        if (!wanted || (name && SDL_strcasestr(name, wanted)))
+        {
+            sGamepad = SDL_OpenGamepad(pIds[i]);
+            break;
+        }
     }
     SDL_free(pIds);
 }
@@ -583,6 +590,10 @@ void port_OnInputEvent(const SDL_Event& e)
             }
             break;
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+            if (!sGamepad || e.gaxis.which != SDL_GetGamepadID(sGamepad))
+            {
+                break;
+            }
             if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX || e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
             {
                 sStick[e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY] = e.gaxis.value;
@@ -596,6 +607,10 @@ void port_OnInputEvent(const SDL_Event& e)
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         {
+            if (!sGamepad || e.gbutton.which != SDL_GetGamepadID(sGamepad))
+            {
+                break;
+            }
             const bool down = e.gbutton.down;
             switch (e.gbutton.button)
             {

@@ -25,8 +25,10 @@ GTA2_DIR=~/games/gta2 ./build_linux/gta2
 ```
 
 Settings live in `gta2_registry.ini` (the registry keys of the Windows game). Alt+Enter switches
-between window and full screen. Movies are skipped. Renderer options are in `gta2gl.ini`
-(`renderer/gta2gl.ini.example`); Scroll Lock toggles them.
+between window and full screen. The first gamepad is used, or the first whose name contains
+`GTA2_GAMEPAD`; bind it in the game's control options (stick and d-pad are the two axes).
+Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
+Scroll Lock toggles them.
 
 ## Layout
 
@@ -39,7 +41,7 @@ between window and full screen. Movies are skipped. Renderer options are in `gta
 
 | Variable | Effect |
 |---|---|
-| `GTA2_INPUT=<frame>:<key>[:<frames held>],...` | key presses at given frames (SDL key names: `Return`, `Up`, `Left Ctrl`) |
+| `GTA2_INPUT=<frame>:<key>[:<frames held>],...` | key presses at given frames (SDL key names: `Return`, `Up`, `Left Ctrl`, `Alt+Return`), or a virtual gamepad (`pad.a`, `pad.dpup`, `pad.lefty-`) |
 | `GTA2_EXIT_AT=<frame>` | quit at that frame |
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP |
 | `GTA2_NO_SOUND=1` | no audio device |

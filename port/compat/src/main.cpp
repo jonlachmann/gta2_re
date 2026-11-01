@@ -29,6 +29,7 @@ int main(int argc, char** argv)
         return 1;
     }
     port_RegisterRenderer();
+    port_InitTestInput();
 
     std::string cmdLine;
     for (int i = 1; i < argc; i++)
