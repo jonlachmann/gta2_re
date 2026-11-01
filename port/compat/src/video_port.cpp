@@ -68,19 +68,12 @@ void ScreenSet(const char* name, DWORD value)
     }
 }
 
-// The game resolution for a screen of that shape: view_height lines (0: the screen's own), an even width.
+// The game draws at the screen's resolution: its view keeps the original's 4:3 height and widens
+// with the screen (Camera::UpdateBoundaries), its HUD follows (Camera::SetScreenSize).
 void GameSize(int screenW, int screenH, int* pW, int* pH)
 {
-    const int view = (int)ScreenGet("view_height", 720);
-    int h = view > 0 && view < screenH ? view : screenH;
-    int w = (int)((long long)h * screenW / screenH) & ~1;
-    if (w < 640 || h < 480)
-    {
-        w = 640;
-        h = 480;
-    }
-    *pW = w;
-    *pH = h;
+    *pW = screenW < 640 ? 640 : screenW & ~1;
+    *pH = screenH < 480 ? 480 : screenH;
 }
 } // namespace
 

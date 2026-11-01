@@ -7,6 +7,7 @@
 #include "input.hpp"
 #include "registry.hpp"
 #include "root_sound.hpp"
+#include "TextTable.hpp"
 #include <stdio.h>
 #include <string.h>
 #include <vector>
@@ -15,7 +16,6 @@
 
 EXTERN_GLOBAL(SoundObject, snd1);
 
-void port_UpdateGameResolution();
 #if defined(GTA2_PORT_SDL)
 bool port_PadMode();
 int port_GetPadBinding(int control);
@@ -53,7 +53,6 @@ enum Action
     kTextSpeed,
     kLanguage,
     kDisplay,
-    kViewSize,
     kBrightness,
     kLighting,
     kExplodingScores,
@@ -228,11 +227,6 @@ void Bind(s32 column, s32 control, s32 binding)
     column ? SetPad(control, binding) : SetControl(control, binding);
 }
 
-// view_height: lines of the game resolution, its width following the screen's shape; 0 is the
-// screen's own resolution.
-const s32 kViewHeights[] = {480, 540, 600, 720, 768, 900, 1080, 0};
-const s32 kNumViewHeights = sizeof(kViewHeights) / sizeof(kViewHeights[0]);
-
 struct Language
 {
     char mCode;
@@ -266,19 +260,6 @@ s32 LanguageIndex()
         }
     }
     return 0;
-}
-
-s32 ViewIndex()
-{
-    const s32 view = gRegistry.Get_Screen_Setting("view_height", 720);
-    for (s32 i = 0; i < kNumViewHeights; i++)
-    {
-        if (kViewHeights[i] == view)
-        {
-            return i;
-        }
-    }
-    return 3;
 }
 
 s32 Wrap(s32 i, s32 n)
@@ -361,6 +342,14 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
         {
             const char code[2] = {kLanguages[Wrap(LanguageIndex() + delta, kNumLanguages)].mCode, 0};
             SetOptionValue("language", REG_SZ, code, sizeof(code));
+            // The frontend's texts are copied into its pages: reload the table and set them up again.
+            const u16 page = pFrontend->mCurrentPageIdx;
+            const u16 option = pFrontend->mMenuPagesArray[page].mCurrentOptionIdx;
+            delete gText_0x14;
+            gText_0x14 = new TextTable();
+            gText_0x14->Load();
+            pFrontend->SetupMenuStringsOptionsElements();
+            pFrontend->mMenuPagesArray[page].mCurrentOptionIdx = option;
             break;
         }
         case kDisplay:
@@ -371,10 +360,6 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
                 SetVideoModeFromSettings();
                 OnVideoModeChanged();
             }
-            break;
-        case kViewSize:
-            gRegistry.Set_Screen_Setting("view_height", kViewHeights[Wrap(ViewIndex() + delta, kNumViewHeights)]);
-            port_UpdateGameResolution();
             break;
         case kBrightness:
         {
@@ -569,6 +554,36 @@ u16 ParentPage(u16 page)
 }
 } // namespace
 
+s32 NumControls()
+{
+    return kNumControls;
+}
+
+const wchar_t* ControlName(s32 control)
+{
+    return kControlNames[control];
+}
+
+const wchar_t* TextSpeedName(s32 speed)
+{
+    return kTextSpeeds[speed < 1 ? 0 : (speed > 5 ? 4 : speed - 1)];
+}
+
+void BindingNames(s32 control, wchar_t* pKey, wchar_t* pPad)
+{
+    if (sKeyNames.empty())
+    {
+        LoadKeyNames();
+    }
+    KeyName(GetControl(control), pKey);
+    PadName(GetPad(control), pPad);
+}
+
+void SetBinding(s32 column, s32 control, s32 binding)
+{
+    Bind(column, control, binding);
+}
+
 void Setup(Frontend* pFrontend)
 {
     for (u16 page : {kOptionsPage, kScreenPage, kControlsPage, kControls2Page})
@@ -592,7 +607,6 @@ void Setup(Frontend* pFrontend)
 
     SetTitle(&pFrontend->mMenuPagesArray[kScreenPage], L"SCREEN", title);
     AddOption(pFrontend, kScreenPage, L"DISPLAY", kDisplay, 0);
-    AddOption(pFrontend, kScreenPage, L"GAME RESOLUTION", kViewSize, 0);
     AddOption(pFrontend, kScreenPage, L"BRIGHTNESS", kBrightness, 0);
     AddOption(pFrontend, kScreenPage, L"LIGHTING", kLighting, 0, true);
     AddOption(pFrontend, kScreenPage, L"EXPLODING SCORES", kExplodingScores, 0);
@@ -769,13 +783,6 @@ bool GetOptionText(Frontend* pFrontend, u16 page, u16 option, wchar_t** ppText)
         case kDisplay:
             wcscpy(value, gRegistry.Get_Screen_Setting("start_mode", 1) ? L"FULL SCREEN" : L"WINDOW");
             break;
-        case kViewSize:
-        {
-            const bool full = gRegistry.Get_Screen_Setting("start_mode", 1) != 0;
-            swprintf(value, L"%d X %d", gRegistry.Get_Screen_Setting(full ? "full_width" : "window_width", 640),
-                     gRegistry.Get_Screen_Setting(full ? "full_height" : "window_height", 480));
-            break;
-        }
         case kLighting:
             wcscpy(value, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
             break;

@@ -11,8 +11,8 @@ SDL_Window* port_GetSDLWindow(HWND h);
 void port_SetFullscreen(HWND h, bool fullscreen);
 SDL_Window* port_MainSDLWindow();
 
-// The player's window size (gta2_registry.ini), the game resolution derived from it and from the
-// desktop for full screen: the view height setting, the width following the screen's shape.
+// The player's window size (gta2_registry.ini), and the game resolution: the window's or, in full
+// screen, the desktop's.
 void port_GetWindowSize(int* pW, int* pH);
 void port_SaveWindowSize(int w, int h);
 void port_UpdateGameResolution();
@@ -51,7 +51,7 @@ void port_PushKey(DWORD dik, bool down);
 
 // Game state the gamepad needs (port/src/game_hooks.cpp).
 bool port_GameRunning();
-bool port_QuitMessageShown();
+bool port_QuitMessageShown(); // or the pause menu
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

@@ -21,4 +21,12 @@ bool UpdateNameEntry(Frontend* pFrontend);
 
 // The frontend's key hints (ENTER, ESC, DEL, BACKSPACE) as the gamepad's buttons once it was used last.
 void PadKeyHint(u8 hint, wchar_t* pText);
+
+// The controls, for the pause menu: names, current bindings' names, and rebinding (column 0 the
+// keyboard, 1 the gamepad; a binding in use elsewhere moves to the control being changed).
+s32 NumControls();
+const wchar_t* ControlName(s32 control);
+const wchar_t* TextSpeedName(s32 speed);
+void BindingNames(s32 control, wchar_t* pKey, wchar_t* pPad);
+void SetBinding(s32 column, s32 control, s32 binding);
 } // namespace PortOptionsMenu
