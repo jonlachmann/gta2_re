@@ -95,15 +95,14 @@ else()
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:gta2> $<TARGET_FILE_DIR:gta2>
             COMMAND_EXPAND_LISTS)
     else()
-        # Win32 and DirectX declarations come from Wine's headers; compat/ implements what the game calls.
-        find_path(WINE_INCLUDE windows.h PATHS /usr/include/wine/windows /usr/include/wine/wine/windows NO_DEFAULT_PATH REQUIRED)
+        # compat/include declares the Win32 and DirectX subset the game uses; compat/src implements it.
         target_compile_options(gta2 PRIVATE -include ${compat}/prelude.hpp)
         target_compile_definitions(gta2 PRIVATE __NT__)
         # LLVM turns wide string loops into calls to the C library, whose wchar_t is 4 bytes.
         target_compile_options(gta2 PRIVATE -fno-builtin-wcslen -fno-builtin-wcscpy -fno-builtin-wcscmp
             -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
         target_include_directories(gta2 PRIVATE
-            ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${WINE_INCLUDE} ${ROOT}/Source ${ROOT})
+            ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
         target_link_options(gta2 PRIVATE -m32 -Wl,--no-dependent-libraries -Wl,--error-limit=0)
     endif()
 endif()

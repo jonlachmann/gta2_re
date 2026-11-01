@@ -20,8 +20,7 @@ ninja -C build_port
 
 ## Linux
 
-Needs clang, lld, ninja, cmake, Wine's headers (`/usr/include/wine/windows`, declarations only) and
-32-bit SDL3 (`lib32-sdl3` on Arch).
+Needs clang, lld, ninja, cmake and 32-bit SDL3 (`lib32-sdl3` on Arch).
 
 ```bash
 cmake -S port -B build_linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux32-clang.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -77,8 +76,9 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 ## Layout
 
 - `compat/`: the Win32 subset the game calls, on SDL3 and POSIX (window, registry, files,
-  DirectInput, Miles and its 3D provider on OpenAL Soft), with Wine's headers for the
-  declarations on Linux. On Windows, `win32_redirect.hpp` sends the game's calls to the same code.
+  DirectInput, Miles and its 3D provider on OpenAL Soft). Outside Windows, `compat/include` declares
+  the Win32 and DirectX subset the game uses (Windows' 32-bit layouts and values); on Windows,
+  MinGW's headers declare it and `win32_redirect.hpp` sends the game's calls to the same code.
 - `renderer/`: the OpenGL ES renderer behind the game's `gbh_*` and `Vid_*` tables.
 - `include/`: copies of headers whose originals don't build outside MSVC.
 
