@@ -103,7 +103,15 @@ struct Sample3D
     S32 mLoopEnd;
     U32 mPlaysLeft;    // loop counts above 1: plays still to start, counted on wraps
     ALint mLastOffset; // sample offset at the previous render, to see the wraps
+    S32 mVolume;
+    float mPlaneDistance;
+    float mMinDistance;
+    float mMaxDistance;
 };
+
+// Where the listener hears from: this many world blocks above the plane of the sounds (see
+// AIL_set_3D_position).
+const float kListenerHeight = 5.0f;
 
 std::recursive_mutex& Lock()
 {
@@ -373,6 +381,13 @@ void CountLoops()
         s->mLastOffset = offset;
     }
 }
+// DirectSound3D's attenuation (inverse distance from the minimum, constant past the maximum) on the
+// distance in the plane, with the game's volume; OpenAL only places the sound.
+void ApplyGain(Sample3D* s)
+{
+    const float d = SDL_clamp(s->mPlaneDistance, s->mMinDistance, s->mMaxDistance);
+    al.alSourcef(s->mSource, AL_GAIN, SDL_clamp(s->mVolume, 0, 127) / 127.0f * (s->mMinDistance / d));
+}
 } // namespace
 
 bool Miles3D_Render(float* pMix, int frames)
@@ -477,6 +492,10 @@ DXDEC H3DSAMPLE AILCALL AIL_allocate_3D_sample_handle(HPROVIDER)
     s->mBytesPerFrame = 2;
     s->mLoopCount = 1;
     s->mLoopEnd = -1;
+    s->mVolume = 127;
+    s->mMinDistance = 1.0f;
+    s->mMaxDistance = 1.0f;
+    al.alSourcef(s->mSource, AL_ROLLOFF_FACTOR, 0.0f);
     if (sHaveEfx)
     {
         al.alSource3i(s->mSource, AL_AUXILIARY_SEND_FILTER, static_cast<ALint>(sSlot), 0, AL_FILTER_NULL);
@@ -543,7 +562,8 @@ DXDEC S32 AILCALL AIL_set_3D_sample_info(H3DSAMPLE h, AILSOUNDINFO FAR* info)
 DXDEC void AILCALL AIL_set_3D_sample_volume(H3DSAMPLE h, S32 volume)
 {
     LOCK;
-    al.alSourcef(S3(h)->mSource, AL_GAIN, SDL_clamp(volume, 0, 127) / 127.0f);
+    S3(h)->mVolume = volume;
+    ApplyGain(S3(h));
 }
 
 DXDEC void AILCALL AIL_set_3D_sample_playback_rate(H3DSAMPLE h, S32 playback_rate)
@@ -586,19 +606,27 @@ AIL_3D_sample_float_distances(H3DSAMPLE, F32 FAR* max_front_dist, F32 FAR* min_f
 }
 
 // Miles uses DirectSound3D's left-handed axes (+z ahead); OpenAL's are right-handed (-z ahead).
+// The game gives positions in the plane of the listener (y = 0), which is the player's ped or car.
+// Heard from that plane, a sound beside the player is panned all the way to one side and the
+// player's own sounds, a hair away, follow the direction of that hair; heard from above, like the
+// top-down camera, the pan grows with the distance on screen as the game's 2D pan does.
 DXDEC void AILCALL AIL_set_3D_position(H3DPOBJECT obj, F32 X, F32 Y, F32 Z)
 {
     LOCK;
-    al.alSource3f(S3(reinterpret_cast<H3DSAMPLE>(obj))->mSource, AL_POSITION, X, Y, -Z);
+    Sample3D* s = S3(reinterpret_cast<H3DSAMPLE>(obj));
+    al.alSource3f(s->mSource, AL_POSITION, X, Y - kListenerHeight, -Z);
+    s->mPlaneDistance = sqrtf(X * X + Z * Z);
+    ApplyGain(s);
 }
 
 DXDEC void AILCALL
 AIL_set_3D_sample_float_distances(H3DSAMPLE h, F32 max_front_dist, F32 min_front_dist, F32, F32)
 {
     LOCK;
-    const ALuint source = S3(h)->mSource;
-    al.alSourcef(source, AL_REFERENCE_DISTANCE, min_front_dist > 0.0f ? min_front_dist : 1.0f);
-    al.alSourcef(source, AL_MAX_DISTANCE, max_front_dist > min_front_dist ? max_front_dist : min_front_dist);
+    Sample3D* s = S3(h);
+    s->mMinDistance = min_front_dist > 0.0f ? min_front_dist : 1.0f;
+    s->mMaxDistance = max_front_dist > s->mMinDistance ? max_front_dist : s->mMinDistance;
+    ApplyGain(s);
 }
 
 #else
