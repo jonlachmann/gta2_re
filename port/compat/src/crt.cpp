@@ -1,3 +1,14 @@
+#if defined(_WIN32)
+#include <limits.h>
+#include <stdio.h>
+
+// Windows paths are the host's: the file system ignores case.
+const char* port_resolve_path(const char* path, char* out)
+{
+    snprintf(out, PATH_MAX, "%s", path);
+    return out;
+}
+#else
 #include <ctype.h>
 #include <dirent.h>
 #include <fnmatch.h>
@@ -245,3 +256,4 @@ char* _itoa(int value, char* dst, int radix)
     dst[o] = 0;
     return dst;
 }
+#endif
