@@ -211,4 +211,19 @@ GTA2_ASSERT_SIZEOF_ALWAYS(Camera, 0xBC)
 
 EXTERN_GLOBAL(Camera*, gViewCamera);
 
+// Screen positions of the 640x480 HUD layout. The port anchors them to the left, centre or right
+// (top, centre or bottom) of screens of other shapes.
+#if defined(GTA2_PORT)
+Fix16 PortUiX(Fix16 x);
+Fix16 PortUiY(Fix16 y);
+Fix16 PortUiStringX(const wchar_t* pStr, Fix16 x, u16 font);
+#define UI_X(x) PortUiX(x)
+#define UI_Y(y) PortUiY(y)
+#define UI_STR_X(str, x, font) PortUiStringX(str, x, font)
+#else
+#define UI_X(x) ((x) * gViewCamera->mUiScale)
+#define UI_Y(y) ((y) * gViewCamera->mUiScale)
+#define UI_STR_X(str, x, font) ((x) * gViewCamera->mUiScale)
+#endif
+
 extern inline Fix16 Max_41E130(Fix16 a, Fix16 b);

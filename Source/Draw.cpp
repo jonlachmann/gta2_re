@@ -30,8 +30,8 @@ MATCH_FUNC(0x495470)
 void __stdcall DrawTextureScaled(STexture* pTexture, Fix16 x_pos, Fix16 y_pos, u8 width, u8 height, Ang16 rotation, s32 alpha_value, u8 alpha_flag)
 {
     DrawTexture(pTexture,
-               x_pos * gViewCamera->mUiScale,
-               y_pos * gViewCamera->mUiScale,
+               UI_X(x_pos),
+               UI_Y(y_pos),
                width,
                height,
                rotation,
@@ -51,8 +51,8 @@ void __stdcall DrawFigureScaled(s32 sprite_type, s16 sprite_idx, Fix16 x_pos, Fi
 {
     DrawFigure(sprite_type,
                sprite_idx,
-               x_pos * gViewCamera->mUiScale,
-               y_pos * gViewCamera->mUiScale,
+               UI_X(x_pos),
+               UI_Y(y_pos),
                rotation,
                gViewCamera->mUiScale,
                palette_type,
@@ -72,8 +72,8 @@ MATCH_FUNC(0x5D7720)
 void __stdcall DrawStringScaledPalette(const wchar_t* pStr, Fix16 xoff, Fix16 yoff, u16 fontType, const s32& palette_type, u16 palette, s32 alpha, u8 alpha_flag)
 {
     DrawString(pStr,
-               xoff * gViewCamera->mUiScale,
-               yoff * gViewCamera->mUiScale,
+               UI_STR_X(pStr, xoff, fontType),
+               UI_Y(yoff),
                fontType,
                gViewCamera->mUiScale,
                palette_type,
@@ -86,8 +86,8 @@ MATCH_FUNC(0x5D77A0)
 void __stdcall DrawStringScaled(const wchar_t* pText, Fix16 xpos, Fix16 ypos, u16 font_type)
 {
     DrawString(pText,
-               xpos * gViewCamera->mUiScale,
-               ypos * gViewCamera->mUiScale,
+               UI_STR_X(pText, xpos, font_type),
+               UI_Y(ypos),
                font_type,
                gViewCamera->mUiScale,
                palette_types_enum::sprites_2,

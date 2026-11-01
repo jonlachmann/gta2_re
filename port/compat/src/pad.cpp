@@ -1,7 +1,8 @@
 // The gamepad. The game never sees it as a device: in game, each control's pad binding (pad_<n> in
 // the registry's Control key, next to the keyboard's <n>) presses that control's keyboard key, so
-// both work at once with the game's keyboard code; Start brings the quit message, which A and B
-// answer. In the frontend it drives the menus as the arrows, Enter and Escape.
+// both work at once with the game's keyboard code; Start opens the pause menu (Escape), which the
+// d-pad, A and B drive, as they answer the quit message. In the frontend it drives the menus as the
+// arrows, Enter and Escape.
 #define DIRECTINPUT_VERSION 0x0700
 #include <windows.h>
 #include <dinput.h>
@@ -358,6 +359,19 @@ void port_UpdatePad()
         if (quitShown && b && !sPrevB)
         {
             Tap(DIK_ESCAPE);
+        }
+        // The pause menu's navigation.
+        static bool sPrevDir[4];
+        const int dirs[4] = {kPadUp, kPadDown, kPadLeft, kPadRight};
+        const DWORD keys[4] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGHT};
+        for (int d = 0; d < 4; d++)
+        {
+            const bool down = CodeDown(dirs[d]);
+            if (quitShown && down && !sPrevDir[d])
+            {
+                Tap(keys[d]);
+            }
+            sPrevDir[d] = down;
         }
     }
     sPrevStart = start;

@@ -1,5 +1,8 @@
 #define FIX16_POINT_ZERO kFpZero_7064C0
 #include "Hud.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/pause_menu.hpp"
+#endif
 #include "hud_message_priority.hpp"
 #include "hud_brief_priority.hpp"
 #include "voice_line.hpp"
@@ -73,8 +76,8 @@ static inline void DrawFigureScaled_4C71B0(s32 sprite_type, s16 sprite_idx, Fix1
 {
     DrawFigure(sprite_type,
                sprite_idx,
-               x_pos * gViewCamera->mUiScale,
-               y_pos * gViewCamera->mUiScale,
+               UI_X(x_pos),
+               UI_Y(y_pos),
                rotation,
                gViewCamera->mUiScale,
                palette_type,
@@ -98,8 +101,8 @@ static inline void WorldToScreen_Hud_40CFC0(Camera* pCam, Fix16 x, Fix16 y, Fix1
 static inline void DrawTextScaled_4C7280(const wchar_t* pStr, Fix16 x, Fix16 y, u16 font, const s32& palette_type, u16 palette, s32 alpha, u8 flags)
 {
     DrawString(pStr,
-               x * gViewCamera->mUiScale,
-               y * gViewCamera->mUiScale,
+               UI_STR_X(pStr, x, font),
+               UI_Y(y),
                font,
                gViewCamera->mUiScale,
                palette_type,
@@ -3195,6 +3198,12 @@ void Hud_PauseScreen::DrawPause()
 
     u32 sprite_type;
     u16 sprite_pal = 0;
+#if defined(GTA2_PORT)
+    if (PortPauseMenu::IsOpen())
+    {
+        return;
+    }
+#endif
     if (gGame_0x40->IsPaused() && !gGame_0x40->mLocalPlayer->mShowQuitMessage)
     {
         DrawFigureScaled(sprite_types_enum::user_6, 134, 227, 180, kAngZero_706610, palette_types_enum::sprites_2, 0, 0, 0);
@@ -3375,6 +3384,9 @@ void Hud::DrawGui()
         mPauseScreen.DrawPause();
         mChatInput.DrawChatMessages();
         mQuitMessage.DrawQuitMessage();
+#if defined(GTA2_PORT)
+        PortPauseMenu::Draw();
+#endif
     }
 }
 
@@ -3477,18 +3489,37 @@ void Hud::Init()
 MATCH_FUNC(0x5d6c20)
 bool Hud::HandleInputKey(s32 action, Player* pPlayer)
 {
+#if defined(GTA2_PORT)
+    if (PortPauseMenu::HandleKey(action, pPlayer))
+    {
+        return true;
+    }
+#endif
     return mQuitMessage.HandleQuitMessageKey(action, pPlayer) || mChatInput.HandleChatInputKey(action, pPlayer);
 }
 
 MATCH_FUNC(0x5d6c70)
 bool Hud::IsInputKeyConsumed(s32 action)
 {
+#if defined(GTA2_PORT)
+    if (PortPauseMenu::IsOpen())
+    {
+        return true;
+    }
+#endif
     return mQuitMessage.IsQuitMessageKey(action) || mChatInput.IsChatInputKey(action);
 }
 
 MATCH_FUNC(0x5d6cb0)
 bool Hud::IsQuitMessageInputKey(s32 action)
 {
+#if defined(GTA2_PORT)
+    // The game drops other keys while paused, and they stay out of replays.
+    if (PortPauseMenu::IsOpen())
+    {
+        return true;
+    }
+#endif
     return mQuitMessage.IsQuitMessageKey(action);
 }
 

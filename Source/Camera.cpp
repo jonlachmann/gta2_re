@@ -370,10 +370,21 @@ s32 Camera::IsCoordsPosVisible(Fix16 x, Fix16 y, Fix16 z)
 MATCH_FUNC(0x435B90)
 void Camera::UpdateBoundaries()
 {
+#if defined(GTA2_PORT)
+    // The original's view is 4:3 and as wide as the screen. On wider screens it keeps the 4:3 view's
+    // height and shows more on the sides: the scale is that of a 4:3 screen of the same height.
+    const s32 width_4_3 = mScreenPxHeight * 4 / 3 < mScreenPxWidth ? mScreenPxHeight * 4 / 3 : mScreenPxWidth;
+    mScreenScale.x = Fix16(width_4_3) * mCurPos.mZoom;
+#else
     mScreenScale.x = Fix16(mScreenPxWidth) * mCurPos.mZoom;
+#endif
     mScreenScale.y = Fix16(640) * mCurPos.mZoom;
 
     Fix16 v = (kFpSeven_676838 + mCurPos.mZ) * (kOne_67681C / mCurPos.mZoom) * kFpHalf_67671C;
+#if defined(GTA2_PORT)
+    const Fix16 v_4_3 = v;
+    v = v_4_3 * Fix16(mScreenPxWidth) / Fix16(width_4_3);
+#endif
 
     mViewBounds.mLeft = mCurPos.mX - v;
     if (mViewBounds.mLeft < kZero_676818)
@@ -395,7 +406,11 @@ void Camera::UpdateBoundaries()
         mViewBounds.mRight = kMaxMapCoord;
     }
 
+#if defined(GTA2_PORT)
+    v = v_4_3 * Fix16(mScreenPxHeight) / Fix16(width_4_3);
+#else
     v *= kFpThreeQuarters_6768E0;
+#endif
 
     mViewBounds.mTop = mCurPos.mY - v;
     if (mViewBounds.mTop < kZero_676818)
@@ -580,7 +595,14 @@ void Camera::SetScreenSize(u32 width, u32 height)
     mScreenScale.x = Fix16(-1);
     mScreenScale.y = Fix16(-1);
 
+#if defined(GTA2_PORT)
+    // The 640x480 HUD fits the screen's height on wide screens, its width on tall ones.
+    const Fix16 by_width = Fix16(width) / 640;
+    const Fix16 by_height = Fix16(height) / 480;
+    mUiScale = by_height < by_width ? by_height : by_width;
+#else
     mUiScale = Fix16(width) / 640;
+#endif
 }
 
 

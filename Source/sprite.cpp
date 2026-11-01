@@ -749,8 +749,8 @@ void Sprite::InvalidateZColAndBBoxes()
 static inline void __stdcall DrawTextScaled_4BA2C0(const wchar_t* pStr, Fix16 x, Fix16 y, u16 font)
 {
     s32 palette_type = palette_types_enum::sprites_2;
-    Fix16 scale_y = y * gViewCamera->mUiScale;
-    DrawString(pStr, x * gViewCamera->mUiScale, scale_y, font, gViewCamera->mUiScale, palette_type, 0, 0, 0);
+    Fix16 scale_y = UI_Y(y);
+    DrawString(pStr, UI_STR_X(pStr, x, font), scale_y, font, gViewCamera->mUiScale, palette_type, 0, 0, 0);
 }
 
 MATCH_FUNC(0x59e7d0)
