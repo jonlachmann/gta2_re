@@ -9,6 +9,13 @@ const char* port_resolve_path(const char* path, char* out);
 
 SDL_Window* port_GetSDLWindow(HWND h);
 void port_SetFullscreen(HWND h, bool fullscreen);
+SDL_Window* port_MainSDLWindow();
+
+// The player's window size (gta2_registry.ini), the game resolution derived from it and from the
+// desktop for full screen: the view height setting, the width following the screen's shape.
+void port_GetWindowSize(int* pW, int* pH);
+void port_SaveWindowSize(int w, int h);
+void port_UpdateGameResolution();
 
 // Number of Vid_FlipBuffers calls so far.
 unsigned port_FrameCount();

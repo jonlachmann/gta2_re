@@ -40,6 +40,84 @@ unsigned port_FrameCount()
     return sFrameCount;
 }
 
+namespace
+{
+DWORD ScreenGet(const char* name, DWORD def)
+{
+    HKEY hKey;
+    DWORD value = def;
+    DWORD size = sizeof(value);
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Screen", 0, KEY_ALL_ACCESS, &hKey) == ERROR_SUCCESS)
+    {
+        if (RegQueryValueExA(hKey, name, NULL, NULL, reinterpret_cast<BYTE*>(&value), &size) != ERROR_SUCCESS)
+        {
+            value = def;
+        }
+        RegCloseKey(hKey);
+    }
+    return value;
+}
+
+void ScreenSet(const char* name, DWORD value)
+{
+    HKEY hKey;
+    if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Screen", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKey, NULL) == ERROR_SUCCESS)
+    {
+        RegSetValueExA(hKey, name, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+        RegCloseKey(hKey);
+    }
+}
+
+// The game resolution for a screen of that shape: view_height lines (0: the screen's own), an even width.
+void GameSize(int screenW, int screenH, int* pW, int* pH)
+{
+    const int view = (int)ScreenGet("view_height", 720);
+    int h = view > 0 && view < screenH ? view : screenH;
+    int w = (int)((long long)h * screenW / screenH) & ~1;
+    if (w < 640 || h < 480)
+    {
+        w = 640;
+        h = 480;
+    }
+    *pW = w;
+    *pH = h;
+}
+} // namespace
+
+void port_GetWindowSize(int* pW, int* pH)
+{
+    const SDL_DisplayMode* pMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    const int desktopW = pMode ? pMode->w : 1920;
+    const int desktopH = pMode ? pMode->h : 1080;
+    *pW = (int)ScreenGet("port_window_width", desktopW * 2 / 3);
+    *pH = (int)ScreenGet("port_window_height", desktopH * 2 / 3);
+}
+
+void port_SaveWindowSize(int w, int h)
+{
+    ScreenSet("port_window_width", w);
+    ScreenSet("port_window_height", h);
+}
+
+void port_UpdateGameResolution()
+{
+    int w;
+    int h;
+    const SDL_DisplayMode* pMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    if (pMode)
+    {
+        GameSize(pMode->w, pMode->h, &w, &h);
+        ScreenSet("full_width", w);
+        ScreenSet("full_height", h);
+    }
+    int windowW;
+    int windowH;
+    port_GetWindowSize(&windowW, &windowH);
+    GameSize(windowW, windowH, &w, &h);
+    ScreenSet("window_width", w);
+    ScreenSet("window_height", h);
+}
+
 VID_EXPORT SVidVersion* GTA2_CC Vid_GetVersion()
 {
     static SVidVersion version = {0x3FE7AE14, "OpenGL ES 3.0 video"};

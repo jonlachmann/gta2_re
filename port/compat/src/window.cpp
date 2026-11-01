@@ -1,5 +1,7 @@
 // The window and message loop on SDL3. A window is an SDL window with OpenGL; SDL events become the
 // few messages the game's WindowProc handles (close, focus, minimise, Alt+Enter).
+// The game's window sizes are logical (its frame size); the SDL window keeps the size the player
+// gives it, and the frame is scaled into it.
 #include <windows.h>
 #include <SDL3/SDL.h>
 #include <deque>
@@ -33,6 +35,7 @@ std::deque<MSG>& Queue()
     return sQueue;
 }
 Window* sMainWindow;
+bool sFullscreen; // as asked: SDL reports the change later, after a resize event
 int sCursorCount;
 
 Window* W(HWND h)
@@ -74,6 +77,17 @@ void Translate(const SDL_Event& e)
             Post(h, WM_KILLFOCUS, 0, 0);
             Post(h, WM_ACTIVATEAPP, FALSE, 0);
             break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            if (!sFullscreen && !(SDL_GetWindowFlags(sMainWindow->mSdl) & SDL_WINDOW_FULLSCREEN))
+            {
+                port_SaveWindowSize(e.window.data1, e.window.data2);
+            }
+            port_UpdateGameResolution();
+            break;
+        case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+        case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+            port_UpdateGameResolution();
+            break;
         case SDL_EVENT_WINDOW_MINIMIZED:
             Post(h, WM_SIZE, SIZE_MINIMIZED, 0);
             break;
@@ -98,10 +112,16 @@ SDL_Window* port_GetSDLWindow(HWND h)
     return h ? W(h)->mSdl : NULL;
 }
 
+SDL_Window* port_MainSDLWindow()
+{
+    return sMainWindow ? sMainWindow->mSdl : NULL;
+}
+
 void port_SetFullscreen(HWND h, bool fullscreen)
 {
     if (h)
     {
+        sFullscreen = fullscreen;
         SDL_SetWindowFullscreen(W(h)->mSdl, fullscreen);
     }
 }
@@ -121,7 +141,10 @@ HWND WINAPI CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD
     {
         return NULL;
     }
-    SDL_Window* pSdl = SDL_CreateWindow(title, w, h, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+    int windowW;
+    int windowH;
+    port_GetWindowSize(&windowW, &windowH);
+    SDL_Window* pSdl = SDL_CreateWindow(title, windowW, windowH, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
     if (!pSdl)
     {
         return NULL;
@@ -130,6 +153,7 @@ HWND WINAPI CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD
     if (!sMainWindow)
     {
         sMainWindow = pWin;
+        port_UpdateGameResolution();
     }
     return reinterpret_cast<HWND>(pWin);
 }
@@ -268,19 +292,11 @@ BOOL WINAPI SetWindowPos(HWND h, HWND, INT x, INT y, INT cx, INT cy, UINT flags)
     {
         pWin->mX = x;
         pWin->mY = y;
-        if (!(SDL_GetWindowFlags(pWin->mSdl) & SDL_WINDOW_FULLSCREEN))
-        {
-            SDL_SetWindowPosition(pWin->mSdl, x, y);
-        }
     }
     if (!(flags & SWP_NOSIZE) && cx > 0 && cy > 0)
     {
         pWin->mW = cx;
         pWin->mH = cy;
-        if (!(SDL_GetWindowFlags(pWin->mSdl) & SDL_WINDOW_FULLSCREEN))
-        {
-            SDL_SetWindowSize(pWin->mSdl, cx, cy);
-        }
     }
     return TRUE;
 }

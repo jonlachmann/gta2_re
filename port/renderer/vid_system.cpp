@@ -39,6 +39,8 @@ VidSystem::VidSystem()
     mDevice.field_8_driver_name = (char*)"opengl";
     mDevice.field_C_driver_desc = (char*)"OpenGL 3.3";
 
+    // Room for the sizes CheckMode adds: the game keeps pointers into the list.
+    mModes.reserve(kMaxModes);
     for (u32 i = 0; i < sizeof(kModeSizes) / sizeof(kModeSizes[0]); i++)
     {
         SDisplayMode m;
@@ -136,7 +138,23 @@ s32 VidSystem::CheckMode(s32 width, s32 height, s32 bpp)
             return mModes[i].field_0_display_mode_idx;
         }
     }
-    return 0;
+    // Any size the frame is scaled from: the port picks the game resolution from the screen's shape.
+    if (width < 320 || height < 240 || width > 4096 || height > 4096 || mModes.size() >= kMaxModes)
+    {
+        return 0;
+    }
+    SDisplayMode m;
+    memset(&m, 0, sizeof(m));
+    m.field_0_display_mode_idx = (u32)mModes.size() + 1;
+    m.field_4_deviceId = 1;
+    m.field_8_width = width;
+    m.field_C_height = height;
+    m.field_10_pitch = width * 2;
+    m.field_14_rgb_bit_count = 16;
+    mModes.push_back(m);
+    mModes[mModes.size() - 2].field_38_pnext = &mModes.back();
+    mHeader.mVideo.field_1C_num_display_modes = (u32)mModes.size();
+    return m.field_0_display_mode_idx;
 }
 
 SDisplayMode* VidSystem::FindMode(s32 modeId)

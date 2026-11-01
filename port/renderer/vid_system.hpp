@@ -15,6 +15,7 @@ class VidSystem
     // Pixel value the CPU surface is filled with; untouched pixels are not composited.
     static const u16 kSurfaceKey = 0x0821;
     static const s32 kWindowedModeId = -2;
+    static const size_t kMaxModes = 64;
 
     VidSystem();
     ~VidSystem();
