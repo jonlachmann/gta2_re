@@ -52,14 +52,25 @@ else()
     target_link_libraries(gta2gl PRIVATE SDL3::SDL3)
 
     set(compat ${CMAKE_CURRENT_LIST_DIR}/compat)
-    set(compat_src crt dinput dll guids kernel main miles registry test_input video_port window)
+    set(compat_src crt dinput dll guids kernel main miles miles3d registry test_input video_port window)
     if(NOT WIN32)
         list(APPEND compat_src kernel_posix wstr)
     endif()
     list(TRANSFORM compat_src PREPEND ${compat}/src/)
     list(TRANSFORM compat_src APPEND .cpp)
     # Our Miles and Bink are defined here, not imported from their DLLs.
-    set_source_files_properties(${compat}/src/miles.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_MSS)
+    set_source_files_properties(${compat}/src/miles.cpp ${compat}/src/miles3d.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_MSS)
+    # 3D sound: OpenAL Soft, loaded at run time from next to the exe. Without it the game has 2D sound only.
+    set(GTA2_OPENAL_DIR "" CACHE PATH "OpenAL Soft install prefix: headers, and the library copied next to the exe")
+    if(GTA2_OPENAL_DIR)
+        set_source_files_properties(${compat}/src/miles3d.cpp PROPERTIES
+            COMPILE_DEFINITIONS "BUILD_MSS;GTA2_HAVE_OPENAL" INCLUDE_DIRECTORIES ${GTA2_OPENAL_DIR}/include)
+        if(WIN32)
+            set(openal_runtime ${GTA2_OPENAL_DIR}/bin/OpenAL32.dll)
+        else()
+            set(openal_runtime ${GTA2_OPENAL_DIR}/lib/libopenal.so.1)
+        endif()
+    endif()
     set_source_files_properties(${ROOT}/Source/3rdParty/bink.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_BINK)
 
     add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
@@ -67,6 +78,10 @@ else()
         src/debug_stubs.cpp src/options_menu.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
     target_link_libraries(gta2 PRIVATE gta2gl SDL3::SDL3)
+    if(openal_runtime)
+        add_custom_command(TARGET gta2 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${openal_runtime} $<TARGET_FILE_DIR:gta2>)
+    endif()
 
     if(WIN32)
         # MinGW's headers declare the Win32 API; win32_redirect.hpp sends the game's calls to compat/.

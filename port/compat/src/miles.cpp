@@ -1,8 +1,9 @@
 // Miles Sound System (the AIL_* subset GTA2 uses) on SDL3 audio: 2D samples from the game's sound
 // banks, and WAV streams (radio stations, voices) decoded while they play, PCM or IMA ADPCM.
-// No 3D provider is offered, so the game mixes everything in 2D.
+// The 3D provider is in miles3d.cpp.
 #include "types.hpp"
 #include "3rdParty/mss.h"
+#include "miles3d.hpp"
 #include "port_platform.hpp"
 #include <math.h>
 #include <stdio.h>
@@ -17,7 +18,7 @@
 
 namespace
 {
-const int kOutRate = 44100;
+const int kOutRate = Miles3D_kRate;
 
 std::recursive_mutex& Lock()
 {
@@ -385,6 +386,7 @@ void SDLCALL AudioCallback(void*, SDL_AudioStream* stream, int additional, int)
             }
         }
     }
+    Miles3D_Render(mix.data(), frames);
     for (float& v : mix)
     {
         v = v > 1.0f ? 1.0f : (v < -1.0f ? -1.0f : v);
@@ -404,11 +406,6 @@ Stream* St(HSTREAM h)
 } // namespace
 
 #define LOCK std::lock_guard<std::recursive_mutex> lock(Lock())
-
-DXDEC S32 AILCALL AIL_enumerate_3D_providers(HPROENUM FAR*, HPROVIDER FAR*, C8 FAR* FAR*)
-{
-    return 0;
-}
 
 DXDEC void FAR* AILCALL AIL_mem_alloc_lock(U32 size)
 {
@@ -602,6 +599,7 @@ DXDEC void AILCALL AIL_set_digital_master_volume(HDIGDRIVER, S32 master_volume)
     {
         sDriver->mMasterVolume = SDL_clamp(master_volume, 0, 127);
     }
+    Miles3D_SetMasterVolume(SDL_clamp(master_volume, 0, 127));
 }
 
 DXDEC HSTREAM AILCALL AIL_open_stream(HDIGDRIVER, char FAR* filename, S32)
@@ -694,77 +692,4 @@ DXDEC void AILCALL AIL_stream_ms_position(HSTREAM h, S32 FAR* total_milliseconds
     {
         *current_milliseconds = (S32)(s->mPos * 1000 / s->mRate);
     }
-}
-DXDEC M3DRESULT AILCALL AIL_open_3D_provider(HPROVIDER lib)
-{
-    return 0;
-}
-
-DXDEC void AILCALL AIL_close_3D_provider(HPROVIDER lib)
-{
-}
-
-DXDEC void AILCALL AIL_3D_provider_attribute(HPROVIDER lib, C8 FAR* name, void FAR* val)
-{
-}
-
-DXDEC void AILCALL AIL_set_3D_provider_preference(HPROVIDER lib, C8 FAR* name, void FAR* val)
-{
-}
-
-DXDEC H3DSAMPLE AILCALL AIL_allocate_3D_sample_handle(HPROVIDER lib)
-{
-    return 0;
-}
-
-DXDEC void AILCALL AIL_release_3D_sample_handle(H3DSAMPLE S)
-{
-}
-
-DXDEC void AILCALL AIL_start_3D_sample(H3DSAMPLE S)
-{
-}
-
-DXDEC void AILCALL AIL_end_3D_sample(H3DSAMPLE S)
-{
-}
-
-DXDEC S32 AILCALL AIL_set_3D_sample_info(H3DSAMPLE S, AILSOUNDINFO FAR* info)
-{
-    return 0;
-}
-
-DXDEC void AILCALL AIL_set_3D_sample_volume(H3DSAMPLE S, S32 volume)
-{
-}
-
-DXDEC void AILCALL AIL_set_3D_sample_playback_rate(H3DSAMPLE S, S32 playback_rate)
-{
-}
-
-DXDEC void AILCALL AIL_set_3D_sample_loop_count(H3DSAMPLE S, U32 loops)
-{
-}
-
-DXDEC void AILCALL AIL_set_3D_sample_loop_block(H3DSAMPLE S, S32 loop_start_offset, S32 loop_end_offset)
-{
-}
-
-DXDEC U32 AILCALL AIL_3D_sample_status(H3DSAMPLE S)
-{
-    return 0;
-}
-
-DXDEC void AILCALL
-AIL_3D_sample_float_distances(H3DSAMPLE S, F32 FAR* max_front_dist, F32 FAR* min_front_dist, F32 FAR* max_back_dist, F32 FAR* min_back_dist)
-{
-}
-
-DXDEC void AILCALL AIL_set_3D_position(H3DPOBJECT obj, F32 X, F32 Y, F32 Z)
-{
-}
-
-DXDEC void AILCALL
-AIL_set_3D_sample_float_distances(H3DSAMPLE S, F32 max_front_dist, F32 min_front_dist, F32 max_back_dist, F32 min_back_dist)
-{
 }
