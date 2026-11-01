@@ -101,6 +101,8 @@ struct Sample3D
     U32 mLoopCount;
     S32 mLoopStart;
     S32 mLoopEnd;
+    U32 mPlaysLeft;    // loop counts above 1: plays still to start, counted on wraps
+    ALint mLastOffset; // sample offset at the previous render, to see the wraps
 };
 
 std::recursive_mutex& Lock()
@@ -343,6 +345,33 @@ void ApplyLoop(Sample3D* s)
     al.alBufferiv(s->mBuffer, AL_LOOP_POINTS_SOFT, points);
     al.alSourcei(s->mSource, AL_BUFFER, static_cast<ALint>(s->mBuffer));
     al.alSourcei(s->mSource, AL_LOOPING, s->mLoopCount == 1 ? AL_FALSE : AL_TRUE);
+    s->mPlaysLeft = s->mLoopCount;
+    s->mLastOffset = 0;
+}
+
+// OpenAL loops forever: a count of N plays stops looping once the last play has begun.
+void CountLoops()
+{
+    for (Sample3D* s : Samples())
+    {
+        if (s->mPlaysLeft <= 1)
+        {
+            continue;
+        }
+        ALint state = AL_STOPPED;
+        ALint offset = 0;
+        al.alGetSourcei(s->mSource, AL_SOURCE_STATE, &state);
+        al.alGetSourcei(s->mSource, AL_SAMPLE_OFFSET, &offset);
+        if (state != AL_PLAYING)
+        {
+            continue;
+        }
+        if (offset < s->mLastOffset && --s->mPlaysLeft == 1)
+        {
+            al.alSourcei(s->mSource, AL_LOOPING, AL_FALSE);
+        }
+        s->mLastOffset = offset;
+    }
 }
 } // namespace
 
@@ -355,7 +384,13 @@ bool Miles3D_Render(float* pMix, int frames)
     }
     static std::vector<float> sBuf;
     sBuf.resize(static_cast<size_t>(frames) * 2);
-    al.alcRenderSamplesSOFT(sDevice, sBuf.data(), frames);
+    // Small slices, so that a short loop cannot wrap twice between two counts.
+    const int kSlice = 128;
+    for (int done = 0; done < frames; done += kSlice)
+    {
+        CountLoops();
+        al.alcRenderSamplesSOFT(sDevice, sBuf.data() + done * 2, SDL_min(kSlice, frames - done));
+    }
     for (size_t i = 0; i < sBuf.size(); i++)
     {
         pMix[i] += sBuf[i];
