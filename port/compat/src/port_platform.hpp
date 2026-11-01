@@ -24,10 +24,34 @@ unsigned port_FrameCount();
 void port_InitTestInput();
 void port_InjectTestInput(unsigned frame);
 
-// Whether the gamepad gave the last input (for button hints), and its state as DirectInput has it:
-// buttons 0..11, axes -1000..1000 with the d-pad on the stick. False without a gamepad.
-bool port_PadMode();
-bool port_PadInput(BYTE* pButtons, LONG* pX, LONG* pY);
+// The gamepad (pad.cpp). Pad binding codes: 0 to 11 the buttons (A, B, X, Y, LB, RB, Back, Start,
+// left and right stick press, LT, RT), then the four directions of the stick and d-pad.
+enum
+{
+    kPadLeft = 224,
+    kPadRight = 225,
+    kPadUp = 226,
+    kPadDown = 227,
+};
+void port_OpenGamepad();
+bool port_PadMode(); // the gamepad gave the last input
+int port_GetPadBinding(int control);
+void port_SetPadBinding(int control, int code);
+int port_DefaultPadBinding(int control);
+void port_CaptureStart(); // then the next key (DIK code) or pad code pressed, -1 until then
+int port_CapturedKey();
+int port_CapturedPad();
+void port_AddPadMenuKeys(BYTE* pKeys);
+void port_PadEvent(const SDL_Event& e);
+void port_UpdatePad();
+
+// Keyboard events for the game (dinput.cpp).
+DWORD port_DikFromScancode(SDL_Scancode sc);
+void port_PushKey(DWORD dik, bool down);
+
+// Game state the gamepad needs (port/src/game_hooks.cpp).
+bool port_GameRunning();
+bool port_QuitMessageShown();
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

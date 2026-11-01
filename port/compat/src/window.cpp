@@ -209,6 +209,7 @@ BOOL WINAPI PeekMessageA(MSG* pMsg, HWND, UINT, UINT, UINT flags)
             port_OnInputEvent(e);
             Translate(e);
         }
+        port_UpdatePad();
     }
     if (Queue().empty())
     {

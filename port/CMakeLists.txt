@@ -52,7 +52,7 @@ else()
     target_link_libraries(gta2gl PRIVATE SDL3::SDL3)
 
     set(compat ${CMAKE_CURRENT_LIST_DIR}/compat)
-    set(compat_src crt dinput dll guids kernel main miles miles3d registry test_input video_port window)
+    set(compat_src crt dinput dll guids kernel main miles pad miles3d registry test_input video_port window)
     if(NOT WIN32)
         list(APPEND compat_src kernel_posix wstr)
     endif()
@@ -75,7 +75,7 @@ else()
 
     add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
         ${ROOT}/Source/3rdParty/bink.cpp
-        src/debug_stubs.cpp src/options_menu.cpp ${compat_src})
+        src/debug_stubs.cpp src/options_menu.cpp src/game_hooks.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
     target_link_libraries(gta2 PRIVATE gta2gl SDL3::SDL3)
     if(openal_runtime)

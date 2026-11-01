@@ -1,5 +1,5 @@
-// DirectInput on SDL3: the keyboard and the first gamepad as DirectInput devices, with DIK_* key codes
-// and DIJOYSTATE offsets. Only real state changes are buffered (no key repeat, no lock key resyncs):
+// DirectInput on SDL3: the keyboard as a DirectInput device with DIK_* key codes (pad.cpp turns the
+// gamepad into keys). Only real state changes are buffered (no key repeat, no lock key resyncs):
 // the game reads one buffered event per frame.
 #define DIRECTINPUT_VERSION 0x0700
 #include <windows.h>
@@ -15,8 +15,6 @@
 
 namespace
 {
-const GUID kGamepadGuid = {0x47544132, 0x5044, 0x0001, {'S', 'D', 'L', 'P', 'A', 'D', 0, 1}};
-
 DWORD Dik(SDL_Scancode sc)
 {
     switch (sc)
@@ -130,14 +128,9 @@ DWORD Dik(SDL_Scancode sc)
 
 const size_t kDefaultBufferSize = 64;
 
-void AddPadMenuKeys(BYTE* pKeys);
-
 class Device : public IDirectInputDevice2A
 {
   public:
-    explicit Device(bool gamepad) : mGamepad(gamepad)
-    {
-    }
 
     void Push(DWORD ofs, DWORD data)
     {
@@ -158,19 +151,6 @@ class Device : public IDirectInputDevice2A
         mBuffer.push_back(d);
     }
 
-    bool IsGamepad() const
-    {
-        return mGamepad;
-    }
-
-    // DIJOYSTATE as the game's data format lays it out: lX, lY at 0 and 4, rgdwPOV at 32, rgbButtons at 48.
-    struct JoyState
-    {
-        LONG mAxes[8];
-        DWORD mPov[4];
-        BYTE mButtons[32];
-    };
-    JoyState mJoy = {{0}, {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF}, {0}};
     BYTE mKeys[256] = {};
 
     STDMETHOD_(HRESULT, QueryInterface)(REFIID riid, void** ppv) override
@@ -193,10 +173,8 @@ class Device : public IDirectInputDevice2A
     STDMETHOD(GetCapabilities)(LPDIDEVCAPS pCaps) override
     {
         pCaps->dwFlags = DIDC_ATTACHED;
-        pCaps->dwDevType = mGamepad ? DIDEVTYPE_JOYSTICK : DIDEVTYPE_KEYBOARD;
-        pCaps->dwAxes = mGamepad ? 2 : 0;
-        pCaps->dwButtons = mGamepad ? 12 : 128;
-        pCaps->dwPOVs = mGamepad ? 1 : 0;
+        pCaps->dwDevType = DIDEVTYPE_KEYBOARD;
+        pCaps->dwButtons = 128;
         return DI_OK;
     }
     STDMETHOD(EnumObjects)(LPDIENUMDEVICEOBJECTSCALLBACKA, LPVOID, DWORD) override
@@ -216,16 +194,6 @@ class Device : public IDirectInputDevice2A
         if (&prop == &DIPROP_BUFFERSIZE)
         {
             mBufferSize = reinterpret_cast<const DIPROPDWORD*>(pHeader)->dwData;
-        }
-        else if (&prop == &DIPROP_RANGE && pHeader->dwHow == DIPH_BYOFFSET && pHeader->dwObj < 8 * sizeof(LONG))
-        {
-            const DIPROPRANGE* pRange = reinterpret_cast<const DIPROPRANGE*>(pHeader);
-            mRangeMin = pRange->lMin;
-            mRangeMax = pRange->lMax;
-        }
-        else if (&prop == &DIPROP_DEADZONE)
-        {
-            mDeadZone = reinterpret_cast<const DIPROPDWORD*>(pHeader)->dwData;
         }
         return DI_OK;
     }
@@ -247,14 +215,10 @@ class Device : public IDirectInputDevice2A
             return DIERR_NOTACQUIRED;
         }
         memset(pData, 0, size);
-        if (mGamepad)
-        {
-            memcpy(pData, &mJoy, size < sizeof(mJoy) ? size : sizeof(mJoy));
-        }
-        else if (size >= 256)
+        if (size >= 256)
         {
             memcpy(pData, mKeys, 256);
-            AddPadMenuKeys(static_cast<BYTE*>(pData));
+            port_AddPadMenuKeys(static_cast<BYTE*>(pData));
         }
         return DI_OK;
     }
@@ -307,10 +271,10 @@ class Device : public IDirectInputDevice2A
         const DWORD size = pInfo->dwSize;
         memset(pInfo, 0, size);
         pInfo->dwSize = size;
-        pInfo->guidInstance = mGamepad ? kGamepadGuid : GUID_SysKeyboard;
+        pInfo->guidInstance = GUID_SysKeyboard;
         pInfo->guidProduct = pInfo->guidInstance;
-        pInfo->dwDevType = mGamepad ? DIDEVTYPE_JOYSTICK : DIDEVTYPE_KEYBOARD;
-        strcpy(pInfo->tszInstanceName, mGamepad ? "Gamepad" : "Keyboard");
+        pInfo->dwDevType = DIDEVTYPE_KEYBOARD;
+        strcpy(pInfo->tszInstanceName, "Keyboard");
         strcpy(pInfo->tszProductName, pInfo->tszInstanceName);
         return DI_OK;
     }
@@ -359,25 +323,7 @@ class Device : public IDirectInputDevice2A
         return DIERR_UNSUPPORTED;
     }
 
-    LONG ScaleAxis(Sint16 v) const
-    {
-        const LONG dead = (LONG)(32767LL * mDeadZone / 10000);
-        LONG a = v < -32767 ? -32767 : v;
-        if (a > -dead && a < dead)
-        {
-            a = 0;
-        }
-        const LONG mid = (mRangeMin + mRangeMax) / 2;
-        const LONG half = (mRangeMax - mRangeMin) / 2;
-        return mid + (LONG)((long long)a * half / 32767);
-    }
-
-    LONG mRangeMin = 0;
-    LONG mRangeMax = 65535;
-    DWORD mDeadZone = 0;
-
   private:
-    bool mGamepad;
     ULONG mRefs = 1;
     bool mAcquired = false;
     bool mOverflow = false;
@@ -387,10 +333,6 @@ class Device : public IDirectInputDevice2A
 };
 
 std::vector<Device*> sDevices;
-SDL_Gamepad* sGamepad;
-bool sPadMode; // the last input came from the gamepad
-Sint16 sStick[2];
-bool sDpad[4]; // up, down, left, right
 
 ULONG STDMETHODCALLTYPE Device::Release()
 {
@@ -401,92 +343,6 @@ ULONG STDMETHODCALLTYPE Device::Release()
     sDevices.erase(std::remove(sDevices.begin(), sDevices.end(), this), sDevices.end());
     delete this;
     return 0;
-}
-
-// The first gamepad, or the first whose name contains $GTA2_GAMEPAD.
-void OpenGamepad()
-{
-    if (sGamepad)
-    {
-        return;
-    }
-    const char* wanted = getenv("GTA2_GAMEPAD");
-    int count = 0;
-    SDL_JoystickID* pIds = SDL_GetGamepads(&count);
-    for (int i = 0; pIds && i < count; i++)
-    {
-        const char* name = SDL_GetGamepadNameForID(pIds[i]);
-        if (!wanted || (name && SDL_strcasestr(name, wanted)))
-        {
-            sGamepad = SDL_OpenGamepad(pIds[i]);
-            break;
-        }
-    }
-    SDL_free(pIds);
-}
-
-// The stick and the d-pad drive the same two axes, as a digital pad of the time did.
-void UpdateAxes()
-{
-    for (Device* pDev : sDevices)
-    {
-        if (!pDev->IsGamepad())
-        {
-            continue;
-        }
-        Sint16 x = sStick[0];
-        Sint16 y = sStick[1];
-        if (sDpad[2] != sDpad[3])
-        {
-            x = sDpad[2] ? -32767 : 32767;
-        }
-        if (sDpad[0] != sDpad[1])
-        {
-            y = sDpad[0] ? -32767 : 32767;
-        }
-        const LONG ax = pDev->ScaleAxis(x);
-        const LONG ay = pDev->ScaleAxis(y);
-        if (ax != pDev->mJoy.mAxes[0])
-        {
-            pDev->mJoy.mAxes[0] = ax;
-            pDev->Push(DIJOFS_X, (DWORD)ax);
-        }
-        if (ay != pDev->mJoy.mAxes[1])
-        {
-            pDev->mJoy.mAxes[1] = ay;
-            pDev->Push(DIJOFS_Y, (DWORD)ay);
-        }
-    }
-}
-
-int ButtonIndex(Uint8 button)
-{
-    switch (button)
-    {
-        case SDL_GAMEPAD_BUTTON_SOUTH: return 0;
-        case SDL_GAMEPAD_BUTTON_EAST: return 1;
-        case SDL_GAMEPAD_BUTTON_WEST: return 2;
-        case SDL_GAMEPAD_BUTTON_NORTH: return 3;
-        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return 4;
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return 5;
-        case SDL_GAMEPAD_BUTTON_BACK: return 6;
-        case SDL_GAMEPAD_BUTTON_START: return 7;
-        case SDL_GAMEPAD_BUTTON_LEFT_STICK: return 8;
-        case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return 9;
-        default: return -1;
-    }
-}
-
-void SetButton(int index, bool down)
-{
-    for (Device* pDev : sDevices)
-    {
-        if (pDev->IsGamepad() && (pDev->mJoy.mButtons[index] != 0) != down)
-        {
-            pDev->mJoy.mButtons[index] = down ? 0x80 : 0;
-            pDev->Push(DIJOFS_BUTTON(index), down ? 0x80 : 0);
-        }
-    }
 }
 
 class DirectInput : public IDirectInputA
@@ -511,11 +367,7 @@ class DirectInput : public IDirectInputA
         Device* pDev;
         if (IsEqualGUID(guid, GUID_SysKeyboard))
         {
-            pDev = new Device(false);
-        }
-        else if (IsEqualGUID(guid, kGamepadGuid) && sGamepad)
-        {
-            pDev = new Device(true);
+            pDev = new Device();
         }
         else
         {
@@ -526,20 +378,9 @@ class DirectInput : public IDirectInputA
         *ppDevice = pDev;
         return DI_OK;
     }
-    STDMETHOD(EnumDevices)(DWORD type, LPDIENUMDEVICESCALLBACKA pCallback, LPVOID pRef, DWORD) override
+    // No joystick: pad.cpp gives the gamepad to the game as keys.
+    STDMETHOD(EnumDevices)(DWORD, LPDIENUMDEVICESCALLBACKA, LPVOID, DWORD) override
     {
-        OpenGamepad();
-        if (sGamepad && (type == 0 || GET_DIDEVICE_TYPE(type) == DIDEVTYPE_JOYSTICK))
-        {
-            DIDEVICEINSTANCEA inst = {};
-            inst.dwSize = sizeof(inst);
-            inst.guidInstance = kGamepadGuid;
-            inst.guidProduct = kGamepadGuid;
-            inst.dwDevType = DIDEVTYPE_JOYSTICK;
-            SDL_strlcpy(inst.tszInstanceName, SDL_GetGamepadName(sGamepad), sizeof(inst.tszInstanceName));
-            SDL_strlcpy(inst.tszProductName, inst.tszInstanceName, sizeof(inst.tszProductName));
-            pCallback(&inst, pRef);
-        }
         return DI_OK;
     }
     STDMETHOD(GetDeviceStatus)(REFGUID) override
@@ -562,179 +403,45 @@ class DirectInput : public IDirectInputA
 DirectInput sDirectInput;
 } // namespace
 
-namespace
+DWORD port_DikFromScancode(SDL_Scancode sc)
 {
-// Only the frontend reads the keyboard's state (the game reads its buffered events): the gamepad
-// drives the menus as the arrows, Enter (A, Start) and Escape (B, Back).
-void AddPadMenuKeys(BYTE* pKeys)
-{
-    if (!sGamepad)
-    {
-        return;
-    }
-    const Sint16 x = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX);
-    const Sint16 y = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY);
-    const Sint16 kStick = 16000;
-    const struct
-    {
-        bool mDown;
-        DWORD mDik;
-    } keys[] = {
-        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) || y < -kStick, DIK_UP},
-        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || y > kStick, DIK_DOWN},
-        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || x < -kStick, DIK_LEFT},
-        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || x > kStick, DIK_RIGHT},
-        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_SOUTH) || SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_START), DIK_RETURN},
-        {SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_EAST) || SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_BACK), DIK_ESCAPE},
-    };
-    for (const auto& k : keys)
-    {
-        if (k.mDown)
-        {
-            pKeys[k.mDik] = 0x80;
-        }
-    }
-}
-} // namespace
-
-bool port_PadMode()
-{
-    return sPadMode;
+    return Dik(sc);
 }
 
-bool port_PadInput(BYTE* pButtons, LONG* pX, LONG* pY)
+void port_PushKey(DWORD dik, bool down)
 {
-    if (!sGamepad)
+    for (Device* pDev : sDevices)
     {
-        return false;
+        pDev->Push(dik, down ? 0x80 : 0);
     }
-    for (int b = 0; b < 32; b++)
-    {
-        const int index = b;
-        pButtons[b] = 0;
-        for (int sdl = 0; sdl < SDL_GAMEPAD_BUTTON_COUNT; sdl++)
-        {
-            if (ButtonIndex((Uint8)sdl) == index && SDL_GetGamepadButton(sGamepad, (SDL_GamepadButton)sdl))
-            {
-                pButtons[b] = 0x80;
-            }
-        }
-    }
-    if (SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384)
-    {
-        pButtons[10] = 0x80;
-    }
-    if (SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16384)
-    {
-        pButtons[11] = 0x80;
-    }
-    Sint16 x = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX);
-    Sint16 y = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY);
-    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) != SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
-    {
-        x = SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? -32767 : 32767;
-    }
-    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) != SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN))
-    {
-        y = SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) ? -32767 : 32767;
-    }
-    *pX = x * 1000 / 32767;
-    *pY = y * 1000 / 32767;
-    return true;
 }
 
 void port_OnInputEvent(const SDL_Event& e)
 {
-    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
+    port_PadEvent(e);
+    if ((e.type != SDL_EVENT_KEY_DOWN && e.type != SDL_EVENT_KEY_UP) || e.key.repeat)
     {
-        sPadMode = false;
+        return;
     }
-    else if (sGamepad && ((e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.which == SDL_GetGamepadID(sGamepad)) ||
-                          (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e.gaxis.which == SDL_GetGamepadID(sGamepad) &&
-                           (e.gaxis.value > 16000 || e.gaxis.value < -16000))))
+    const DWORD dik = Dik(e.key.scancode);
+    const bool down = e.type == SDL_EVENT_KEY_DOWN;
+    if (!dik)
     {
-        sPadMode = true;
+        return;
     }
-    switch (e.type)
+    for (Device* pDev : sDevices)
     {
-        case SDL_EVENT_KEY_DOWN:
-        case SDL_EVENT_KEY_UP:
+        if ((pDev->mKeys[dik] != 0) != down)
         {
-            const DWORD dik = Dik(e.key.scancode);
-            const bool down = e.type == SDL_EVENT_KEY_DOWN;
-            if (!dik || e.key.repeat)
-            {
-                break;
-            }
-            for (Device* pDev : sDevices)
-            {
-                if (!pDev->IsGamepad() && (pDev->mKeys[dik] != 0) != down)
-                {
-                    pDev->mKeys[dik] = down ? 0x80 : 0;
-                    pDev->Push(dik, down ? 0x80 : 0);
-                }
-            }
-            break;
+            pDev->mKeys[dik] = down ? 0x80 : 0;
+            pDev->Push(dik, down ? 0x80 : 0);
         }
-        case SDL_EVENT_GAMEPAD_ADDED:
-            OpenGamepad();
-            break;
-        case SDL_EVENT_GAMEPAD_REMOVED:
-            if (sGamepad && SDL_GetGamepadID(sGamepad) == e.gdevice.which)
-            {
-                SDL_CloseGamepad(sGamepad);
-                sGamepad = NULL;
-            }
-            break;
-        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-            if (!sGamepad || e.gaxis.which != SDL_GetGamepadID(sGamepad))
-            {
-                break;
-            }
-            if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX || e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
-            {
-                sStick[e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY] = e.gaxis.value;
-                UpdateAxes();
-            }
-            else if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
-            {
-                SetButton(e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? 10 : 11, e.gaxis.value > 16384);
-            }
-            break;
-        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        case SDL_EVENT_GAMEPAD_BUTTON_UP:
-        {
-            if (!sGamepad || e.gbutton.which != SDL_GetGamepadID(sGamepad))
-            {
-                break;
-            }
-            const bool down = e.gbutton.down;
-            switch (e.gbutton.button)
-            {
-                case SDL_GAMEPAD_BUTTON_DPAD_UP: sDpad[0] = down; UpdateAxes(); break;
-                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: sDpad[1] = down; UpdateAxes(); break;
-                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: sDpad[2] = down; UpdateAxes(); break;
-                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: sDpad[3] = down; UpdateAxes(); break;
-                default:
-                {
-                    const int index = ButtonIndex(e.gbutton.button);
-                    if (index >= 0)
-                    {
-                        SetButton(index, down);
-                    }
-                    break;
-                }
-            }
-            break;
-        }
-        default:
-            break;
     }
 }
 
 extern "C" HRESULT WINAPI DirectInputCreateA(HINSTANCE, DWORD, LPDIRECTINPUTA* ppDI, LPUNKNOWN)
 {
-    OpenGamepad();
+    port_OpenGamepad();
     *ppDI = &sDirectInput;
     return DI_OK;
 }
