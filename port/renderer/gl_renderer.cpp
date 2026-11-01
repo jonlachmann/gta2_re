@@ -3,15 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-// OpenGL ES 3.0 / WebGL2.
-#define GLSL_HEADER "#version 300 es\nprecision highp float;\nprecision highp int;\n"
 
 namespace
 {
 // Faithful path: kept exactly as validated against the reference (any change of the varyings can
 // move a rasterisation tie).
 const char* kFaithfulVS =
-    GLSL_HEADER
     "layout(location = 0) in vec3 aPos;\n"
     "layout(location = 1) in vec4 aCol;\n"
     "layout(location = 2) in vec2 aUV;\n"
@@ -29,7 +26,6 @@ const char* kFaithfulVS =
     "}\n";
 
 const char* kFaithfulFS =
-    GLSL_HEADER
     "uniform sampler2D uTex;\n"
     "uniform int uAlphaTest;\n"
     "uniform int uUseTex;\n"
@@ -47,7 +43,6 @@ const char* kFaithfulFS =
 
 // Enhanced path (bloom output, per pixel lighting).
 const char* kSceneVS =
-    GLSL_HEADER
     "layout(location = 0) in vec3 aPos;\n"
     "layout(location = 1) in vec4 aCol;\n"
     "layout(location = 2) in vec2 aUV;\n"
@@ -78,7 +73,6 @@ const char* kSceneVS =
 
 // Per pixel lighting is the original's LightVertex formula with a real square root.
 const char* kSceneFS =
-    GLSL_HEADER
     "uniform sampler2D uTex;\n"
     "uniform int uAlphaTest;\n"
     "uniform int uUseTex;\n"
@@ -128,7 +122,6 @@ const char* kSceneFS =
 
 // Fullscreen triangle; also composites the CPU surface (alpha 0 where the game did not write).
 const char* kPresentVS =
-    GLSL_HEADER
     "out vec2 vUV;\n"
     "void main()\n"
     "{\n"
@@ -138,7 +131,6 @@ const char* kPresentVS =
     "}\n";
 
 const char* kPresentFS =
-    GLSL_HEADER
     "uniform sampler2D uTex;\n"
     "uniform vec3 uGamma;\n"
     "uniform int uFlipY;\n"
@@ -153,7 +145,6 @@ const char* kPresentFS =
 
 // Bloom: 4x4 box downsample (four bilinear taps), separable 9 tap gaussian, additive compose.
 const char* kDownFS =
-    GLSL_HEADER
     "uniform sampler2D uTex;\n"
     "uniform vec2 uTexel;\n"
     "in vec2 vUV;\n"
@@ -165,7 +156,6 @@ const char* kDownFS =
     "}\n";
 
 const char* kBlurFS =
-    GLSL_HEADER
     "uniform sampler2D uTex;\n"
     "uniform vec2 uStep;\n"
     "in vec2 vUV;\n"
@@ -182,7 +172,6 @@ const char* kBlurFS =
     "}\n";
 
 const char* kComposeFS =
-    GLSL_HEADER
     "uniform sampler2D uTex;\n"
     "uniform sampler2D uBloom;\n"
     "uniform float uIntensity;\n"
@@ -219,16 +208,22 @@ GLRenderer::~GLRenderer()
     Shutdown();
 }
 
+// The shaders are GLSL ES 3.00 (OpenGL ES 3.0, WebGL2) and GLSL 3.30 alike; only the first line differs.
 GLuint GLRenderer::CompileProgram(const char* vs, const char* fs, const char** ppError)
 {
     static char log[1024];
+    const char* version = reinterpret_cast<const char*>(gl.glGetString(GL_VERSION));
+    const char* header = (version && strncmp(version, "OpenGL ES", 9) == 0)
+        ? "#version 300 es\nprecision highp float;\nprecision highp int;\n"
+        : "#version 330 core\n";
     GLuint shaders[2];
     const char* srcs[2] = {vs, fs};
     const GLenum types[2] = {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER};
     for (int i = 0; i < 2; i++)
     {
         shaders[i] = gl.glCreateShader(types[i]);
-        gl.glShaderSource(shaders[i], 1, &srcs[i], NULL);
+        const char* parts[2] = {header, srcs[i]};
+        gl.glShaderSource(shaders[i], 2, parts, NULL);
         gl.glCompileShader(shaders[i]);
         GLint ok = 0;
         gl.glGetShaderiv(shaders[i], GL_COMPILE_STATUS, &ok);

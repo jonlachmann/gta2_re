@@ -91,6 +91,9 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP |
 | `GTA2_NO_SOUND=1` | no audio device |
 | `GTA2_NO_OPENAL=1`, `GTA2_HRTF=1` | no 3D sound; binaural 3D sound |
+| `GTA2_LOG_FILE=<file>` | SDL's log, debug strings and message boxes written to that file |
+| `GTA2_NO_MESSAGEBOX=1` | message boxes only logged, never shown |
+| `GTA2_AUDIO_DRIVER`, `GTA2_AUDIO_FILE` | SDL's audio driver and disk output file (wine hides `SDL_*` variables from Windows programs) |
 | `GTA2_DEBUG_OUTPUT=1` | the game's debug strings on stderr |
 
 Frames count presented frames. A run nobody sees, with the sound written to a file:

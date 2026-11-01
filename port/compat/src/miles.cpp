@@ -456,6 +456,7 @@ DXDEC S32 AILCALL AIL_waveOutOpen(HDIGDRIVER FAR* drvr, LPHWAVEOUT FAR*, S32, LP
         SDL_Log("Audio: %s", SDL_GetError());
         return -1;
     }
+    SDL_Log("Audio: %s", SDL_GetCurrentAudioDriver());
     sDriver = new Driver();
     sDriver->mDevice = pDevice;
     SDL_ResumeAudioStreamDevice(pDevice);
