@@ -16,6 +16,10 @@
 EXTERN_GLOBAL(SoundObject, snd1);
 
 void port_UpdateGameResolution();
+#if defined(GTA2_PORT_SDL)
+bool port_PadMode();
+bool port_PadInput(BYTE* pButtons, LONG* pX, LONG* pY);
+#endif
 
 void __stdcall SetStartMode(s32 startMode);
 void __stdcall SetVideoModeFromSettings();
@@ -366,65 +370,164 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
     }
 }
 
-// The first key or pad input pressed since every key was released; -1 if none.
-s32 CapturedBinding(Frontend* pFrontend)
+// Pad buttons 0..31 and the two axes (-1000..1000), as the game's pad bindings read them.
+bool ReadPad(u8* pButtons, LONG* pX, LONG* pY)
 {
-    bool anyDown = false;
-    s32 result = -1;
-    for (s32 i = 0; i < 256; i++)
-    {
-        const bool down = (pFrontend->mKeys[i] & 0x80) != 0;
-        anyDown |= down;
-        if (down && !(sPrevKeys[i] & 0x80) && sCaptureArmed && result < 0)
-        {
-            result = i;
-        }
-    }
-    memcpy(sPrevKeys, pFrontend->mKeys, sizeof(sPrevKeys));
-
+#if defined(GTA2_PORT_SDL)
+    return port_PadInput(pButtons, pX, pY);
+#else
     struct
     {
         LONG mAxes[8];
         DWORD mPov[4];
         u8 mButtons[32];
     } pad;
-    if (gGamePadDevice && SUCCEEDED(gGamePadDevice->GetDeviceState(sizeof(pad), &pad)))
+    if (!gGamePadDevice || FAILED(gGamePadDevice->GetDeviceState(sizeof(pad), &pad)))
+    {
+        return false;
+    }
+    memcpy(pButtons, pad.mButtons, 32);
+    *pX = pad.mAxes[0];
+    *pY = pad.mAxes[1];
+    return true;
+#endif
+}
+
+// The first key or pad input pressed since everything was released; -1 if none. The pad comes
+// first: it also drives the menus through the arrows, Enter and Escape.
+s32 CapturedBinding(Frontend* pFrontend)
+{
+    bool anyDown = false;
+    s32 keyResult = -1;
+    for (s32 i = 0; i < 256; i++)
+    {
+        const bool down = (pFrontend->mKeys[i] & 0x80) != 0;
+        anyDown |= down;
+        if (down && !(sPrevKeys[i] & 0x80) && keyResult < 0)
+        {
+            keyResult = i;
+        }
+    }
+    memcpy(sPrevKeys, pFrontend->mKeys, sizeof(sPrevKeys));
+
+    s32 padResult = -1;
+    u8 buttons[32];
+    LONG x;
+    LONG y;
+    if (ReadPad(buttons, &x, &y))
     {
         for (s32 b = 0; b < 32; b++)
         {
-            const bool down = (pad.mButtons[b] & 0x80) != 0;
+            const bool down = (buttons[b] & 0x80) != 0;
             anyDown |= down;
-            if (down && !(sPrevPadButtons[b] & 0x80) && sCaptureArmed && result < 0)
+            if (down && !(sPrevPadButtons[b] & 0x80) && padResult < 0)
             {
-                result = kPadFlag | b;
+                padResult = kPadFlag | b;
             }
-            sPrevPadButtons[b] = pad.mButtons[b];
+            sPrevPadButtons[b] = buttons[b];
         }
-        if (sCaptureArmed && result < 0)
+        anyDown |= x <= -750 || x >= 750 || y <= -750 || y >= 750;
+        if (padResult < 0)
         {
-            if (pad.mAxes[0] <= -750)
+            if (x <= -750)
             {
-                result = kPadFlag | kPadLeft;
+                padResult = kPadFlag | kPadLeft;
             }
-            else if (pad.mAxes[0] >= 750)
+            else if (x >= 750)
             {
-                result = kPadFlag | kPadRight;
+                padResult = kPadFlag | kPadRight;
             }
-            else if (pad.mAxes[1] <= -750)
+            else if (y <= -750)
             {
-                result = kPadFlag | kPadUp;
+                padResult = kPadFlag | kPadUp;
             }
-            else if (pad.mAxes[1] >= 750)
+            else if (y >= 750)
             {
-                result = kPadFlag | kPadDown;
+                padResult = kPadFlag | kPadDown;
             }
         }
     }
-    if (!anyDown)
+    if (!sCaptureArmed)
     {
-        sCaptureArmed = true;
+        sCaptureArmed = !anyDown;
+        return -1;
     }
-    return result;
+    return padResult >= 0 ? padResult : keyResult;
+}
+
+bool PadMode()
+{
+#if defined(GTA2_PORT_SDL)
+    return port_PadMode();
+#else
+    return false;
+#endif
+}
+
+void SetText(MenuElement& e, s16 x, s16 y, const wchar_t* pText, u16 font)
+{
+    e.mElementType = STRING_TEXT_1;
+    e.mIsItDisplayed = 1;
+    e.mXpos = x;
+    e.mYpos = y;
+    wcsncpy(e.mElementNameStr, pText, 50);
+    e.mFontType = font;
+    e.mFontPalette = 0xFFFF;
+}
+
+// Key hints at the bottom of our pages (elements 1 to 6): the keys, or the pad's buttons in the
+// frontend's red discs once the pad was used last.
+void UpdateHints(Frontend* pFrontend, MenuPage* pPage)
+{
+    struct Hint
+    {
+        const wchar_t* mKey;
+        const wchar_t* mButton;
+        const wchar_t* mLabel;
+    };
+    const Hint kNavigate[] = {{L"ENTER", L"A", L"SELECT"}, {L"ESC", L"B", L"BACK"}};
+    const Hint kCapture[] = {{L"ESC", NULL, L"CANCEL"}};
+    const bool capturing = sCapturing >= 0;
+    const Hint* pHints = capturing ? kCapture : kNavigate;
+    const s32 count = capturing ? 1 : 2;
+    const bool pad = PadMode();
+    const u16 font = pFrontend->mNormalFont;
+    const u16 buttonFont = static_cast<u16>(gFrontendHeadingFont);
+
+    pPage->mNumberOfElements = 7;
+    for (s32 i = 1; i < 7; i++)
+    {
+        pPage->mElementsArray[i].mIsItDisplayed = 0;
+    }
+    s32 x = 120;
+    const s32 y = 440;
+    for (s32 i = 0; i < count; i++)
+    {
+        MenuElement* pElems = &pPage->mElementsArray[1 + i * 3];
+        if (pad && pHints[i].mButton)
+        {
+            pElems[0].mElementType = GEOMETRIC_SHAPE_3;
+            pElems[0].mIsItDisplayed = 1;
+            pElems[0].mXpos = static_cast<s16>(x + 10);
+            pElems[0].mYpos = static_cast<s16>(y + 12);
+            pElems[0].mGeometricShapeType = 0;
+            wchar_t button[4];
+            wcscpy(button, pHints[i].mButton);
+            SetText(pElems[1], static_cast<s16>(pFrontend->GetCenteredXPos(button, buttonFont, x + 10)), y, button, buttonFont);
+            x += 34;
+        }
+        else
+        {
+            wchar_t key[16];
+            wcscpy(key, pHints[i].mKey);
+            SetText(pElems[1], static_cast<s16>(x), y, key, font);
+            x += Frontend::GetMaxTextWidth(key, font) + 10;
+        }
+        wchar_t label[16];
+        wcscpy(label, pHints[i].mLabel);
+        SetText(pElems[2], static_cast<s16>(x), y, label, font);
+        x += Frontend::GetMaxTextWidth(label, font) + 40;
+    }
 }
 
 u16 ParentPage(u16 page)
@@ -504,6 +607,7 @@ bool Update(Frontend* pFrontend)
     }
     pFrontend->mMenuScreen = RedBar_16;
     MenuPage* pPage = &pFrontend->mMenuPagesArray[pageIdx];
+    UpdateHints(pFrontend, pPage);
     const Item& item = ItemAt(pageIdx, pPage->mCurrentOptionIdx);
 
     if (sCapturing >= 0)
