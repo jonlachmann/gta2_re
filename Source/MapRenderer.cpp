@@ -115,7 +115,7 @@ static inline f32 Fix16ToF32_P3(const Fix16& v)
 struct VertProjector
 {
     // 9.6f 0x46BD40
-    inline void ProjectVertTop(Fix16& x, Fix16& y, Vert* pVert)
+    inline void ProjectVertTop(const Fix16& x, const Fix16& y, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(x, y, gZCoordTop, pVert);
         pVert->x = x.ToFloat() * gScreenScaleTop.ToFloat() + static_cast<u32>(gViewCamera->mScreenPxCenterX);
@@ -124,7 +124,7 @@ struct VertProjector
     }
 
     // 9.6f 0x46BDF0
-    inline void ProjectVertBottom(Fix16& xpos, Fix16& ypos, Vert* pVert)
+    inline void ProjectVertBottom(const Fix16& xpos, const Fix16& ypos, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(xpos, ypos, gZCoord, pVert);
     
@@ -134,7 +134,7 @@ struct VertProjector
     }
 
     // 9.6f 0x46BC70
-    inline void ProjectVert(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
+    inline void ProjectVert(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(xpos, ypos, zpos, pVert);
         pVert->z = 1.0f / (gViewCamera->mCurPos.mZ.ToFloat() + (8.0f - zpos.ToFloat()));
@@ -158,7 +158,7 @@ static VertProjector gVertProjector;
 // exactly 0 left (DrawLeftSide's last operator+), so a bigger helper sends calls out of line.
 struct VertProjector2
 {
-    inline void ProjectVertTop(Fix16& x, Fix16& y, Vert* pVert)
+    inline void ProjectVertTop(const Fix16& x, const Fix16& y, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(x, y, gZCoordTop, pVert);
         pVert->x = (((x.ToFloat())) * gScreenScaleTop.ToFloat()) + static_cast<u32>(gViewCamera->mScreenPxCenterX);
@@ -166,7 +166,7 @@ struct VertProjector2
         pVert->z = gInvDepthTop.ToFloat();
     }
 
-    inline void ProjectVertBottom(Fix16& xpos, Fix16& ypos, Vert* pVert)
+    inline void ProjectVertBottom(const Fix16& xpos, const Fix16& ypos, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(xpos, ypos, gZCoord, pVert);
 
@@ -175,7 +175,7 @@ struct VertProjector2
         pVert->z = gInvDepthBottom.ToFloat();
     }
 
-    inline void ProjectVert(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
+    inline void ProjectVert(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(xpos, ypos, zpos, pVert);
         pVert->z = 1.0f / (gViewCamera->mCurPos.mZ.ToFloat() + (8.0f - zpos.ToFloat()));
@@ -189,7 +189,7 @@ static VertProjector2 gVertProjector2;
 // DrawGradientSlopeSouthwards and Eastwards_4F33B0 load field_60 before x/y (see above).
 struct VertProjector3
 {
-    inline void ProjectVert(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
+    inline void ProjectVert(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(xpos, ypos, zpos, pVert);
         pVert->z = 1.0f / (gViewCamera->mCurPos.mZ.ToFloat() + (8.0f - zpos.ToFloat()));
@@ -214,7 +214,7 @@ static inline f32 Fix16ToF32_Stored(const Fix16& v)
 // field_60 fmuls behind that idiv, as in the original.
 struct VertProjector4
 {
-    inline void ProjectVert(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
+    inline void ProjectVert(const Fix16& xpos, Fix16& ypos, const Fix16& zpos, Vert* pVert)
     {
         set_vert_xyz_relative_to_cam(xpos, ypos, zpos, pVert);
         pVert->z = 1.0f / (gViewCamera->mCurPos.mZ.ToFloat() + (8.0f - zpos.ToFloat()));
@@ -735,7 +735,7 @@ void __stdcall set_vert_xyz_relative_to_cam(Fix16 xCoord, Fix16 yCoord, Fix16 z_
 
 // This function matches, but the offsets of gScreenScaleTop and gInvDepthTop are wrong
 MATCH_FUNC(0x4eae00)
-void MapRenderer::ProjectVertTop(Fix16& xpos, Fix16& ypos, Vert* pVert)
+void MapRenderer::ProjectVertTop(const Fix16& xpos, const Fix16& ypos, Vert* pVert)
 {
     set_vert_xyz_relative_to_cam(xpos, ypos, gZCoordTop, pVert);
     
@@ -745,7 +745,7 @@ void MapRenderer::ProjectVertTop(Fix16& xpos, Fix16& ypos, Vert* pVert)
 }
 
 MATCH_FUNC(0x4eaea0)
-void MapRenderer::ProjectVertBottom(Fix16& xCoord, Fix16& yCoord, Vert* pVert)
+void MapRenderer::ProjectVertBottom(const Fix16& xCoord, const Fix16& yCoord, Vert* pVert)
 {
     set_vert_xyz_relative_to_cam(xCoord, yCoord, gZCoord, pVert);
 
@@ -907,7 +907,7 @@ void MapRenderer::DrawRightSide(u16& right_word)
 
 // https://decomp.me/scratch/GkGnQ
 MATCH_FUNC(0x4EB940)
-void MapRenderer::ProjectVert(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
+void MapRenderer::ProjectVert(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
 {
     set_vert_xyz_relative_to_cam_inlined(xpos, ypos, zpos, pVert);
 

@@ -15,8 +15,8 @@ EXTERN_GLOBAL(Fix16, kFpZero_7035C0);
 EXTERN_GLOBAL(u32, gLightingDrawFlag);
 EXTERN_GLOBAL_ARRAY(Vert, gSpriteVerts, 8);
 
-EXPORT bool __stdcall ComputeScanlineIntersectionX(Fix16& minX, Fix16& minY, Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1);
-EXPORT bool __stdcall ComputeScanlineIntersectionY(Fix16& minX, Fix16& minY, Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1);
+EXPORT bool __stdcall ComputeScanlineIntersectionX(const Fix16& minX, Fix16& minY, const Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1);
+EXPORT bool __stdcall ComputeScanlineIntersectionY(const Fix16& minX, Fix16& minY, const Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1);
 
 class Car;
 class Char;

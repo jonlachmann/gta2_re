@@ -1060,7 +1060,7 @@ s32 NetUi::ShowNetworkUiBlocking(HINSTANCE hInstance)
 {
     mhInstance = hInstance;
     gNetPlay.Set15(reinterpret_cast<int>(NetUi::cb_FillSessionList), this);
-    gNetPlay.Set6(static_cast<void*>(NetUi::cb_AddPlayerToList), static_cast<void*>(this));
+    gNetPlay.Set6(reinterpret_cast<void*>(NetUi::cb_AddPlayerToList), static_cast<void*>(this));
     gNetPlay.Set9(reinterpret_cast<int>(NetUi::cb_RemovePlayerFromList), reinterpret_cast<int>(this));
     gNetPlay.Set3_Disconnect(reinterpret_cast<int>(NetUi::cb_Disconnect), reinterpret_cast<int>(this));
     gNetPlay.Set18(reinterpret_cast<int>(NetUi::cb_SetPlayerPing), reinterpret_cast<int>(this));

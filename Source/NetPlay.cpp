@@ -1428,14 +1428,14 @@ void NetPlay::InvokeCallback(s32 idx, u32 event_data)
             case 1: // disconnect ?
                 if (mFuncPtrsAndParams[idx].mParamFnCallback)
                 {
-                    static_cast<TPacketCallback>(mFuncPtrsAndParams[idx].mParamFnCallback)(
+                    reinterpret_cast<TPacketCallback>(mFuncPtrsAndParams[idx].mParamFnCallback)(
                         mFuncPtrsAndParams[idx].mParamContext);
                 }
                 break;
             case 2: // a player joined the group (NetUi::cb_AddPlayerToList)
                 if (mFuncPtrsAndParams[idx].mParamFnCallback)
                 {
-                    static_cast<TPacketCallback2Args>(mFuncPtrsAndParams[idx].mParamFnCallback)(
+                    reinterpret_cast<TPacketCallback2Args>(mFuncPtrsAndParams[idx].mParamFnCallback)(
                         mFuncPtrsAndParams[idx].mParamContext,
                         *reinterpret_cast<s32*>(event_data + 0x1C), // Network_Player::mPlayerName
                         event_data + 0x24); // Network_Player::mpData
@@ -1448,7 +1448,7 @@ void NetPlay::InvokeCallback(s32 idx, u32 event_data)
             case 8:
                 if (mFuncPtrsAndParams[idx].mParamFnCallback)
                 {
-                    static_cast<TPacketCallbackArg>(mFuncPtrsAndParams[idx].mParamFnCallback)(
+                    reinterpret_cast<TPacketCallbackArg>(mFuncPtrsAndParams[idx].mParamFnCallback)(
                         mFuncPtrsAndParams[idx].mParamContext,
                         event_data); // a wchar_t* string?
                 }
@@ -1457,7 +1457,7 @@ void NetPlay::InvokeCallback(s32 idx, u32 event_data)
                 // Exit game call back?
                 if (mFuncPtrsAndParams[idx].mParamFnCallback)
                 {
-                    static_cast<TPacketCallbackArg>(mFuncPtrsAndParams[idx].mParamFnCallback)(
+                    reinterpret_cast<TPacketCallbackArg>(mFuncPtrsAndParams[idx].mParamFnCallback)(
                         mFuncPtrsAndParams[idx].mParamContext,
                         *reinterpret_cast<u32*>(event_data)); // s32* usually set to 2 ?
                 }
@@ -1467,7 +1467,7 @@ void NetPlay::InvokeCallback(s32 idx, u32 event_data)
                 // set player name?
                 if (mFuncPtrsAndParams[idx].mParamFnCallback)
                 {
-                    static_cast<TPacketCallback>(mFuncPtrsAndParams[idx].mParamFnCallback)(
+                    reinterpret_cast<TPacketCallback>(mFuncPtrsAndParams[idx].mParamFnCallback)(
                         mFuncPtrsAndParams[idx].mParamContext);
                 }
                 break;
