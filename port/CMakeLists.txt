@@ -51,7 +51,7 @@ else()
 
     file(GLOB compat_src ${CMAKE_CURRENT_LIST_DIR}/compat/src/*.cpp)
     add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
-        ${ROOT}/Source/3rdParty/mss.cpp ${ROOT}/Source/3rdParty/bink.cpp
+        ${ROOT}/Source/3rdParty/bink.cpp
         src/debug_stubs.cpp ${compat_src})
     target_compile_options(gta2 PRIVATE -include ${CMAKE_CURRENT_LIST_DIR}/compat/prelude.hpp)
     target_compile_definitions(gta2 PRIVATE __NT__ GTA2_PORT_SDL)
