@@ -55,6 +55,9 @@ else()
         src/debug_stubs.cpp ${compat_src})
     target_compile_options(gta2 PRIVATE -include ${CMAKE_CURRENT_LIST_DIR}/compat/prelude.hpp)
     target_compile_definitions(gta2 PRIVATE __NT__ GTA2_PORT_SDL)
+    # LLVM turns wide string loops into calls to the C library, whose wchar_t is 4 bytes.
+    target_compile_options(gta2 PRIVATE -fno-builtin-wcslen -fno-builtin-wcscpy -fno-builtin-wcscmp
+        -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
     target_include_directories(gta2 PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/compat/include ${CMAKE_CURRENT_LIST_DIR}/include
         ${WINE_INCLUDE} ${ROOT}/Source ${ROOT})
