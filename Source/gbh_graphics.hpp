@@ -6,7 +6,7 @@
 // and with it VC6 drops the EH frame of destructors that delete through an inline destructor
 // (DoorPool::~DoorPool). The original TUs had no STL there, so unless a TU already has <set>/<vector>, their
 // include guards are set and the two members get placeholder types.
-#if !defined(_SET_) && !defined(_VECTOR_)
+#if defined(_MSC_VER) && !defined(_SET_) && !defined(_VECTOR_)
 #define _SET_
 #define _VECTOR_
 namespace std

@@ -4,7 +4,7 @@
 #include "BitSet32.hpp"
 #include "CarAI.hpp"
 #include "Car_10.hpp"
-#include "Fix16.hpp"
+#include "fix16.hpp"
 #include "Function.hpp"
 #include "Object_3C.hpp"
 #include "Ped.hpp"
