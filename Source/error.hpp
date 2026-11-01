@@ -3,7 +3,7 @@
 #include "Function.hpp"
 #include <windows.h>
 
-#if defined(__clang__) || (_MSC_VER <= 1200)
+#if !defined(__clang__) && (_MSC_VER <= 1200)
 #include <FSTREAM.H>
 #define ostream_type ostream
 #else

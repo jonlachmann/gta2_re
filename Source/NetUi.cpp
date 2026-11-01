@@ -4,7 +4,7 @@
 #include "NetPlay.hpp"
 #include "registry.hpp"
 #include "TextTable.hpp"
-#include <COMMCTRL.H>
+#include <commctrl.h>
 #include <direct.h>
 
 DEFINE_STATIC_MEMBER(UINT_PTR, NetUi, sTimerId, 0x6F8A18);

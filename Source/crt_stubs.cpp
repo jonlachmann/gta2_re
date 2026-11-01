@@ -64,7 +64,13 @@ int __cdecl fgetc(FILE* f)
 // getting applied mid-way. However since after WinMain is called exit() is also
 // called we never "return" to the hook manager code nor ever remove any hooks therefore
 // this shouldn't be a problem but is something to be aware of.
-void* operator new(size_t n) throw(std::bad_alloc)
+#if defined(_MSC_VER)
+    #define THROW_BAD_ALLOC throw(std::bad_alloc)
+#else
+    #define THROW_BAD_ALLOC
+#endif
+
+void* operator new(size_t n) THROW_BAD_ALLOC
 {
     return crt::malloc(n);
 }
@@ -73,7 +79,7 @@ void operator delete(void* p) throw()
     crt::free(p);
 }
 
-void* operator new[](size_t s) throw(std::bad_alloc)
+void* operator new[](size_t s) THROW_BAD_ALLOC
 {
     return crt::malloc(s);
 }
