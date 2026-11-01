@@ -57,6 +57,9 @@ Scroll Lock toggles them.
 | `GTA2_EXIT_AT=<frame>` | quit at that frame |
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP |
 | `GTA2_NO_SOUND=1` | no audio device |
+| `GTA2_LOG_FILE=<file>` | SDL's log, debug strings and message boxes written to that file |
+| `GTA2_NO_MESSAGEBOX=1` | message boxes only logged, never shown |
+| `GTA2_AUDIO_DRIVER`, `GTA2_AUDIO_FILE` | SDL's audio driver and disk output file (wine hides `SDL_*` variables from Windows programs) |
 | `GTA2_DEBUG_OUTPUT=1` | the game's debug strings on stderr |
 
 Frames count presented frames. A run nobody sees, with the sound written to a file:

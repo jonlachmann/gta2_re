@@ -70,7 +70,7 @@ void WINAPI OutputDebugStringA(LPCSTR s)
     static const bool sEnabled = getenv("GTA2_DEBUG_OUTPUT") != NULL;
     if (sEnabled)
     {
-        fputs(s, stderr);
+        SDL_Log("%s", s);
     }
 }
 
