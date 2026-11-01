@@ -18,7 +18,12 @@ EXTERN_GLOBAL(SoundObject, snd1);
 void port_UpdateGameResolution();
 #if defined(GTA2_PORT_SDL)
 bool port_PadMode();
-bool port_PadInput(BYTE* pButtons, LONG* pX, LONG* pY);
+int port_GetPadBinding(int control);
+void port_SetPadBinding(int control, int code);
+int port_DefaultPadBinding(int control);
+void port_CaptureStart();
+int port_CapturedKey();
+int port_CapturedPad();
 #endif
 
 void __stdcall SetStartMode(s32 startMode);
@@ -72,18 +77,18 @@ const s32 kDefaultControls[kNumControls] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGH
 const wchar_t* const kControlNames[kNumControls] = {L"FORWARD", L"BACKWARD", L"LEFT", L"RIGHT", L"ATTACK",
                                                     L"ENTER OR EXIT", L"JUMP OR BRAKE", L"PREVIOUS WEAPON",
                                                     L"NEXT WEAPON", L"SPECIAL 1", L"SPECIAL 2", L"SPECIAL 3"};
-// Pad bindings: the original's codes for the two axes, else a button number.
-const s32 kPadFlag = 0x8000;
+// Pad binding codes (compat/src/pad.cpp): buttons 0 to 11, then the stick and d-pad directions.
+const wchar_t* const kPadButtonNames[12] = {L"A", L"B", L"X", L"Y", L"LB", L"RB", L"BACK", L"START", L"L3", L"R3", L"LT", L"RT"};
 const s32 kPadLeft = 224;
 const s32 kPadRight = 225;
 const s32 kPadUp = 226;
 const s32 kPadDown = 227;
 
 
-s32 sCapturing = -1; // control index waiting for a key or pad button
-bool sCaptureArmed; // every key released since capture started
+s32 sCapturing = -1; // control index waiting for a key or pad input
+s32 sColumn;         // 0: keyboard, 1: gamepad
+u16 sLastPage;
 char_type sPrevKeys[256];
-u8 sPrevPadButtons[32];
 wchar_t sText[100];
 
 struct KeyName
@@ -133,44 +138,66 @@ void LoadKeyNames()
     fclose(f);
 }
 
-void BindingName(s32 binding, wchar_t* pOut)
+void KeyName(s32 dik, wchar_t* pOut)
 {
-    const s32 code = binding & 0xFF;
-    if (binding & kPadFlag)
+    dik &= 0xFF;
+    if (dik < static_cast<s32>(sKeyNames.size()) && sKeyNames[dik].mName[0])
     {
-        switch (code)
-        {
-            case kPadLeft:
-                wcscpy(pOut, L"PAD LEFT");
-                break;
-            case kPadRight:
-                wcscpy(pOut, L"PAD RIGHT");
-                break;
-            case kPadUp:
-                wcscpy(pOut, L"PAD UP");
-                break;
-            case kPadDown:
-                wcscpy(pOut, L"PAD DOWN");
-                break;
-            default:
-                swprintf(pOut, L"PAD BUTTON %d", code + 1);
-                break;
-        }
-    }
-    else if (code < static_cast<s32>(sKeyNames.size()) && sKeyNames[code].mName[0])
-    {
-        wcscpy(pOut, sKeyNames[code].mName);
+        wcscpy(pOut, sKeyNames[dik].mName);
     }
     else
     {
-        swprintf(pOut, L"KEY %d", code);
+        swprintf(pOut, L"KEY %d", dik);
+    }
+}
+
+void PadName(s32 code, wchar_t* pOut)
+{
+    switch (code)
+    {
+        case kPadLeft:
+            wcscpy(pOut, L"LEFT");
+            break;
+        case kPadRight:
+            wcscpy(pOut, L"RIGHT");
+            break;
+        case kPadUp:
+            wcscpy(pOut, L"UP");
+            break;
+        case kPadDown:
+            wcscpy(pOut, L"DOWN");
+            break;
+        default:
+            wcscpy(pOut, code >= 0 && code < 12 ? kPadButtonNames[code] : L"-");
+            break;
     }
 }
 
 s32 GetControl(s32 i)
 {
-    return gRegistry.Get_Control_Setting(i, kDefaultControls[i]);
+    return gRegistry.Get_Control_Setting(i, kDefaultControls[i]) & 0xFF;
 }
+
+#if defined(GTA2_PORT_SDL)
+s32 GetPad(s32 i)
+{
+    return port_GetPadBinding(i);
+}
+
+void SetPad(s32 i, s32 code)
+{
+    port_SetPadBinding(i, code);
+}
+#else
+s32 GetPad(s32)
+{
+    return -1;
+}
+
+void SetPad(s32, s32)
+{
+}
+#endif
 
 void SetControl(s32 i, s32 binding)
 {
@@ -187,18 +214,18 @@ void SetControl(s32 i, s32 binding)
     RegCloseKey(hKey);
 }
 
-// A binding already used by another control moves to the one being changed.
-void Bind(s32 control, s32 binding)
+// A key or pad input already used by another control moves to the one being changed.
+void Bind(s32 column, s32 control, s32 binding)
 {
-    const s32 old = GetControl(control);
+    const s32 old = column ? GetPad(control) : GetControl(control);
     for (s32 i = 0; i < kNumControls; i++)
     {
-        if (i != control && GetControl(i) == binding)
+        if (i != control && (column ? GetPad(i) : GetControl(i)) == binding)
         {
-            SetControl(i, old);
+            column ? SetPad(i, old) : SetControl(i, old);
         }
     }
-    SetControl(control, binding);
+    column ? SetPad(control, binding) : SetControl(control, binding);
 }
 
 // view_height: lines of the game resolution, its width following the screen's shape; 0 is the
@@ -370,90 +397,47 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
     }
 }
 
-// Pad buttons 0..31 and the two axes (-1000..1000), as the game's pad bindings read them.
-bool ReadPad(u8* pButtons, LONG* pX, LONG* pY)
-{
 #if defined(GTA2_PORT_SDL)
-    return port_PadInput(pButtons, pX, pY);
-#else
-    struct
-    {
-        LONG mAxes[8];
-        DWORD mPov[4];
-        u8 mButtons[32];
-    } pad;
-    if (!gGamePadDevice || FAILED(gGamePadDevice->GetDeviceState(sizeof(pad), &pad)))
-    {
-        return false;
-    }
-    memcpy(pButtons, pad.mButtons, 32);
-    *pX = pad.mAxes[0];
-    *pY = pad.mAxes[1];
-    return true;
-#endif
+void CaptureStart(Frontend*)
+{
+    port_CaptureStart();
 }
 
-// The first key or pad input pressed since everything was released; -1 if none. The pad comes
-// first: it also drives the menus through the arrows, Enter and Escape.
-s32 CapturedBinding(Frontend* pFrontend)
+s32 CapturedKey(Frontend*)
 {
-    bool anyDown = false;
-    s32 keyResult = -1;
-    for (s32 i = 0; i < 256; i++)
+    return port_CapturedKey();
+}
+
+s32 CapturedPad()
+{
+    return port_CapturedPad();
+}
+#else
+// The DirectX build has no SDL layer: the first key pressed in the frontend's key state.
+void CaptureStart(Frontend* pFrontend)
+{
+    memcpy(sPrevKeys, pFrontend->mKeys, sizeof(sPrevKeys));
+}
+
+s32 CapturedKey(Frontend* pFrontend)
+{
+    s32 result = -1;
+    for (s32 i = 0; i < 256 && result < 0; i++)
     {
-        const bool down = (pFrontend->mKeys[i] & 0x80) != 0;
-        anyDown |= down;
-        if (down && !(sPrevKeys[i] & 0x80) && keyResult < 0)
+        if ((pFrontend->mKeys[i] & 0x80) && !(sPrevKeys[i] & 0x80))
         {
-            keyResult = i;
+            result = i;
         }
     }
     memcpy(sPrevKeys, pFrontend->mKeys, sizeof(sPrevKeys));
-
-    s32 padResult = -1;
-    u8 buttons[32];
-    LONG x;
-    LONG y;
-    if (ReadPad(buttons, &x, &y))
-    {
-        for (s32 b = 0; b < 32; b++)
-        {
-            const bool down = (buttons[b] & 0x80) != 0;
-            anyDown |= down;
-            if (down && !(sPrevPadButtons[b] & 0x80) && padResult < 0)
-            {
-                padResult = kPadFlag | b;
-            }
-            sPrevPadButtons[b] = buttons[b];
-        }
-        anyDown |= x <= -750 || x >= 750 || y <= -750 || y >= 750;
-        if (padResult < 0)
-        {
-            if (x <= -750)
-            {
-                padResult = kPadFlag | kPadLeft;
-            }
-            else if (x >= 750)
-            {
-                padResult = kPadFlag | kPadRight;
-            }
-            else if (y <= -750)
-            {
-                padResult = kPadFlag | kPadUp;
-            }
-            else if (y >= 750)
-            {
-                padResult = kPadFlag | kPadDown;
-            }
-        }
-    }
-    if (!sCaptureArmed)
-    {
-        sCaptureArmed = !anyDown;
-        return -1;
-    }
-    return padResult >= 0 ? padResult : keyResult;
+    return result;
 }
+
+s32 CapturedPad()
+{
+    return -1;
+}
+#endif
 
 bool PadMode()
 {
@@ -486,11 +470,12 @@ void UpdateHints(Frontend* pFrontend, MenuPage* pPage)
         const wchar_t* mLabel;
     };
     const Hint kNavigate[] = {{L"ENTER", L"A", L"SELECT"}, {L"ESC", L"B", L"BACK"}};
-    const Hint kCapture[] = {{L"ESC", NULL, L"CANCEL"}};
+    const bool pad = PadMode();
+    // Capture: B cancels on the keyboard column, Back on the pad column (B can be bound there).
+    const Hint kCapture[] = {{pad && sColumn ? L"BACK" : L"ESC", pad && !sColumn ? L"B" : NULL, L"CANCEL"}};
     const bool capturing = sCapturing >= 0;
     const Hint* pHints = capturing ? kCapture : kNavigate;
     const s32 count = capturing ? 1 : 2;
-    const bool pad = PadMode();
     const u16 font = pFrontend->mNormalFont;
     const u16 buttonFont = static_cast<u16>(gFrontendHeadingFont);
 
@@ -528,6 +513,46 @@ void UpdateHints(Frontend* pFrontend, MenuPage* pPage)
         SetText(pElems[2], static_cast<s16>(x), y, label, font);
         x += Frontend::GetMaxTextWidth(label, font) + 40;
     }
+}
+
+// Spaces after the text up to column x (at least one).
+void PadTo(Frontend* pFrontend, wchar_t* pText, s32 xpos, s32 column)
+{
+    const u16 font = pFrontend->mNormalFont;
+    size_t len = wcslen(pText);
+    do
+    {
+        pText[len++] = L' ';
+        pText[len] = 0;
+    } while (xpos + Frontend::GetMaxTextWidth(pText, font) < column && len < 70);
+}
+
+// Column titles on the control pages (elements 7, 8) and an arrow at the chosen column (element 9).
+void UpdateColumns(Frontend* pFrontend, MenuPage* pPage)
+{
+    const u16 page = pFrontend->mCurrentPageIdx;
+    if (page != kControlsPage && page != kControls2Page)
+    {
+        return;
+    }
+    const u16 font = pFrontend->mNormalFont;
+    pPage->mNumberOfElements = 10;
+    SetText(pPage->mElementsArray[7], 300, 140, L"KEYBOARD", font);
+    pPage->mElementsArray[8].mIsItDisplayed = 0;
+    pPage->mElementsArray[9].mIsItDisplayed = 0;
+#if defined(GTA2_PORT_SDL)
+    SetText(pPage->mElementsArray[8], 470, 140, L"GAMEPAD", font);
+    const MenuItem& item = pPage->mOptionsArray[pPage->mCurrentOptionIdx];
+    if (ItemAt(page, pPage->mCurrentOptionIdx).mAction == kBinding)
+    {
+        MenuElement& arrow = pPage->mElementsArray[9];
+        arrow.mElementType = GEOMETRIC_SHAPE_3;
+        arrow.mIsItDisplayed = 1;
+        arrow.mXpos = static_cast<s16>((sColumn ? 470 : 300) - 12);
+        arrow.mYpos = static_cast<s16>(item.mYPos + 6);
+        arrow.mGeometricShapeType = 2;
+    }
+#endif
 }
 
 u16 ParentPage(u16 page)
@@ -590,6 +615,16 @@ void Setup(Frontend* pFrontend)
     AddOption(pFrontend, kControls2Page, L"DEFAULT KEYS", kDefaultKeys, 0, true);
     AddOption(pFrontend, kControls2Page, L"BACK", kGoTo, kControlsPage);
 
+    // Room for the two binding columns.
+    for (u16 page : {kControlsPage, kControls2Page})
+    {
+        MenuPage* pPage = &pFrontend->mMenuPagesArray[page];
+        for (u16 i = 0; i < pPage->mNumberOfOptions; i++)
+        {
+            pPage->mOptionsArray[i].mXPos = 60;
+        }
+    }
+
     // The start menu's "Options" opened GTA2 Manager.
     pFrontend->mMenuPagesArray[MENUPAGE_START_MENU].mOptionsArray[1].mMenuPageTarget = kOptionsPage;
 }
@@ -607,20 +642,36 @@ bool Update(Frontend* pFrontend)
     }
     pFrontend->mMenuScreen = RedBar_16;
     MenuPage* pPage = &pFrontend->mMenuPagesArray[pageIdx];
+    if (pageIdx != sLastPage && (pageIdx == kControlsPage || pageIdx == kControls2Page) &&
+        sLastPage != kControlsPage && sLastPage != kControls2Page)
+    {
+        sColumn = PadMode() ? 1 : 0;
+    }
+    sLastPage = pageIdx;
     UpdateHints(pFrontend, pPage);
+    UpdateColumns(pFrontend, pPage);
     const Item& item = ItemAt(pageIdx, pPage->mCurrentOptionIdx);
 
     if (sCapturing >= 0)
     {
-        const s32 binding = CapturedBinding(pFrontend);
-        if (binding == DIK_ESCAPE)
+        // Escape (keyboard), B (keyboard column) or Back (pad column) cancel.
+        const s32 key = CapturedKey(pFrontend);
+        const s32 pad = CapturedPad();
+        const bool cancel = key == DIK_ESCAPE || (sColumn == 0 && pad == 1) || (sColumn == 1 && pad == 6);
+        if (cancel)
         {
             sCapturing = -1;
             snd1.mObjectType = 6;
         }
-        else if (binding >= 0)
+        else if (sColumn == 0 && key > 0)
         {
-            Bind(sCapturing, binding);
+            Bind(0, sCapturing, key);
+            sCapturing = -1;
+            snd1.mObjectType = 5;
+        }
+        else if (sColumn == 1 && pad >= 0)
+        {
+            Bind(1, sCapturing, pad);
             sCapturing = -1;
             snd1.mObjectType = 5;
         }
@@ -640,9 +691,7 @@ bool Update(Frontend* pFrontend)
         else if (item.mAction == kBinding)
         {
             sCapturing = item.mArg;
-            sCaptureArmed = false;
-            memcpy(sPrevKeys, pFrontend->mKeys, sizeof(sPrevKeys));
-            memset(sPrevPadButtons, 0, sizeof(sPrevPadButtons));
+            CaptureStart(pFrontend);
             snd1.mObjectType = 5;
         }
         else if (item.mAction == kDefaultKeys)
@@ -650,6 +699,9 @@ bool Update(Frontend* pFrontend)
             for (s32 i = 0; i < kNumControls; i++)
             {
                 SetControl(i, kDefaultControls[i]);
+#if defined(GTA2_PORT_SDL)
+                SetPad(i, port_DefaultPadBinding(i));
+#endif
             }
             snd1.mObjectType = 5;
         }
@@ -672,8 +724,14 @@ bool Update(Frontend* pFrontend)
     {
         snd1.mObjectType = 2;
     }
-    else if ((pFrontend->mLeftPressed || pFrontend->mRightPressed) && item.mAction != kGoTo &&
-             item.mAction != kBinding && item.mAction != kDefaultKeys)
+    else if ((pFrontend->mLeftPressed || pFrontend->mRightPressed) && item.mAction == kBinding)
+    {
+#if defined(GTA2_PORT_SDL)
+        sColumn = pFrontend->mRightPressed ? 1 : 0;
+        snd1.mObjectType = pFrontend->mLeftPressed ? 3 : 4;
+#endif
+    }
+    else if ((pFrontend->mLeftPressed || pFrontend->mRightPressed) && item.mAction != kGoTo && item.mAction != kDefaultKeys)
     {
         ChangeValue(pFrontend, item, pFrontend->mLeftPressed ? -1 : 1);
         snd1.mObjectType = pFrontend->mLeftPressed ? 3 : 4;
@@ -731,31 +789,112 @@ bool GetOptionText(Frontend* pFrontend, u16 page, u16 option, wchar_t** ppText)
             swprintf(value, L"%d", gRegistry.Get_Screen_Setting("gamma", 10));
             break;
         case kBinding:
+        {
+            // Two columns: the keyboard's key at x = 300, the gamepad's at x = 470.
+            wchar_t key[24];
+            wchar_t pad[24];
+            KeyName(GetControl(item.mArg), key);
+            PadName(GetPad(item.mArg), pad);
             if (sCapturing == item.mArg)
             {
-                wcscpy(value, L"PRESS A KEY");
+                wcscpy(sColumn ? pad : key, L"PRESS");
             }
-            else
-            {
-                BindingName(GetControl(item.mArg), value);
-            }
-            break;
+            wcscpy(sText, menuItem.mOptionNameStr);
+            PadTo(pFrontend, sText, menuItem.mXPos, 300);
+            wcscat(sText, key);
+#if defined(GTA2_PORT_SDL)
+            PadTo(pFrontend, sText, menuItem.mXPos, 470);
+            wcscat(sText, pad);
+#endif
+            *ppText = sText;
+            return true;
+        }
         default:
             break;
     }
 
     // The value in a second column at x = 380.
     wcscpy(sText, menuItem.mOptionNameStr);
-    const u16 font = pFrontend->mNormalFont;
-    size_t len = wcslen(sText);
-    do
-    {
-        sText[len++] = L' ';
-        sText[len] = 0;
-    } while (menuItem.mXPos + Frontend::GetMaxTextWidth(sText, font) < 380 && len < 58);
-    wcsncpy(sText + len, value, 99 - len);
+    PadTo(pFrontend, sText, menuItem.mXPos, 380);
+    wcsncpy(sText + wcslen(sText), value, 99 - wcslen(sText));
     sText[99] = 0;
     *ppText = sText;
     return true;
+}
+bool UpdateNameEntry(Frontend* pFrontend)
+{
+    if (!PadMode())
+    {
+        return false;
+    }
+    static const wchar_t kLetters[] = L"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+    const s32 numLetters = static_cast<s32>(wcslen(kLetters));
+    wchar_t* pName = pFrontend->mCurrPlyrName;
+    u8& len = pFrontend->mCurrPlyrNameLength;
+    if (len == 0)
+    {
+        pName[len++] = L'A';
+    }
+    if (pFrontend->mReturnPressed || pFrontend->mEscapePressed)
+    {
+        pFrontend->mState = FrontendState::Menu_Navigation_1;
+        pFrontend->StripPlayerNameToCurrLength();
+        if (pFrontend->mReturnPressed)
+        {
+            pFrontend->SaveAndUpdatePlayerName();
+        }
+        pFrontend->mMenuPagesArray[MENUPAGE_PLAY].mCurrentOptionIdx = 0;
+        snd1.mObjectType = pFrontend->mReturnPressed ? 5 : 6;
+        return true;
+    }
+    if (pFrontend->mUpPressed || pFrontend->mDownPressed)
+    {
+        s32 i = 0;
+        while (i < numLetters && kLetters[i] != pName[len - 1])
+        {
+            i++;
+        }
+        i = Wrap((i < numLetters ? i : 0) + (pFrontend->mUpPressed ? 1 : -1), numLetters);
+        pName[len - 1] = kLetters[i];
+        snd1.mObjectType = 7;
+    }
+    else if (pFrontend->mRightPressed && len < 8)
+    {
+        pName[len] = pName[len - 1] == L' ' ? L'A' : pName[len - 1];
+        len++;
+        snd1.mObjectType = 7;
+    }
+    else if (pFrontend->mLeftPressed && len > 1)
+    {
+        len--;
+        snd1.mObjectType = 8;
+    }
+    pFrontend->StripPlayerNameToCurrLength();
+    return true;
+}
+
+void PadKeyHint(u8 hint, wchar_t* pText)
+{
+    if (!PadMode())
+    {
+        return;
+    }
+    switch (hint)
+    {
+        case 0: // ESC
+            wcscpy(pText, L"B");
+            break;
+        case 1: // DEL
+            wcscpy(pText, L"X");
+            break;
+        case 2: // ENTER
+            wcscpy(pText, L"A");
+            break;
+        case 3: // BACKSPACE
+            wcscpy(pText, L"LEFT");
+            break;
+        default:
+            break;
+    }
 }
 } // namespace PortOptionsMenu

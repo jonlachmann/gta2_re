@@ -1578,6 +1578,12 @@ void Frontend::Update()
     switch (mState)
     {
         case FrontendState::User_Typing_New_Player_Name_3:
+#if defined(GTA2_PORT)
+            if (PortOptionsMenu::UpdateNameEntry(this))
+            {
+                break;
+            }
+#endif
             HandlePlayerNameTyping();
             break;
 
@@ -2866,6 +2872,9 @@ s32 Frontend::DrawKeyHint(u8 str_id_idx, u16 text_xpos, u16 text_ypos, u16 fontT
             break;
     }
 
+#if defined(GTA2_PORT)
+    PortOptionsMenu::PadKeyHint(str_id_idx, tmpBuff);
+#endif
     if (static_cast<u16>(palette) == 0xFFFF)
     {
         DrawStringDefaultPalette(tmpBuff, text_xpos, text_ypos, fontType, 1);
