@@ -1555,6 +1555,13 @@ EXPORT void __stdcall GetDirectXVersion(u32* pDXVer, u32* osKind)
     DDSURFACEDESC surfaceDesc;
     struct _OSVERSIONINFOA osVersionInfo;
 
+#if defined(GTA2_PORT_SDL)
+    // No DirectX to probe: the renderer and input are built in.
+    *pDXVer = 0x601;
+    *osKind = VER_PLATFORM_WIN32_NT;
+    return;
+#endif
+
     pDDraw = NULL;
     pDraw2 = NULL;
     pDSurface = NULL;
