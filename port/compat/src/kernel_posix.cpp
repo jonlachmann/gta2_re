@@ -277,7 +277,7 @@ INT WINAPI WideCharToMultiByte(UINT, DWORD, LPCWSTR src, INT srcLen, LPSTR dst, 
     return n;
 }
 
-INT WINAPI wvsprintfA(LPSTR dst, LPCSTR fmt, __ms_va_list args)
+INT WINAPI wvsprintfA(LPSTR dst, LPCSTR fmt, va_list args)
 {
     return vsprintf(dst, fmt, args);
 }

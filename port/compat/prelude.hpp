@@ -31,13 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-// WCHAR as wchar_t, which -fshort-wchar makes 2 bytes like on Windows.
-#define WINE_UNICODE_NATIVE
 #define __forceinline inline
-
-typedef unsigned char byte;
-typedef unsigned char boolean;
-typedef long long hyper;
 
 #include "crt.hpp"
 #include "wstr.hpp"
