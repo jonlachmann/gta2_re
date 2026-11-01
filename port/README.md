@@ -5,7 +5,18 @@ Native builds of the decompiled game with clang, 32-bit. Plan: `docs/port_plan.m
 | Build | Platform layer | Toolchain file |
 |---|---|---|
 | Linux (i686) | SDL3, OpenGL ES 3.0, built-in renderer, sound and input | `toolchain-linux32-clang.cmake` |
-| Windows (MinGW, i686) | the original DirectX, Miles and Bink DLLs | `toolchain-mingw32-clang.cmake` |
+| Windows (MinGW, i686) | the same as Linux; `-DGTA2_PORT_DIRECTX=ON` for DMA's DirectX, Miles and Bink DLLs | `toolchain-mingw32-clang.cmake` |
+
+## Windows
+
+Needs SDL3 for MinGW (`SDL3-devel-<version>-mingw` from the SDL releases). `SDL3.dll` is copied
+next to `gta2.exe`; the exe needs no DirectX, Miles or Bink DLL.
+
+```bash
+cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-mingw32-clang.cmake \
+      -DSDL3_DIR=<SDL3-devel>/i686-w64-mingw32/lib/cmake/SDL3 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+ninja -C build_port
+```
 
 ## Linux
 
@@ -33,7 +44,8 @@ Scroll Lock toggles them.
 ## Layout
 
 - `compat/`: the Win32 subset the game calls, on SDL3 and POSIX (window, registry, files,
-  DirectInput, Miles), with Wine's headers for the declarations.
+  DirectInput, Miles), with Wine's headers for the declarations on Linux. On Windows,
+  `win32_redirect.hpp` sends the game's calls to the same code.
 - `renderer/`: the OpenGL ES renderer behind the game's `gbh_*` and `Vid_*` tables.
 - `include/`: copies of headers whose originals don't build outside MSVC.
 

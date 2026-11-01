@@ -5,8 +5,10 @@
 #include <windows.h>
 #include <dinput.h>
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <deque>
 #include <string.h>
+#include <vector>
 #include "port_platform.hpp"
 
 #undef remove

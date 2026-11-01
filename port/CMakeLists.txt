@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(gta2_port C CXX)
 
 # Fork build: one executable from the game sources, clang, 32-bit.
-#   Windows (MinGW): cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-mingw32-clang.cmake
+#   Windows (MinGW): cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-mingw32-clang.cmake -DSDL3_DIR=...
 #   Linux:           cmake -S port -B build_linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-linux32-clang.cmake
 
 set(ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
@@ -24,7 +24,10 @@ add_compile_options(
     -fno-strict-aliasing -fwrapv -ftrivial-auto-var-init=zero -fno-delete-null-pointer-checks -fno-autolink -w -Wno-address-of-temporary -Wno-c++11-narrowing)
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS GTA2_PORT)
 
-if(WIN32)
+# Windows can also build with DMA's DLLs (DirectX renderer and video, Miles, Bink) next to the exe.
+option(GTA2_PORT_DIRECTX "Windows: use the original DirectX, Miles and Bink DLLs instead of SDL3" OFF)
+
+if(WIN32 AND GTA2_PORT_DIRECTX)
     include_directories(${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
 
     add_library(mss32 SHARED ${ROOT}/Source/3rdParty/mss.cpp)
@@ -40,8 +43,7 @@ if(WIN32)
     target_link_options(gta2 PRIVATE -static -static-libgcc -static-libstdc++ -lpthread)
     set_target_properties(mss32 binkw32 PROPERTIES PREFIX "")
 else()
-    # Win32 and DirectX declarations come from Wine's headers; compat/ implements what the game calls.
-    find_path(WINE_INCLUDE windows.h PATHS /usr/include/wine/windows /usr/include/wine/wine/windows NO_DEFAULT_PATH REQUIRED)
+    # Windows: SDL3-devel-<version>-mingw, -DSDL3_DIR=<it>/i686-w64-mingw32/lib/cmake/SDL3.
     find_package(SDL3 REQUIRED CONFIG)
 
     # The OpenGL ES renderer: portable, no Windows headers.
@@ -49,18 +51,44 @@ else()
     add_library(gta2gl STATIC ${renderer_src})
     target_link_libraries(gta2gl PRIVATE SDL3::SDL3)
 
-    file(GLOB compat_src ${CMAKE_CURRENT_LIST_DIR}/compat/src/*.cpp)
+    set(compat ${CMAKE_CURRENT_LIST_DIR}/compat)
+    set(compat_src crt dinput dll guids kernel main miles registry test_input video_port window)
+    if(NOT WIN32)
+        list(APPEND compat_src kernel_posix wstr)
+    endif()
+    list(TRANSFORM compat_src PREPEND ${compat}/src/)
+    list(TRANSFORM compat_src APPEND .cpp)
+    # Our Miles and Bink are defined here, not imported from their DLLs.
+    set_source_files_properties(${compat}/src/miles.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_MSS)
+    set_source_files_properties(${ROOT}/Source/3rdParty/bink.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_BINK)
+
     add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
         ${ROOT}/Source/3rdParty/bink.cpp
         src/debug_stubs.cpp src/options_menu.cpp ${compat_src})
-    target_compile_options(gta2 PRIVATE -include ${CMAKE_CURRENT_LIST_DIR}/compat/prelude.hpp)
-    target_compile_definitions(gta2 PRIVATE __NT__ GTA2_PORT_SDL)
-    # LLVM turns wide string loops into calls to the C library, whose wchar_t is 4 bytes.
-    target_compile_options(gta2 PRIVATE -fno-builtin-wcslen -fno-builtin-wcscpy -fno-builtin-wcscmp
-        -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
-    target_include_directories(gta2 PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/compat/include ${CMAKE_CURRENT_LIST_DIR}/include
-        ${WINE_INCLUDE} ${ROOT}/Source ${ROOT})
+    target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
     target_link_libraries(gta2 PRIVATE gta2gl SDL3::SDL3)
-    target_link_options(gta2 PRIVATE -m32 -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+
+    if(WIN32)
+        # MinGW's headers declare the Win32 API; win32_redirect.hpp sends the game's calls to compat/.
+        target_sources(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/resources.rc)
+        set_target_properties(gta2 PROPERTIES WIN32_EXECUTABLE ON)
+        target_compile_options(gta2 PRIVATE -include ${compat}/win32_redirect.hpp)
+        target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
+        target_link_libraries(gta2 PRIVATE user32 advapi32 version)
+        target_link_options(gta2 PRIVATE -static -static-libgcc -static-libstdc++ -lpthread)
+        add_custom_command(TARGET gta2 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:gta2> $<TARGET_FILE_DIR:gta2>
+            COMMAND_EXPAND_LISTS)
+    else()
+        # Win32 and DirectX declarations come from Wine's headers; compat/ implements what the game calls.
+        find_path(WINE_INCLUDE windows.h PATHS /usr/include/wine/windows /usr/include/wine/wine/windows NO_DEFAULT_PATH REQUIRED)
+        target_compile_options(gta2 PRIVATE -include ${compat}/prelude.hpp)
+        target_compile_definitions(gta2 PRIVATE __NT__)
+        # LLVM turns wide string loops into calls to the C library, whose wchar_t is 4 bytes.
+        target_compile_options(gta2 PRIVATE -fno-builtin-wcslen -fno-builtin-wcscpy -fno-builtin-wcscmp
+            -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
+        target_include_directories(gta2 PRIVATE
+            ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${WINE_INCLUDE} ${ROOT}/Source ${ROOT})
+        target_link_options(gta2 PRIVATE -m32 -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+    endif()
 endif()

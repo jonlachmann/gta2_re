@@ -4,6 +4,9 @@
 #include <windows.h>
 #include <SDL3/SDL.h>
 
+// Resolves a game path to the host file system; out must hold PATH_MAX bytes.
+const char* port_resolve_path(const char* path, char* out);
+
 SDL_Window* port_GetSDLWindow(HWND h);
 void port_SetFullscreen(HWND h, bool fullscreen);
 
