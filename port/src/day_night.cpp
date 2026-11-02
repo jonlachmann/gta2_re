@@ -2,6 +2,7 @@
 #include "gbh_graphics.hpp"
 #include "rng.hpp"
 #include "settings.hpp"
+#include "sprite.hpp"
 #include "winmain.hpp"
 
 #if defined(GTA2_PORT_SDL)
@@ -33,6 +34,17 @@ f32 Daylight()
     const f32 hour = 24.0f * tick / dayTicks;
     return SmoothStep(5.0f, 7.0f, hour) - SmoothStep(18.0f, 20.0f, hour);
 }
+
+// A car's sprite masks are cached by its delta flags only, with or without its lights apart (Lit), so
+// they are built again when that changes, as the game does when LIGHTING changes.
+void SetDay(f32 day)
+{
+    if ((day < 1.0f) != (sDay < 1.0f) && gSpriteMaskCache)
+    {
+        gSpriteMaskCache->InvalidateAllMasks();
+    }
+    sDay = day;
+}
 } // namespace
 
 void SetAmbient(f32 ambient)
@@ -40,11 +52,11 @@ void SetAmbient(f32 ambient)
 #if defined(GTA2_PORT_SDL)
     if (!PortSettings::DayNightCycle() || !gpRng)
     {
-        sDay = 0.0f;
+        SetDay(0.0f);
         port_SetAmbient(ambient, ambient, ambient, 1.0f);
         return;
     }
-    sDay = Daylight();
+    SetDay(Daylight());
     const f32 night = 1.0f - sDay;
     const f32 warm = 4.0f * sDay * night;
     const f32 level = ambient * night + sDay;
