@@ -757,12 +757,6 @@ void Frontend::ChangeMenuPage(u16 menu_page_idx)
 MATCH_FUNC(0x4B3AF0)
 void Frontend::GetOptionText(u16 menu_page_idx, u16 option_idx, wchar_t** w_buffer)
 {
-#if defined(GTA2_PORT)
-    if (PortOptionsMenu::GetOptionText(this, menu_page_idx, option_idx, w_buffer))
-    {
-        return;
-    }
-#endif
     MenuPage* pPage = &mMenuPagesArray[menu_page_idx];
     MenuItem* pOption = &pPage->mOptionsArray[option_idx];
 
@@ -1403,6 +1397,9 @@ void Frontend::DrawMenu()
         swprintf(tmpBuff, L"_");
         DrawStringDefaultPalette(tmpBuff, x_pos, y_pos, mNormalFont, 1);
     }
+#if defined(GTA2_PORT)
+    PortOptionsMenu::Draw(this);
+#endif
 }
 
 // https://decomp.me/scratch/qV1ie switch "goto" issue
