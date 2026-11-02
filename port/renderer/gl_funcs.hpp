@@ -7,6 +7,7 @@
 #define GTA2GL_FUNCS(X)                                                    \
     X(PFNGLGETERRORPROC, glGetError)                                       \
     X(PFNGLGETSTRINGPROC, glGetString)                                     \
+    X(PFNGLGETSTRINGIPROC, glGetStringi)                                   \
     X(PFNGLGETINTEGERVPROC, glGetIntegerv)                                 \
     X(PFNGLENABLEPROC, glEnable)                                           \
     X(PFNGLDISABLEPROC, glDisable)                                         \
@@ -66,6 +67,7 @@
     X(PFNGLDELETESAMPLERSPROC, glDeleteSamplers)                           \
     X(PFNGLBINDSAMPLERPROC, glBindSampler)                                 \
     X(PFNGLSAMPLERPARAMETERIPROC, glSamplerParameteri)                     \
+    X(PFNGLSAMPLERPARAMETERFPROC, glSamplerParameterf)                     \
     X(PFNGLDRAWBUFFERSPROC, glDrawBuffers)                                 \
     X(PFNGLCLEARBUFFERFVPROC, glClearBufferfv)                             \
     X(PFNGLBINDBUFFERBASEPROC, glBindBufferBase)                           \

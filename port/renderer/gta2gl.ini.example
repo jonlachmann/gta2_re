@@ -9,3 +9,5 @@ truecolor = 0
 bloom = 0
 ; 1: the lights of the level evaluated per pixel instead of per vertex
 per_pixel_lighting = 0
+; minified textures: 0 bilinear (original), 1 trilinear mipmaps, 2 anisotropic mipmaps
+texture_filter = 0

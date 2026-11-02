@@ -1,7 +1,7 @@
 // Portable OpenGL 3.3 core renderer: logical size offscreen target, batched triangles,
 // a CPU 16-bit surface overlay for direct pixel writes, gamma, present and frame capture.
 // The offscreen target is stored top row first (y down) so edge ties follow D3D's top-left fill rule.
-// Optional enhancements (RenderOptions): true colour target, bloom, per pixel lighting.
+// Optional enhancements (RenderOptions): true colour target, bloom, per pixel lighting, mipmaps.
 #pragma once
 
 #include "gl_funcs.hpp"
@@ -13,6 +13,7 @@ struct RTexture
     GLuint mId;
     s32 mWidth;
     s32 mHeight;
+    s32 mLevels; // mip levels uploaded, 1 for the base level only
 };
 
 class GLRenderer : public IRenderer
@@ -63,7 +64,7 @@ class GLRenderer : public IRenderer
 
     // IRenderer
     RTexture* CreateTexture();
-    void UploadTexture(RTexture* pTex, s32 width, s32 height, const u32* pRgba);
+    void UploadTexture(RTexture* pTex, s32 width, s32 height, const u32* pRgba, RMipmaps mipmaps);
     void FreeTexture(RTexture* pTex);
     void BeginScene();
     void EndScene();
@@ -80,6 +81,7 @@ class GLRenderer : public IRenderer
     void BindTarget();
     void ApplyState(u32 state);
     void CreateTargets();
+    void ApplyTextureFilter();
     void DrawFullscreen();
     GLuint CompileProgram(const char* vs, const char* fs, const char** ppError);
 
@@ -130,6 +132,9 @@ class GLRenderer : public IRenderer
     GLuint mLightUbo;
     GLuint mSamplerNearest;
     GLuint mSamplerLinear;
+    GLuint mSamplerMip;
+    f32 mMaxAnisotropy; // 1 without EXT_texture_filter_anisotropic
+    std::vector<u32> mMipBuffer;
     GLuint mWhiteTex;
     GLuint mSurfaceTex;
     s32 mSurfaceW;
