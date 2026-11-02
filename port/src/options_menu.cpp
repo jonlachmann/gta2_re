@@ -10,6 +10,10 @@
 
 EXTERN_GLOBAL(SoundObject, snd1);
 
+#if defined(GTA2_PORT_SDL)
+bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel);
+#endif
+
 namespace PortOptionsMenu
 {
 namespace
@@ -45,6 +49,80 @@ PortMenu::Result HandleInput(Frontend* pFrontend)
     }
     return PortMenu::HandleMouse(1.0f, 0.0f, 0.0f);
 }
+
+#if defined(GTA2_PORT_SDL)
+bool Inside(f32 x, f32 y, f32 left, f32 top, f32 right, f32 bottom)
+{
+    return x >= left && x < right && y >= top && y < bottom;
+}
+
+// The original pages with the mouse, as their keys: pointing at an option selects it, a click enters
+// it, the right button goes back, the wheel and the arrows beside an option change it.
+void OriginalPageMouse(Frontend* pFrontend)
+{
+    float x;
+    float y;
+    int left;
+    int right;
+    int wheel;
+    const bool moved = port_TakeMouse(&x, &y, &left, &right, &wheel);
+    if (right)
+    {
+        pFrontend->mEscapePressed = true;
+        return;
+    }
+    MenuPage* pPage = &pFrontend->mMenuPagesArray[pFrontend->mCurrentPageIdx];
+    for (s32 i = 0; i < pPage->mNumberOfElements && left; i++)
+    {
+        const MenuElement& element = pPage->mElementsArray[i];
+        const u16 shape = element.mGeometricShapeType;
+        if (element.mElementType == GEOMETRIC_SHAPE_3 && element.mIsItDisplayed && (shape == 1 || shape == 2) &&
+            Inside(x, y, element.mXpos - 12.0f, element.mYpos - 12.0f, element.mXpos + 12.0f, element.mYpos + 12.0f))
+        {
+            (shape == 1 ? pFrontend->mLeftPressed : pFrontend->mRightPressed) = true;
+            return;
+        }
+    }
+    s32 option = -1;
+    for (s32 i = 0; i < pPage->mNumberOfOptions && option < 0; i++)
+    {
+        MenuItem& item = pPage->mOptionsArray[i];
+        if (!item.mIsUnlocked)
+        {
+            continue;
+        }
+        wchar_t* pText = item.mOptionNameStr;
+        if (item.mOptionType == HORIZONTAL_SELECTION_2)
+        {
+            pFrontend->GetOptionText(pFrontend->mCurrentPageIdx, static_cast<u16>(i), &pText);
+        }
+        const u16 font = i == pPage->mCurrentOptionIdx ? pFrontend->mSelectedFont
+                                                        : (item.mFontType != 0xFFFF ? item.mFontType : pFrontend->mNormalFont);
+        const f32 width = static_cast<f32>(Frontend::GetMaxTextWidth(pText, font));
+        if (Inside(x, y, item.mXPos - 4.0f, item.mYPos - 2.0f, item.mXPos + width + 4.0f, item.mYPos + 18.0f))
+        {
+            option = i;
+        }
+    }
+    if (option < 0 || !(moved || left || wheel))
+    {
+        return;
+    }
+    if (option != pPage->mCurrentOptionIdx)
+    {
+        snd1.mObjectType = option < pPage->mCurrentOptionIdx ? PortMenu::kMovedUp : PortMenu::kMovedDown;
+        pPage->mCurrentOptionIdx = static_cast<u16>(option);
+    }
+    if (wheel)
+    {
+        (wheel < 0 ? pFrontend->mLeftPressed : pFrontend->mRightPressed) = true;
+    }
+    else if (left)
+    {
+        pFrontend->mReturnPressed = true;
+    }
+}
+#endif
 } // namespace
 
 void Setup(Frontend* pFrontend)
@@ -76,6 +154,9 @@ bool Update(Frontend* pFrontend)
     if (pFrontend->mCurrentPageIdx != kMenuPage)
     {
         sShown = false;
+#if defined(GTA2_PORT_SDL)
+        OriginalPageMouse(pFrontend);
+#endif
         return false;
     }
     if (!sShown)
