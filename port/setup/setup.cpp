@@ -358,13 +358,15 @@ bool SetupLoop(const std::string& gameDir)
         }
         else if (path.empty())
         {
-            const std::string music = std::to_string(check.mMusicFound) + " of " + std::to_string(check.mMusicTotal);
+            const bool music = check.mMusicFound >= check.mMusicTotal;
             const int choice = Ask(
-                check.mMusicFound < check.mMusicTotal ? SDL_MESSAGEBOX_WARNING : SDL_MESSAGEBOX_INFORMATION,
-                "GTA2's game files are installed in:\n" + gameDir + "\n\nMusic: " + music +
-                    " tracks. Without them the game runs without music and radio. The music is in the GTAudio "
-                    "folder of the original CD, or in the installer: choose one to add it, or to replace the game "
-                    "files.",
+                music ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_WARNING,
+                "GTA2's game files are installed in:\n" + gameDir + "\n\n" +
+                    (music ? std::string("Choose a folder or a file to replace them.")
+                           : "The music was not found (" + std::to_string(check.mMusicFound) + " of " +
+                                 std::to_string(check.mMusicTotal) +
+                                 " tracks): the game runs without music and radio. The music is in the GTAudio "
+                                 "folder of the original CD, or in the installer: choose one to add it."),
                 {"Use a folder...", "Use a file...", "Play"}, 2, 2);
             if (choice == 2)
             {
