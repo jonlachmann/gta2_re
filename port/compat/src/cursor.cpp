@@ -1,5 +1,5 @@
-// The mouse cursor: a sprite of the player's own game data, turned to point up-left, outlined, and
-// scaled with the display; the system arrow when the data can't be read.
+// The mouse cursor: a sprite of the player's own game data, turned to point up-left, smoothed,
+// outlined and shadowed, scaled with the display; the system arrow when the data can't be read.
 #include "port_platform.hpp"
 #include <math.h>
 #include <stdio.h>
@@ -10,10 +10,11 @@
 
 namespace
 {
-// The yellow objective arrow of the HUD (user sprite 5; 7 is the red one).
-const char* const kStyle = "data\\wil.sty";
-const int kUserSprite = 5;
-const float kTurn = 35.0f; // degrees, counter-clockwise from pointing up
+// The frontend's yellow arrow (wil.sty's user sprites 5 and 7, turned 35 degrees, are the HUD's
+// yellow and red objective arrows).
+const char* const kStyle = "data\\fstyle.sty";
+const int kUserSprite = 0;
+const float kTurn = 45.0f; // degrees, counter-clockwise from pointing up
 
 struct Image
 {
@@ -122,90 +123,200 @@ bool LoadUserSprite(const char* path, int user, Image* pOut)
     return true;
 }
 
-// Scaled by a whole factor, then turned with 4x4 samples per pixel for smooth edges.
-Image Turn(const Image& src, int scale, float degrees)
+// The sprite's opacity and colour between its pixel centres; the 0.5 contour of the opacity smooths
+// the stair steps of its edges.
+float Opacity(const Image& src, float x, float y)
 {
-    const float w = static_cast<float>(src.mW * scale);
-    const float h = static_cast<float>(src.mH * scale);
+    x -= 0.5f;
+    y -= 0.5f;
+    const int x0 = static_cast<int>(floorf(x));
+    const int y0 = static_cast<int>(floorf(y));
+    float v = 0;
+    for (int j = 0; j < 2; j++)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (src.Opaque(x0 + i, y0 + j))
+            {
+                v += (i ? x - x0 : 1 - (x - x0)) * (j ? y - y0 : 1 - (y - y0));
+            }
+        }
+    }
+    return v;
+}
+
+void Colour(const Image& src, float x, float y, float* pRgb)
+{
+    x -= 0.5f;
+    y -= 0.5f;
+    const int x0 = static_cast<int>(floorf(x));
+    const int y0 = static_cast<int>(floorf(y));
+    float sum = 0;
+    for (int j = 0; j < 2; j++)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (src.Opaque(x0 + i, y0 + j))
+            {
+                const float weight = (i ? x - x0 : 1 - (x - x0)) * (j ? y - y0 : 1 - (y - y0));
+                const Uint32 p = src.At(x0 + i, y0 + j);
+                for (int k = 0; k < 3; k++)
+                {
+                    pRgb[k] += (p >> (8 * k) & 0xFF) * weight;
+                }
+                sum += weight;
+            }
+        }
+    }
+    for (int k = 0; sum > 0 && k < 3; k++)
+    {
+        pRgb[k] /= sum;
+    }
+}
+
+// Scaled and turned with 6x6 samples per pixel, over a dark outline and a drop shadow; the hotspot
+// lands on the tip, the middle of the sprite's top row.
+Image Render(const Image& src, float scale, float degrees, int* pHotX, int* pHotY)
+{
     const float c = cosf(degrees * 3.14159265f / 180);
     const float s = sinf(degrees * 3.14159265f / 180);
-    const int outW = static_cast<int>(ceilf(fabsf(w * c) + fabsf(h * s))) + 2;
-    const int outH = static_cast<int>(ceilf(fabsf(w * s) + fabsf(h * c))) + 2;
-    Image out = NewImage(outW, outH);
-    const int kSamples = 4;
-    for (int y = 0; y < outH; y++)
+    const int line = scale < 2.5f ? 1 : 2;
+    const int pad = line * 2 + 1;
+    const int w = static_cast<int>(ceilf((src.mW * fabsf(c) + src.mH * fabsf(s)) * scale)) + pad * 2;
+    const int h = static_cast<int>(ceilf((src.mW * fabsf(s) + src.mH * fabsf(c)) * scale)) + pad * 2;
+    const int kSamples = 6;
+    std::vector<float> body(static_cast<size_t>(w) * h * 4, 0.0f);
+    for (int y = 0; y < h; y++)
     {
-        for (int x = 0; x < outW; x++)
+        for (int x = 0; x < w; x++)
         {
-            int r = 0, g = 0, b = 0, n = 0;
+            float* pPixel = &body[(y * w + x) * 4];
             for (int j = 0; j < kSamples; j++)
             {
                 for (int i = 0; i < kSamples; i++)
                 {
-                    const float dx = x + (i + 0.5f) / kSamples - outW / 2.0f;
-                    const float dy = y + (j + 0.5f) / kSamples - outH / 2.0f;
-                    const float sx = dx * c - dy * s + w / 2;
-                    const float sy = dx * s + dy * c + h / 2;
-                    if (sx >= 0 && sy >= 0 && sx < w && sy < h)
+                    const float dx = (x + (i + 0.5f) / kSamples - w / 2.0f) / scale;
+                    const float dy = (y + (j + 0.5f) / kSamples - h / 2.0f) / scale;
+                    const float sx = dx * c - dy * s + src.mW / 2.0f;
+                    const float sy = dx * s + dy * c + src.mH / 2.0f;
+                    if (Opacity(src, sx, sy) >= 0.5f)
                     {
-                        const Uint32 p = src.At(static_cast<int>(sx) / scale, static_cast<int>(sy) / scale);
-                        if (p >> 24)
+                        float rgb[3] = {};
+                        Colour(src, sx, sy, rgb);
+                        for (int k = 0; k < 3; k++)
                         {
-                            r += p & 0xFF;
-                            g += p >> 8 & 0xFF;
-                            b += p >> 16 & 0xFF;
-                            n++;
+                            pPixel[k] += rgb[k];
                         }
+                        pPixel[3] += 1;
                     }
                 }
             }
-            if (n)
+            for (int k = 0; pPixel[3] > 0 && k < 3; k++)
             {
-                out.At(x, y) = Rgba(r / n, g / n, b / n, 255 * n / (kSamples * kSamples));
+                pPixel[k] /= pPixel[3];
             }
+            pPixel[3] /= kSamples * kSamples;
         }
     }
-    return out;
-}
-
-// A dark line one pixel wide around the opaque pixels, so the cursor reads on any background.
-Image Outline(const Image& src)
-{
-    Image out = NewImage(src.mW + 2, src.mH + 2);
-    for (int y = 0; y < out.mH; y++)
-    {
-        for (int x = 0; x < out.mW; x++)
+    auto coverage = [&](int x, int y) { return x >= 0 && y >= 0 && x < w && y < h ? body[(y * w + x) * 4 + 3] : 0.0f; };
+    auto outline = [&](int x, int y) {
+        float v = 0;
+        for (int j = -line; j <= line; j++)
         {
-            const Uint32 p = x > 0 && y > 0 && x <= src.mW && y <= src.mH ? src.At(x - 1, y - 1) : 0;
-            bool edge = false;
-            for (int j = -2; j <= 0 && (p >> 24) < 128; j++)
+            for (int i = -line; i <= line; i++)
             {
-                for (int i = -2; i <= 0; i++)
+                v = coverage(x + i, y + j) > v ? coverage(x + i, y + j) : v;
+            }
+        }
+        return v;
+    };
+    Image out = NewImage(w, h);
+    for (int y = 0; y < h; y++)
+    {
+        for (int x = 0; x < w; x++)
+        {
+            const float layers[3][4] = {{0, 0, 0, outline(x - line, y - line) * 0.45f},
+                                        {14, 10, 6, outline(x, y)},
+                                        {body[(y * w + x) * 4], body[(y * w + x) * 4 + 1], body[(y * w + x) * 4 + 2], coverage(x, y)}};
+            float rgb[3] = {};
+            float alpha = 0;
+            for (const auto& layer : layers)
+            {
+                for (int k = 0; k < 3; k++)
                 {
-                    edge |= src.Opaque(x + i, y + j);
+                    rgb[k] = layer[k] * layer[3] + rgb[k] * (1 - layer[3]);
                 }
+                alpha = layer[3] + alpha * (1 - layer[3]);
             }
-            out.At(x, y) = edge ? Rgba(12, 8, 8, 255) : p;
+            if (alpha > 0)
+            {
+                out.At(x, y) = Rgba(static_cast<int>(rgb[0] / alpha), static_cast<int>(rgb[1] / alpha),
+                                    static_cast<int>(rgb[2] / alpha), static_cast<int>(alpha * 255 + 0.5f));
+            }
         }
     }
+
+    int first = src.mW;
+    int last = -1;
+    for (int x = 0; x < src.mW; x++)
+    {
+        if (src.Opaque(x, 0))
+        {
+            first = x < first ? x : first;
+            last = x;
+        }
+    }
+    const float tipX = (first + last + 1) / 2.0f - src.mW / 2.0f;
+    const float tipY = -src.mH / 2.0f;
+    *pHotX = static_cast<int>((tipX * c + tipY * s) * scale + w / 2.0f);
+    *pHotY = static_cast<int>((-tipX * s + tipY * c) * scale + h / 2.0f);
     return out;
 }
+} // namespace
 
-void SetCursor(const Image& img)
+// About the size of the system's arrow: one and a half sprite pixels per screen pixel at 1080 lines,
+// in proportion to the display's height.
+void port_SetGameCursor()
 {
-    // The hotspot is the tip: the opaque pixel nearest the top left corner.
-    int hotX = img.mW;
-    int hotY = img.mH;
-    for (int y = 0; y < img.mH; y++)
+    Image sprite;
+    if (!LoadUserSprite(kStyle, kUserSprite, &sprite))
     {
-        for (int x = 0; x < img.mW; x++)
+        return;
+    }
+    // Only the sprite's opaque part, which must start on its top row.
+    int right = 0;
+    int bottom = 0;
+    for (int y = 0; y < sprite.mH; y++)
+    {
+        for (int x = 0; x < sprite.mW; x++)
         {
-            if (img.Opaque(x, y) && x + y < hotX + hotY)
+            if (sprite.Opaque(x, y))
             {
-                hotX = x;
-                hotY = y;
+                right = x + 1 > right ? x + 1 : right;
+                bottom = y + 1;
             }
         }
+    }
+    Image cropped = NewImage(right, bottom);
+    for (int y = 0; y < bottom; y++)
+    {
+        for (int x = 0; x < right; x++)
+        {
+            cropped.At(x, y) = sprite.At(x, y);
+        }
+    }
+    const SDL_DisplayMode* pMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    const float scale = pMode && pMode->h > 0 ? pMode->h / 720.0f : 1.5f;
+    int hotX;
+    int hotY;
+    const Image img = Render(cropped, scale, kTurn, &hotX, &hotY);
+    if (const char* pPath = getenv("GTA2_CURSOR_BMP"))
+    {
+        SDL_Surface* pSurface = SDL_CreateSurfaceFrom(img.mW, img.mH, SDL_PIXELFORMAT_RGBA32,
+                                                      const_cast<Uint32*>(img.mPixels.data()), img.mW * 4);
+        SDL_SaveBMP(pSurface, pPath);
+        SDL_DestroySurface(pSurface);
+        SDL_Log("cursor %dx%d, hotspot %d,%d", img.mW, img.mH, hotX, hotY);
     }
     SDL_Surface* pSurface = SDL_CreateSurfaceFrom(img.mW, img.mH, SDL_PIXELFORMAT_RGBA32,
                                                   const_cast<Uint32*>(img.mPixels.data()), img.mW * 4);
@@ -215,30 +326,4 @@ void SetCursor(const Image& img)
     {
         SDL_SetCursor(pCursor);
     }
-}
-} // namespace
-
-// About the size of the system's arrow: the sprite's pixels as they are up to 1440 lines, one more
-// step every 1080 lines from there (twice as big at 4K).
-void port_SetGameCursor()
-{
-    Image sprite;
-    if (!LoadUserSprite(kStyle, kUserSprite, &sprite))
-    {
-        return;
-    }
-    const SDL_DisplayMode* pMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
-    const int scale = pMode && pMode->h > 1080 ? (pMode->h + 540) / 1080 : 1;
-    Image img = Turn(sprite, scale, kTurn);
-    for (int i = 0; i < scale; i++)
-    {
-        img = Outline(img);
-    }
-    if (const char* pPath = getenv("GTA2_CURSOR_BMP"))
-    {
-        SDL_Surface* pSurface = SDL_CreateSurfaceFrom(img.mW, img.mH, SDL_PIXELFORMAT_RGBA32, img.mPixels.data(), img.mW * 4);
-        SDL_SaveBMP(pSurface, pPath);
-        SDL_DestroySurface(pSurface);
-    }
-    SetCursor(img);
 }
