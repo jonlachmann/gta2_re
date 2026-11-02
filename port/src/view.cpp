@@ -303,3 +303,14 @@ void PortViewTurnPoint640(Fix16& x, Fix16& y)
         y = Fix16(240.0f + PortView::sStepSin * dx + PortView::sStepCos * dy);
     }
 }
+
+void PortViewTurnSound(Fix16& x, Fix16& y)
+{
+    if (PortView::sValid)
+    {
+        const f32 fx = PortView::ToF(x);
+        const f32 fy = PortView::ToF(y);
+        x = Fix16(PortView::sStepCos * fx - PortView::sStepSin * fy);
+        y = Fix16(PortView::sStepSin * fx + PortView::sStepCos * fy);
+    }
+}
