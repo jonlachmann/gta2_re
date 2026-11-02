@@ -374,11 +374,39 @@ void Sprite(s16 sprite, f32 x, f32 y)
                palette_types_enum::sprites_2, 0, 0, 0, false);
 }
 
-// The text's column, or just after the text before it when that is longer.
-f32 Column(f32 column, f32 x, const wchar_t* pBefore, s16 font)
+f32 Max(f32 a, f32 b)
 {
-    const f32 after = x + Width(pBefore, font) + 10;
-    return after > column ? after : column;
+    return a > b ? a : b;
+}
+
+void Panel(f32 left, f32 top, f32 right, f32 bottom)
+{
+    Vert verts[4] = {};
+    verts[0].x = verts[3].x = sLeft + left * sScale;
+    verts[1].x = verts[2].x = sLeft + right * sScale;
+    verts[0].y = verts[1].y = sTop + top * sScale;
+    verts[2].y = verts[3].y = sTop + bottom * sScale;
+    pgbh_DrawFlatRect(verts, 0);
+}
+
+// A setting's value, or a binding's key and pad input; empty for other items.
+void ItemValues(const Item& item, wchar_t* pValue, wchar_t* pPad)
+{
+    pValue[0] = 0;
+    pPad[0] = 0;
+    if (item.mKind == kSetting)
+    {
+        PortSettings::Value(static_cast<PortSettings::Id>(item.mArg), pValue);
+    }
+    else if (item.mKind == kBinding)
+    {
+        KeyName(GetKey(item.mArg), pValue);
+        PadName(GetBinding(1, item.mArg), pPad);
+        if (sCapturing == item.mArg)
+        {
+            wcscpy(sColumn ? pPad : pValue, Translate(L"PRESS"));
+        }
+    }
 }
 
 // The keys at the bottom, or the pad's buttons in the frontend's red discs once the pad was used last.
@@ -560,7 +588,7 @@ const wchar_t* Title()
     return Translate(kTitles[sPage]);
 }
 
-void Draw(f32 scale, f32 left, f32 top)
+void Draw(f32 scale, f32 left, f32 top, bool panel)
 {
     sScale = scale;
     sLeft = left;
@@ -569,18 +597,59 @@ void Draw(f32 scale, f32 left, f32 top)
     {
         LoadKeyNames();
     }
-    const bool controls = sPage == kControlsPage || sPage == kControls2Page;
-    const f32 x = controls ? 60.0f : 120.0f;
-    if (controls)
-    {
-        Text(Translate(L"KEYBOARD"), 300, 140, gFrontendNormalFont);
-#if defined(GTA2_PORT_SDL)
-        Text(Translate(L"GAMEPAD"), 470, 140, gFrontendNormalFont);
-#endif
-    }
-
     Item items[kMaxItems];
     const s32 count = Items(sPage, items);
+    const bool controls = sPage == kControlsPage || sPage == kControls2Page;
+#if defined(GTA2_PORT_SDL)
+    const bool padColumn = controls;
+#else
+    const bool padColumn = false;
+#endif
+    const wchar_t* pKeyboard = Translate(L"KEYBOARD");
+    const wchar_t* pGamepad = Translate(L"GAMEPAD");
+
+    // The columns at their places, or further right for longer texts, a gap after the longest.
+    const s16 normal = gFrontendNormalFont;
+    f32 nameWidth = 0;
+    f32 valueWidth = controls ? Width(pKeyboard, normal) : 0;
+    f32 padWidth = padColumn ? Width(pGamepad, normal) : 0;
+    wchar_t value[24];
+    wchar_t pad[24];
+    for (s32 i = 0; i < count; i++)
+    {
+        if (items[i].mKind == kSetting || items[i].mKind == kBinding)
+        {
+            ItemValues(items[i], value, pad);
+            nameWidth = Max(nameWidth, Width(ItemName(items[i]), normal));
+            valueWidth = Max(valueWidth, Width(value, normal));
+            padWidth = Max(padWidth, Width(pad, normal));
+        }
+    }
+    const f32 kGap = 24;
+    f32 x = controls ? 60.0f : 120.0f;
+    f32 valueX = Max(controls ? 300.0f : 380.0f, x + nameWidth + kGap);
+    f32 padX = Max(470, valueX + valueWidth + kGap);
+    f32 right = padColumn ? padX + padWidth : valueX + valueWidth;
+    // Inside the frontend's screen: the page moves left, down to x 20.
+    f32 shift = right - 630;
+    shift = shift < 0 ? 0 : (shift > x - 20 ? x - 20 : shift);
+    x -= shift;
+    valueX -= shift;
+    padX -= shift;
+    right -= shift;
+
+    if (panel)
+    {
+        Panel(x < 60 ? x - 20 : 40, 130, Max(600, right + 20), 470);
+    }
+    if (controls)
+    {
+        Text(pKeyboard, valueX, 140, normal);
+        if (padColumn)
+        {
+            Text(pGamepad, padX, 140, normal);
+        }
+    }
     f32 y = 160;
     for (s32 i = 0; i < count; i++)
     {
@@ -590,34 +659,17 @@ void Draw(f32 scale, f32 left, f32 top)
             y += item.mGap ? 34 : 22;
         }
         const bool selected = i == sSelected[sPage];
-        const s16 font = selected ? gFrontendSelectedFont : gFrontendNormalFont;
-        const wchar_t* pName = ItemName(item);
-        Text(pName, x, y, font);
-        wchar_t value[24];
-        if (item.mKind == kSetting)
+        const s16 font = selected ? gFrontendSelectedFont : normal;
+        ItemValues(item, value, pad);
+        Text(ItemName(item), x, y, font);
+        Text(value, valueX, y, font);
+        if (padColumn && item.mKind == kBinding)
         {
-            PortSettings::Value(static_cast<PortSettings::Id>(item.mArg), value);
-            Text(value, Column(380, x, pName, font), y, font);
-        }
-        else if (item.mKind == kBinding)
-        {
-            wchar_t pad[24];
-            KeyName(GetKey(item.mArg), value);
-            PadName(GetBinding(1, item.mArg), pad);
-            if (sCapturing == item.mArg)
-            {
-                wcscpy(sColumn ? pad : value, Translate(L"PRESS"));
-            }
-            const f32 keyX = Column(300, x, pName, font);
-            Text(value, keyX, y, font);
-#if defined(GTA2_PORT_SDL)
-            const f32 padX = Column(470, keyX, value, font);
             Text(pad, padX, y, font);
             if (selected)
             {
-                Sprite(kArrowSprite, (sColumn ? padX : keyX) - 12, y + 6);
+                Sprite(kArrowSprite, (sColumn ? padX : valueX) - 12, y + 6);
             }
-#endif
         }
     }
     DrawHints();

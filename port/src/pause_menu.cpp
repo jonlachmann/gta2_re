@@ -119,19 +119,6 @@ void Close()
     }
 }
 
-void Panel(f32 left, f32 top, f32 right, f32 bottom)
-{
-    Vert verts[4] = {};
-    verts[0].x = left;
-    verts[0].y = top;
-    verts[1].x = right;
-    verts[1].y = top;
-    verts[2].x = right;
-    verts[2].y = bottom;
-    verts[3].x = left;
-    verts[3].y = bottom;
-    pgbh_DrawFlatRect(verts, 0);
-}
 } // namespace
 
 bool IsOpen()
@@ -198,19 +185,19 @@ void Draw()
     }
     PortMenu::UpdateCapture();
 
-    // The 640x480 layout centred on the screen; the original's banner, higher to leave room for the menu.
+    // The 640x480 layout centred on the screen, the menu then the original's banner over its panel, higher
+    // to leave room for the menu.
     const f32 scale = gViewCamera->mUiScale.mValue / 16384.0f;
     const f32 left = (gViewCamera->mScreenPxWidth - 640.0f * scale) / 2;
     const f32 top = (gViewCamera->mScreenPxHeight - 480.0f * scale) / 2;
-    Panel(left + 40 * scale, top + 130 * scale, left + 600 * scale, top + 470 * scale);
+    UseFrontendStyle(false);
+    PortMenu::Draw(scale, left, top, true);
+    UseGameStyle();
     DrawFigureScaled(sprite_types_enum::user_6, 134, 227, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
     DrawFigureScaled(sprite_types_enum::user_6, 136, 320, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
     DrawFigureScaled(sprite_types_enum::user_6, 135, 413, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
     wchar_t* pPause = gText_0x14->Find("pause");
     DrawStringScaledPalette(pPause, (640 - Frontend::GetMaxTextWidth(pPause, static_cast<u16>(word_7064D8))) / 2, 78,
                             static_cast<u16>(word_7064D8), palette_types_enum::sprites_2, 0, 0, 0);
-    UseFrontendStyle(false);
-    PortMenu::Draw(scale, left, top);
-    UseGameStyle();
 }
 } // namespace PortPauseMenu

@@ -101,7 +101,7 @@ void Draw(Frontend* pFrontend)
 {
     if (pFrontend->mCurrentPageIdx == kMenuPage)
     {
-        PortMenu::Draw(1.0f, 0.0f, 0.0f);
+        PortMenu::Draw(1.0f, 0.0f, 0.0f, false);
     }
 }
 

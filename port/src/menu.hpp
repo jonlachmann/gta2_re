@@ -44,6 +44,7 @@ Result UpdateCapture();
 
 const wchar_t* Title();
 
-// The 640x480 layout at that scale and screen position. Needs the frontend's style.
-void Draw(f32 scale, f32 left, f32 top);
+// The 640x480 layout at that scale and screen position, on a black panel sized to the page if asked.
+// Needs the frontend's style.
+void Draw(f32 scale, f32 left, f32 top, bool panel);
 } // namespace PortMenu
