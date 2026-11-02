@@ -49,7 +49,7 @@ const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kView[] = {kZoom, kCamera, kHudScale, kSafeArea};
+const Id kView[] = {kZoom, kCamera, kCameraTilt, kHudScale, kSafeArea};
 #else
 const Id kView[] = {kZoom, kHudScale, kSafeArea};
 #endif
@@ -60,7 +60,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT"};
 
 struct Language
 {
@@ -131,6 +131,7 @@ const Translation kTranslations[] = {
     {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
     {L"CAMERA", NULL, {L"CAMERA", L"KAMERA", L"TELECAMERA", L"CÁMARA"}},
     {L"CLASSIC", NULL, {L"CLASSIQUE", L"KLASSISCH", L"CLASSICA", L"CLÁSICA"}},
+    {L"CAMERA TILT", NULL, {L"INCLINAISON", L"NEIGUNG", L"INCLINAZIONE", L"INCLINACIÓN"}},
     {L"CHINATOWN", NULL, {L"CHINATOWN", L"CHINATOWN", L"CHINATOWN", L"CHINATOWN"}},
     {L"LIGHT EFFECTS", NULL, {L"EFFETS LUMINEUX", L"LICHTEFFEKTE", L"EFFETTI LUCE", L"EFECTOS DE LUZ"}},
     {L"TEXTURE FILTERING", NULL, {L"FILTRAGE TEXTURES", L"TEXTURFILTER", L"FILTRO TEXTURE", L"FILTRADO TEXTURAS"}},
@@ -259,6 +260,8 @@ const char* ScreenName(Id id)
             return "gl_msaa";
         case kCamera:
             return "camera_cw";
+        case kCameraTilt:
+            return "camera_tilt";
         case kShadows:
             return "gl_soft_shadows";
         default:
@@ -280,6 +283,10 @@ s32 ScreenDefault(Id id)
     if (id == kTextureFilter)
     {
         return 2;
+    }
+    if (id == kCameraTilt)
+    {
+        return 8;
     }
     return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
@@ -322,6 +329,8 @@ s32 sHudScale = -1;
 s32 sSafeArea = -1;
 // Cached: the view reads it every step and frame.
 s32 sCamera = -1;
+s32 sCameraTilt = -1;
+const s32 kMaxCameraTilt = 15;
 
 s32 HudScalePercent()
 {
@@ -444,6 +453,10 @@ f32 SafeArea()
 
 Id Requirement(Id id)
 {
+    if (id == kCameraTilt)
+    {
+        return kCamera;
+    }
 #if defined(GTA2_PORT_SDL)
     if (id == kHeadlights || id == kLightEffects)
     {
@@ -470,6 +483,15 @@ bool ChinatownCamera()
 #else
     return false;
 #endif
+}
+
+s32 CameraTilt()
+{
+    if (sCameraTilt < 0)
+    {
+        sCameraTilt = Clamp(Screen(kCameraTilt), 0, kMaxCameraTilt);
+    }
+    return sCameraTilt;
 }
 
 bool Headlights()
@@ -531,6 +553,11 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pMax = kMaxSafeArea;
             *pValue = SafeAreaPercent();
             return true;
+        case kCameraTilt:
+            *pMin = 0;
+            *pMax = kMaxCameraTilt;
+            *pValue = CameraTilt();
+            return true;
         default:
             return false;
     }
@@ -582,6 +609,9 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kSafeArea:
             swprintf(pOut, L"%d", SafeAreaPercent());
+            break;
+        case kCameraTilt:
+            swprintf(pOut, L"%d", CameraTilt());
             break;
         case kBloom:
             if (Screen(id))
@@ -792,6 +822,10 @@ void Change(Id id, s32 delta)
             sSafeArea = Clamp(SafeAreaPercent() + delta, 0, kMaxSafeArea);
             gRegistry.Set_Screen_Setting(ScreenName(id), sSafeArea);
             RefreshHud();
+            break;
+        case kCameraTilt:
+            sCameraTilt = Clamp(CameraTilt() + delta, 0, kMaxCameraTilt);
+            gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTilt);
             break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
