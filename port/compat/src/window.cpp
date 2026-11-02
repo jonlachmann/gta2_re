@@ -8,7 +8,6 @@
 #include <map>
 #include <string>
 #include "port_platform.hpp"
-#include "../../setup/setup.hpp"
 
 namespace
 {
@@ -133,6 +132,11 @@ void port_SetFullscreen(HWND h, bool fullscreen)
 
 extern "C" {
 
+// GTA2's icon: the game's own (resource 0x65 of gta2.exe, Icon_1.ico in the Windows build).
+static const unsigned char kIconPng[] = {
+#embed "../../resources/gta2.png"
+};
+
 ATOM WINAPI RegisterClassA(const WNDCLASSA* pClass)
 {
     Classes()[pClass->lpszClassName] = pClass->lpfnWndProc;
@@ -158,7 +162,11 @@ HWND WINAPI CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD
     if (!sMainWindow)
     {
         sMainWindow = pWin;
-        port_SetWindowIcon(pSdl);
+        if (SDL_Surface* pIcon = SDL_LoadPNG_IO(SDL_IOFromConstMem(kIconPng, sizeof(kIconPng)), true))
+        {
+            SDL_SetWindowIcon(pSdl, pIcon);
+            SDL_DestroySurface(pIcon);
+        }
         port_UpdateGameResolution();
     }
     return reinterpret_cast<HWND>(pWin);

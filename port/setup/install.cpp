@@ -402,7 +402,6 @@ struct Plan
     std::map<size_t, fs::path> mFiles; // into kStaging
     bool mHasData = false;
     std::string mRoot; // the folder that holds data, relative to the source
-    size_t mExe = SIZE_MAX; // gta2.exe, for its icon
     uint64_t mBytes = 0;
 };
 
@@ -421,7 +420,7 @@ Plan MakePlan(const std::vector<Entry>& entries)
         }
     }
     plan.mRoot = prefix.size() >= 5 ? prefix.substr(0, prefix.size() - 5) : "..";
-    const std::string lowerPrefix = Lower(prefix), lowerExe = Lower(plan.mRoot) + "gta2.exe";
+    const std::string lowerPrefix = Lower(prefix);
     std::map<std::string, bool> taken;
     for (size_t i = 0; i < entries.size(); i++)
     {
@@ -435,10 +434,6 @@ Plan MakePlan(const std::vector<Entry>& entries)
         else if (slash != std::string::npos && EndsWith(lower.substr(0, slash), "gtaudio") && EndsWith(lower, ".wav"))
         {
             dest = std::string(kMusicDir) + entries[i].mPath.substr(slash + 1);
-        }
-        else if (plan.mHasData && lower == lowerExe)
-        {
-            plan.mExe = i;
         }
         if (Lower(dest).compare(0, strlen(kMusicDir), Lower(kMusicDir)) == 0)
         {
@@ -567,11 +562,7 @@ InstallResult Install(const fs::path& sourcePath, Progress& progress)
     {
         return Fail(error, progress);
     }
-    if (plan.mExe != SIZE_MAX)
-    {
-        plan.mFiles[plan.mExe] = fs::path(kStaging) / "gta2.exe";
-    }
-    progress.mTotal = plan.mBytes + (plan.mExe != SIZE_MAX ? source->mEntries[plan.mExe].mSize : 0);
+    progress.mTotal = plan.mBytes;
     if (!source->Extract(plan.mFiles, progress, &error))
     {
         return Fail(error, progress);
@@ -621,7 +612,6 @@ InstallResult Install(const fs::path& sourcePath, Progress& progress)
             return Fail(error, progress);
         }
         fs::remove_all("data.old", ec);
-        SaveExeIcon(fs::path(kStaging) / "gta2.exe", "gta2_icon.bmp");
 
         // A folder the port already ran from: its settings and saves come along.
         const fs::path root = (sourcePath / PathFromUtf8(plan.mRoot)).lexically_normal();

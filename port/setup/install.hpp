@@ -57,7 +57,4 @@ struct InstallResult
 
 // source: a folder, or a file (InstallShield setup, disc image, archive).
 InstallResult Install(const fs::path& source, Progress& progress);
-
-// The largest image of gta2.exe's icon (group 0x65), as a BMP file.
-bool SaveExeIcon(const fs::path& exe, const fs::path& bmp);
 } // namespace setup

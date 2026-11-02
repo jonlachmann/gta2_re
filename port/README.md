@@ -63,9 +63,7 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 | macOS | `~/Library/Application Support/gta2_re/` |
 
 It holds `data/` (the game's data, the music in `data/GTAudio/`), `gta2_registry.ini` (settings),
-`gta2gl.ini` (renderer options), `player/` (saves and high scores), `test/` (replays, logs) and
-`gta2_icon.bmp`, the window icon: GTA2's own, taken from the `gta2.exe` of the source (the port has
-no icon of its own). A game folder without it gives the icon of its `gta2.exe`, if any.
+`gta2gl.ini` (renderer options), `player/` (saves and high scores) and `test/` (replays, logs).
 
 Without the data there, a message box offers three choices:
 
@@ -210,7 +208,6 @@ to unshield and libarchive.
 | `GTA2_SETUP_PATH=<folder or file>` | the setup installs from it, without the first question and the dialog (messages shown after it still wait, unless `GTA2_NO_MESSAGEBOX=1`) |
 | `GTA2_SETUP_DRAWN=1` | the setup's questions in its own window, not in message boxes |
 | `GTA2_SETUP_CAPTURE=<dir>` | the setup's windows written there as BMP |
-| `GTA2_ICON_BMP=<file>` | the window icon written to that BMP |
 
 Frames count presented frames, except that while the game runs they count its logic steps, so a
 script does the same at any frame rate. A run nobody sees, with the sound written to a file:
