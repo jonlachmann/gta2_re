@@ -1,5 +1,5 @@
-// The in-game pause menu: Escape pauses the game and opens it (resume, sound, screen, text speed,
-// controls, quit) over the original's pause banner. Quit leads to the original's quit message.
+// The in-game pause menu: Escape pauses the game and opens it over the original's pause banner, with
+// the options menu's settings applied at once, the controls, and quit.
 #pragma once
 
 #include "Player.hpp"

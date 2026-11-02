@@ -21,6 +21,7 @@
 EXTERN_GLOBAL(s16, word_7064D8);
 
 void __stdcall SetStartMode(s32 startMode);
+void __stdcall Init_FrameRateLightingAndExplodingScores();
 void __stdcall SetVideoModeFromSettings();
 void OnVideoModeChanged();
 char_type IsWindowedModeAvailable();
@@ -39,16 +40,55 @@ enum Item
     kResume,
     kSfx,
     kMusic,
+    k3dSound,
     kBrightness,
     kDisplay,
+    kLighting,
+    kExplodingScores,
+    kFrameLimit,
     kTextSpeed,
+    kLanguage,
     kControls,
     kQuit,
     kNumItems,
 };
 
-const wchar_t* const kItemNames[kNumItems] = {L"RESUME", L"SOUND EFFECTS", L"MUSIC", L"BRIGHTNESS",
-                                              L"DISPLAY", L"TEXT SPEED", L"CONTROLS", L"QUIT GAME"};
+const wchar_t* const kItemNames[kNumItems] = {L"RESUME", L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"BRIGHTNESS",
+                                              L"DISPLAY", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
+                                              L"TEXT SPEED", L"LANGUAGE", L"CONTROLS", L"QUIT GAME"};
+
+struct Language
+{
+    char mCode;
+    const wchar_t* mName;
+};
+const Language kLanguages[] = {{'e', L"ENGLISH"}, {'f', L"FRANCAIS"}, {'g', L"DEUTSCH"}, {'i', L"ITALIANO"}, {'s', L"ESPANOL"}};
+const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
+
+s32 LanguageIndex()
+{
+    char code[16] = "e";
+    gRegistry.Get_Option("language", reinterpret_cast<BYTE*>(code), sizeof(code));
+    for (s32 i = 0; i < kNumLanguages; i++)
+    {
+        if (kLanguages[i].mCode == code[0])
+        {
+            return i;
+        }
+    }
+    return 0;
+}
+
+void SetOption(const char* name, DWORD type, const void* pData, DWORD size)
+{
+    HKEY hKey;
+    if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Option", 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &hKey, NULL) == ERROR_SUCCESS)
+    {
+        RegSetValueExA(hKey, name, 0, type, static_cast<const BYTE*>(pData), size);
+        RegCloseKey(hKey);
+    }
+}
 
 bool sOpen;
 bool sControlsPage;
@@ -144,14 +184,34 @@ void Change(s32 item, s32 delta)
         case kTextSpeed:
         {
             const DWORD speed = static_cast<DWORD>(Clamp(gRegistry.Get_Option_Int("text_speed", 3) + delta, 1, 5));
-            HKEY hKey;
-            if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Option", 0, NULL, 0,
-                                KEY_ALL_ACCESS, NULL, &hKey, NULL) == ERROR_SUCCESS)
-            {
-                RegSetValueExA(hKey, "text_speed", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&speed), sizeof(speed));
-                RegCloseKey(hKey);
-            }
+            SetOption("text_speed", REG_DWORD, &speed, sizeof(speed));
             gHud_2B00->GetTextSpeed();
+            break;
+        }
+        case k3dSound:
+        {
+            // As the game does when it starts: the setting stays on only if a 3D provider opened.
+            gRoot_sound.Set3DSound(!gRegistry.Sound_Setting_Exists("do_3d_sound"));
+            gRegistry.Clear_Or_Delete_Sound_Setting("do_3d_sound", gRoot_sound.Get3DSound());
+            break;
+        }
+        case kLighting:
+        case kExplodingScores:
+        case kFrameLimit:
+        {
+            const char* name = item == kLighting ? "lighting" : (item == kExplodingScores ? "exploding_on" : "max_frame_rate");
+            gRegistry.Set_Screen_Setting(name, gRegistry.Get_Screen_Setting(name, 1) ? 0 : 1);
+            Init_FrameRateLightingAndExplodingScores();
+            break;
+        }
+        case kLanguage:
+        {
+            const char code[2] = {kLanguages[(LanguageIndex() + delta + kNumLanguages) % kNumLanguages].mCode, 0};
+            SetOption("language", REG_SZ, code, sizeof(code));
+            delete gText_0x14;
+            gText_0x14 = new TextTable();
+            gText_0x14->Load();
+            gHud_2B00->RecalcTextLayout();
             break;
         }
         default:
@@ -176,6 +236,21 @@ void Value(s32 item, wchar_t* pOut)
             break;
         case kTextSpeed:
             wcscpy(pOut, PortOptionsMenu::TextSpeedName(gRegistry.Get_Option_Int("text_speed", 3)));
+            break;
+        case k3dSound:
+            wcscpy(pOut, gRegistry.Sound_Setting_Exists("do_3d_sound") ? L"ON" : L"OFF");
+            break;
+        case kLighting:
+            wcscpy(pOut, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
+            break;
+        case kExplodingScores:
+            wcscpy(pOut, gRegistry.Get_Screen_Setting("exploding_on", 1) ? L"ON" : L"OFF");
+            break;
+        case kFrameLimit:
+            wcscpy(pOut, gRegistry.Get_Screen_Setting("max_frame_rate", 1) ? L"ON" : L"OFF");
+            break;
+        case kLanguage:
+            wcscpy(pOut, kLanguages[LanguageIndex()].mName);
             break;
         default:
             break;
@@ -298,7 +373,7 @@ bool HandleKey(s32 action, Player* pPlayer)
             else if (sSelected == kQuit)
             {
                 Close();
-                gHud_2B00->mQuitMessage.ShowQuitMessage(pPlayer);
+                gGame_0x40->ExitGameNoBonus(1, GameExitType::PlayerQuit_2);
             }
             else
             {
@@ -351,13 +426,13 @@ void Draw()
     wchar_t value[32];
     if (!sControlsPage)
     {
-        Panel(150, 165, 490, 165 + kNumItems * 20 + 10);
+        Panel(130, 160, 510, 160 + kNumItems * 18 + 10);
         for (s32 i = 0; i < kNumItems; i++)
         {
-            const f32 y = 172.0f + i * 20;
-            Text(kItemNames[i], 170, y, i == sSelected);
+            const f32 y = 167.0f + i * 18;
+            Text(kItemNames[i], 150, y, i == sSelected);
             Value(i, value);
-            Text(value, 360, y, i == sSelected);
+            Text(value, 370, y, i == sSelected);
         }
         return;
     }
