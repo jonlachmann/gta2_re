@@ -26,7 +26,8 @@ PortMenu::Result HandleInput(Frontend* pFrontend)
 {
     if (PortMenu::IsCapturing())
     {
-        return PortMenu::UpdateCapture();
+        const PortMenu::Result result = PortMenu::UpdateCapture();
+        return result != PortMenu::kNothing ? result : PortMenu::HandleMouse(1.0f, 0.0f, 0.0f);
     }
     const struct
     {
@@ -42,7 +43,7 @@ PortMenu::Result HandleInput(Frontend* pFrontend)
             return PortMenu::HandleInput(input.mInput);
         }
     }
-    return PortMenu::kNothing;
+    return PortMenu::HandleMouse(1.0f, 0.0f, 0.0f);
 }
 } // namespace
 

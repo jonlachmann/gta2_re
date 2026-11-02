@@ -23,6 +23,8 @@ int port_DefaultPadBinding(int control);
 void port_CaptureStart();
 int port_CapturedKey();
 int port_CapturedPad();
+bool port_MouseMode();
+bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel);
 #endif
 
 namespace PortMenu
@@ -78,8 +80,9 @@ const s32 kPadRight = 225;
 const s32 kPadUp = 226;
 const s32 kPadDown = 227;
 
-// The frontend's user sprites: a disc behind a pad button's name, an arrow.
+// The frontend's user sprites: a disc behind a pad button's name, arrows.
 const s16 kDiscSprite = 2;
+const s16 kLeftArrowSprite = 37;
 const s16 kArrowSprite = 38;
 
 Page sPage;
@@ -409,6 +412,110 @@ void ItemValues(const Item& item, wchar_t* pValue, wchar_t* pPad)
     }
 }
 
+// Where Draw puts the page in the 640x480 layout.
+struct Layout
+{
+    Item mItems[kMaxItems];
+    f32 mY[kMaxItems]; // each line's top
+    s32 mCount;
+    bool mControls;
+    bool mPadColumn;
+    f32 mX;
+    f32 mValueX;
+    f32 mPadX;
+    f32 mPanelLeft;
+    f32 mPanelRight;
+};
+
+// From a setting's value to the centre of the arrows the mouse changes it with.
+const f32 kArrowGap = 14;
+
+void GetLayout(Layout* pLayout)
+{
+    if (sKeyNames.empty())
+    {
+        LoadKeyNames();
+    }
+    Item* pItems = pLayout->mItems;
+    const s32 count = Items(sPage, pItems);
+    const bool controls = sPage == kControlsPage || sPage == kControls2Page;
+#if defined(GTA2_PORT_SDL)
+    const bool padColumn = controls;
+#else
+    const bool padColumn = false;
+#endif
+
+    // The columns at their places, or further right for longer texts, a gap after the longest.
+    const s16 normal = gFrontendNormalFont;
+    f32 nameWidth = 0;
+    f32 valueWidth = controls ? Width(Translate(L"KEYBOARD"), normal) : 0;
+    f32 padWidth = padColumn ? Width(Translate(L"GAMEPAD"), normal) : 0;
+    wchar_t value[24];
+    wchar_t pad[24];
+    for (s32 i = 0; i < count; i++)
+    {
+        if (pItems[i].mKind == kSetting || pItems[i].mKind == kBinding)
+        {
+            ItemValues(pItems[i], value, pad);
+            nameWidth = Max(nameWidth, Width(ItemName(pItems[i]), normal));
+            valueWidth = Max(valueWidth, Width(value, normal));
+            padWidth = Max(padWidth, Width(pad, normal));
+        }
+    }
+    const f32 kGap = 24;
+    f32 x = controls ? 60.0f : 120.0f;
+    f32 valueX = Max(controls ? 300.0f : 380.0f, x + nameWidth + kGap);
+    f32 padX = Max(470, valueX + valueWidth + kGap);
+    f32 right = padColumn ? padX + padWidth : valueX + valueWidth;
+    // Inside the frontend's screen: the page moves left, down to x 20.
+    f32 shift = right - 630;
+    shift = shift < 0 ? 0 : (shift > x - 20 ? x - 20 : shift);
+
+    pLayout->mCount = count;
+    pLayout->mControls = controls;
+    pLayout->mPadColumn = padColumn;
+    pLayout->mX = x - shift;
+    pLayout->mValueX = valueX - shift;
+    pLayout->mPadX = padX - shift;
+    pLayout->mPanelLeft = pLayout->mX < 60 ? pLayout->mX - 20 : 40;
+    pLayout->mPanelRight = Max(600, right - shift + (controls ? 20 : kArrowGap + 16));
+    f32 y = 160;
+    for (s32 i = 0; i < count; i++)
+    {
+        if (i)
+        {
+            y += pItems[i].mGap ? 34 : 22;
+        }
+        pLayout->mY[i] = y;
+    }
+}
+
+// The line under that layout position, -1 if none.
+s32 LineAt(const Layout& layout, f32 x, f32 y)
+{
+    if (x < layout.mPanelLeft || x >= layout.mPanelRight)
+    {
+        return -1;
+    }
+    for (s32 i = 0; i < layout.mCount; i++)
+    {
+        if (y >= layout.mY[i] - 4 && y < layout.mY[i] + 18)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool MouseMode()
+{
+#if defined(GTA2_PORT_SDL)
+    return port_MouseMode();
+#else
+    return false;
+#endif
+}
+
 // The keys at the bottom, or the pad's buttons in the frontend's red discs once the pad was used last.
 void DrawHints()
 {
@@ -482,6 +589,14 @@ void Open()
     sPage = kMainPage;
     sSelected[kMainPage] = 0;
     sCapturing = -1;
+#if defined(GTA2_PORT_SDL)
+    float x;
+    float y;
+    int left;
+    int right;
+    int wheel;
+    port_TakeMouse(&x, &y, &left, &right, &wheel);
+#endif
 }
 
 Result HandleInput(Input input)
@@ -583,6 +698,70 @@ Result UpdateCapture()
     return kEntered;
 }
 
+Result HandleMouse(f32 scale, f32 left, f32 top)
+{
+#if defined(GTA2_PORT_SDL)
+    float frameX;
+    float frameY;
+    int leftClicks;
+    int rightClicks;
+    int wheel;
+    const bool moved = port_TakeMouse(&frameX, &frameY, &leftClicks, &rightClicks, &wheel);
+    if (sCapturing >= 0)
+    {
+        if (rightClicks)
+        {
+            sCapturing = -1;
+            return kWentBack;
+        }
+        return kNothing;
+    }
+    if (rightClicks)
+    {
+        return Back();
+    }
+    const f32 x = (frameX - left) / scale;
+    const f32 y = (frameY - top) / scale;
+    Layout layout;
+    GetLayout(&layout);
+    const s32 line = LineAt(layout, x, y);
+    if (line < 0)
+    {
+        return kNothing;
+    }
+    const Item& item = layout.mItems[line];
+    s32& selected = sSelected[sPage];
+    Result result = kNothing;
+    if (moved || leftClicks || wheel)
+    {
+        if (line != selected)
+        {
+            result = line < selected ? kMovedUp : kMovedDown;
+            selected = line;
+        }
+        // Over a binding's keyboard or gamepad input, that column.
+        if (item.mKind == kBinding && x >= layout.mValueX - kArrowGap - 6)
+        {
+            sColumn = x >= layout.mPadX - kArrowGap - 6 ? 1 : 0;
+        }
+    }
+    if (item.mKind == kSetting && (wheel || leftClicks))
+    {
+        // The left arrow lowers, the rest of the line raises.
+        const bool lower = wheel ? wheel < 0 : x >= layout.mValueX - kArrowGap * 2 && x < layout.mValueX - 2;
+        PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), lower ? -1 : 1);
+        return lower ? kLowered : kRaised;
+    }
+    if (leftClicks)
+    {
+        return HandleInput(kSelect);
+    }
+    return result;
+#else
+    return kNothing;
+#endif
+}
+
 const wchar_t* Title()
 {
     return Translate(kTitles[sPage]);
@@ -593,83 +772,44 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
     sScale = scale;
     sLeft = left;
     sTop = top;
-    if (sKeyNames.empty())
-    {
-        LoadKeyNames();
-    }
-    Item items[kMaxItems];
-    const s32 count = Items(sPage, items);
-    const bool controls = sPage == kControlsPage || sPage == kControls2Page;
-#if defined(GTA2_PORT_SDL)
-    const bool padColumn = controls;
-#else
-    const bool padColumn = false;
-#endif
-    const wchar_t* pKeyboard = Translate(L"KEYBOARD");
-    const wchar_t* pGamepad = Translate(L"GAMEPAD");
-
-    // The columns at their places, or further right for longer texts, a gap after the longest.
+    Layout layout;
+    GetLayout(&layout);
     const s16 normal = gFrontendNormalFont;
-    f32 nameWidth = 0;
-    f32 valueWidth = controls ? Width(pKeyboard, normal) : 0;
-    f32 padWidth = padColumn ? Width(pGamepad, normal) : 0;
-    wchar_t value[24];
-    wchar_t pad[24];
-    for (s32 i = 0; i < count; i++)
-    {
-        if (items[i].mKind == kSetting || items[i].mKind == kBinding)
-        {
-            ItemValues(items[i], value, pad);
-            nameWidth = Max(nameWidth, Width(ItemName(items[i]), normal));
-            valueWidth = Max(valueWidth, Width(value, normal));
-            padWidth = Max(padWidth, Width(pad, normal));
-        }
-    }
-    const f32 kGap = 24;
-    f32 x = controls ? 60.0f : 120.0f;
-    f32 valueX = Max(controls ? 300.0f : 380.0f, x + nameWidth + kGap);
-    f32 padX = Max(470, valueX + valueWidth + kGap);
-    f32 right = padColumn ? padX + padWidth : valueX + valueWidth;
-    // Inside the frontend's screen: the page moves left, down to x 20.
-    f32 shift = right - 630;
-    shift = shift < 0 ? 0 : (shift > x - 20 ? x - 20 : shift);
-    x -= shift;
-    valueX -= shift;
-    padX -= shift;
-    right -= shift;
-
     if (panel)
     {
-        Panel(x < 60 ? x - 20 : 40, 130, Max(600, right + 20), 470);
+        Panel(layout.mPanelLeft, 130, layout.mPanelRight, 470);
     }
-    if (controls)
+    if (layout.mControls)
     {
-        Text(pKeyboard, valueX, 140, normal);
-        if (padColumn)
+        Text(Translate(L"KEYBOARD"), layout.mValueX, 140, normal);
+        if (layout.mPadColumn)
         {
-            Text(pGamepad, padX, 140, normal);
+            Text(Translate(L"GAMEPAD"), layout.mPadX, 140, normal);
         }
     }
-    f32 y = 160;
-    for (s32 i = 0; i < count; i++)
+    wchar_t value[24];
+    wchar_t pad[24];
+    for (s32 i = 0; i < layout.mCount; i++)
     {
-        const Item& item = items[i];
-        if (i)
-        {
-            y += item.mGap ? 34 : 22;
-        }
+        const Item& item = layout.mItems[i];
+        const f32 y = layout.mY[i];
         const bool selected = i == sSelected[sPage];
         const s16 font = selected ? gFrontendSelectedFont : normal;
         ItemValues(item, value, pad);
-        Text(ItemName(item), x, y, font);
-        Text(value, valueX, y, font);
-        if (padColumn && item.mKind == kBinding)
+        Text(ItemName(item), layout.mX, y, font);
+        Text(value, layout.mValueX, y, font);
+        if (layout.mPadColumn && item.mKind == kBinding)
         {
-            Text(pad, padX, y, font);
+            Text(pad, layout.mPadX, y, font);
             if (selected)
             {
-                Sprite(kArrowSprite, (sColumn ? padX : valueX) - 12, y + 6);
+                Sprite(kArrowSprite, (sColumn ? layout.mPadX : layout.mValueX) - 12, y + 6);
             }
+        }
+        if (selected && item.mKind == kSetting && MouseMode())
+        {
+            Sprite(kLeftArrowSprite, layout.mValueX - kArrowGap, y + 6);
+            Sprite(kArrowSprite, layout.mValueX + Width(value, font) + kArrowGap, y + 6);
         }
     }
     DrawHints();

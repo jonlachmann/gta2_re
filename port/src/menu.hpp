@@ -42,6 +42,10 @@ Result HandleInput(Input input);
 bool IsCapturing();
 Result UpdateCapture();
 
+// The mouse's moves, clicks and wheel since the last call, with the layout placed as Draw places it.
+// Needs the frontend's style.
+Result HandleMouse(f32 scale, f32 left, f32 top);
+
 const wchar_t* Title();
 
 // The 640x480 layout at that scale and screen position, on a black panel sized to the page if asked.

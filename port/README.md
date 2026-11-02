@@ -37,6 +37,8 @@ GTA2_DIR=~/games/gta2 ./build_linux/gta2
 Settings live in `gta2_registry.ini` (the registry keys of the Windows game). Alt+Enter switches
 between window and full screen. The first gamepad is used, or the first whose name contains
 `GTA2_GAMEPAD`; bind it in the game's control options (stick and d-pad are the two axes).
+The menus also take the mouse: pointing selects, a click enters or changes a value, the right
+button goes back, the wheel changes a value; the cursor shows while the mouse is in use over a menu.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
 

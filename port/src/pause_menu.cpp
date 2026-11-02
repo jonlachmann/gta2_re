@@ -119,6 +119,17 @@ void Close()
     }
 }
 
+void Apply(PortMenu::Result result)
+{
+    if (result == PortMenu::kClosed || result == PortMenu::kQuitGame)
+    {
+        Close();
+    }
+    if (result == PortMenu::kQuitGame)
+    {
+        gGame_0x40->ExitGameNoBonus(1, GameExitType::PlayerQuit_2);
+    }
+}
 } // namespace
 
 bool IsOpen()
@@ -162,18 +173,7 @@ bool HandleKey(s32 action, Player* pPlayer)
     {
         return true;
     }
-    switch (PortMenu::HandleInput(kInputs[i].mInput))
-    {
-        case PortMenu::kClosed:
-            Close();
-            break;
-        case PortMenu::kQuitGame:
-            Close();
-            gGame_0x40->ExitGameNoBonus(1, GameExitType::PlayerQuit_2);
-            break;
-        default:
-            break;
-    }
+    Apply(PortMenu::HandleInput(kInputs[i].mInput));
     return true;
 }
 
@@ -191,6 +191,13 @@ void Draw()
     const f32 left = (gViewCamera->mScreenPxWidth - 640.0f * scale) / 2;
     const f32 top = (gViewCamera->mScreenPxHeight - 480.0f * scale) / 2;
     UseFrontendStyle(false);
+    const PortMenu::Result result = PortMenu::HandleMouse(scale, left, top);
+    if (result == PortMenu::kClosed || result == PortMenu::kQuitGame)
+    {
+        UseGameStyle();
+        Apply(result);
+        return;
+    }
     PortMenu::Draw(scale, left, top, true);
     UseGameStyle();
     DrawFigureScaled(sprite_types_enum::user_6, 134, 227, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
