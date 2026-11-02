@@ -3660,6 +3660,9 @@ void MapRenderer::Draw()
                 pIter--;
             }
         }
+#if defined(GTA2_PORT)
+        PortHeadlights::DrawBeams(zLayer);
+#endif
     }
     gSpriteRenderer->Draw(7);    // draw all sprites on the highest layer
 }
