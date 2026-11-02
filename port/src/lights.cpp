@@ -9,6 +9,7 @@
 #include "ang16.hpp"
 #include "enums.hpp"
 #include "explosion_type.hpp"
+#include "frame_loop.hpp"
 #include "gbh_graphics.hpp"
 #include "gtx_0x106C.hpp"
 #include "settings.hpp"
@@ -134,6 +135,42 @@ void CarLights(Car* pCar, bool headlights, bool effects)
     }
 }
 
+// Hashed value in [0, 1] for lattice point i of a noise.
+f32 Hash(u32 seed, u32 i)
+{
+    u32 h = seed * 0x9E3779B1u ^ i * 0x85EBCA77u;
+    h ^= h >> 15;
+    h *= 0x2C1B3C6Du;
+    h ^= h >> 12;
+    return (h & 0xFFFF) / 65535.0f;
+}
+
+// Smooth value noise in [0, 1] along t.
+f32 Noise(u32 seed, f32 t)
+{
+    const u32 i = static_cast<u32>(t);
+    const f32 f = t - i;
+    const f32 a = Hash(seed, i);
+    return a + (Hash(seed, i + 1) - a) * f * f * (3.0f - 2.0f * f);
+}
+
+// A flame's brightness at a logic step, 1 on average: slow and quick noises, now and then a dip or a flare.
+f32 Flame(u32 seed, u32 step)
+{
+    f32 v = 0.5f * Noise(seed, step / 9.0f) + 0.3f * Noise(seed + 1, step / 4.0f) + 0.2f * Noise(seed + 2, step / 1.7f);
+    const f32 event = Noise(seed + 3, step / 2.5f);
+    v += event > 0.88f ? (event - 0.88f) * 4.0f : (event < 0.1f ? (event - 0.1f) * 4.0f : 0.0f);
+    return 0.6f + 0.8f * v;
+}
+
+// Flame() between the last two logic steps, as the sprites are drawn.
+f32 FlameNow(u32 seed)
+{
+    const u32 step = PortFrameLoop::StepCount();
+    const f32 prev = Flame(seed, step - 1);
+    return prev + (Flame(seed, step) - prev) * PortFrameLoop::DrawAlpha();
+}
+
 // Blasts flash over their first steps (the countdown starts at 100); fires glow while they burn. Molotov
 // flames carry a light of the game's own (Weapon::throwable).
 void ExplosionLight(const Explosion& explosion)
@@ -153,8 +190,16 @@ void ExplosionLight(const Explosion& explosion)
         case explosion_type::car_fire_level1_12:
         case explosion_type::car_fire_level2_13:
         case explosion_type::car_fire_level3_14:
-            AddLight(x, y, z, 2.5f, 160, kFire);
+        {
+            // Brightness, size, a little drift and orange to yellow, each on its own noise.
+            const u32 seed = static_cast<u16>(explosion.mId) * 8u;
+            const f32 k = FlameNow(seed);
+            const f32 yellow = FlameNow(seed + 4) - 0.6f;
+            const u32 colour = 0xFFFF0000u | static_cast<u32>(0x80 + 0x38 * yellow) << 8 | static_cast<u32>(0x20 + 0x18 * yellow);
+            AddLight(x + (FlameNow(seed + 5) - 1.0f) * 0.3f, y + (FlameNow(seed + 6) - 1.0f) * 0.3f, z, 2.3f + 0.3f * k,
+                     static_cast<s32>(160 * k), colour);
             break;
+        }
         case explosion_type::small_18:
         case explosion_type::item_19:
         case explosion_type::large_20:
@@ -164,7 +209,8 @@ void ExplosionLight(const Explosion& explosion)
         case explosion_type::building_315_25:
         case explosion_type::no_ring_32:
         case explosion_type::small_33:
-            AddLight(x, y, z, 6.0f, (explosion.mTimer - 25) * 255 / 60, kFire);
+            AddLight(x, y, z, 6.0f, static_cast<s32>((explosion.mTimer - 25) * 255 / 60 * (0.8f + 0.2f * FlameNow(explosion.mId))),
+                     kFire);
             break;
         default:
             break;

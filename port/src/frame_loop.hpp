@@ -25,6 +25,10 @@ void EndDraw();
 // Logic steps since the previous draw: what the original advanced once per drawn frame advances that often.
 u32 StepsBeforeDraw();
 
+// Logic steps run so far, and where the current draw sits between the last two (1: on the last).
+u32 StepCount();
+f32 DrawAlpha();
+
 // Two values a draw changes, put back at the end of the scope unless a logic step ran before this draw.
 template <typename T>
 class StepLocked

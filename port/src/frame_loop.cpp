@@ -252,4 +252,14 @@ u32 StepsBeforeDraw()
 {
     return sInDraw ? sDrawSteps : 1;
 }
+
+u32 StepCount()
+{
+    return sStepCount;
+}
+
+f32 DrawAlpha()
+{
+    return sInDraw && !Original() ? sAlpha : 1.0f;
+}
 } // namespace PortFrameLoop
