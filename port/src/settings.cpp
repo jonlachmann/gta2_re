@@ -37,7 +37,7 @@ namespace PortSettings
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kDayLength, kStartTime, kExplodingScores};
+const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kDayLength, kStartTime, kClock, kExplodingScores};
 #else
 const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores};
 #endif
@@ -61,7 +61,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK"};
 
 struct Language
 {
@@ -120,6 +120,7 @@ const Translation kTranslations[] = {
     {L"DAY-NIGHT CYCLE", NULL, {L"CYCLE JOUR-NUIT", L"TAG-NACHT-ZYKLUS", L"CICLO GIORNO-NOTTE", L"CICLO DÍA-NOCHE"}},
     {L"CYCLE LENGTH", NULL, {L"DUREE DU CYCLE", L"ZYKLUSDAUER", L"DURATA CICLO", L"DURACIÓN CICLO"}},
     {L"START TIME", NULL, {L"HEURE DE DEPART", L"STARTZEIT", L"ORA INIZIALE", L"HORA INICIAL"}},
+    {L"CLOCK", NULL, {L"HORLOGE", L"UHR", L"OROLOGIO", L"RELOJ"}},
     {L"EXPLODING SCORES", NULL, {L"SCORES EXPLOSIFS", L"PUNKTE-EXPLOSION", L"PUNTI ESPLOSIVI", L"PUNTOS EXPLOSIVOS"}},
     {L"FRAME LIMIT", NULL, {L"LIMITE IMAGES", L"BILDRATENLIMIT", L"LIMITE FOTOGRAMMI", L"LÍMITE IMÁGENES"}},
     {L"VSYNC", NULL, {L"VSYNC", L"VSYNC", L"VSYNC", L"VSYNC"}},
@@ -284,6 +285,8 @@ const char* ScreenName(Id id)
             return "day_length";
         case kStartTime:
             return "day_start";
+        case kClock:
+            return "day_clock";
         default:
             return "car_headlights";
     }
@@ -320,7 +323,7 @@ s32 ScreenDefault(Id id)
     {
         return 12;
     }
-    return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
+    return id == kLighting || id == kExplodingScores || id == kVsync || id == kClock ? 1 : 0;
 }
 
 s32 Screen(Id id)
@@ -568,7 +571,7 @@ Id Requirement(Id id)
         return kPerPixelLighting;
     }
 #endif
-    if (id == kDayLength || id == kStartTime)
+    if (id == kDayLength || id == kStartTime || id == kClock)
     {
         return kLighting;
     }
@@ -594,6 +597,11 @@ s32 DayLength()
 s32 StartTime()
 {
     return Clamp(Screen(kStartTime), 0, 23);
+}
+
+bool Clock()
+{
+    return DayNightCycle() && Screen(kClock) != 0;
 }
 
 bool ChinatownCamera()
@@ -934,6 +942,7 @@ void Change(Id id, s32 delta)
             break;
         case kHeadlights:
         case kLightEffects:
+        case kClock:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
         case kCamera:
