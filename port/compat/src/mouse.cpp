@@ -42,6 +42,9 @@ void port_MouseEvent(const SDL_Event& e)
                 sLeftDown = false;
             }
             break;
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            sLeftDown = false;
+            break;
         case SDL_EVENT_MOUSE_WHEEL:
             sWheel += e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -e.wheel.y : e.wheel.y;
             break;

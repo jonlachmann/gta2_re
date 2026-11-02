@@ -420,6 +420,22 @@ void port_OnInputEvent(const SDL_Event& e)
 {
     port_PadEvent(e);
     port_MouseEvent(e);
+    if (e.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+    {
+        // The releases of the keys held now would go to the next window.
+        for (Device* pDev : sDevices)
+        {
+            for (DWORD dik = 0; dik < 256; dik++)
+            {
+                if (pDev->mKeys[dik])
+                {
+                    pDev->mKeys[dik] = 0;
+                    pDev->Push(dik, 0);
+                }
+            }
+        }
+        return;
+    }
     if ((e.type != SDL_EVENT_KEY_DOWN && e.type != SDL_EVENT_KEY_UP) || e.key.repeat)
     {
         return;
