@@ -1,0 +1,15 @@
+#!/bin/sh
+# The game is 32-bit: it runs on the glibc, Mesa and libraries of the AppImage, through their own loader,
+# so the host needs no 32-bit library, only a kernel that runs 32-bit programs.
+HERE=${APPDIR:-$(dirname "$(readlink -f "$0")")}
+L=$HERE/usr/lib
+if ! "$L/ld-linux.so.2" --version > /dev/null 2>&1; then
+    echo "gta2: this system cannot run 32-bit programs (a kernel without IA32 emulation)" >&2
+    exit 1
+fi
+export __EGL_VENDOR_LIBRARY_FILENAMES="${__EGL_VENDOR_LIBRARY_FILENAMES:-$HERE/usr/share/glvnd/egl_vendor.d/50_mesa.json}"
+export __GLX_VENDOR_LIBRARY_NAME="${__GLX_VENDOR_LIBRARY_NAME:-mesa}"
+export GBM_BACKENDS_PATH="$L/gbm"
+export LIBDECOR_PLUGIN_DIR="$L/libdecor/plugins-1"
+# --library-path rather than LD_LIBRARY_PATH: the programs the game starts (zenity, xdg-open) keep the host's.
+exec "$L/ld-linux.so.2" --inhibit-cache --library-path "$L" "$HERE/usr/bin/gta2" "$@"
