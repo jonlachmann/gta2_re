@@ -1209,7 +1209,8 @@ void Sprite::Draw()
         memcpy(&pShadowVerts[3], &gSpriteVerts[3], sizeof(Vert));
 
 #if defined(GTA2_PORT)
-        f32 shadow_offset = (PortScreenUiScale() * 5).ToFloat();
+        // A screen offset in the original: the zoom setting scales it with the view.
+        f32 shadow_offset = (PortCameraZoom(PortScreenUiScale()) * 5).ToFloat();
 #else
         f32 shadow_offset = (gViewCamera->mUiScale * 5).ToFloat();
 #endif
