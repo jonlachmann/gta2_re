@@ -303,7 +303,7 @@ s32 ScreenDefault(Id id)
     }
     if (id == kCameraTurnSpeed)
     {
-        return 5;
+        return 7;
     }
     return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
@@ -580,7 +580,7 @@ s32 CameraTurnSpeed()
 {
     if (sCameraTurnSpeed < 0)
     {
-        sCameraTurnSpeed = Clamp(Screen(kCameraTurnSpeed), 1, kMaxCameraTurnSpeed);
+        sCameraTurnSpeed = Clamp(Screen(kCameraTurnSpeed), 0, kMaxCameraTurnSpeed);
     }
     return sCameraTurnSpeed;
 }
@@ -659,7 +659,7 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pValue = CameraTilt();
             return true;
         case kCameraTurnSpeed:
-            *pMin = 1;
+            *pMin = 0;
             *pMax = kMaxCameraTurnSpeed;
             *pValue = CameraTurnSpeed();
             return true;
@@ -954,7 +954,7 @@ void Change(Id id, s32 delta)
             gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTilt);
             break;
         case kCameraTurnSpeed:
-            sCameraTurnSpeed = Clamp(CameraTurnSpeed() + delta, 1, kMaxCameraTurnSpeed);
+            sCameraTurnSpeed = Clamp(CameraTurnSpeed() + delta, 0, kMaxCameraTurnSpeed);
             gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTurnSpeed);
             break;
         case kCameraRotation:
