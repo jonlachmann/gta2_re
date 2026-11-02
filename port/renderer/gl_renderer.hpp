@@ -76,7 +76,7 @@ class GLRenderer : public IRenderer
     u32 GetUploadCount() const { return mUploads; }
     u32 GetVertexCount() const { return mVertices; }
     const RenderOptions& Options() const { return mOptions; }
-    void SetLights(const RLight* pLights, s32 count, f32 ambient);
+    void SetLights(const RLight* pLights, s32 count, const f32* pAmbient);
 
   private:
     void Flush();
@@ -166,7 +166,7 @@ class GLRenderer : public IRenderer
     bool mSmoothMagnify = false;
     RenderOptions mOptions;
     s32 mNumLights;
-    f32 mAmbient;
+    f32 mAmbient[3];
     f32 mGamma[3];
     u32 mDrawCalls;
     u32 mUploads;

@@ -3,6 +3,7 @@
 #if defined(GTA2_PORT)
 #include "../port/src/frame_loop.hpp"
 #include "../port/src/lights.hpp"
+#include "../port/src/day_night.hpp"
 #endif
 #include "winmain.hpp"
 #include "gbh_graphics.hpp"
@@ -3539,14 +3540,15 @@ void MapRenderer::Draw()
     // set ambient level
     if (gLighting)
     {
-        pgbh_SetAmbient(mAmbient.ToFloat());
 #if defined(GTA2_PORT)
+        PortDayNight::SetAmbient(mAmbient.ToFloat());
         // The fade advances once per logic step, however often the frame is drawn.
         for (u32 steps = PortFrameLoop::StepsBeforeDraw(); steps; steps--)
         {
             MapRenderer::ambient_light_tick();
         }
 #else
+        pgbh_SetAmbient(mAmbient.ToFloat());
         MapRenderer::ambient_light_tick();
 #endif
     }

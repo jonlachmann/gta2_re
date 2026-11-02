@@ -78,7 +78,10 @@ PalEntry* gPals[16384];
 std::vector<ImageEntry> gImages;
 LightInternal gLights[256];
 u32 gNumLights;
-f32 gAmbient = 255.0f;
+// Red, green and blue; tinted only by port_SetAmbient.
+f32 gAmbient[3] = {255.0f, 255.0f, 255.0f};
+// The game's and the port's lights scaled by it (the DAY-NIGHT CYCLE's fade).
+f32 gLightScale = 1.0f;
 f32 gWindow[4];
 // port_SetViewTurn: what is drawn is moved by (mTx, mTy), turned about (mCx, mCy), then tilted forward about the
 // eye; mScale is the projection's pixels per unit at depth 1.
@@ -442,9 +445,9 @@ u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
     lg += Cap(sg);
     lb += Cap(sb);
     const f32 n = shade / 255.0f;
-    f32 r = n * ((colour >> 16) & 0xFF) * lr + gAmbient;
-    f32 g = n * ((colour >> 8) & 0xFF) * lg + gAmbient;
-    f32 b = n * (colour & 0xFF) * lb + gAmbient;
+    f32 r = n * ((colour >> 16) & 0xFF) * lr + gAmbient[0];
+    f32 g = n * ((colour >> 8) & 0xFF) * lg + gAmbient[1];
+    f32 b = n * (colour & 0xFF) * lb + gAmbient[2];
     const u32 ri = r > 255.0f ? 255 : (u32)r;
     const u32 gi = g > 255.0f ? 255 : (u32)g;
     const u32 bi = b > 255.0f ? 255 : (u32)b;
@@ -582,8 +585,9 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
             pVerts[i].diff = diffuse;
         }
     }
-    const bool lit = (flags & FLAG_LIGHTING) && gAmbient != 255.0f;
-    const bool shadowLit = softShadow && gAmbient != 255.0f;
+    const bool fullAmbient = gAmbient[0] == 255.0f && gAmbient[1] == 255.0f && gAmbient[2] == 255.0f;
+    const bool lit = (flags & FLAG_LIGHTING) && !fullAmbient;
+    const bool shadowLit = softShadow && !fullAmbient;
     const bool perPixel = (lit || shadowLit) && gRenderer->Options().mPerPixelLighting;
     u32 unlit[4];
     if (lit)
@@ -605,7 +609,7 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
             {
                 const u32 l = LightVertex(pVerts[i + 4], 255, 0xFFFFFFu);
                 const f32 sum = (f32)(((l >> 16) & 0xFF) + ((l >> 8) & 0xFF) + (l & 0xFF));
-                const f32 ratio = 3.0f * gAmbient / (sum > 1.0f ? sum : 1.0f);
+                const f32 ratio = (gAmbient[0] + gAmbient[1] + gAmbient[2]) / (sum > 1.0f ? sum : 1.0f);
                 const u32 a = (u32)((pVerts[i].diff >> 24) * (0.5f + 0.5f * (ratio < 1.0f ? ratio : 1.0f)));
                 pVerts[i].diff = (pVerts[i].diff & 0xFFFFFFu) | (a << 24);
             }
@@ -682,7 +686,7 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
     }
     if (gTraceScene && gSceneCount == gTraceScene)
     {
-        fprintf(stderr, "  -> amb=%.1f lights=%u state=%x diff=%08x %08x %08x %08x\n", gAmbient, gNumLights, state, pVerts[0].diff,
+        fprintf(stderr, "  -> amb=%.1f lights=%u state=%x diff=%08x %08x %08x %08x\n", gAmbient[0], gNumLights, state, pVerts[0].diff,
                 pVerts[1].diff, pVerts[2].diff, count > 3 ? pVerts[3].diff : 0);
     }
     gRenderer->DrawTriangles(tris, n, pTex, state);
@@ -1069,7 +1073,7 @@ GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
     LightInternal& l = gLights[idx];
     const f32 k = 1.0f / 255.0f;
     l.mFlags = pLight->field_0;
-    l.mBrightness = (pLight->field_0 & 0xFF) * k;
+    l.mBrightness = (pLight->field_0 & 0xFF) * k * gLightScale;
     l.mX = pLight->field_4_x;
     l.mY = pLight->field_8_y;
     l.mZ = pLight->field_C_z;
@@ -1113,7 +1117,17 @@ void port_SetViewTurn(s32 kind, f32 cx, f32 cy, f32 c, f32 s, f32 tx, f32 ty, f3
 
 GBH_EXPORT void GTA2_CC gbh_SetAmbient(f32 ambient)
 {
-    gAmbient = ambient * 255.0f;
+    gAmbient[0] = gAmbient[1] = gAmbient[2] = ambient * 255.0f;
+    gLightsDirty = true;
+}
+
+// The level's ambient light in colour, and the scale of the lights added after it.
+void port_SetAmbient(f32 r, f32 g, f32 b, f32 lights)
+{
+    gAmbient[0] = r * 255.0f;
+    gAmbient[1] = g * 255.0f;
+    gAmbient[2] = b * 255.0f;
+    gLightScale = lights;
     gLightsDirty = true;
 }
 

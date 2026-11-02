@@ -30,6 +30,7 @@
 #include "block_face.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/shadows.hpp"
+#include "../port/src/day_night.hpp"
 #endif
 
 // Forward declarations: the functions below are in address order
@@ -1151,7 +1152,11 @@ void Sprite::Draw()
             gSpriteMaskCache->InvalidateMasksBySpriteIdx(&sprite_idx);
         }
         car_flags = pCar->mDamagedAreas.GetRaw();
+#if defined(GTA2_PORT)
+        if (PortDayNight::Lit())
+#else
         if (gLighting)
+#endif
         {
             if (pCar->HasBottomLeftRoofLight())
             {
@@ -1241,7 +1246,11 @@ void Sprite::Draw()
 
     pgbh_DrawQuad(Sprite::ComputeDrawFlags(), pTexture, gSpriteVerts, 255);
 
+#if defined(GTA2_PORT)
+    if (pCar && PortDayNight::Lit())
+#else
     if (pCar && gLighting)
+#endif
     {
         pCar->mDamagedAreas.MaskWithGlobalFlags();
 
