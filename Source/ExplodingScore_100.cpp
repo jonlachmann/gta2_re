@@ -419,7 +419,7 @@ void ExplodingScore::DrawSingleNumber(s32 number_to_draw, s32 xpos_sub)
     pCam->ProjectWorldToScreen_4B90E0(mX, mY, mZ, &proj_x, &proj_y);
 #if defined(GTA2_PORT)
     // The digits stay upright where the turned view puts their place.
-    PortView::TurnPoint(proj_x, proj_y);
+    PortView::TurnPoint(proj_x, proj_y, mZ);
 #endif
 
     Fix16 base_scale;

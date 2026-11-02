@@ -32,6 +32,7 @@ enum Id
     kAntiAliasing,
     kCamera,
     kShadows,
+    kCameraTilt,
     kCount,
 };
 
@@ -69,6 +70,8 @@ bool LightEffects();
 f32 HudScale();
 // CAMERA: CHINATOWN turns the view with the player's vehicle (view.hpp).
 bool ChinatownCamera();
+// CAMERA TILT: the CHINATOWN camera's pitch on foot, in degrees, 0 to 15.
+s32 CameraTilt();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();

@@ -198,8 +198,8 @@ class MapRenderer
     u8 mTriDiagDownLeftColour; // 0x1A
     u8 mTriDiagDownRightColour; // 0x1B
 #if defined(GTA2_PORT)
-    // Room for a zoomed out camera on wide screens.
-    DrawListBlock mDrawList[4096];
+    // Room for a zoomed out, turned and tilted camera on wide screens.
+    DrawListBlock mDrawList[8192];
 #else
     DrawListBlock mDrawList[1500]; // 0x1C
 #endif

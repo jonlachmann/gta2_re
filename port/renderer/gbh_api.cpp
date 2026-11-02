@@ -80,12 +80,23 @@ LightInternal gLights[256];
 u32 gNumLights;
 f32 gAmbient = 255.0f;
 f32 gWindow[4];
-// port_SetViewTurn: what is drawn is moved by (mTx, mTy), then turned about (mCx, mCy).
+// port_SetViewTurn: what is drawn is moved by (mTx, mTy), turned about (mCx, mCy), then tilted forward about the
+// eye; mScale is the projection's pixels per unit at depth 1.
 struct ViewTurn
 {
-    bool mOn;
-    f32 mCx, mCy, mCos, mSin, mTx, mTy;
+    s32 mKind;
+    f32 mCx, mCy, mCos, mSin, mTx, mTy, mCosP, mSinP, mScale, mMarkerDepth;
 } gViewTurn;
+// The kinds of port_SetViewTurn, as PortView::Turn: world vertices, sprites and HUD markers kept unforeshortened.
+enum
+{
+    kTurnOff,
+    kTurnWorld,
+    kTurnSprites,
+    kTurnMarkers,
+};
+// Nearer than this after the tilt (in blocks), a primitive is behind the view and dropped.
+const f32 kNearDepth = 0.25f;
 s32 gScreenTable[1700];
 u32 gTextureId;
 u32 gSceneCount;
@@ -663,29 +674,74 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
     gGlobals.mNumPolysDrawn += count - 2;
 }
 
+// A screen point at depth d moved, turned and tilted: the eye stays, so the depth changes.
+void TurnPoint(f32 x, f32 y, f32 d, f32* pX, f32* pY, f32* pD)
+{
+    const ViewTurn& t = gViewTurn;
+    const f32 dx = x + t.mTx - t.mCx;
+    const f32 dy = y + t.mTy - t.mCy;
+    const f32 rx = t.mCos * dx - t.mSin * dy;
+    const f32 ry = t.mSin * dx + t.mCos * dy;
+    *pD = d * t.mCosP - ry * d / t.mScale * t.mSinP;
+    const f32 k = d / *pD;
+    *pX = t.mCx + rx * k;
+    *pY = t.mCy + (ry * t.mCosP + t.mScale * t.mSinP) * k;
+}
+
 // Turned in place and put back: the game draws some vertices twice (a car's damage over its sprite).
 void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 baseColour)
 {
-    if (!gViewTurn.mOn || (flags & (FLAG_INTERNAL_BLIT | FLAG_FIT_TO_TEXTURE)) || count < 3 || count > 4)
+    if (gViewTurn.mKind == kTurnOff || (flags & (FLAG_INTERNAL_BLIT | FLAG_FIT_TO_TEXTURE)) || count < 3 || count > 4 ||
+        pVerts[0].z <= 0.0f)
     {
         RenderVertsUnturned(flags, pTexture, pVerts, count, baseColour);
         return;
     }
-    f32 keep[4][2];
+    f32 keep[4][3];
+    f32 nearest = 1e30f;
     for (s32 i = 0; i < count; i++)
     {
         keep[i][0] = pVerts[i].x;
         keep[i][1] = pVerts[i].y;
-        const f32 x = pVerts[i].x + gViewTurn.mTx - gViewTurn.mCx;
-        const f32 y = pVerts[i].y + gViewTurn.mTy - gViewTurn.mCy;
-        pVerts[i].x = gViewTurn.mCx + gViewTurn.mCos * x - gViewTurn.mSin * y;
-        pVerts[i].y = gViewTurn.mCy + gViewTurn.mSin * x + gViewTurn.mCos * y;
+        keep[i][2] = pVerts[i].z;
     }
-    RenderVertsUnturned(flags, pTexture, pVerts, count, baseColour);
+    if (gViewTurn.mKind != kTurnWorld && count == 4)
+    {
+        // The centre goes where the view puts it; the corners keep their shape, turned and scaled as there.
+        const f32 mx = (pVerts[0].x + pVerts[1].x + pVerts[2].x + pVerts[3].x) / 4;
+        const f32 my = (pVerts[0].y + pVerts[1].y + pVerts[2].y + pVerts[3].y) / 4;
+        const f32 d = gViewTurn.mKind == kTurnMarkers ? gViewTurn.mMarkerDepth : 1.0f / pVerts[0].z;
+        f32 x, y;
+        TurnPoint(mx, my, d, &x, &y, &nearest);
+        const f32 k = d / nearest;
+        for (s32 i = 0; i < count; i++)
+        {
+            const f32 ox = keep[i][0] - mx;
+            const f32 oy = keep[i][1] - my;
+            pVerts[i].x = x + k * (gViewTurn.mCos * ox - gViewTurn.mSin * oy);
+            pVerts[i].y = y + k * (gViewTurn.mSin * ox + gViewTurn.mCos * oy);
+            pVerts[i].z = gViewTurn.mKind == kTurnMarkers ? keep[i][2] : 1.0f / nearest;
+        }
+    }
+    else
+    {
+        for (s32 i = 0; i < count; i++)
+        {
+            f32 depth;
+            TurnPoint(keep[i][0], keep[i][1], 1.0f / keep[i][2], &pVerts[i].x, &pVerts[i].y, &depth);
+            pVerts[i].z = 1.0f / depth;
+            nearest = depth < nearest ? depth : nearest;
+        }
+    }
+    if (nearest >= kNearDepth)
+    {
+        RenderVertsUnturned(flags, pTexture, pVerts, count, baseColour);
+    }
     for (s32 i = 0; i < count; i++)
     {
         pVerts[i].x = keep[i][0];
         pVerts[i].y = keep[i][1];
+        pVerts[i].z = keep[i][2];
     }
 }
 
@@ -1024,16 +1080,20 @@ void port_SpotLight(f32 dx, f32 dy, f32 cosOuter, f32 cosInner)
     }
 }
 
-// The CHINATOWN camera (port/src/view.hpp): the world drawn turned while on.
-void port_SetViewTurn(bool on, f32 cx, f32 cy, f32 c, f32 s, f32 tx, f32 ty)
+// The CHINATOWN camera (port/src/view.hpp): the world drawn turned and tilted while on.
+void port_SetViewTurn(s32 kind, f32 cx, f32 cy, f32 c, f32 s, f32 tx, f32 ty, f32 cosP, f32 sinP, f32 scale, f32 markerDepth)
 {
-    gViewTurn.mOn = on;
+    gViewTurn.mKind = kind;
     gViewTurn.mCx = cx;
     gViewTurn.mCy = cy;
     gViewTurn.mCos = c;
     gViewTurn.mSin = s;
     gViewTurn.mTx = tx;
     gViewTurn.mTy = ty;
+    gViewTurn.mCosP = cosP;
+    gViewTurn.mSinP = sinP;
+    gViewTurn.mScale = scale > 0.0f ? scale : 1.0f;
+    gViewTurn.mMarkerDepth = markerDepth;
 }
 
 GBH_EXPORT void GTA2_CC gbh_SetAmbient(f32 ambient)
