@@ -116,6 +116,7 @@ const char* kSceneFS =
     "{\n"
     "    vec4 uLightPos[256];\n" // xyz, radius
     "    vec4 uLightCol[256];\n" // rgb * brightness, 1 / radius
+    "    vec4 uLightDir[256];\n" // spot direction xy, cos of the outer and inner cone
     "};\n"
     "in vec4 vCol;\n"
     "in vec2 vUV;\n"
@@ -141,8 +142,11 @@ const char* kSceneFS =
     "            float r = uLightPos[i].w;\n"
     "            if (d2 <= r * r)\n"
     "            {\n"
-    "                float att = (r - sqrt(d2)) * uLightCol[i].w;\n"
-    "                if (att > 0.0) acc += uLightCol[i].rgb * att;\n"
+    "                float dist = sqrt(d2);\n"
+    "                float att = (r - dist) * uLightCol[i].w;\n"
+    "                vec4 s = uLightDir[i];\n"
+    "                float c = dist > 0.0 ? dot(d.xy, s.xy) / dist : 0.0;\n"
+    "                if (att > 0.0) acc += uLightCol[i].rgb * att * smoothstep(s.z, s.w, c);\n"
     "            }\n"
     "        }\n"
     "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * acc + uAmbient) / 255.0, vec3(1.0)), vUnlit.a);\n"
@@ -335,7 +339,7 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
 
     gl.glGenBuffers(1, &mLightUbo);
     gl.glBindBuffer(GL_UNIFORM_BUFFER, mLightUbo);
-    gl.glBufferData(GL_UNIFORM_BUFFER, kMaxLights * 2 * 16, NULL, GL_DYNAMIC_DRAW);
+    gl.glBufferData(GL_UNIFORM_BUFFER, kMaxLights * 3 * 16, NULL, GL_DYNAMIC_DRAW);
     gl.glBindBufferBase(GL_UNIFORM_BUFFER, 0, mLightUbo);
 
     gl.glGenVertexArrays(1, &mVao);
@@ -658,7 +662,7 @@ void GLRenderer::SetLights(const RLight* pLights, s32 count, f32 ambient)
     {
         count = kMaxLights;
     }
-    static f32 data[kMaxLights * 8];
+    static f32 data[kMaxLights * 12];
     memset(data, 0, sizeof(data));
     for (s32 i = 0; i < count; i++)
     {
@@ -667,6 +671,8 @@ void GLRenderer::SetLights(const RLight* pLights, s32 count, f32 ambient)
         f32* col = &data[kMaxLights * 4 + i * 4];
         pos[0] = l.x, pos[1] = l.y, pos[2] = l.z, pos[3] = l.radius;
         col[0] = l.r, col[1] = l.g, col[2] = l.b, col[3] = l.invRadius;
+        f32* dir = &data[kMaxLights * 8 + i * 4];
+        dir[0] = l.dx, dir[1] = l.dy, dir[2] = l.cosOuter, dir[3] = l.cosInner;
     }
     gl.glBindBuffer(GL_UNIFORM_BUFFER, mLightUbo);
     gl.glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(data), data);

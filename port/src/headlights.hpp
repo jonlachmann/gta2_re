@@ -1,11 +1,11 @@
-// Car headlights for the dusk lighting (the graphics option CAR HEADLIGHTS): a cone of light on the ground
-// ahead of each lit headlight lamp of the cars' sprites.
+// Car headlights for the dusk lighting (the graphics option CAR HEADLIGHTS): a spot light at each lit
+// headlight lamp of the cars' sprites, among the game's lights.
 #pragma once
 
 #include "types.hpp"
 
 namespace PortHeadlights
 {
-// After the blocks of a layer, for the cars standing on them.
-void DrawBeams(s32 zLayer);
+// With the level's lights.
+void Submit(s32 min_x, s32 min_y, s32 max_x, s32 max_y);
 } // namespace PortHeadlights
