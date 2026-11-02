@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "Camera.hpp"
 #include "Frontend.hpp"
 #include "Function.hpp"
 #include "Game.hpp"
@@ -8,6 +9,7 @@
 #include "map_0x370.hpp"
 #include "registry.hpp"
 #include "root_sound.hpp"
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -27,7 +29,7 @@ namespace PortSettings
 {
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
-const Id kScreen[] = {kDisplay, kBrightness, kLighting, kExplodingScores, kFrameLimit};
+const Id kScreen[] = {kDisplay, kBrightness, kLighting, kExplodingScores, kFrameLimit, kZoom};
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
 const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kHeadlights};
@@ -40,7 +42,8 @@ namespace
 {
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
-                                       L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS"};
+                                       L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
+                                       L"CAMERA ZOOM"};
 
 struct Language
 {
@@ -95,6 +98,7 @@ const Translation kTranslations[] = {
     {L"TRUE COLOUR", NULL, {L"VRAIES COULEURS", L"ECHTFARBEN", L"COLORI REALI", L"COLOR REAL"}},
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
+    {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
     {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
@@ -196,6 +200,8 @@ const char* ScreenName(Id id)
             return "gl_bloom";
         case kPerPixelLighting:
             return "gl_pixel_lighting";
+        case kZoom:
+            return "camera_zoom";
         default:
             return "car_headlights";
     }
@@ -210,6 +216,31 @@ s32 ScreenDefault(Id id)
 s32 Screen(Id id)
 {
     return gRegistry.Get_Screen_Setting(ScreenName(id), ScreenDefault(id));
+}
+
+// Steps of the camera zoom: 0 is the original's, each step closer magnifies by kZoomStep.
+const s32 kMinZoom = -5;
+const s32 kMaxZoom = 5;
+const f32 kZoomStep = 1.125f;
+// Cached: the camera and the map renderer read it several times a frame.
+bool sZoomRead;
+s32 sZoom;
+Fix16 sZoomFactor;
+
+void SetZoom(s32 zoom)
+{
+    sZoom = Clamp(zoom, kMinZoom, kMaxZoom);
+    sZoomFactor = Fix16(static_cast<s32>(powf(kZoomStep, static_cast<f32>(sZoom)) * 16384.0f + 0.5f), 0);
+    sZoomRead = true;
+}
+
+s32 Zoom()
+{
+    if (!sZoomRead)
+    {
+        SetZoom(Screen(kZoom));
+    }
+    return sZoom;
 }
 
 // The zone name on screen is a copy of the text table's.
@@ -305,6 +336,11 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pMax = 10;
             *pValue = Clamp(Screen(id), 0, 10);
             return true;
+        case kZoom:
+            *pMin = kMinZoom;
+            *pMax = kMaxZoom;
+            *pValue = Zoom();
+            return true;
         default:
             return false;
     }
@@ -343,6 +379,9 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kLighting:
             wcscpy(pOut, Translate(Screen(id) ? L"DUSK" : L"NOON"));
+            break;
+        case kZoom:
+            swprintf(pOut, L"%d", Zoom());
             break;
         case kBloom:
             if (Screen(id))
@@ -444,6 +483,10 @@ void Change(Id id, s32 delta)
         case kHeadlights:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
+        case kZoom:
+            SetZoom(Zoom() + delta);
+            gRegistry.Set_Screen_Setting(ScreenName(id), sZoom);
+            break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             if (id == kLighting || id == kExplodingScores || id == kFrameLimit)
@@ -458,3 +501,9 @@ void Change(Id id, s32 delta)
     }
 }
 } // namespace PortSettings
+
+Fix16 PortCameraZoom(Fix16 zoom)
+{
+    PortSettings::Zoom();
+    return zoom * PortSettings::sZoomFactor;
+}

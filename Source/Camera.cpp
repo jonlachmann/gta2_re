@@ -124,7 +124,11 @@ bool Camera::IsSpriteInView(Sprite* pSprite, s32 wide_view)
 {
     Fix16 half_width;
     half_width = mCurPos.mZ - pSprite->mZpos + kFpEight_676840;
+#if defined(GTA2_PORT)
+    half_width = half_width / (PortCameraZoom(mCurPos.mZoom) * kTwo_676820);
+#else
     half_width = half_width / (mCurPos.mZoom * kTwo_676820);
+#endif
 
     if (wide_view == 1)
     {
@@ -374,16 +378,18 @@ void Camera::UpdateBoundaries()
     // The original's view is 4:3 and as wide as the screen. On wider screens it keeps the 4:3 view's
     // height and shows more on the sides: the scale is that of a 4:3 screen of the same height.
     const s32 width_4_3 = mScreenPxHeight * 4 / 3 < mScreenPxWidth ? mScreenPxHeight * 4 / 3 : mScreenPxWidth;
-    mScreenScale.x = Fix16(width_4_3) * mCurPos.mZoom;
+    const Fix16 zoom = PortCameraZoom(mCurPos.mZoom);
+    mScreenScale.x = Fix16(width_4_3) * zoom;
+    mScreenScale.y = Fix16(640) * zoom;
+
+    Fix16 v = (kFpSeven_676838 + mCurPos.mZ) * (kOne_67681C / zoom) * kFpHalf_67671C;
+    const Fix16 v_4_3 = v;
+    v = v_4_3 * Fix16(mScreenPxWidth) / Fix16(width_4_3);
 #else
     mScreenScale.x = Fix16(mScreenPxWidth) * mCurPos.mZoom;
-#endif
     mScreenScale.y = Fix16(640) * mCurPos.mZoom;
 
     Fix16 v = (kFpSeven_676838 + mCurPos.mZ) * (kOne_67681C / mCurPos.mZoom) * kFpHalf_67671C;
-#if defined(GTA2_PORT)
-    const Fix16 v_4_3 = v;
-    v = v_4_3 * Fix16(mScreenPxWidth) / Fix16(width_4_3);
 #endif
 
     mViewBounds.mLeft = mCurPos.mX - v;

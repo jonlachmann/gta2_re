@@ -197,7 +197,12 @@ class MapRenderer
     u8 mTriDiagUpRightColour; // 0x19
     u8 mTriDiagDownLeftColour; // 0x1A
     u8 mTriDiagDownRightColour; // 0x1B
+#if defined(GTA2_PORT)
+    // Room for a zoomed out camera on wide screens.
+    DrawListBlock mDrawList[4096];
+#else
     DrawListBlock mDrawList[1500]; // 0x1C
+#endif
     s32 mCurrDrawLayerSize; // 0x2EFC
     s32 mDrawnTileCount; // 0x2F00
 };
