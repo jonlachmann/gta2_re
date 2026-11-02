@@ -4,6 +4,7 @@
 #include "../../renderer/gl_context.hpp"
 #include "../../renderer/vid_system.hpp"
 #include <stdlib.h>
+#include <vector>
 
 #define VID_EXPORT extern "C"
 
@@ -107,6 +108,48 @@ void ScreenSet(const char* name, DWORD value)
     }
 }
 
+// The full screen modes: 0 the desktop's (borderless), then the screen's own sizes and refresh rates, one
+// per rate in whole hertz.
+struct FullscreenMode
+{
+    SDL_DisplayMode mMode;
+    int mCentiHz;
+};
+
+int CentiHz(const SDL_DisplayMode& mode)
+{
+    return (int)(mode.refresh_rate * 100.0f + 0.5f);
+}
+
+std::vector<FullscreenMode> FullscreenModes()
+{
+    std::vector<FullscreenMode> modes(1);
+    modes[0].mMode = SDL_DisplayMode();
+    modes[0].mCentiHz = 0;
+    if (const SDL_DisplayMode* pDesktop = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay()))
+    {
+        modes[0].mMode = *pDesktop;
+        modes[0].mCentiHz = CentiHz(*pDesktop);
+    }
+    int count = 0;
+    SDL_DisplayMode** ppModes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &count);
+    for (int i = 0; ppModes && i < count; i++)
+    {
+        const FullscreenMode mode = {*ppModes[i], CentiHz(*ppModes[i])};
+        bool known = false;
+        for (size_t j = 1; j < modes.size(); j++)
+        {
+            known = known || (modes[j].mMode.w == mode.mMode.w && modes[j].mMode.h == mode.mMode.h && (modes[j].mCentiHz + 50) / 100 == (mode.mCentiHz + 50) / 100);
+        }
+        if (!known)
+        {
+            modes.push_back(mode);
+        }
+    }
+    SDL_free(ppModes);
+    return modes;
+}
+
 // The game draws at the screen's resolution: its view keeps the original's 4:3 height and widens
 // with the screen (Camera::UpdateBoundaries), its HUD follows (Camera::SetScreenSize).
 void GameSize(int screenW, int screenH, int* pW, int* pH)
@@ -131,11 +174,89 @@ void port_SaveWindowSize(int w, int h)
     ScreenSet("port_window_height", h);
 }
 
+int port_FullscreenModeCount()
+{
+    return (int)FullscreenModes().size();
+}
+
+int port_FullscreenModeIndex()
+{
+    const int w = (int)ScreenGet("port_fullscreen_width", 0);
+    const int h = (int)ScreenGet("port_fullscreen_height", 0);
+    const int centiHz = (int)ScreenGet("port_fullscreen_centihz", 0);
+    const std::vector<FullscreenMode> modes = FullscreenModes();
+    for (size_t i = 1; i < modes.size(); i++)
+    {
+        if (modes[i].mMode.w == w && modes[i].mMode.h == h && modes[i].mCentiHz == centiHz)
+        {
+            return (int)i;
+        }
+    }
+    return 0;
+}
+
+void port_FullscreenModeSize(int index, int* pW, int* pH, int* pCentiHz)
+{
+    const std::vector<FullscreenMode> modes = FullscreenModes();
+    const FullscreenMode& mode = modes[index > 0 && index < (int)modes.size() ? index : 0];
+    *pW = mode.mMode.w;
+    *pH = mode.mMode.h;
+    *pCentiHz = mode.mCentiHz;
+}
+
+void port_SetFullscreenModeIndex(int index)
+{
+    int w = 0;
+    int h = 0;
+    int centiHz = 0;
+    if (index > 0)
+    {
+        port_FullscreenModeSize(index, &w, &h, &centiHz);
+    }
+    ScreenSet("port_fullscreen_width", w);
+    ScreenSet("port_fullscreen_height", h);
+    ScreenSet("port_fullscreen_centihz", centiHz);
+    port_UpdateGameResolution();
+}
+
+const SDL_DisplayMode* port_FullscreenMode()
+{
+    static SDL_DisplayMode sMode;
+    const int index = port_FullscreenModeIndex();
+    if (!index)
+    {
+        return NULL;
+    }
+    sMode = FullscreenModes()[index].mMode;
+    return &sMode;
+}
+
+// VSYNC: adaptive where the driver has it (a late frame is shown at once), else plain.
+void port_ApplyVsync()
+{
+    if (!SDL_GL_GetCurrentContext())
+    {
+        return;
+    }
+    if (!ScreenGet("port_vsync", 1))
+    {
+        SDL_GL_SetSwapInterval(0);
+    }
+    else if (!SDL_GL_SetSwapInterval(-1))
+    {
+        SDL_GL_SetSwapInterval(1);
+    }
+}
+
 void port_UpdateGameResolution()
 {
     int w;
     int h;
-    const SDL_DisplayMode* pMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    const SDL_DisplayMode* pMode = port_FullscreenMode();
+    if (!pMode)
+    {
+        pMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    }
     if (pMode)
     {
         GameSize(pMode->w, pMode->h, &w, &h);
@@ -262,6 +383,7 @@ VID_EXPORT s32 GTA2_CC Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
             }
             return 1;
         }
+        port_ApplyVsync();
     }
     pSys->SetMode(modeId, w, h);
     return 0;

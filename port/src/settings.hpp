@@ -22,6 +22,8 @@ enum Id
     kBloom,
     kPerPixelLighting,
     kHeadlights,
+    kVsync,
+    kDisplayMode,
     kCount,
 };
 

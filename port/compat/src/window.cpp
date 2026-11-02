@@ -122,6 +122,10 @@ void port_SetFullscreen(HWND h, bool fullscreen)
     if (h)
     {
         sFullscreen = fullscreen;
+        if (fullscreen)
+        {
+            SDL_SetWindowFullscreenMode(W(h)->mSdl, port_FullscreenMode());
+        }
         SDL_SetWindowFullscreen(W(h)->mSdl, fullscreen);
     }
 }
