@@ -356,13 +356,22 @@ f32 TableSqrt(f32 x)
     return v.f;
 }
 
-// 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light.
-f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
+f32 SmoothStep(f32 t)
 {
-    const f32 c = dist > 0.0f ? (dx * light.mDx + dy * light.mDy) / dist : 0.0f;
-    f32 t = (c - light.mCosOuter) / (light.mCosInner - light.mCosOuter);
     t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
     return t * t * (3.0f - 2.0f * t);
+}
+
+// 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light. A spot also brightens
+// over the first 30% of its range, so it peaks ahead of its apex.
+f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
+{
+    if (light.mCosInner <= -1.0f)
+    {
+        return 1.0f;
+    }
+    const f32 c = dist > 0.0f ? (dx * light.mDx + dy * light.mDy) / dist : 0.0f;
+    return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) * SmoothStep(dist / (0.3f * light.mRadius));
 }
 
 u32 LightVertex(const Vert& vert, u8 shade, u32 colour)

@@ -124,7 +124,8 @@ void CarLights(Car* pCar, bool headlights, bool effects)
         f32 y;
         if (headlights && bits.mask_bit(kHead[i]) && LampPosition(pSprite, kHeadlightDelta, i == 1, x, y))
         {
-            AddLight(x, y, z, 5.0f, 200, kHalogen, fx, fy, 0.9f, 0.98f);
+            // The apex inside the car: the two beams overlap from the bumper on.
+            AddLight(x - fx * 0.4f, y - fy * 0.4f, z, 5.0f, 240, kHalogen, fx, fy, 0.9f, 0.98f);
         }
         // The game lights the lamp only when braking; dimmer tail lights while the headlights are on.
         const bool braking = bits.mask_bit(kBrake[i]);
