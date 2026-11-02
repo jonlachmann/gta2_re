@@ -9,6 +9,9 @@ namespace PortDayNight
 // In place of gbh_SetAmbient for the level's ambient, before anything of the frame is drawn.
 void SetAmbient(f32 ambient);
 
+// CLOCK: the hour on the HUD, by the money.
+void DrawClock();
+
 // gLighting, but false by day in the cycle: cars keep their lights in their sprite, as at NOON.
 bool Lit();
 } // namespace PortDayNight

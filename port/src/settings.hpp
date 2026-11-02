@@ -38,6 +38,7 @@ enum Id
     kPreset,
     kDayLength,
     kStartTime,
+    kClock,
     kCount,
 };
 
@@ -76,6 +77,8 @@ bool LightEffects();
 bool DayNightCycle();
 s32 DayLength();
 s32 StartTime();
+// CLOCK: the cycle's hour on the HUD.
+bool Clock();
 
 // HUD SCALE: 1 for the original's size.
 f32 HudScale();
