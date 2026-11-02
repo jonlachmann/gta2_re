@@ -35,6 +35,7 @@ enum Id
     kCameraTilt,
     kCameraTurnSpeed,
     kCameraRotation,
+    kPreset,
     kCount,
 };
 
