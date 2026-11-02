@@ -29,6 +29,8 @@ namespace PortMenu
 {
 namespace
 {
+using PortSettings::Translate;
+
 enum Page
 {
     kMainPage,
@@ -160,7 +162,7 @@ s32 Items(Page page, Item* pItems)
     return n;
 }
 
-const wchar_t* ItemName(const Item& item)
+const wchar_t* EnglishName(const Item& item)
 {
     switch (item.mKind)
     {
@@ -179,6 +181,11 @@ const wchar_t* ItemName(const Item& item)
         default:
             return L"BACK";
     }
+}
+
+const wchar_t* ItemName(const Item& item)
+{
+    return Translate(EnglishName(item));
 }
 
 // The key names GTA2 Manager showed: data\keyboard\<lang>_kb.cfg, one name per DirectInput code.
@@ -230,16 +237,16 @@ void PadName(s32 code, wchar_t* pOut)
     switch (code)
     {
         case kPadLeft:
-            wcscpy(pOut, L"LEFT");
+            wcscpy(pOut, Translate(L"LEFT"));
             break;
         case kPadRight:
-            wcscpy(pOut, L"RIGHT");
+            wcscpy(pOut, Translate(L"RIGHT"));
             break;
         case kPadUp:
-            wcscpy(pOut, L"UP");
+            wcscpy(pOut, Translate(L"UP"));
             break;
         case kPadDown:
-            wcscpy(pOut, L"DOWN");
+            wcscpy(pOut, Translate(L"DOWN"));
             break;
         default:
             wcscpy(pOut, code >= 0 && code < 12 ? kPadButtonNames[code] : L"-");
@@ -384,13 +391,7 @@ s32 CapturedPad()
 
 void ChangeSetting(s32 setting, s32 delta)
 {
-    const PortSettings::Id id = static_cast<PortSettings::Id>(setting);
-    PortSettings::Change(id, delta);
-    if (id == PortSettings::kLanguage && gFrontend)
-    {
-        // The frontend's texts are copied into its pages: set them up again.
-        gFrontend->SetupMenuStringsOptionsElements();
-    }
+    PortSettings::Change(static_cast<PortSettings::Id>(setting), delta);
 }
 
 void GoTo(Page page)
@@ -476,11 +477,13 @@ void DrawHints()
         }
         else
         {
-            Text(pHints[i].mKey, x, y, font);
-            x += Width(pHints[i].mKey, font) + 10;
+            const wchar_t* pKey = Translate(pHints[i].mKey);
+            Text(pKey, x, y, font);
+            x += Width(pKey, font) + 10;
         }
-        Text(pHints[i].mLabel, x, y, font);
-        x += Width(pHints[i].mLabel, font) + 40;
+        const wchar_t* pLabel = Translate(pHints[i].mLabel);
+        Text(pLabel, x, y, font);
+        x += Width(pLabel, font) + 40;
     }
 }
 } // namespace
@@ -583,7 +586,7 @@ Result UpdateCapture()
 
 const wchar_t* Title()
 {
-    return kTitles[sPage];
+    return Translate(kTitles[sPage]);
 }
 
 void Draw(f32 scale, f32 left, f32 top)
@@ -599,9 +602,9 @@ void Draw(f32 scale, f32 left, f32 top)
     const f32 x = controls ? 60.0f : 120.0f;
     if (controls)
     {
-        Text(L"KEYBOARD", 300, 140, gFrontendNormalFont);
+        Text(Translate(L"KEYBOARD"), 300, 140, gFrontendNormalFont);
 #if defined(GTA2_PORT_SDL)
-        Text(L"GAMEPAD", 470, 140, gFrontendNormalFont);
+        Text(Translate(L"GAMEPAD"), 470, 140, gFrontendNormalFont);
 #endif
     }
 
@@ -632,7 +635,7 @@ void Draw(f32 scale, f32 left, f32 top)
             PadName(GetPad(item.mArg), pad);
             if (sCapturing == item.mArg)
             {
-                wcscpy(sColumn ? pad : value, L"PRESS");
+                wcscpy(sColumn ? pad : value, Translate(L"PRESS"));
             }
             const f32 keyX = Column(300, x, pName, font);
             Text(value, keyX, y, font);

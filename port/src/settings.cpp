@@ -5,6 +5,7 @@
 #include "Globals.hpp"
 #include "Hud.hpp"
 #include "TextTable.hpp"
+#include "map_0x370.hpp"
 #include "registry.hpp"
 #include "root_sound.hpp"
 #include <stdio.h>
@@ -51,6 +52,95 @@ const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
 
 const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
 const wchar_t* const kHeadlightNames[] = {L"OFF", L"GLOW", L"BEAMS"};
+
+// A text of the port's menus: a key of the game's text table, or the text in French, German, Italian
+// and Spanish (Latin-1 letters, uppercase as the game writes them), many from GTA2 Manager's data\bob_?.gxt.
+struct Translation
+{
+    const wchar_t* mEnglish;
+    const char* mGameKey;
+    const wchar_t* mText[4];
+};
+const Translation kTranslations[] = {
+    {L"OPTIONS", "options", {}},
+    {L"BACK", "back", {}},
+    {L"CANCEL", "psxcanc", {}},
+    {L"ESC", "esc_i", {}},
+    {L"UP", "up_i", {}},
+    {L"DOWN", "down_i", {}},
+    {L"LEFT", "left_i", {}},
+    {L"RIGHT", "right_i", {}},
+    {L"FAST", "psxfast", {}},
+    {L"NORMAL", "psxnorm", {}},
+    {L"SLOW", "psxslow", {}},
+    {L"RESUME", "psxret", {}},
+    {L"QUIT GAME", "psxquit", {}},
+    {L"ENTER", NULL, {L"ENTREE", L"EINGABE", L"INVIO", L"INTRO"}},
+    {L"SELECT", NULL, {L"CHOISIR", L"WÄHLEN", L"SCEGLI", L"ELEGIR"}},
+    {L"VERY FAST", NULL, {L"TRES RAPIDE", L"SEHR SCHNELL", L"MOLTO VELOCE", L"MUY RÁPIDA"}},
+    {L"VERY SLOW", NULL, {L"TRES LENTE", L"SEHR LANGSAM", L"MOLTO LENTA", L"MUY LENTA"}},
+    {L"SOUND EFFECTS", NULL, {L"EFFETS SONORES", L"SOUNDEFFEKTE", L"EFFETTI SONORI", L"EFECTOS SONOROS"}},
+    {L"MUSIC", NULL, {L"MUSIQUE", L"MUSIK", L"MUSICA", L"MÚSICA"}},
+    {L"3D SOUND", NULL, {L"SON 3D", L"3D-SOUND", L"SUONO 3D", L"SONIDO 3D"}},
+    {L"TEXT SPEED", NULL, {L"VITESSE TEXTE", L"TEXTTEMPO", L"VELOCITÀ TESTO", L"VELOCIDAD TEXTO"}},
+    {L"LANGUAGE", NULL, {L"LANGUE", L"SPRACHE", L"LINGUA", L"IDIOMA"}},
+    {L"DISPLAY", NULL, {L"AFFICHAGE", L"ANZEIGE", L"SCHERMO", L"PANTALLA"}},
+    {L"FULL SCREEN", NULL, {L"PLEIN ECRAN", L"VOLLBILD", L"INTERO", L"COMPLETA"}},
+    {L"WINDOW", NULL, {L"FENETRE", L"FENSTER", L"FINESTRA", L"VENTANA"}},
+    {L"BRIGHTNESS", NULL, {L"VALEUR GAMMA", L"GAMMA-WERT", L"VALORE GAMMA", L"VALOR GAMMA"}},
+    {L"LIGHTING", NULL, {L"ECLAIRAGE", L"LICHT", L"ILLUMINAZIONE", L"LUCES"}},
+    {L"DUSK", NULL, {L"CREPUSCULE", L"DÄMMERUNG", L"CREPUSCOLO", L"ATARDECER"}},
+    {L"NOON", NULL, {L"MIDI", L"MITTAG", L"MEZZOGIORNO", L"MEDIODÍA"}},
+    {L"EXPLODING SCORES", NULL, {L"SCORES EXPLOSIFS", L"PUNKTE-EXPLOSION", L"PUNTI ESPLOSIVI", L"PUNTOS EXPLOSIVOS"}},
+    {L"FRAME LIMIT", NULL, {L"LIMITE IMAGES", L"BILDRATENLIMIT", L"LIMITE FOTOGRAMMI", L"LÍMITE IMÁGENES"}},
+    {L"TRUE COLOUR", NULL, {L"VRAIES COULEURS", L"ECHTFARBEN", L"COLORI REALI", L"COLOR REAL"}},
+    {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
+    {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
+    {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
+    {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
+    {L"GLOW", NULL, {L"HALO", L"LEUCHTEN", L"ALONE", L"HALO"}},
+    {L"BEAMS", NULL, {L"FAISCEAUX", L"LICHTKEGEL", L"FASCI", L"HACES"}},
+    {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
+    {L"GRAPHICS", NULL, {L"GRAPHISMES", L"GRAFIK", L"GRAFICA", L"GRÁFICOS"}},
+    {L"CONTROLS", NULL, {L"COMMANDES", L"STEUERUNG", L"COMANDI", L"CONTROLES"}},
+    {L"MORE", NULL, {L"SUITE", L"MEHR", L"ALTRI", L"MÁS"}},
+    {L"DEFAULT KEYS", NULL, {L"CONTROLES PAR DEFAUT", L"STANDARDSTEUERUNG", L"COMANDI PREDEFINITI", L"CONTROLES PREDETERMINADOS"}},
+    {L"KEYBOARD", NULL, {L"CLAVIER", L"TASTATUR", L"TASTIERA", L"TECLADO"}},
+    {L"GAMEPAD", NULL, {L"MANETTE", L"GAMEPAD", L"GAMEPAD", L"MANDO"}},
+    {L"PRESS", NULL, {L"APPUYEZ", L"DRÜCKEN", L"PREMI", L"PULSA"}},
+    {L"FORWARD", NULL, {L"AVANT", L"VORWÄRTS", L"AVANTI", L"ADELANTE"}},
+    {L"BACKWARD", NULL, {L"ARRIERE", L"ZURÜCK", L"INDIETRO", L"ATRÁS"}},
+    {L"ATTACK", NULL, {L"ATTAQUE", L"ANGRIFF", L"ATTACCA", L"ATACAR"}},
+    {L"ENTER OR EXIT", NULL, {L"ENTREE/SORTIE", L"EIN-/AUSSTEIGEN", L"ENTRA/ESCI", L"ENTRAR/SALIR"}},
+    {L"JUMP OR BRAKE", NULL, {L"FREIN/SAUT", L"SPRUNG/BREMSE", L"FRENA/SALTA", L"FRENO/SALTAR"}},
+    {L"PREVIOUS WEAPON", NULL, {L"ARME PRECEDENTE", L"VORIGE WAFFE", L"ARMA PRECEDENTE", L"ARMA ANTERIOR"}},
+    {L"NEXT WEAPON", NULL, {L"ARME SUIVANTE", L"NÄCHSTE WAFFE", L"ARMA SUCCESSIVA", L"ARMA SIGUIENTE"}},
+    {L"SPECIAL 1", NULL, {L"SPECIAL 1", L"SPEZIAL 1", L"SPECIALE 1", L"ESPECIAL 1"}},
+    {L"SPECIAL 2", NULL, {L"SPECIAL 2", L"SPEZIAL 2", L"SPECIALE 2", L"ESPECIAL 2"}},
+    {L"SPECIAL 3", NULL, {L"SPECIAL 3", L"SPEZIAL 3", L"SPECIALE 3", L"ESPECIAL 3"}},
+};
+const s32 kNumTranslations = sizeof(kTranslations) / sizeof(kTranslations[0]);
+
+// The texts in the game's font codes, for sCacheLang.
+wchar_t sCache[kNumTranslations][32];
+char sCacheLang;
+
+s32 TranslationLanguage(char code)
+{
+    switch (code)
+    {
+        case 'f':
+            return 0;
+        case 'g':
+            return 1;
+        case 'i':
+            return 2;
+        case 's':
+            return 3;
+        default:
+            return -1;
+    }
+}
 
 s32 Clamp(s32 v, s32 lo, s32 hi)
 {
@@ -124,7 +214,69 @@ s32 Screen(Id id)
 {
     return gRegistry.Get_Screen_Setting(ScreenName(id), ScreenDefault(id));
 }
+
+// The zone name on screen is a copy of the text table's.
+void RefreshZoneName()
+{
+    Hud_MapZone& zone = gHud_2B00->mZoneName;
+    gmp_map_zone* pZone = zone.mLocalNavZone ? zone.mLocalNavZone : zone.mNavZone;
+    wchar_t* pName = zone.mTimer && pZone ? pZone->get_zone_str() : NULL;
+    if (pName)
+    {
+        wcsncpy(zone.mWstr, gText_0x14->StrToUpper(pName), 64);
+        zone.mWstr[64] = 0;
+    }
+}
+
+// The frontend copies its texts into its pages: set them up again, keeping the selected options.
+void RefreshFrontend()
+{
+    const s32 numPages = sizeof(gFrontend->mMenuPagesArray) / sizeof(gFrontend->mMenuPagesArray[0]);
+    u16 selected[numPages];
+    for (s32 i = 0; i < numPages; i++)
+    {
+        selected[i] = gFrontend->mMenuPagesArray[i].mCurrentOptionIdx;
+    }
+    gFrontend->SetupMenuStringsOptionsElements();
+    for (s32 i = 0; i < numPages; i++)
+    {
+        gFrontend->mMenuPagesArray[i].mCurrentOptionIdx = selected[i];
+    }
+}
 } // namespace
+
+const wchar_t* Translate(const wchar_t* pEnglish)
+{
+    const s32 lang = gText_0x14 ? TranslationLanguage(gText_0x14->mLangCode) : -1;
+    if (lang < 0)
+    {
+        return pEnglish;
+    }
+    if (sCacheLang != gText_0x14->mLangCode)
+    {
+        sCacheLang = gText_0x14->mLangCode;
+        for (s32 i = 0; i < kNumTranslations; i++)
+        {
+            const wchar_t* pText = kTranslations[i].mText[lang];
+            wcsncpy(sCache[i], pText ? pText : kTranslations[i].mEnglish, 31);
+            sCache[i][31] = 0;
+            gText_0x14->RemapExtendedChars(sCache[i]);
+        }
+    }
+    for (s32 i = 0; i < kNumTranslations; i++)
+    {
+        if (!wcscmp(kTranslations[i].mEnglish, pEnglish))
+        {
+            const char* pKey = kTranslations[i].mGameKey;
+            if (pKey)
+            {
+                return gText_0x14->KeyExists(pKey) ? gText_0x14->Find(pKey) : pEnglish;
+            }
+            return sCache[i];
+        }
+    }
+    return pEnglish;
+}
 
 const wchar_t* Name(Id id)
 {
@@ -153,22 +305,22 @@ void Value(Id id, wchar_t* pOut)
             swprintf(pOut, L"%d", VolumeStep(gRegistry.Get_Sound_Setting(id == kSfxVolume ? "SFXVol" : "CDVol", 127)));
             break;
         case k3dSound:
-            wcscpy(pOut, gRegistry.Sound_Setting_Exists("do_3d_sound") ? L"ON" : L"OFF");
+            wcscpy(pOut, Translate(gRegistry.Sound_Setting_Exists("do_3d_sound") ? L"ON" : L"OFF"));
             break;
         case kTextSpeed:
-            wcscpy(pOut, kTextSpeeds[Clamp(gRegistry.Get_Option_Int("text_speed", 3), 1, 5) - 1]);
+            wcscpy(pOut, Translate(kTextSpeeds[Clamp(gRegistry.Get_Option_Int("text_speed", 3), 1, 5) - 1]));
             break;
         case kLanguage:
             wcscpy(pOut, kLanguages[LanguageIndex()].mName);
             break;
         case kDisplay:
-            wcscpy(pOut, gRegistry.Get_Screen_Setting("start_mode", 1) ? L"FULL SCREEN" : L"WINDOW");
+            wcscpy(pOut, Translate(gRegistry.Get_Screen_Setting("start_mode", 1) ? L"FULL SCREEN" : L"WINDOW"));
             break;
         case kBrightness:
             swprintf(pOut, L"%d", gRegistry.Get_Screen_Setting("gamma", 10));
             break;
         case kLighting:
-            wcscpy(pOut, Screen(id) ? L"DUSK" : L"NOON");
+            wcscpy(pOut, Translate(Screen(id) ? L"DUSK" : L"NOON"));
             break;
         case kBloom:
             if (Screen(id))
@@ -177,14 +329,14 @@ void Value(Id id, wchar_t* pOut)
             }
             else
             {
-                wcscpy(pOut, L"OFF");
+                wcscpy(pOut, Translate(L"OFF"));
             }
             break;
         case kHeadlights:
-            wcscpy(pOut, kHeadlightNames[Clamp(Screen(id), 0, 2)]);
+            wcscpy(pOut, Translate(kHeadlightNames[Clamp(Screen(id), 0, 2)]));
             break;
         default:
-            wcscpy(pOut, Screen(id) ? L"ON" : L"OFF");
+            wcscpy(pOut, Translate(Screen(id) ? L"ON" : L"OFF"));
             break;
     }
 }
@@ -241,7 +393,12 @@ void Change(Id id, s32 delta)
             gText_0x14->Load();
             if (inGame)
             {
+                RefreshZoneName();
                 gHud_2B00->RecalcTextLayout();
+            }
+            else if (gFrontend)
+            {
+                RefreshFrontend();
             }
             break;
         }
