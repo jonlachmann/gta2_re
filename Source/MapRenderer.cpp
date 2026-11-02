@@ -2,7 +2,7 @@
 #include "Camera.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/frame_loop.hpp"
-#include "../port/src/headlights.hpp"
+#include "../port/src/lights.hpp"
 #endif
 #include "winmain.hpp"
 #include "gbh_graphics.hpp"
@@ -3641,7 +3641,7 @@ void MapRenderer::Draw()
                 pgbh_SetCamera(static_cast<f32>(min_x), static_cast<f32>(min_y), static_cast<f32>(max_x), static_cast<f32>(max_y));
                 LightGrid::SubmitLightsInArea(min_x, min_y, max_x, max_y);
 #if defined(GTA2_PORT)
-                PortHeadlights::Submit(min_x, min_y, max_x, max_y);
+                PortLights::Submit(min_x, min_y, max_x, max_y);
 #endif
             }
 

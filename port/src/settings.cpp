@@ -43,9 +43,9 @@ const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingS
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kHeadlights};
+const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kHeadlights, kLightEffects};
 #else
-const Id kGraphics[] = {kHeadlights};
+const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
 
@@ -54,7 +54,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS"};
 
 struct Language
 {
@@ -119,6 +119,7 @@ const Translation kTranslations[] = {
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
     {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
+    {L"LIGHT EFFECTS", NULL, {L"EFFETS LUMINEUX", L"LICHTEFFEKTE", L"EFFETTI LUCE", L"EFECTOS DE LUZ"}},
     {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
@@ -228,6 +229,8 @@ const char* ScreenName(Id id)
             return "hud_scale";
         case kSafeArea:
             return "hud_margin";
+        case kLightEffects:
+            return "light_effects";
         default:
             return "car_headlights";
     }
@@ -392,6 +395,11 @@ f32 SafeArea()
 bool Headlights()
 {
     return Screen(kHeadlights) != 0;
+}
+
+bool LightEffects()
+{
+    return Screen(kLightEffects) != 0;
 }
 
 // The original's max_frame_rate is not read: off, it ran the game as fast as the machine.
@@ -623,6 +631,7 @@ void Change(Id id, s32 delta)
             ApplyRenderOptions();
             break;
         case kHeadlights:
+        case kLightEffects:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
         case kFrameLimit:

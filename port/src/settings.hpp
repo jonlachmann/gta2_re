@@ -27,6 +27,7 @@ enum Id
     kZoom,
     kHudScale,
     kSafeArea,
+    kLightEffects,
     kCount,
 };
 
@@ -49,8 +50,9 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue);
 // Changing the language reloads the text table and lays the frontend's or the HUD's texts out again.
 void Change(Id id, s32 delta);
 
-// Car headlight beams, with the dusk lighting.
+// Car headlight beams, and the other added lights (lights.hpp), with the dusk lighting.
 bool Headlights();
+bool LightEffects();
 
 // HUD SCALE: 1 for the original's size.
 f32 HudScale();
