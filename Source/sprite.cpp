@@ -1208,7 +1208,11 @@ void Sprite::Draw()
         memcpy(&pShadowVerts[2], &gSpriteVerts[2], sizeof(Vert));
         memcpy(&pShadowVerts[3], &gSpriteVerts[3], sizeof(Vert));
 
+#if defined(GTA2_PORT)
+        f32 shadow_offset = (PortScreenUiScale() * 5).ToFloat();
+#else
         f32 shadow_offset = (gViewCamera->mUiScale * 5).ToFloat();
+#endif
         pShadowVerts[0].diff = 0xA0000000;
         pShadowVerts[1].diff = 0xA0000000;
         pShadowVerts[2].diff = 0xA0000000;

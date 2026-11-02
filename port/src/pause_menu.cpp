@@ -11,6 +11,7 @@
 #include "gbh_graphics.hpp"
 #include "gtx_0x106C.hpp"
 #include "menu.hpp"
+#include "settings.hpp"
 
 EXTERN_GLOBAL(s16, word_7064D8);
 
@@ -177,6 +178,11 @@ bool HandleKey(s32 action, Player* pPlayer)
     return true;
 }
 
+Fix16 Fx(f32 v)
+{
+    return Fix16(static_cast<s32>(v * 16384.0f), 0);
+}
+
 void Draw()
 {
     if (!sOpen)
@@ -185,9 +191,9 @@ void Draw()
     }
     PortMenu::UpdateCapture();
 
-    // The 640x480 layout centred on the screen, the menu then the original's banner over its panel, higher
-    // to leave room for the menu.
-    const f32 scale = gViewCamera->mUiScale.mValue / 16384.0f;
+    // The 640x480 layout centred on the screen, inside the safe area but without the HUD scale, the menu
+    // then the original's banner over its panel, higher to leave room for the menu.
+    const f32 scale = PortScreenUiScale().ToFloat() * (1 - 2 * PortSettings::SafeArea());
     const f32 left = (gViewCamera->mScreenPxWidth - 640.0f * scale) / 2;
     const f32 top = (gViewCamera->mScreenPxHeight - 480.0f * scale) / 2;
     UseFrontendStyle(false);
@@ -200,11 +206,16 @@ void Draw()
     }
     PortMenu::Draw(scale, left, top, true);
     UseGameStyle();
-    DrawFigureScaled(sprite_types_enum::user_6, 134, 227, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
-    DrawFigureScaled(sprite_types_enum::user_6, 136, 320, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
-    DrawFigureScaled(sprite_types_enum::user_6, 135, 413, 100, Ang16(0), palette_types_enum::sprites_2, 0, 0, 0);
+    const s16 kBanner[3] = {134, 136, 135};
+    for (s32 i = 0; i < 3; i++)
+    {
+        DrawFigure(sprite_types_enum::user_6, kBanner[i], Fx(left + (227 + 93 * i) * scale), Fx(top + 100 * scale), Ang16(0),
+                   Fx(scale), palette_types_enum::sprites_2, 0, 0, 0, false);
+    }
     wchar_t* pPause = gText_0x14->Find("pause");
-    DrawStringScaledPalette(pPause, (640 - Frontend::GetMaxTextWidth(pPause, static_cast<u16>(word_7064D8))) / 2, 78,
-                            static_cast<u16>(word_7064D8), palette_types_enum::sprites_2, 0, 0, 0);
+    const s16 font = static_cast<s16>(word_7064D8);
+    const f32 pauseX = (640 - Frontend::GetMaxTextWidth(pPause, font)) / 2;
+    DrawString(pPause, Fx(left + pauseX * scale), Fx(top + 78 * scale), font, Fx(scale), palette_types_enum::sprites_2, 0, 0,
+               0);
 }
 } // namespace PortPauseMenu

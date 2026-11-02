@@ -221,6 +221,10 @@ Fix16 PortUiStringX(const wchar_t* pStr, Fix16 x, u16 font);
 Fix16 PortViewWidthFactor();
 // A camera zoom with the player's zoom setting applied, for everything that depends on the view's size.
 Fix16 PortCameraZoom(Fix16 zoom);
+// The HUD's scale on a screen of that size, with the HUD scale and safe area settings.
+Fix16 PortHudUiScale(u32 width, u32 height);
+// The 640x480 layout's scale that fits the screen, without the HUD settings.
+Fix16 PortScreenUiScale();
 #define UI_X(x) PortUiX(x)
 #define UI_Y(y) PortUiY(y)
 #define UI_STR_X(str, x, font) PortUiStringX(str, x, font)

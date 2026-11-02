@@ -25,6 +25,8 @@ enum Id
     kVsync,
     kDisplayMode,
     kZoom,
+    kHudScale,
+    kSafeArea,
     kCount,
 };
 
@@ -49,6 +51,11 @@ void Change(Id id, s32 delta);
 
 // Car headlight beams, with the dusk lighting.
 bool Headlights();
+
+// HUD SCALE: 1 for the original's size.
+f32 HudScale();
+// SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
+f32 SafeArea();
 
 // FRAME LIMIT: frames drawn per second, 30 the original's pacing, 0 no limit.
 s32 MaxFps();

@@ -36,9 +36,10 @@ namespace PortSettings
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kExplodingScores, kZoom};
+const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kExplodingScores,
+                      kZoom, kHudScale, kSafeArea};
 #else
-const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores, kZoom};
+const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores, kZoom, kHudScale, kSafeArea};
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
@@ -53,7 +54,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA"};
 
 struct Language
 {
@@ -110,6 +111,8 @@ const Translation kTranslations[] = {
     {L"VSYNC", NULL, {L"VSYNC", L"VSYNC", L"VSYNC", L"VSYNC"}},
     {L"ORIGINAL", NULL, {L"ORIGINAL", L"ORIGINAL", L"ORIGINALE", L"ORIGINAL"}},
     {L"UNLIMITED", NULL, {L"ILLIMITE", L"UNBEGRENZT", L"ILLIMITATO", L"ILIMITADO"}},
+    {L"HUD SCALE", NULL, {L"TAILLE HUD", L"HUD-GRÖSSE", L"SCALA HUD", L"ESCALA HUD"}},
+    {L"SAFE AREA", NULL, {L"MARGE ECRAN", L"BILDRAND", L"MARGINE SCHERMO", L"MARGEN PANTALLA"}},
     {L"DISPLAY MODE", NULL, {L"MODE VIDEO", L"BILDSCHIRMMODUS", L"MODALITÀ VIDEO", L"MODO DE VÍDEO"}},
     {L"DESKTOP", NULL, {L"BUREAU", L"DESKTOP", L"DESKTOP", L"ESCRITORIO"}},
     {L"TRUE COLOUR", NULL, {L"VRAIES COULEURS", L"ECHTFARBEN", L"COLORI REALI", L"COLOR REAL"}},
@@ -221,6 +224,10 @@ const char* ScreenName(Id id)
             return "gl_pixel_lighting";
         case kZoom:
             return "camera_zoom";
+        case kHudScale:
+            return "hud_scale";
+        case kSafeArea:
+            return "hud_margin";
         default:
             return "car_headlights";
     }
@@ -232,6 +239,10 @@ s32 ScreenDefault(Id id)
     if (id == kFrameLimit)
     {
         return 30;
+    }
+    if (id == kHudScale)
+    {
+        return 100;
     }
     return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
@@ -264,6 +275,40 @@ s32 Zoom()
         SetZoom(Screen(kZoom));
     }
     return sZoom;
+}
+
+// HUD SCALE in percent, by steps of 10; SAFE AREA in percent. Cached: each HUD element reads them.
+const s32 kMinHudScale = 50;
+const s32 kMaxHudScale = 150;
+const s32 kMaxSafeArea = 10;
+s32 sHudScale = -1;
+s32 sSafeArea = -1;
+
+s32 HudScalePercent()
+{
+    if (sHudScale < 0)
+    {
+        sHudScale = Clamp(Screen(kHudScale), kMinHudScale, kMaxHudScale) / 10 * 10;
+    }
+    return sHudScale;
+}
+
+s32 SafeAreaPercent()
+{
+    if (sSafeArea < 0)
+    {
+        sSafeArea = Clamp(Screen(kSafeArea), 0, kMaxSafeArea);
+    }
+    return sSafeArea;
+}
+
+// The HUD's scale is set with the screen's size, as the HUD lays its texts out.
+void RefreshHud()
+{
+    if (port_GameRunning() && gViewCamera)
+    {
+        gGame_0x40->SetScreenSize(gViewCamera->mScreenPxWidth, gViewCamera->mScreenPxHeight);
+    }
 }
 
 // The zone name on screen is a copy of the text table's.
@@ -334,6 +379,16 @@ const wchar_t* Name(Id id)
     return kNames[id];
 }
 
+f32 HudScale()
+{
+    return HudScalePercent() / 100.0f;
+}
+
+f32 SafeArea()
+{
+    return SafeAreaPercent() / 100.0f;
+}
+
 bool Headlights()
 {
     return Screen(kHeadlights) != 0;
@@ -378,6 +433,16 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pMax = kMaxZoom;
             *pValue = Zoom();
             return true;
+        case kHudScale:
+            *pMin = kMinHudScale / 10;
+            *pMax = kMaxHudScale / 10;
+            *pValue = HudScalePercent() / 10;
+            return true;
+        case kSafeArea:
+            *pMin = 0;
+            *pMax = kMaxSafeArea;
+            *pValue = SafeAreaPercent();
+            return true;
         default:
             return false;
     }
@@ -419,6 +484,12 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kZoom:
             swprintf(pOut, L"%d", Zoom());
+            break;
+        case kHudScale:
+            swprintf(pOut, L"%d", HudScalePercent());
+            break;
+        case kSafeArea:
+            swprintf(pOut, L"%d", SafeAreaPercent());
             break;
         case kBloom:
             if (Screen(id))
@@ -582,6 +653,16 @@ void Change(Id id, s32 delta)
         case kZoom:
             SetZoom(Zoom() + delta);
             gRegistry.Set_Screen_Setting(ScreenName(id), sZoom);
+            break;
+        case kHudScale:
+            sHudScale = Clamp(HudScalePercent() + delta * 10, kMinHudScale, kMaxHudScale);
+            gRegistry.Set_Screen_Setting(ScreenName(id), sHudScale);
+            RefreshHud();
+            break;
+        case kSafeArea:
+            sSafeArea = Clamp(SafeAreaPercent() + delta, 0, kMaxSafeArea);
+            gRegistry.Set_Screen_Setting(ScreenName(id), sSafeArea);
+            RefreshHud();
             break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);

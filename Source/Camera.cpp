@@ -602,10 +602,7 @@ void Camera::SetScreenSize(u32 width, u32 height)
     mScreenScale.y = Fix16(-1);
 
 #if defined(GTA2_PORT)
-    // The 640x480 HUD fits the screen's height on wide screens, its width on tall ones.
-    const Fix16 by_width = Fix16(width) / 640;
-    const Fix16 by_height = Fix16(height) / 480;
-    mUiScale = by_height < by_width ? by_height : by_width;
+    mUiScale = PortHudUiScale(width, height);
 #else
     mUiScale = Fix16(width) / 640;
 #endif
