@@ -28,32 +28,43 @@ Fix16 FromF(f32 v)
     return Fix16(static_cast<s32>(v * 16384.0f), 0);
 }
 
-// The 640 (or 480) wide layout scaled by the HUD scale, and what the screen has beyond it: thirds of
-// the layout stay at the left (top), centre or right (bottom) of the screen.
-f32 Anchor(f32 pos, f32 layoutSize, s32 screenSize)
+// The 640 (or 480) wide layout scaled by the HUD scale, and what the screen has beyond it: what lies
+// in the outer sixths of the layout stays at that edge of the screen, the rest is centred with it.
+f32 Offset(f32 pos, f32 layoutSize, s32 screenSize)
 {
-    const f32 scale = ToF(gViewCamera->mUiScale);
-    const f32 extra = screenSize - layoutSize * scale;
-    const f32 offset = pos < layoutSize / 3 ? 0.0f : (pos > layoutSize * 2 / 3 ? extra : extra / 2);
-    return offset;
+    const f32 extra = screenSize - layoutSize * ToF(gViewCamera->mUiScale);
+    return pos < layoutSize / 6 ? 0.0f : (pos > layoutSize * 5 / 6 ? extra : extra / 2);
 }
 } // namespace
 
 Fix16 PortUiX(Fix16 x)
 {
-    return FromF(ToF(x) * ToF(gViewCamera->mUiScale) + Anchor(ToF(x), 640.0f, gViewCamera->mScreenPxWidth));
+    return FromF(ToF(x) * ToF(gViewCamera->mUiScale) + Offset(ToF(x), 640.0f, gViewCamera->mScreenPxWidth));
 }
 
 Fix16 PortUiY(Fix16 y)
 {
-    return FromF(ToF(y) * ToF(gViewCamera->mUiScale) + Anchor(ToF(y), 480.0f, gViewCamera->mScreenPxHeight));
+    return FromF(ToF(y) * ToF(gViewCamera->mUiScale) + Offset(ToF(y), 480.0f, gViewCamera->mScreenPxHeight));
 }
 
-// A string is anchored by its centre, or to the left when it starts near the left edge (text next to
-// a face or an icon).
+// Text centred in the layout stays centred; otherwise its start (left edge) or its end (right edge)
+// decides, so text beside a face or an icon keeps its place.
 Fix16 PortUiStringX(const wchar_t* pStr, Fix16 x, u16 font)
 {
     const f32 width = static_cast<f32>(Frontend::GetMaxTextWidth(const_cast<wchar_t*>(pStr), font));
-    const f32 centre = ToF(x) < 640.0f / 6 ? 0.0f : ToF(x) + width / 2;
-    return FromF(ToF(x) * ToF(gViewCamera->mUiScale) + Anchor(centre, 640.0f, gViewCamera->mScreenPxWidth));
+    const f32 start = ToF(x);
+    const f32 centred = (640.0f - width) / 2;
+    f32 anchor = 320.0f;
+    if (start - centred > 1.5f || centred - start > 1.5f)
+    {
+        anchor = start < 640.0f / 6 ? 0.0f : (start + width > 640.0f * 5 / 6 ? 640.0f : 320.0f);
+    }
+    return FromF(start * ToF(gViewCamera->mUiScale) + Offset(anchor, 640.0f, gViewCamera->mScreenPxWidth));
+}
+
+Fix16 PortViewWidthFactor()
+{
+    const s32 width = gViewCamera->mScreenPxWidth;
+    const s32 width_4_3 = gViewCamera->mScreenPxHeight * 4 / 3;
+    return width > width_4_3 && width_4_3 > 0 ? FromF(static_cast<f32>(width) / width_4_3) : Fix16(1);
 }

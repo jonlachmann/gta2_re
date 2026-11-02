@@ -3501,6 +3501,12 @@ void MapRenderer::ClearDrawnTileCount()
 // can't take those rvalues.
 static inline void AddToDrawListByVal(MapRenderer* pThis, s32 x, s32 y)
 {
+#if defined(GTA2_PORT)
+    if (pThis->mCurrDrawLayerSize >= static_cast<s32>(GTA2_COUNTOF(pThis->mDrawList)))
+    {
+        return;
+    }
+#endif
     DrawListBlock* pPos = &pThis->mDrawList[pThis->mCurrDrawLayerSize];
     pPos->mX = x;
     pPos->mY = y;
@@ -3548,6 +3554,10 @@ void MapRenderer::Draw()
 
             // narrow the y direction because of assymetric monitor resolution
             Fix16 layer_column_width = layer_row_width * kScreenAspectRatio;
+#if defined(GTA2_PORT)
+            // Wider than 4:3: the view widens (Camera::UpdateBoundaries).
+            layer_row_width = layer_row_width * PortViewWidthFactor();
+#endif
 
             // compute x boundary
             Fix16 half_x = layer_row_width / 2;
