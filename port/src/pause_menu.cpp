@@ -115,11 +115,15 @@ void FreeStyle()
 }
 
 // The frontend's menu sounds, fstyle's samples 0 to 11: a left and a right one for each result up to
-// kWentBack. The game's sound bank is the level's, so they play on two sample handles of their own.
+// kWentBack. The game's sound bank is the level's, so they play on sample handles of their own.
 SdtEntry sSoundEntries[12];
 std::vector<u8> sSoundData;
 s32 sSoundFirst;
-HSAMPLE sSoundHandles[2];
+// Pairs used in turn: like the frontend's, a sound plays to its end over the next ones (about a
+// second), as cutting it short clicks.
+const s32 kSoundPairs = 8;
+HSAMPLE sSoundHandles[kSoundPairs * 2];
+s32 sNextPair;
 
 bool LoadSoundData()
 {
@@ -161,15 +165,19 @@ void OpenSounds()
     }
     for (HSAMPLE& handle : sSoundHandles)
     {
-        handle = AIL_allocate_sample_handle(gSampManager.mhDriver);
+        if (!handle)
+        {
+            handle = AIL_allocate_sample_handle(gSampManager.mhDriver);
+        }
     }
 }
 
-void CloseSounds()
+// Once the menu closed, as each sound ends.
+void ReleaseSounds()
 {
     for (HSAMPLE& handle : sSoundHandles)
     {
-        if (handle)
+        if (handle && AIL_sample_status(handle) != SMP_PLAYING)
         {
             AIL_release_sample_handle(handle);
             handle = NULL;
@@ -177,7 +185,7 @@ void CloseSounds()
     }
 }
 
-// As the frontend plays them, at the SOUND EFFECTS volume; a new one cuts the last.
+// As the frontend plays them, at the SOUND EFFECTS volume.
 void PlaySound(PortMenu::Result result)
 {
     if (result < PortMenu::kMovedUp || result > PortMenu::kWentBack)
@@ -187,7 +195,7 @@ void PlaySound(PortMenu::Result result)
     const s32 volume = gRegistry.Get_Sound_Setting("SFXVol", 127);
     for (s32 i = 0; i < 2; i++)
     {
-        HSAMPLE handle = sSoundHandles[i];
+        HSAMPLE handle = sSoundHandles[sNextPair * 2 + i];
         if (!handle)
         {
             continue;
@@ -203,12 +211,12 @@ void PlaySound(PortMenu::Result result)
         AIL_set_sample_loop_count(handle, 1);
         AIL_start_sample(handle);
     }
+    sNextPair = (sNextPair + 1) % kSoundPairs;
 }
 
 void Close()
 {
     sOpen = false;
-    CloseSounds();
     FreeStyle();
     if (gGame_0x40->IsPaused())
     {
@@ -285,6 +293,7 @@ void Draw()
 {
     if (!sOpen)
     {
+        ReleaseSounds();
         return;
     }
     PlaySound(PortMenu::UpdateCapture());
