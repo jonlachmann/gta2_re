@@ -193,7 +193,8 @@ docker run --rm -v $PWD/../work/out:/app:ro -v $PWD/port/packaging:/p:ro debian:
 ```
 
 - Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
-  the libraries' licences.
+  the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later (Windows 7 and 8.1
+  need the Universal C Runtime update).
 - Linux: `gta2_re-<version>-x86_64.AppImage`. The game inside is i686, built in an i386 Debian userland; the
   AppImage brings that userland's glibc and loader, Mesa (EGL, GLX, llvmpipe and the GPU drivers) and the
   libraries SDL3 loads, and `AppRun` starts the game through the bundled `ld-linux.so.2 --library-path`. It
