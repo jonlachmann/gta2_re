@@ -7,11 +7,15 @@
 #include "Globals.hpp"
 #include "TextTable.hpp"
 #include "TextureCache.hpp"
+#include "cSampleManager.hpp"
 #include "debug.hpp"
 #include "gbh_graphics.hpp"
 #include "gtx_0x106C.hpp"
 #include "menu.hpp"
+#include "registry.hpp"
 #include "settings.hpp"
+#include <stdio.h>
+#include <vector>
 
 EXTERN_GLOBAL(s16, word_7064D8);
 
@@ -110,9 +114,101 @@ void FreeStyle()
     UseGameStyle();
 }
 
+// The frontend's menu sounds, fstyle's samples 0 to 11: a left and a right one for each result up to
+// kWentBack. The game's sound bank is the level's, so they play on two sample handles of their own.
+SdtEntry sSoundEntries[12];
+std::vector<u8> sSoundData;
+s32 sSoundFirst;
+HSAMPLE sSoundHandles[2];
+
+bool LoadSoundData()
+{
+    FILE* pSdt = fopen("data\\audio\\FSTYLE.SDT", "rb");
+    FILE* pRaw = fopen("data\\audio\\FSTYLE.RAW", "rb");
+    bool ok = pSdt && pRaw && fread(sSoundEntries, sizeof(SdtEntry), 12, pSdt) == 12;
+    if (ok)
+    {
+        sSoundFirst = sSoundEntries[0].mOffset;
+        s32 end = 0;
+        for (const SdtEntry& entry : sSoundEntries)
+        {
+            sSoundFirst = entry.mOffset < sSoundFirst ? entry.mOffset : sSoundFirst;
+            end = entry.mOffset + entry.mSampleLength > end ? entry.mOffset + entry.mSampleLength : end;
+        }
+        sSoundData.resize(end - sSoundFirst);
+        ok = fseek(pRaw, sSoundFirst, SEEK_SET) == 0 && fread(sSoundData.data(), 1, sSoundData.size(), pRaw) == sSoundData.size();
+    }
+    if (pSdt)
+    {
+        fclose(pSdt);
+    }
+    if (pRaw)
+    {
+        fclose(pRaw);
+    }
+    if (!ok)
+    {
+        sSoundData.clear();
+    }
+    return ok;
+}
+
+void OpenSounds()
+{
+    if (!gSampManager.mhDriver || (sSoundData.empty() && !LoadSoundData()))
+    {
+        return;
+    }
+    for (HSAMPLE& handle : sSoundHandles)
+    {
+        handle = AIL_allocate_sample_handle(gSampManager.mhDriver);
+    }
+}
+
+void CloseSounds()
+{
+    for (HSAMPLE& handle : sSoundHandles)
+    {
+        if (handle)
+        {
+            AIL_release_sample_handle(handle);
+            handle = NULL;
+        }
+    }
+}
+
+// As the frontend plays them, at the SOUND EFFECTS volume; a new one cuts the last.
+void PlaySound(PortMenu::Result result)
+{
+    if (result < PortMenu::kMovedUp || result > PortMenu::kWentBack)
+    {
+        return;
+    }
+    const s32 volume = gRegistry.Get_Sound_Setting("SFXVol", 127);
+    for (s32 i = 0; i < 2; i++)
+    {
+        HSAMPLE handle = sSoundHandles[i];
+        if (!handle)
+        {
+            continue;
+        }
+        const SdtEntry& entry = sSoundEntries[(result - PortMenu::kMovedUp) * 2 + i];
+        AIL_end_sample(handle);
+        AIL_init_sample(handle);
+        AIL_set_sample_type(handle, DIG_F_MONO_16, DIG_PCM_SIGN);
+        AIL_set_sample_address(handle, &sSoundData[entry.mOffset - sSoundFirst], entry.mSampleLength);
+        AIL_set_sample_playback_rate(handle, entry.mPlayBackRate);
+        AIL_set_sample_volume(handle, volume);
+        AIL_set_sample_pan(handle, i ? 127 : 0);
+        AIL_set_sample_loop_count(handle, 1);
+        AIL_start_sample(handle);
+    }
+}
+
 void Close()
 {
     sOpen = false;
+    CloseSounds();
     FreeStyle();
     if (gGame_0x40->IsPaused())
     {
@@ -122,6 +218,7 @@ void Close()
 
 void Apply(PortMenu::Result result)
 {
+    PlaySound(result);
     if (result == PortMenu::kClosed || result == PortMenu::kQuitGame)
     {
         Close();
@@ -148,6 +245,7 @@ bool HandleKey(s32 action, Player* pPlayer)
         }
         sOpen = true;
         LoadStyle();
+        OpenSounds();
         PortMenu::Open();
         if (!gGame_0x40->IsPaused())
         {
@@ -189,7 +287,7 @@ void Draw()
     {
         return;
     }
-    PortMenu::UpdateCapture();
+    PlaySound(PortMenu::UpdateCapture());
 
     // The 640x480 layout centred on the screen, inside the safe area but without the HUD scale, the menu
     // then the original's banner over its panel, higher to leave room for the menu.
@@ -204,6 +302,7 @@ void Draw()
         Apply(result);
         return;
     }
+    PlaySound(result);
     PortMenu::Draw(scale, left, top, true);
     UseGameStyle();
     const s16 kBanner[3] = {134, 136, 135};

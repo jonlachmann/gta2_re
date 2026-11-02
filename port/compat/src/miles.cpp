@@ -358,6 +358,47 @@ void MixStream(Stream* s, float* out, int frames)
     }
 }
 
+// Sounds at full scale (the frontend's are) sum past it when they overlap. Rather than clipping, the
+// mix is turned down for as long as needed, starting kLookahead frames ahead of the peak.
+class Limiter
+{
+  public:
+    void Process(float* pMix, int frames)
+    {
+        const float kCeiling = 0.99f;
+        const float release = 1.0f - expf(-1.0f / (0.15f * kOutRate));
+        for (int i = 0; i < frames; i++)
+        {
+            float* p = &pMix[i * 2];
+            const float peak = SDL_max(fabsf(p[0]), fabsf(p[1]));
+            const int in = mPos;
+            mDelay[in * 2] = p[0];
+            mDelay[in * 2 + 1] = p[1];
+            mNeeded[in] = peak > kCeiling ? kCeiling / peak : 1.0f;
+            mPos = (mPos + 1) % kLookahead;
+            // A linear ramp down to each gain needed in the lookahead, the oldest frame needing its own.
+            float gain = mGain + (1.0f - mGain) * release;
+            for (int k = 0; k < kLookahead; k++)
+            {
+                const float needed = mNeeded[(mPos + k) % kLookahead];
+                gain = SDL_min(gain, needed + (1.0f - needed) * k / kLookahead);
+            }
+            mGain = gain;
+            p[0] = mDelay[mPos * 2] * gain;
+            p[1] = mDelay[mPos * 2 + 1] * gain;
+        }
+    }
+
+  private:
+    static const int kLookahead = 64;
+    float mDelay[kLookahead * 2] = {};
+    float mNeeded[kLookahead] = {};
+    int mPos = 0;
+    float mGain = 1.0f;
+};
+
+Limiter sLimiter;
+
 void SDLCALL AudioCallback(void*, SDL_AudioStream* stream, int additional, int)
 {
     const int frames = additional / (int)(2 * sizeof(float));
@@ -387,6 +428,7 @@ void SDLCALL AudioCallback(void*, SDL_AudioStream* stream, int additional, int)
         }
     }
     Miles3D_Render(mix.data(), frames);
+    sLimiter.Process(mix.data(), frames);
     for (float& v : mix)
     {
         v = v > 1.0f ? 1.0f : (v < -1.0f ? -1.0f : v);
