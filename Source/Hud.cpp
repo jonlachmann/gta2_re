@@ -2,6 +2,7 @@
 #include "Hud.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/pause_menu.hpp"
+#include "../port/src/view.hpp"
 #endif
 #include "hud_message_priority.hpp"
 #include "hud_brief_priority.hpp"
@@ -3367,7 +3368,13 @@ void Hud::DrawGui()
     {
         SetFullAmbient();
         mPlayerStats.DrawPlayerStats();
+#if defined(GTA2_PORT)
+        PortView::SetTurn(PortView::kMarkers);
         mUnderRoofArrowMarker.Draw();
+        PortView::SetTurn(PortView::kOff);
+#else
+        mUnderRoofArrowMarker.Draw();
+#endif
         mPlayerNames.DrawPlayerNames();
         mWantedLevel.DrawWantedLevel();
         mGangRespectBars.DrawGangRespectBars();
@@ -3378,7 +3385,13 @@ void Hud::DrawGui()
         mBrief.DrawBrief();
         mPagers.DrawPagers();
         mTexts.Service();
+#if defined(GTA2_PORT)
+        PortView::SetTurn(PortView::kMarkers);
         mArrows.DrawArrows();
+        PortView::SetTurn(PortView::kOff);
+#else
+        mArrows.DrawArrows();
+#endif
         mMpMessage.Draw();
         mMessage.DrawMessage();
         mPauseScreen.DrawPause();

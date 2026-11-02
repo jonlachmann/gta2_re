@@ -1,4 +1,7 @@
 #include "Game.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/view.hpp"
+#endif
 #include "ped_group_type.hpp"
 #include "ped_class.hpp"
 #include "AmbulanceService.hpp"
@@ -395,7 +398,13 @@ void Game::Draw()
 
     pgbh_BeginScene();
 
+#if defined(GTA2_PORT)
+    PortView::SetTurn(PortView::kWorld);
+#endif
     gpMapRenderer->Draw(); // Note: Also seems to draw sprites
+#if defined(GTA2_PORT)
+    PortView::SetTurn(PortView::kOff);
+#endif
 
     if (!bExplodingScoresOff)
     {

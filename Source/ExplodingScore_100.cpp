@@ -6,6 +6,7 @@
 #include <memory.h>
 #if defined(GTA2_PORT)
 #include "../port/src/frame_loop.hpp"
+#include "../port/src/view.hpp"
 #endif
 
 DEFINE_GLOBAL(ExplodingScorePool*, gExplodingScorePool, 0x702F34);
@@ -416,6 +417,10 @@ void ExplodingScore::DrawSingleNumber(s32 number_to_draw, s32 xpos_sub)
     }
 
     pCam->ProjectWorldToScreen_4B90E0(mX, mY, mZ, &proj_x, &proj_y);
+#if defined(GTA2_PORT)
+    // The digits stay upright where the turned view puts their place.
+    PortView::TurnPoint(proj_x, proj_y);
+#endif
 
     Fix16 base_scale;
     s32 x_off;

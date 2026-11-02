@@ -5,6 +5,7 @@
 #include "interpolation.hpp"
 #include "settings.hpp"
 #include "sprite.hpp"
+#include "view.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -91,11 +92,11 @@ void Trace(char kind)
     }
     const Sprite* pSprite = PlayerSprite();
     const Camera* pCamera = gGame_0x40 && gGame_0x40->mDrawPlayer ? &gGame_0x40->mDrawPlayer->mViewCamera : NULL;
-    fprintf(spTrace, "%c %u %.4f cam %d %d %d player %d %d %d %d\n", kind, sStepCount, kind == 'D' ? sAlpha : 1.0f,
+    fprintf(spTrace, "%c %u %.4f cam %d %d %d player %d %d %d %d yaw %.2f\n", kind, sStepCount, kind == 'D' ? sAlpha : 1.0f,
             pCamera ? pCamera->mCurPos.mX.mValue : 0, pCamera ? pCamera->mCurPos.mY.mValue : 0,
             pCamera ? pCamera->mCurPos.mZ.mValue : 0, pSprite ? pSprite->mXy.x.mValue : 0,
             pSprite ? pSprite->mXy.y.mValue : 0, pSprite ? pSprite->mZpos.mValue : 0,
-            pSprite ? pSprite->mRotation.rValue : 0);
+            pSprite ? pSprite->mRotation.rValue : 0, PortView::Yaw(kind == 'D' ? sAlpha : 1.0f));
 }
 
 void Stats(unsigned long long now)
@@ -145,6 +146,7 @@ void Reset()
     sAccumulated = 0;
     sStepsSinceDraw = 0;
     PortInterp::Clear();
+    PortView::Clear();
     ApplySettings();
 }
 
@@ -210,6 +212,7 @@ Action Next(s32 stepMs, bool forceStep, bool noDraw)
 void BeforeStep()
 {
     PortInterp::Snapshot();
+    PortView::Snapshot();
 }
 
 void AfterStep()
@@ -218,6 +221,7 @@ void AfterStep()
     sStepCount++;
     sStatsSteps++;
     port_CountGameStep();
+    PortView::Step();
     Trace('S');
 }
 
@@ -230,12 +234,14 @@ void BeginDraw()
         PortInterp::Apply(sAlpha);
     }
     Trace('D');
+    PortView::BeginDraw(sAlpha);
     port_SetGameFlip(true);
 }
 
 void EndDraw()
 {
     port_SetGameFlip(false);
+    PortView::EndDraw();
     PortInterp::Restore();
     sStepsSinceDraw = 0;
     sInDraw = false;

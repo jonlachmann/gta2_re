@@ -363,6 +363,9 @@ MATCH_FUNC(0x435A70)
 s32 Camera::IsCoordsPosVisible(Fix16 x, Fix16 y, Fix16 z)
 {
     Fix16_Point_POD pos = WorldToScreen(x, y, z);
+#if defined(GTA2_PORT)
+    PortViewTurnPoint640(pos.x, pos.y);
+#endif
     if (pos.x >= kZero_676818 && pos.x < Fix16(640) && pos.y >= kZero_676818 && pos.y < Fix16(480))
     {
         return 1;
