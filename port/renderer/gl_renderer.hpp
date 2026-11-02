@@ -1,7 +1,7 @@
 // Portable OpenGL 3.3 core renderer: logical size offscreen target, batched triangles,
 // a CPU 16-bit surface overlay for direct pixel writes, gamma, present and frame capture.
 // The offscreen target is stored top row first (y down) so edge ties follow D3D's top-left fill rule.
-// Optional enhancements (RenderOptions): true colour target, bloom, per pixel lighting, mipmaps, MSAA.
+// Optional enhancements (RenderOptions): true colour target, bloom, per pixel lighting, mipmaps, MSAA, soft shadows.
 #pragma once
 
 #include "gl_funcs.hpp"
@@ -85,6 +85,8 @@ class GLRenderer : public IRenderer
     void CreateTargets();
     void CreateMultisampleTarget(GLenum colourFormat);
     void ResolveMultisample();
+    void SetDrawBuffers();
+    void ApplyShadows();
     void ApplyTextureFilter();
     void DrawFullscreen();
     GLuint CompileProgram(const char* vs, const char* fs, const char** ppError);
@@ -102,6 +104,7 @@ class GLRenderer : public IRenderer
     GLuint mFbo;
     GLuint mFboTex;      // scene colour (attachment 0)
     GLuint mBloomSrcTex; // additive contributions (attachment 1, bloom only)
+    GLuint mShadowTex;   // shadow mask (attachment 2, soft shadows only)
     GLuint mPostFbo;     // scene + bloom
     GLuint mPostTex;
     GLuint mBlurFbo[2];
@@ -110,11 +113,12 @@ class GLRenderer : public IRenderer
     s32 mBlurH;
     bool mTargetsTrueColour;
     bool mTargetsBloom;
+    bool mTargetsShadows;
     bool mPostValid;
     GLsync mFrameFence;
     // MSAA: the scene is drawn into these and resolved into mFbo by FinishFrame.
     GLuint mMsFbo;
-    GLuint mMsColour[2];
+    GLuint mMsColour[3];
     s32 mTargetsSamples; // 0 without MSAA
     s32 mMaxSamples;
 
@@ -122,7 +126,7 @@ class GLRenderer : public IRenderer
     struct SceneProgram
     {
         GLuint mId;
-        GLint mScale, mOffset, mAlphaTest, mUseTex, mSampleShift, mSmooth, mAdditive, mPerPixel, mNumLights, mAmbient;
+        GLint mScale, mOffset, mAlphaTest, mUseTex, mSampleShift, mSmooth, mAdditive, mPerPixel, mNumLights, mAmbient, mShadow;
     };
     SceneProgram mScene[2];
     int mActiveScene;

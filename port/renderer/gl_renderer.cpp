@@ -112,6 +112,7 @@ const char* kSceneFS =
     "uniform int uPerPixel;\n"
     "uniform int uNumLights;\n"
     "uniform float uAmbient;\n"
+    "uniform int uShadow;\n"
     "layout(std140) uniform Lights\n"
     "{\n"
     "    vec4 uLightPos[256];\n" // xyz, radius
@@ -126,34 +127,72 @@ const char* kSceneFS =
     "in float vLit;\n"
     "layout(location = 0) out vec4 oColor;\n"
     "layout(location = 1) out vec4 oBloom;\n"
+    "layout(location = 2) out vec4 oShadow;\n"
+    "vec3 LightSum()\n"
+    "{\n"
+    "    vec3 acc = vec3(0.0);\n"
+    "    for (int i = 0; i < uNumLights; i++)\n"
+    "    {\n"
+    "        vec3 d = vWorld - uLightPos[i].xyz;\n"
+    "        float d2 = dot(d, d);\n"
+    "        float r = uLightPos[i].w;\n"
+    "        if (d2 <= r * r)\n"
+    "        {\n"
+    "            float dist = sqrt(d2);\n"
+    "            float att = (r - dist) * uLightCol[i].w;\n"
+    "            vec4 s = uLightDir[i];\n"
+    "            float c = dist > 0.0 ? dot(d.xy, s.xy) / dist : 0.0;\n"
+    "            float spot = s.w > -1.0 ? smoothstep(s.z, s.w, c) * smoothstep(0.0, 0.3 * r, dist) : 1.0;\n"
+    "            if (att > 0.0) acc += uLightCol[i].rgb * att * spot;\n"
+    "        }\n"
+    "    }\n"
+    "    return acc;\n"
+    "}\n"
+    // The texture's alpha averaged over a square of that radius in texels; outside the texture is transparent.
+    "float SoftAlpha(vec2 uv, float radius)\n"
+    "{\n"
+    "    vec2 texel = 1.0 / vec2(textureSize(uTex, 0));\n"
+    "    int n = int(clamp(ceil(radius), 1.0, 4.0));\n"
+    "    vec2 stepUV = texel * (radius / float(n));\n"
+    "    float sum = 0.0;\n"
+    "    for (int y = -n; y <= n; y++)\n"
+    "    {\n"
+    "        for (int x = -n; x <= n; x++)\n"
+    "        {\n"
+    "            vec2 p = uv + vec2(float(x), float(y)) * stepUV;\n"
+    "            vec2 inside = step(vec2(0.0), p) * step(p, vec2(1.0));\n"
+    "            sum += textureLod(uTex, p, 0.0).a * inside.x * inside.y;\n"
+    "        }\n"
+    "    }\n"
+    "    return sum / float((2 * n + 1) * (2 * n + 1));\n"
+    "}\n"
     "void main()\n"
     "{\n"
     "    vec2 uv = vUV - (dFdx(vUV) + dFdy(vUV)) * uSampleShift;\n"
+    "    if (uShadow != 0)\n"
+    "    {\n"
+    // A shadow takes away the ambient light and half of the lights' (as in gbh_api.cpp).
+    "        float a = SoftAlpha(uv, vCol.r * 255.0 / 32.0) * vCol.a;\n"
+    "        if (uPerPixel != 0 && vLit > 0.5)\n"
+    "        {\n"
+    "            vec3 l = min(255.0 * LightSum() + uAmbient, vec3(255.0));\n"
+    "            a *= 0.5 + 0.5 * min(3.0 * uAmbient / max(l.r + l.g + l.b, 1.0), 1.0);\n"
+    "        }\n"
+    "        oColor = vec4(0.0);\n"
+    "        oBloom = vec4(0.0);\n"
+    "        oShadow = vec4(a);\n"
+    "        return;\n"
+    "    }\n"
     "    vec4 t = uUseTex != 0 ? SmoothSample(uv) : vec4(1.0);\n"
     "    if (uAlphaTest != 0 && t.a < 0.5) discard;\n"
     "    vec4 c = vCol;\n"
     "    if (uPerPixel != 0 && vLit > 0.5)\n"
     "    {\n"
-    "        vec3 acc = vec3(0.0);\n"
-    "        for (int i = 0; i < uNumLights; i++)\n"
-    "        {\n"
-    "            vec3 d = vWorld - uLightPos[i].xyz;\n"
-    "            float d2 = dot(d, d);\n"
-    "            float r = uLightPos[i].w;\n"
-    "            if (d2 <= r * r)\n"
-    "            {\n"
-    "                float dist = sqrt(d2);\n"
-    "                float att = (r - dist) * uLightCol[i].w;\n"
-    "                vec4 s = uLightDir[i];\n"
-    "                float c = dist > 0.0 ? dot(d.xy, s.xy) / dist : 0.0;\n"
-    "                float spot = s.w > -1.0 ? smoothstep(s.z, s.w, c) * smoothstep(0.0, 0.3 * r, dist) : 1.0;\n"
-    "                if (att > 0.0) acc += uLightCol[i].rgb * att * spot;\n"
-    "            }\n"
-    "        }\n"
-    "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * acc + uAmbient) / 255.0, vec3(1.0)), vUnlit.a);\n"
+    "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * LightSum() + uAmbient) / 255.0, vec3(1.0)), vUnlit.a);\n"
     "    }\n"
     "    oColor = t * c;\n"
     "    oBloom = uAdditive != 0 ? oColor : vec4(0.0, 0.0, 0.0, oColor.a);\n"
+    "    oShadow = vec4(0.0, 0.0, 0.0, oColor.a);\n"
     "}\n";
 
 // Fullscreen triangle; also composites the CPU surface (alpha 0 where the game did not write).
@@ -171,12 +210,14 @@ const char* kPresentFS =
     "uniform vec3 uGamma;\n"
     "uniform int uFlipY;\n"
     "in vec2 vUV;\n"
-    "out vec4 oColor;\n"
+    "layout(location = 0) out vec4 oColor;\n"
+    "layout(location = 2) out vec4 oShadow;\n"
     "void main()\n"
     "{\n"
     "    vec2 uv = uFlipY != 0 ? vec2(vUV.x, 1.0 - vUV.y) : vUV;\n"
     "    vec4 c = texture(uTex, uv);\n"
     "    oColor = vec4(pow(c.rgb, 1.0 / uGamma), c.a);\n"
+    "    oShadow = vec4(0.0, 0.0, 0.0, c.a);\n"
     "}\n";
 
 // Bloom: 4x4 box downsample (four bilinear taps), separable 9 tap gaussian, additive compose.
@@ -299,8 +340,8 @@ void Downsample(const u32* src, s32 sw, s32 sh, u32* dst, s32 dw, s32 dh, bool a
 } // namespace
 
 GLRenderer::GLRenderer()
-    : mReady(false), mLogicalW(640), mLogicalH(480), mTargetW(640), mTargetH(480), mDrawableW(0), mDrawableH(0), mFbo(0), mFboTex(0), mBloomSrcTex(0), mPostFbo(0), mPostTex(0), mBlurW(0),
-      mBlurH(0), mTargetsTrueColour(false), mTargetsBloom(false), mPostValid(false), mFrameFence(0), mMsFbo(0), mTargetsSamples(0), mMaxSamples(0), mProgram(0), mPresentProgram(0),
+    : mReady(false), mLogicalW(640), mLogicalH(480), mTargetW(640), mTargetH(480), mDrawableW(0), mDrawableH(0), mFbo(0), mFboTex(0), mBloomSrcTex(0), mShadowTex(0), mPostFbo(0), mPostTex(0), mBlurW(0),
+      mBlurH(0), mTargetsTrueColour(false), mTargetsBloom(false), mTargetsShadows(false), mPostValid(false), mFrameFence(0), mMsFbo(0), mTargetsSamples(0), mMaxSamples(0), mProgram(0), mPresentProgram(0),
       mDownProgram(0), mBlurProgram(0), mComposeProgram(0), mVao(0), mVbo(0), mLightUbo(0), mSamplerNearest(0), mSamplerLinear(0),
       mSamplerMip(0), mMaxAnisotropy(1.0f), mWhiteTex(0), mSurfaceTex(0), mSurfaceW(0), mSurfaceH(0), mBatchTex(0), mBatchState(0), mAppliedState(0), mStateValid(false),
       mOffsetX(0.5f - 1.0f / 2048.0f), mOffsetY(0.5f - 1.0f / 2048.0f), mSampleShift(1.0f / 1024.0f), mNumLights(0),
@@ -312,7 +353,7 @@ GLRenderer::GLRenderer()
     mGamma[0] = mGamma[1] = mGamma[2] = 1.0f;
     mBlurFbo[0] = mBlurFbo[1] = 0;
     mBlurTex[0] = mBlurTex[1] = 0;
-    mMsColour[0] = mMsColour[1] = 0;
+    mMsColour[0] = mMsColour[1] = mMsColour[2] = 0;
 }
 
 GLRenderer::~GLRenderer()
@@ -396,6 +437,7 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
         sp.mPerPixel = gl.glGetUniformLocation(sp.mId, "uPerPixel");
         sp.mNumLights = gl.glGetUniformLocation(sp.mId, "uNumLights");
         sp.mAmbient = gl.glGetUniformLocation(sp.mId, "uAmbient");
+        sp.mShadow = gl.glGetUniformLocation(sp.mId, "uShadow");
         gl.glUseProgram(sp.mId);
         gl.glUniform1i(gl.glGetUniformLocation(sp.mId, "uTex"), 0);
     }
@@ -482,12 +524,13 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
     gl.glGenFramebuffers(1, &mFbo);
     gl.glGenTextures(1, &mFboTex);
     gl.glGenTextures(1, &mBloomSrcTex);
+    gl.glGenTextures(1, &mShadowTex);
     gl.glGenFramebuffers(1, &mPostFbo);
     gl.glGenTextures(1, &mPostTex);
     gl.glGenFramebuffers(2, mBlurFbo);
     gl.glGenTextures(2, mBlurTex);
     gl.glGenFramebuffers(1, &mMsFbo);
-    gl.glGenRenderbuffers(2, mMsColour);
+    gl.glGenRenderbuffers(3, mMsColour);
 
     mBatch.reserve(kMaxBatchVerts);
     mReady = true;
@@ -522,10 +565,11 @@ void GLRenderer::Shutdown()
     gl.glDeleteFramebuffers(2, mBlurFbo);
     gl.glDeleteTextures(1, &mFboTex);
     gl.glDeleteTextures(1, &mBloomSrcTex);
+    gl.glDeleteTextures(1, &mShadowTex);
     gl.glDeleteTextures(1, &mPostTex);
     gl.glDeleteTextures(2, mBlurTex);
     gl.glDeleteFramebuffers(1, &mMsFbo);
-    gl.glDeleteRenderbuffers(2, mMsColour);
+    gl.glDeleteRenderbuffers(3, mMsColour);
     gl.glDeleteSamplers(1, &mSamplerMip);
     gl.glDeleteTextures(1, &mWhiteTex);
     gl.glDeleteTextures(1, &mSurfaceTex);
@@ -546,7 +590,7 @@ void GLRenderer::Shutdown()
 void GLRenderer::SetOptions(const RenderOptions& options)
 {
     const bool targetsChanged = options.mTrueColour != mOptions.mTrueColour || (options.mBloom > 0.0f) != (mOptions.mBloom > 0.0f) ||
-                                options.mMsaa != mOptions.mMsaa;
+                                options.mMsaa != mOptions.mMsaa || options.mSoftShadows != mOptions.mSoftShadows;
     Flush();
     mOptions = options;
     if (mReady)
@@ -653,6 +697,20 @@ void GLRenderer::CreateTargets()
         gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, 0, 0);
         gl.glDrawBuffers(1, one);
     }
+    mTargetsShadows = mOptions.mSoftShadows;
+    gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+    if (mTargetsShadows)
+    {
+        // Sampled as (0, 0, 0, mask) to darken the scene with alpha blending.
+        gl.glBindTexture(GL_TEXTURE_2D, mShadowTex);
+        gl.glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+        gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_ZERO);
+        gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_ZERO);
+        gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_ZERO);
+        gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+    }
+    gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, mTargetsShadows ? mShadowTex : 0, 0);
+    SetDrawBuffers();
     CreateMultisampleTarget(colourFormat);
     mPostValid = false;
     mStateValid = false;
@@ -662,8 +720,8 @@ void GLRenderer::CreateMultisampleTarget(GLenum colourFormat)
 {
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mMsFbo);
     // New names free the old storage; deleting detaches them from the bound framebuffer.
-    gl.glDeleteRenderbuffers(2, mMsColour);
-    gl.glGenRenderbuffers(2, mMsColour);
+    gl.glDeleteRenderbuffers(3, mMsColour);
+    gl.glGenRenderbuffers(3, mMsColour);
     mTargetsSamples = 0;
     // The resolve blit needs the same formats as the single sample target's.
     for (s32 samples = mOptions.mMsaa < mMaxSamples ? mOptions.mMsaa : mMaxSamples; samples > 1; samples /= 2)
@@ -671,15 +729,18 @@ void GLRenderer::CreateMultisampleTarget(GLenum colourFormat)
         for (int i = 0; i < 16 && gl.glGetError() != GL_NO_ERROR; i++)
         {
         }
-        const s32 count = mTargetsBloom ? 2 : 1;
-        for (s32 i = 0; i < count; i++)
+        const GLenum formats[3] = {colourFormat, GL_RGBA8, GL_R8};
+        const bool used[3] = {true, mTargetsBloom, mTargetsShadows};
+        for (s32 i = 0; i < 3; i++)
         {
             gl.glBindRenderbuffer(GL_RENDERBUFFER, mMsColour[i]);
-            gl.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, i ? GL_RGBA8 : colourFormat, mTargetW, mTargetH);
-            gl.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, mMsColour[i]);
+            if (used[i])
+            {
+                gl.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, formats[i], mTargetW, mTargetH);
+            }
+            gl.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, used[i] ? mMsColour[i] : 0);
         }
-        const GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-        gl.glDrawBuffers(count, buffers);
+        SetDrawBuffers();
         if (gl.glGetError() == GL_NO_ERROR && gl.glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
         {
             mTargetsSamples = samples;
@@ -697,18 +758,61 @@ void GLRenderer::ResolveMultisample()
     }
     gl.glBindFramebuffer(GL_READ_FRAMEBUFFER, mMsFbo);
     gl.glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mFbo);
-    const s32 count = mTargetsBloom ? 2 : 1;
-    for (s32 i = 0; i < count; i++)
+    const bool used[3] = {true, mTargetsBloom, mTargetsShadows};
+    for (s32 i = 0; i < 3; i++)
     {
-        const GLenum buffers[2] = {i ? (GLenum)GL_NONE : (GLenum)GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+        if (!used[i])
+        {
+            continue;
+        }
+        const GLenum buffers[3] = {i == 0 ? (GLenum)GL_COLOR_ATTACHMENT0 : (GLenum)GL_NONE,
+                                   i == 1 ? (GLenum)GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE, GL_COLOR_ATTACHMENT2};
         gl.glReadBuffer(GL_COLOR_ATTACHMENT0 + i);
         gl.glDrawBuffers(i + 1, buffers);
         gl.glBlitFramebuffer(0, 0, mTargetW, mTargetH, 0, 0, mTargetW, mTargetH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
-    const GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-    gl.glDrawBuffers(count, buffers);
+    SetDrawBuffers();
     gl.glReadBuffer(GL_COLOR_ATTACHMENT0);
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+}
+
+// For the bound scene target: colour, bloom source and shadow mask, as the options have them.
+void GLRenderer::SetDrawBuffers()
+{
+    const GLenum buffers[3] = {GL_COLOR_ATTACHMENT0, mTargetsBloom ? (GLenum)GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE, GL_COLOR_ATTACHMENT2};
+    gl.glDrawBuffers(mTargetsShadows ? 3 : (mTargetsBloom ? 2 : 1), buffers);
+}
+
+// Darkens the resolved scene by the shadow mask, then clears the mask.
+void GLRenderer::ApplyShadows()
+{
+    if (!mTargetsShadows)
+    {
+        return;
+    }
+    gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+    gl.glViewport(0, 0, mTargetW, mTargetH);
+    const GLenum one[1] = {GL_COLOR_ATTACHMENT0};
+    gl.glDrawBuffers(1, one);
+    gl.glUseProgram(mPresentProgram);
+    gl.glUniform3f(mUniGamma, 1.0f, 1.0f, 1.0f);
+    gl.glUniform1i(mUniFlipY, 0);
+    gl.glActiveTexture(GL_TEXTURE0);
+    gl.glBindTexture(GL_TEXTURE_2D, mShadowTex);
+    gl.glBindSampler(0, mSamplerNearest);
+    gl.glEnable(GL_BLEND);
+    gl.glBlendEquation(GL_FUNC_ADD);
+    gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    DrawFullscreen();
+    SetDrawBuffers();
+    const GLfloat zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    gl.glClearBufferfv(GL_COLOR, 2, zero);
+    if (mTargetsSamples)
+    {
+        BindTarget();
+        gl.glClearBufferfv(GL_COLOR, 2, zero);
+    }
+    mStateValid = false;
 }
 
 void GLRenderer::ApplyTextureFilter()
@@ -744,10 +848,14 @@ void GLRenderer::Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 botto
     }
     const GLfloat colour[4] = {r / 255.0f, g / 255.0f, b / 255.0f, 1.0f};
     gl.glClearBufferfv(GL_COLOR, 0, colour);
+    const GLfloat zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     if (mTargetsBloom)
     {
-        const GLfloat zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         gl.glClearBufferfv(GL_COLOR, 1, zero);
+    }
+    if (mTargetsShadows)
+    {
+        gl.glClearBufferfv(GL_COLOR, 2, zero);
     }
     gl.glDisable(GL_SCISSOR_TEST);
 }
@@ -879,6 +987,8 @@ void GLRenderer::ApplyState(u32 state)
     {
         return;
     }
+    // A shadow keeps the colour (it writes zero) and takes the larger of the shadow masks.
+    gl.glBlendEquation((state & RS_SHADOW) ? GL_MAX : GL_FUNC_ADD);
     if (state & RS_BLEND_ADD)
     {
         gl.glEnable(GL_BLEND);
@@ -902,6 +1012,7 @@ void GLRenderer::ApplyState(u32 state)
         gl.glUniform1i(sp.mPerPixel, mOptions.mPerPixelLighting ? 1 : 0);
         gl.glUniform1i(sp.mNumLights, mNumLights);
         gl.glUniform1f(sp.mAmbient, mAmbient);
+        gl.glUniform1i(sp.mShadow, (state & RS_SHADOW) ? 1 : 0);
     }
     gl.glBindSampler(0, (state & kStateMipmap) ? mSamplerMip : (state & RS_FILTER_LINEAR) ? mSamplerLinear : mSamplerNearest);
     if (state & RS_PIXEL_EXACT)
@@ -953,7 +1064,7 @@ void GLRenderer::Flush()
         return;
     }
     BindTarget();
-    const int scene = (mOptions.mBloom > 0.0f || mOptions.mPerPixelLighting) ? 1 : 0;
+    const int scene = (mOptions.mBloom > 0.0f || mOptions.mPerPixelLighting || mTargetsShadows) ? 1 : 0;
     if (scene != mActiveScene)
     {
         mActiveScene = scene;
@@ -1020,21 +1131,18 @@ void GLRenderer::CompositeSurface(const u16* pPixels, s32 pitchBytes, s32 width,
     }
 
     BindTarget();
-    const GLenum one[1] = {GL_COLOR_ATTACHMENT0};
-    gl.glDrawBuffers(1, one);
+    const GLenum buffers[3] = {GL_COLOR_ATTACHMENT0, GL_NONE, GL_COLOR_ATTACHMENT2};
+    gl.glDrawBuffers(mTargetsShadows ? 3 : 1, buffers);
     gl.glUseProgram(mPresentProgram);
     gl.glUniform3f(mUniGamma, 1.0f, 1.0f, 1.0f);
     gl.glUniform1i(mUniFlipY, 0);
     gl.glActiveTexture(GL_TEXTURE0);
     gl.glBindSampler(0, mSamplerNearest);
     gl.glEnable(GL_BLEND);
+    gl.glBlendEquation(GL_FUNC_ADD);
     gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     DrawFullscreen();
-    if (mTargetsBloom)
-    {
-        const GLenum two[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-        gl.glDrawBuffers(2, two);
-    }
+    SetDrawBuffers();
     mStateValid = false;
 }
 
@@ -1046,6 +1154,7 @@ void GLRenderer::FinishFrame()
     }
     Flush();
     ResolveMultisample();
+    ApplyShadows();
     mPostValid = false;
     if (!mTargetsBloom || mOptions.mBloom <= 0.0f)
     {

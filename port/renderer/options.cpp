@@ -82,6 +82,10 @@ void OptionsFile::Load()
             {
                 o.mMsaa = (s32)value;
             }
+            else if (key == "soft_shadows")
+            {
+                o.mSoftShadows = value != 0.0f;
+            }
         }
         fclose(f);
     }
@@ -105,6 +109,10 @@ void OptionsFile::Load()
     if (const char* e = getenv("GTA2GL_MSAA"))
     {
         o.mMsaa = atoi(e);
+    }
+    if (const char* e = getenv("GTA2GL_SOFT_SHADOWS"))
+    {
+        o.mSoftShadows = atoi(e) != 0;
     }
     mConfigured = o;
     Update();
@@ -143,7 +151,7 @@ void OptionsFile::Update()
     next.mGeneration = mEffective.mGeneration;
     if (next.mTrueColour != mEffective.mTrueColour || next.mBloom != mEffective.mBloom ||
         next.mPerPixelLighting != mEffective.mPerPixelLighting || next.mTextureFilter != mEffective.mTextureFilter ||
-        next.mMsaa != mEffective.mMsaa)
+        next.mMsaa != mEffective.mMsaa || next.mSoftShadows != mEffective.mSoftShadows)
     {
         next.mGeneration++;
     }

@@ -57,6 +57,12 @@ void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighti
     }
 }
 
+// As the renderer draws them: off with Scroll Lock's faithful rendering.
+bool port_SoftShadows()
+{
+    return sVidSystem && sVidSystem->Renderer().Options().mSoftShadows;
+}
+
 // 8 until the renderer has a context.
 int port_MaxMsaaSamples()
 {

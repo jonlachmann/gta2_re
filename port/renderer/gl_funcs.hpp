@@ -13,6 +13,7 @@
     X(PFNGLDISABLEPROC, glDisable)                                         \
     X(PFNGLBLENDFUNCPROC, glBlendFunc)                                     \
     X(PFNGLBLENDFUNCSEPARATEPROC, glBlendFuncSeparate)                     \
+    X(PFNGLBLENDEQUATIONPROC, glBlendEquation)                             \
     X(PFNGLVIEWPORTPROC, glViewport)                                       \
     X(PFNGLSCISSORPROC, glScissor)                                         \
     X(PFNGLCLEARCOLORPROC, glClearColor)                                   \
