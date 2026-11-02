@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include "port_platform.hpp"
+#include "../../setup/setup.hpp"
 
 namespace
 {
@@ -157,6 +158,7 @@ HWND WINAPI CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD
     if (!sMainWindow)
     {
         sMainWindow = pWin;
+        port_SetWindowIcon(pSdl);
         port_UpdateGameResolution();
     }
     return reinterpret_cast<HWND>(pWin);

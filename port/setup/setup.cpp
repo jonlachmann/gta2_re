@@ -1,16 +1,13 @@
-// The setup screens: native message boxes and file dialogs, and a small SDL window for the progress
-// (and for the questions where no message box is available).
+// The game folder, and the setup that fills it: native message boxes and file dialogs, and a small
+// SDL window for the progress (and for the questions where no message box is available).
 #include "setup.hpp"
 
 #include "install.hpp"
 
 #include <SDL3/SDL.h>
-#include <atomic>
 #include <math.h>
-#include <stdio.h>
+#include <algorithm>
 #include <stdlib.h>
-#include <system_error>
-#include <vector>
 
 using namespace setup;
 
@@ -27,16 +24,10 @@ const char kNoGameText[] =
     "https://web.archive.org/web/20071024135959/http://www.rockstargames.com/classics/";
 const char kNoGameUrl[] = "https://web.archive.org/web/20071024135959/http://www.rockstargames.com/classics/";
 
-const char kPrefOrg[] = "";
-const char kPrefApp[] = "gta2_re";
-
 const SDL_DialogFileFilter kFileFilters[] = {
-    {"GTA2 installer, archive or disc image", "exe;zip;7z;iso;bin"},
+    {"GTA2 installer or disc image", "exe;iso;zip;7z"},
     {"All files", "*"},
 };
-
-fs::path sGameDir;
-bool sPerUser;
 
 bool EnvSet(const char* name)
 {
@@ -44,20 +35,44 @@ bool EnvSet(const char* name)
     return v && *v && *v != '0';
 }
 
-// A window drawn with SDL's renderer and its built-in 8x8 font, in units of font pixels.
+// Lines of at most width characters, cut at spaces (a longer word only if breakWords).
+std::string Wrap(const std::string& text, size_t width, bool breakWords)
+{
+    std::string out, line;
+    for (size_t pos = 0; pos <= text.size(); pos++)
+    {
+        const char c = pos < text.size() ? text[pos] : '\n';
+        if (c != '\n')
+        {
+            line += c;
+            if (line.size() <= width)
+            {
+                continue;
+            }
+            size_t cut = line.rfind(' ', width);
+            cut = cut != std::string::npos && cut > 0 ? cut : breakWords ? width : line.find(' ', width);
+            if (cut == std::string::npos)
+            {
+                continue;
+            }
+            out += line.substr(0, cut) + '\n';
+            line.erase(0, cut + (line[cut] == ' '));
+            continue;
+        }
+        out += line + (pos < text.size() ? "\n" : "");
+        line.clear();
+    }
+    return out;
+}
+
+// A window drawn with SDL's renderer and its 8x8 font, in units of font pixels.
 class SetupWindow
 {
 public:
     ~SetupWindow()
     {
-        if (mRenderer)
-        {
-            SDL_DestroyRenderer(mRenderer);
-        }
-        if (mWindow)
-        {
-            SDL_DestroyWindow(mWindow);
-        }
+        SDL_DestroyRenderer(mRenderer);
+        SDL_DestroyWindow(mWindow);
         if (mVideo)
         {
             SDL_QuitSubSystem(SDL_INIT_VIDEO);
@@ -67,16 +82,9 @@ public:
     bool Open(int w, int h)
     {
         mVideo = SDL_InitSubSystem(SDL_INIT_VIDEO);
-        if (!mVideo)
-        {
-            SDL_Log("Setup window: %s", SDL_GetError());
-            return false;
-        }
-        const float content = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+        const float content = mVideo ? SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay()) : 1.0f;
         mScale = fmaxf(2.0f, roundf(2.0f * (content > 0.0f ? content : 1.0f)));
-        mW = w;
-        mH = h;
-        if (!SDL_CreateWindowAndRenderer(kTitle, (int)(w * mScale), (int)(h * mScale), 0, &mWindow, &mRenderer))
+        if (!mVideo || !SDL_CreateWindowAndRenderer(kTitle, (int)(w * mScale), (int)(h * mScale), 0, &mWindow, &mRenderer))
         {
             SDL_Log("Setup window: %s", SDL_GetError());
             return false;
@@ -86,190 +94,95 @@ public:
         return true;
     }
 
-    void Clear()
+    void Color(Uint32 rgb) { SDL_SetRenderDrawColor(mRenderer, rgb >> 16, (rgb >> 8) & 255, rgb & 255, 255); }
+
+    void Rect(float x, float y, float w, float h, Uint32 fill, Uint32 border)
     {
-        Color(0xEE, 0xEE, 0xEE);
-        SDL_RenderClear(mRenderer);
+        const SDL_FRect r = {x, y, w, h};
+        Color(fill);
+        SDL_RenderFillRect(mRenderer, &r);
+        Color(border);
+        SDL_RenderRect(mRenderer, &r);
     }
 
-    void Color(Uint8 r, Uint8 g, Uint8 b) { SDL_SetRenderDrawColor(mRenderer, r, g, b, 255); }
-
-    void Fill(float x, float y, float w, float h)
+    void Text(float x, float y, const std::string& s, Uint32 rgb)
     {
-        const SDL_FRect rect = {x, y, w, h};
-        SDL_RenderFillRect(mRenderer, &rect);
+        Color(rgb);
+        SDL_RenderDebugText(mRenderer, x, y, s.c_str());
     }
-
-    void Frame(float x, float y, float w, float h)
-    {
-        const SDL_FRect rect = {x, y, w, h};
-        SDL_RenderRect(mRenderer, &rect);
-    }
-
-    void Text(float x, float y, const std::string& s) { SDL_RenderDebugText(mRenderer, x, y, s.c_str()); }
 
     // GTA2_SETUP_CAPTURE=<folder>: frames written there as BMP, for tests without a screen.
     void Present(bool capture)
     {
+        static int sCaptures;
         const char* dir = SDL_getenv("GTA2_SETUP_CAPTURE");
-        if (capture && dir)
+        SDL_Surface* s = capture && dir ? SDL_RenderReadPixels(mRenderer, NULL) : NULL;
+        if (s)
         {
-            if (SDL_Surface* s = SDL_RenderReadPixels(mRenderer, NULL))
-            {
-                char path[1024];
-                snprintf(path, sizeof(path), "%s/setup_%03d.bmp", dir, sCaptures++);
-                SDL_SaveBMP(s, path);
-                SDL_DestroySurface(s);
-            }
+            SDL_SaveBMP(s, (std::string(dir) + "/setup_" + std::to_string(sCaptures++) + ".bmp").c_str());
+            SDL_DestroySurface(s);
         }
         SDL_RenderPresent(mRenderer);
+        Color(0xEEEEEE);
+        SDL_RenderClear(mRenderer);
     }
 
     float mScale = 2.0f;
-    int mW = 0, mH = 0;
-    SDL_Window* mWindow = NULL;
-    SDL_Renderer* mRenderer = NULL;
 
 private:
     bool mVideo = false;
-    static int sCaptures;
+    SDL_Window* mWindow = NULL;
+    SDL_Renderer* mRenderer = NULL;
 };
-int SetupWindow::sCaptures;
 
-// Lines of at most width characters, cut at spaces; a longer word is cut only if breakWords.
-std::vector<std::string> Wrap(const std::string& text, size_t width, bool breakWords)
-{
-    std::vector<std::string> lines;
-    size_t start = 0;
-    while (start <= text.size())
-    {
-        size_t end = text.find('\n', start);
-        if (end == std::string::npos)
-        {
-            end = text.size();
-        }
-        std::string para = text.substr(start, end - start);
-        start = end + 1;
-        while (para.size() > width)
-        {
-            size_t cut = para.rfind(' ', width);
-            if (cut == std::string::npos || cut == 0)
-            {
-                cut = breakWords ? width : para.find(' ', width);
-                if (cut == std::string::npos)
-                {
-                    break;
-                }
-            }
-            lines.push_back(para.substr(0, cut));
-            para.erase(0, cut + (para[cut] == ' ' ? 1 : 0));
-        }
-        lines.push_back(para);
-    }
-    return lines;
-}
-
-std::string Join(const std::vector<std::string>& lines)
-{
-    std::string s;
-    for (const std::string& line : lines)
-    {
-        s += (s.empty() ? "" : "\n") + line;
-    }
-    return s;
-}
-
-// The question in a window of our own: no native message box (GTA2_SETUP_DRAWN=1 forces it).
-int DrawnBox(const char* message, const std::vector<const char*>& buttons, int escapeButton)
+// The question in a window of our own, without a native message box (GTA2_SETUP_DRAWN=1 forces
+// it): a click or the button's number answers it, Escape or closing gives escapeButton.
+int DrawnBox(const std::string& message, const std::vector<const char*>& buttons, int escapeButton)
 {
     const int w = 340;
-    const std::vector<std::string> lines = Wrap(message, (w - 16) / 8, true);
-    const int buttonsTop = 10 + (int)lines.size() * 10 + 8;
-    const int h = buttonsTop + (int)buttons.size() * 20 + 6;
+    const std::string text = Wrap(message, (w - 16) / 8, true);
+    const int top = 18 + 10 * (int)std::count(text.begin(), text.end(), '\n'), h = top + 20 * (int)buttons.size() + 6;
     SetupWindow win;
     if (!win.Open(w, h))
     {
         return escapeButton;
     }
-    int hover = 0;
-    bool captured = false;
-    for (;;)
+    for (bool first = true;; first = false)
     {
+        float mx, my;
+        SDL_GetMouseState(&mx, &my);
+        const int hover = mx / win.mScale >= 8 && mx / win.mScale < w - 8 ? (int)floorf((my / win.mScale - top) / 20) : -1;
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
+            if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
+                (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE))
             {
                 return escapeButton;
             }
-            if (e.type == SDL_EVENT_KEY_DOWN)
+            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key >= SDLK_1 && e.key.key < SDLK_1 + (SDL_Keycode)buttons.size())
             {
-                if (e.key.key == SDLK_ESCAPE)
-                {
-                    return escapeButton;
-                }
-                if (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER || e.key.key == SDLK_SPACE)
-                {
-                    return hover;
-                }
-                if (e.key.key == SDLK_DOWN || e.key.key == SDLK_TAB)
-                {
-                    hover = (hover + 1) % (int)buttons.size();
-                }
-                if (e.key.key == SDLK_UP)
-                {
-                    hover = (hover + (int)buttons.size() - 1) % (int)buttons.size();
-                }
-                if (e.key.key >= SDLK_1 && e.key.key < SDLK_1 + (SDL_Keycode)buttons.size())
-                {
-                    return (int)(e.key.key - SDLK_1);
-                }
+                return (int)(e.key.key - SDLK_1);
             }
-            if (e.type == SDL_EVENT_MOUSE_MOTION || e.type == SDL_EVENT_MOUSE_BUTTON_UP)
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && hover >= 0 && hover < (int)buttons.size())
             {
-                const float x = (e.type == SDL_EVENT_MOUSE_MOTION ? e.motion.x : e.button.x) / win.mScale;
-                const float y = (e.type == SDL_EVENT_MOUSE_MOTION ? e.motion.y : e.button.y) / win.mScale;
-                const int i = (int)floorf((y - buttonsTop) / 20.0f);
-                const bool on = x >= 8 && x < w - 8 && y >= buttonsTop && i < (int)buttons.size() &&
-                                y - buttonsTop - i * 20.0f < 16.0f;
-                if (on)
-                {
-                    hover = i;
-                    if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT)
-                    {
-                        return i;
-                    }
-                }
+                return hover;
             }
         }
-        win.Clear();
-        win.Color(0x20, 0x20, 0x20);
-        for (size_t i = 0; i < lines.size(); i++)
+        size_t line = 0;
+        for (size_t start = 0; start < text.size(); line++)
         {
-            win.Text(8, 10 + i * 10.0f, lines[i]);
+            const size_t end = std::min(text.find('\n', start), text.size());
+            win.Text(8, 10 + 10.0f * line, text.substr(start, end - start), 0x202020);
+            start = end + 1;
         }
         for (size_t i = 0; i < buttons.size(); i++)
         {
-            const float y = buttonsTop + i * 20.0f;
-            if ((int)i == hover)
-            {
-                win.Color(0x35, 0x84, 0xE4);
-                win.Fill(8, y, w - 16, 16);
-                win.Color(0xFF, 0xFF, 0xFF);
-            }
-            else
-            {
-                win.Color(0xFF, 0xFF, 0xFF);
-                win.Fill(8, y, w - 16, 16);
-                win.Color(0x9A, 0x9A, 0x9A);
-                win.Frame(8, y, w - 16, 16);
-                win.Color(0x20, 0x20, 0x20);
-            }
             const std::string label = std::to_string(i + 1) + ". " + buttons[i];
-            win.Text(roundf((w - label.size() * 8.0f) / 2), y + 4, label);
+            win.Rect(8, top + 20.0f * i, w - 16, 16, (int)i == hover ? 0xD6E6FA : 0xFFFFFF, 0x9A9A9A);
+            win.Text(roundf((w - label.size() * 8.0f) / 2), top + 20.0f * i + 4, label, 0x202020);
         }
-        win.Present(!captured);
-        captured = true;
+        win.Present(first);
         SDL_Delay(10);
     }
 }
@@ -286,18 +199,17 @@ int Ask(SDL_MessageBoxFlags flags, const std::string& message, const std::vector
     if (!EnvSet("GTA2_SETUP_DRAWN"))
     {
         std::vector<SDL_MessageBoxButtonData> data;
-        for (size_t i = 0; i < buttons.size(); i++)
+        for (int i = 0; i < (int)buttons.size(); i++)
         {
-            SDL_MessageBoxButtonFlags f = 0;
-            f |= (int)i == returnButton ? SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT : 0;
-            f |= (int)i == escapeButton ? SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT : 0;
-            data.push_back({f, (int)i, buttons[i]});
+            data.push_back({(i == returnButton ? SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT : 0u) |
+                                (i == escapeButton ? SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT : 0u),
+                            i, buttons[i]});
         }
 #if defined(_WIN32) || defined(__APPLE__)
-        const std::string& text = message;
+        const std::string text = message;
 #else
         // zenity and SDL's X11 box do not wrap lines.
-        const std::string text = Join(Wrap(message, 72, false));
+        const std::string text = Wrap(message, 72, false);
 #endif
         const SDL_MessageBoxData box = {flags | SDL_MESSAGEBOX_BUTTONS_LEFT_TO_RIGHT, NULL, kTitle, text.c_str(),
                                         (int)data.size(), data.data(), NULL};
@@ -308,50 +220,32 @@ int Ask(SDL_MessageBoxFlags flags, const std::string& message, const std::vector
         }
         SDL_Log("No message box (%s): drawing the question", SDL_GetError());
     }
-    return DrawnBox(message.c_str(), buttons, escapeButton);
-}
-
-void Tell(SDL_MessageBoxFlags flags, const std::string& message)
-{
-    Ask(flags, message, {"OK"}, 0, 0);
+    return DrawnBox(message, buttons, escapeButton);
 }
 
 struct Pick
 {
-    std::atomic<int> mState{0}; // 1 chosen, 2 dialog failed, 3 cancelled
+    std::atomic<int> mState{0}; // 1 done (mPath empty if cancelled), 2 no dialog
     std::string mPath, mError;
 };
-
-void SDLCALL OnPicked(void* pUser, const char* const* pList, int)
-{
-    Pick* p = static_cast<Pick*>(pUser);
-    if (!pList)
-    {
-        p->mError = SDL_GetError();
-        p->mState = 2;
-    }
-    else if (!pList[0])
-    {
-        p->mState = 3;
-    }
-    else
-    {
-        p->mPath = pList[0];
-        p->mState = 1;
-    }
-}
 
 // A folder or a file from the system's dialog; empty if cancelled.
 std::string PickPath(bool folder)
 {
     Pick pick;
+    const SDL_DialogFileCallback done = [](void* pUser, const char* const* pList, int) {
+        Pick* p = static_cast<Pick*>(pUser);
+        p->mError = pList ? "" : SDL_GetError();
+        p->mPath = pList && pList[0] ? pList[0] : "";
+        p->mState = pList ? 1 : 2;
+    };
     if (folder)
     {
-        SDL_ShowOpenFolderDialog(OnPicked, &pick, NULL, NULL, false);
+        SDL_ShowOpenFolderDialog(done, &pick, NULL, NULL, false);
     }
     else
     {
-        SDL_ShowOpenFileDialog(OnPicked, &pick, NULL, kFileFilters, SDL_arraysize(kFileFilters), NULL, false);
+        SDL_ShowOpenFileDialog(done, &pick, NULL, kFileFilters, SDL_arraysize(kFileFilters), NULL, false);
     }
     while (pick.mState == 0)
     {
@@ -360,152 +254,97 @@ std::string PickPath(bool folder)
     }
     if (pick.mState == 2)
     {
-        Tell(SDL_MESSAGEBOX_ERROR, "No file dialog could be opened (" + pick.mError +
-                                       ").\n\nOn Linux this needs xdg-desktop-portal or zenity. The path can also be "
-                                       "given in the GTA2_SETUP_PATH environment variable.");
+        Ask(SDL_MESSAGEBOX_ERROR,
+            "No file dialog could be opened (" + pick.mError +
+                ").\n\nOn Linux this needs xdg-desktop-portal or zenity. The path can also be given in the "
+                "GTA2_SETUP_PATH environment variable.",
+            {"OK"}, 0, 0);
     }
     return pick.mPath;
 }
 
 struct Job
 {
-    fs::path mSource, mDest;
+    fs::path mSource;
     Progress mProgress;
     InstallResult mResult;
     std::atomic<bool> mDone{false};
 };
 
-int SDLCALL InstallThread(void* pUser)
-{
-    Job* job = static_cast<Job*>(pUser);
-    job->mResult = Install(job->mSource, job->mDest, job->mProgress);
-    job->mDone = true;
-    return 0;
-}
-
-std::string Megabytes(uint64_t bytes)
-{
-    return std::to_string((unsigned)((bytes + (1 << 19)) >> 20)) + " MB";
-}
-
 // The copy runs in a thread while the window shows its progress; closing the window cancels it.
-InstallResult RunInstall(const fs::path& source, const fs::path& dest)
+InstallResult RunInstall(const fs::path& source)
 {
     Job job;
     job.mSource = source;
-    job.mDest = dest;
-    SDL_Thread* thread = SDL_CreateThread(InstallThread, "gta2 setup", &job);
-    if (!thread)
-    {
-        InstallThread(&job);
-        return job.mResult;
-    }
+    SDL_Thread* thread = SDL_CreateThread(
+        [](void* p) {
+            Job* job = static_cast<Job*>(p);
+            job->mResult = Install(job->mSource, job->mProgress);
+            job->mDone = true;
+            return 0;
+        },
+        "gta2 setup", &job);
     const int w = 300, h = 66;
     SetupWindow win;
-    const bool shown = win.Open(w, h);
-    Uint64 lastCapture = 0;
-    bool captured = false;
-    while (!job.mDone)
+    const bool shown = thread && win.Open(w, h);
+    for (Uint64 lastCapture = 0; thread && !job.mDone;)
     {
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
-                (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE))
-            {
-                job.mProgress.mCancel = true;
-            }
+            job.mProgress.mCancel = job.mProgress.mCancel || e.type == SDL_EVENT_QUIT ||
+                                    e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
+                                    (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE);
         }
-        if (!shown)
-        {
-            SDL_Delay(20);
-            continue;
-        }
-        const uint64_t done = job.mProgress.mDone, total = job.mProgress.mTotal;
-        const float frac = total ? (float)((double)done / (double)total) : 0.0f;
+        const uint64_t done = job.mProgress.mDone >> 20, total = job.mProgress.mTotal >> 20;
+        const std::string amount = total ? std::to_string(done) + " / " + std::to_string(total) + " MB" : "";
         std::string status = job.mProgress.Status();
-        const std::string amount = total == 0                   ? ""
-                                   : job.mProgress.mCountsFiles ? std::to_string(done) + " / " + std::to_string(total) + " files"
-                                                                : Megabytes(done) + " / " + Megabytes(total);
         const size_t room = (w - 16) / 8 - amount.size() - 2;
-        if (status.size() > room)
+        status = status.size() > room ? "..." + status.substr(status.size() - room + 3) : status;
+        if (shown)
         {
-            status = "..." + status.substr(status.size() - (room - 3));
+            win.Text(8, 8, job.mProgress.mCancel ? "Cancelling..." : "Copying GTA2's game files...", 0x202020);
+            win.Rect(8, 24, w - 16, 14, 0xFFFFFF, 0x9A9A9A);
+            win.Rect(9, 25, total ? (w - 18) * (float)done / total : 0, 12, 0x3584E4, 0x3584E4);
+            win.Text(8, 48, status, 0x505050);
+            win.Text(w - 8 - amount.size() * 8.0f, 48, amount, 0x505050);
+            const bool capture = lastCapture == 0 || SDL_GetTicks() - lastCapture >= 1000;
+            lastCapture = capture ? SDL_GetTicks() : lastCapture;
+            win.Present(capture);
         }
-        win.Clear();
-        win.Color(0x20, 0x20, 0x20);
-        win.Text(8, 8, job.mProgress.mCancel ? "Cancelling..." : "Copying GTA2's game files...");
-        win.Color(0xFF, 0xFF, 0xFF);
-        win.Fill(8, 24, w - 16, 14);
-        win.Color(0x35, 0x84, 0xE4);
-        win.Fill(9, 25, (w - 18) * frac, 12);
-        win.Color(0x9A, 0x9A, 0x9A);
-        win.Frame(8, 24, w - 16, 14);
-        win.Color(0x50, 0x50, 0x50);
-        win.Text(8, 48, status);
-        win.Text(w - 8 - amount.size() * 8.0f, 48, amount);
-        const Uint64 now = SDL_GetTicks();
-        const bool capture = !captured || now - lastCapture >= 1000;
-        lastCapture = capture ? now : lastCapture;
-        captured = true;
-        win.Present(capture);
         SDL_Delay(10);
     }
-    SDL_WaitThread(thread, NULL);
+    if (thread)
+    {
+        SDL_WaitThread(thread, NULL);
+    }
+    else
+    {
+        job.mResult = Install(source, job.mProgress);
+    }
     return job.mResult;
 }
 
-std::string MusicMessage(const DataCheck& check)
-{
-    return "GTA2 is installed, but its music was not found (" + std::to_string(check.mMusicFound) + " of " +
-           std::to_string(check.mMusicTotal) +
-           " tracks): the game runs without music and radio.\n\n"
-           "The music is on the original CD, in its GTAudio folder. Choose that folder (or the CD), or a disc "
-           "image or archive that holds it, to add it now.";
-}
-
-bool SetupLoop(bool force)
+// The questions until the game has its data: false to quit.
+bool SetupLoop(const std::string& gameDir)
 {
     // GTA2_SETUP_PATH: the folder or file to install from, instead of the first question and the dialog.
-    const char* env = SDL_getenv("GTA2_SETUP_PATH");
-    std::string envPath = env ? env : "";
-    const std::string destText = PathToUtf8(sGameDir);
-    bool haveData = CheckGameData(sGameDir).mMissing.empty();
-    bool musicStep = false;
-    for (;;)
+    const char* envPath = SDL_getenv("GTA2_SETUP_PATH");
+    std::string path = envPath ? envPath : "";
+    for (bool fromEnv = !path.empty();; fromEnv = false, path.clear())
     {
-        std::string path;
-        const bool fromEnv = !envPath.empty();
-        if (fromEnv)
+        const DataCheck check = CheckGameData(".");
+        if (path.empty() && !check.mMissing.empty())
         {
-            path = envPath;
-            envPath.clear();
-        }
-        else if (musicStep)
-        {
-            const int choice = Ask(SDL_MESSAGEBOX_WARNING, MusicMessage(CheckGameData(sGameDir)),
-                                   {"Folder...", "Disc image or archive...", "Play without music"}, 2, 2);
-            if (choice == 2)
-            {
-                return true;
-            }
-            path = PickPath(choice == 0);
-        }
-        else
-        {
-            const std::string message =
-                haveData ? "GTA2's game files are installed in:\n" + destText +
-                               "\n\nChoose a source to replace them, or to add the music."
-                         : "GTA2's game files were not found.\n\nThis port does not include them: they come from "
-                           "your own copy of GTA2, either an installed game folder, or an installer, archive (.zip, "
-                           ".7z) or disc image (.iso) of the game. They will be copied to:\n" +
-                               destText;
-            const int choice = Ask(SDL_MESSAGEBOX_INFORMATION, message,
-                                   {"Use an existing install...", "Install from a file...", "I don't have the game"},
-                                   0, -1);
+            const int choice = Ask(SDL_MESSAGEBOX_INFORMATION,
+                                   "GTA2's game files were not found.\n\nThis port does not include them: they come "
+                                   "from your own copy of GTA2, an installed game folder, the game's CD or its "
+                                   "installer. They will be copied to:\n" + gameDir,
+                                   {"Use an existing install...", "Install from a file...", "I don't have the game"}, 0,
+                                   -1);
             if (choice < 0)
             {
-                return haveData && force;
+                return false;
             }
             if (choice == 2)
             {
@@ -517,30 +356,41 @@ bool SetupLoop(bool force)
             }
             path = PickPath(choice == 0);
         }
+        else if (path.empty())
+        {
+            const bool music = check.mMusicFound >= check.mMusicTotal;
+            const int choice = Ask(
+                music ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_WARNING,
+                "GTA2's game files are installed in:\n" + gameDir + "\n\n" +
+                    (music ? std::string("Choose a folder or a file to replace them.")
+                           : "The music was not found (" + std::to_string(check.mMusicFound) + " of " +
+                                 std::to_string(check.mMusicTotal) +
+                                 " tracks): the game runs without music and radio. The music is in the GTAudio "
+                                 "folder of the original CD, or in the installer: choose one to add it."),
+                {"Use a folder...", "Use a file...", "Play"}, 2, 2);
+            if (choice == 2)
+            {
+                return true;
+            }
+            path = PickPath(choice == 0);
+        }
         if (path.empty())
         {
             continue;
         }
-
-        const InstallResult result = RunInstall(PathFromUtf8(path), sGameDir);
-        if (!result.mOk)
+        const InstallResult result = RunInstall(PathFromUtf8(path));
+        if (!result.mOk && !result.mCancelled)
         {
-            if (!result.mCancelled)
-            {
-                Tell(SDL_MESSAGEBOX_ERROR, result.mError);
-            }
-            if (fromEnv)
-            {
-                return false;
-            }
-            continue;
+            Ask(SDL_MESSAGEBOX_ERROR, result.mError, {"OK"}, 0, 0);
         }
-        haveData = true;
-        if (result.mCheck.mMusicFound >= result.mCheck.mMusicTotal)
+        if (fromEnv && !result.mOk)
+        {
+            return false;
+        }
+        if (result.mOk && result.mCheck.mMusicFound >= result.mCheck.mMusicTotal)
         {
             return true;
         }
-        musicStep = true;
     }
 }
 
@@ -549,84 +399,60 @@ bool HasGameData(const fs::path& dir)
     fs::path found;
     return FindNoCase(dir, "data/fstyle.sty", &found);
 }
-} // namespace
 
-namespace
+// $GTA2_DIR, else the current folder or the executable's when it holds the game's data, else the
+// per-user folder (empty if none).
+fs::path GameFolder(bool* pPerUser)
 {
-// Folders the game writes to and does not create.
-void MakeGameFolders()
-{
-    std::error_code ec;
-    fs::path found;
-    for (const char* dir : {"player", "test"})
-    {
-        if (!FindNoCase(fs::current_path(ec), dir, &found))
-        {
-            fs::create_directories(dir, ec);
-        }
-    }
-}
-
-void EnterFolder()
-{
+    *pPerUser = false;
     if (const char* dir = SDL_getenv("GTA2_DIR"))
     {
-        if (!SetWorkingDir(PathFromUtf8(dir)))
-        {
-            fprintf(stderr, "Cannot enter GTA2_DIR %s\n", dir);
-            exit(1);
-        }
-        return;
+        return PathFromUtf8(dir);
     }
     std::error_code ec;
-    if (HasGameData(fs::current_path(ec)))
+    const char* base = SDL_GetBasePath();
+    if (HasGameData(fs::current_path(ec)) || !base)
     {
-        return;
+        return fs::current_path(ec);
     }
-    if (const char* base = SDL_GetBasePath())
+    if (HasGameData(PathFromUtf8(base)))
     {
-        const fs::path exeDir = PathFromUtf8(base);
-        if (HasGameData(exeDir))
-        {
-            SetWorkingDir(exeDir);
-            return;
-        }
+        return PathFromUtf8(base);
     }
-    char* pref = SDL_GetPrefPath(kPrefOrg, kPrefApp);
-    if (!pref)
-    {
-        fprintf(stderr, "No per-user folder: %s\n", SDL_GetError());
-        return;
-    }
-    sGameDir = PathFromUtf8(pref);
+    char* pref = SDL_GetPrefPath("", "gta2_re");
+    const fs::path dir = PathFromUtf8(pref ? pref : "");
     SDL_free(pref);
-    sPerUser = true;
-    SetWorkingDir(sGameDir);
+    *pPerUser = true;
+    return dir;
 }
 } // namespace
 
-void port_EnterGameFolder()
+bool port_PrepareGameFolder(bool forceSetup)
 {
-    EnterFolder();
-    MakeGameFolders();
-}
-
-bool port_RunSetup(bool force)
-{
-    if (!sPerUser)
+    bool perUser;
+    const fs::path dir = GameFolder(&perUser);
+    std::error_code ec;
+    fs::current_path(dir, ec);
+    if (ec || dir.empty())
     {
-        if (force)
-        {
-            SDL_Log("--setup: the game's data is already in the game folder, not the per-user one");
-        }
-        return true;
+        SDL_Log("Cannot enter the game folder %s: %s", PathToUtf8(dir).c_str(), ec ? ec.message().c_str() : SDL_GetError());
+        return false;
     }
-    if (!force && CheckGameData(sGameDir).mMissing.empty())
+    // Folders the game writes to and does not create.
+    fs::path found;
+    for (const char* sub : {"player", "test"})
+    {
+        if (!FindNoCase(".", sub, &found))
+        {
+            fs::create_directories(sub, ec);
+        }
+    }
+    if (!perUser || (!forceSetup && CheckGameData(".").mMissing.empty()))
     {
         return true;
     }
     SDL_InitSubSystem(SDL_INIT_EVENTS);
-    const bool ok = SetupLoop(force);
+    const bool ok = SetupLoop(PathToUtf8(dir));
     SDL_QuitSubSystem(SDL_INIT_EVENTS);
     return ok;
 }
