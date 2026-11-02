@@ -490,6 +490,10 @@ struct Layout
     f32 mPanelRight;
 };
 
+// From a line's top to the next, or to one set apart.
+const f32 kLineStep = 20;
+const f32 kGapStep = 30;
+
 // From a setting's value to the centre of the arrows the mouse changes it with.
 const f32 kArrowGap = 14;
 
@@ -547,7 +551,7 @@ void GetLayout(Layout* pLayout)
     {
         if (i)
         {
-            y += pItems[i].mGap ? 34 : 22;
+            y += pItems[i].mGap ? kGapStep : kLineStep;
         }
         pLayout->mY[i] = y;
     }
@@ -562,7 +566,7 @@ s32 LineAt(const Layout& layout, f32 x, f32 y)
     }
     for (s32 i = 0; i < layout.mCount; i++)
     {
-        if (y >= layout.mY[i] - 4 && y < layout.mY[i] + 18)
+        if (y >= layout.mY[i] - 3 && y < layout.mY[i] + kLineStep - 3)
         {
             return i;
         }
