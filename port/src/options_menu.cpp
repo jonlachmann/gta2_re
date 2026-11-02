@@ -55,6 +55,7 @@ enum Action
     kDisplay,
     kBrightness,
     kLighting,
+    kHeadlights,
     kExplodingScores,
     kFrameLimit,
     kBinding,
@@ -370,10 +371,11 @@ void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
             break;
         }
         case kLighting:
+        case kHeadlights:
         case kExplodingScores:
         case kFrameLimit:
         {
-            const char* name = item.mAction == kLighting ? "lighting" : (item.mAction == kExplodingScores ? "exploding_on" : "max_frame_rate");
+            const char* name = item.mAction == kLighting ? "lighting" : (item.mAction == kHeadlights ? "car_headlights" : (item.mAction == kExplodingScores ? "exploding_on" : "max_frame_rate"));
             gRegistry.Set_Screen_Setting(name, gRegistry.Get_Screen_Setting(name, 1) ? 0 : 1);
             break;
         }
@@ -609,6 +611,7 @@ void Setup(Frontend* pFrontend)
     AddOption(pFrontend, kScreenPage, L"DISPLAY", kDisplay, 0);
     AddOption(pFrontend, kScreenPage, L"BRIGHTNESS", kBrightness, 0);
     AddOption(pFrontend, kScreenPage, L"LIGHTING", kLighting, 0, true);
+    AddOption(pFrontend, kScreenPage, L"CAR HEADLIGHTS", kHeadlights, 0);
     AddOption(pFrontend, kScreenPage, L"EXPLODING SCORES", kExplodingScores, 0);
     AddOption(pFrontend, kScreenPage, L"FRAME LIMIT", kFrameLimit, 0);
     AddOption(pFrontend, kScreenPage, L"BACK", kGoTo, kOptionsPage, true);
@@ -785,6 +788,9 @@ bool GetOptionText(Frontend* pFrontend, u16 page, u16 option, wchar_t** ppText)
             break;
         case kLighting:
             wcscpy(value, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
+            break;
+        case kHeadlights:
+            wcscpy(value, gRegistry.Get_Screen_Setting("car_headlights", 1) ? L"ON" : L"OFF");
             break;
         case kExplodingScores:
             wcscpy(value, gRegistry.Get_Screen_Setting("exploding_on", 1) ? L"ON" : L"OFF");

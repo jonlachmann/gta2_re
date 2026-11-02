@@ -44,6 +44,7 @@ enum Item
     kBrightness,
     kDisplay,
     kLighting,
+    kHeadlights,
     kExplodingScores,
     kFrameLimit,
     kTextSpeed,
@@ -54,7 +55,7 @@ enum Item
 };
 
 const wchar_t* const kItemNames[kNumItems] = {L"RESUME", L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"BRIGHTNESS",
-                                              L"DISPLAY", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
+                                              L"DISPLAY", L"LIGHTING", L"CAR HEADLIGHTS", L"EXPLODING SCORES", L"FRAME LIMIT",
                                               L"TEXT SPEED", L"LANGUAGE", L"CONTROLS", L"QUIT GAME"};
 
 struct Language
@@ -196,10 +197,11 @@ void Change(s32 item, s32 delta)
             break;
         }
         case kLighting:
+        case kHeadlights:
         case kExplodingScores:
         case kFrameLimit:
         {
-            const char* name = item == kLighting ? "lighting" : (item == kExplodingScores ? "exploding_on" : "max_frame_rate");
+            const char* name = item == kLighting ? "lighting" : (item == kHeadlights ? "car_headlights" : (item == kExplodingScores ? "exploding_on" : "max_frame_rate"));
             gRegistry.Set_Screen_Setting(name, gRegistry.Get_Screen_Setting(name, 1) ? 0 : 1);
             Init_FrameRateLightingAndExplodingScores();
             break;
@@ -242,6 +244,9 @@ void Value(s32 item, wchar_t* pOut)
             break;
         case kLighting:
             wcscpy(pOut, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
+            break;
+        case kHeadlights:
+            wcscpy(pOut, gRegistry.Get_Screen_Setting("car_headlights", 1) ? L"ON" : L"OFF");
             break;
         case kExplodingScores:
             wcscpy(pOut, gRegistry.Get_Screen_Setting("exploding_on", 1) ? L"ON" : L"OFF");
