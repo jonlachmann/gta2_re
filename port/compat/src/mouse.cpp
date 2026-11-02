@@ -8,6 +8,7 @@ float sX;
 float sY;
 bool sMoved;
 int sLeft;
+bool sLeftDown;
 int sRight;
 float sWheel;
 bool sCursorShown = true;
@@ -28,10 +29,17 @@ void port_MouseEvent(const SDL_Event& e)
             if (e.button.button == SDL_BUTTON_LEFT)
             {
                 sLeft++;
+                sLeftDown = true;
             }
             else if (e.button.button == SDL_BUTTON_RIGHT)
             {
                 sRight++;
+            }
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (e.button.button == SDL_BUTTON_LEFT)
+            {
+                sLeftDown = false;
             }
             break;
         case SDL_EVENT_MOUSE_WHEEL:
@@ -72,6 +80,11 @@ bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel)
     sLeft = 0;
     sRight = 0;
     return moved;
+}
+
+bool port_MouseLeftDown()
+{
+    return sLeftDown;
 }
 
 void port_MouseEndFrame()

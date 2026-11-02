@@ -25,6 +25,7 @@ int port_CapturedKey();
 int port_CapturedPad();
 bool port_MouseMode();
 bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel);
+bool port_MouseLeftDown();
 #endif
 
 namespace PortMenu
@@ -89,6 +90,7 @@ Page sPage;
 s32 sSelected[kNumPages];
 s32 sColumn; // 0 keyboard, 1 gamepad
 s32 sCapturing = -1; // control waiting for a key or pad input
+bool sDragging; // a slider's knob, with the left button held
 #if !defined(GTA2_PORT_SDL)
 char_type sPrevKeys[256];
 #endif
@@ -382,14 +384,69 @@ f32 Max(f32 a, f32 b)
     return a > b ? a : b;
 }
 
-void Panel(f32 left, f32 top, f32 right, f32 bottom)
+// colour: 0xRRGGBB.
+void Rect(f32 left, f32 top, f32 right, f32 bottom, s32 colour)
 {
     Vert verts[4] = {};
     verts[0].x = verts[3].x = sLeft + left * sScale;
     verts[1].x = verts[2].x = sLeft + right * sScale;
     verts[0].y = verts[1].y = sTop + top * sScale;
     verts[2].y = verts[3].y = sTop + bottom * sScale;
-    pgbh_DrawFlatRect(verts, 0);
+    pgbh_DrawFlatRect(verts, colour);
+}
+
+// The numeric settings' sliders: a track, then the value's text.
+const f32 kSliderWidth = 100;
+const f32 kSliderGap = 14;
+
+struct Slider
+{
+    s32 mMin;
+    s32 mMax;
+    s32 mValue;
+};
+
+bool GetSlider(const Item& item, Slider* pSlider)
+{
+    return item.mKind == kSetting &&
+        PortSettings::Range(static_cast<PortSettings::Id>(item.mArg), &pSlider->mMin, &pSlider->mMax, &pSlider->mValue);
+}
+
+// From the value column to the value's text.
+f32 TextOffset(const Item& item)
+{
+    Slider slider;
+    return GetSlider(item, &slider) ? kSliderWidth + kSliderGap : 0;
+}
+
+// The frontend's text colours, a darker grey for the empty part of the track.
+void DrawSlider(const Slider& slider, f32 x, f32 y, bool selected)
+{
+    const s32 colour = selected ? 0xFF1000 : 0xFFFFFF;
+    const f32 middle = y + 7;
+    const f32 knob = x + kSliderWidth * (slider.mValue - slider.mMin) / (slider.mMax - slider.mMin);
+    Rect(x, middle - 1.5f, kSliderWidth + x, middle + 1.5f, 0x606060);
+    Rect(x, middle - 1.5f, knob, middle + 1.5f, colour);
+    Rect(knob - 3, middle - 7, knob + 3, middle + 7, colour);
+}
+
+// The value under the mouse on a slider's track, or nearest to it.
+Result SetSliderAt(const Item& item, f32 x, f32 trackX)
+{
+    Slider slider;
+    if (!GetSlider(item, &slider))
+    {
+        return kNothing;
+    }
+    const f32 steps = (x - trackX) * (slider.mMax - slider.mMin) / kSliderWidth;
+    s32 value = slider.mMin + static_cast<s32>(steps < 0 ? steps - 0.5f : steps + 0.5f);
+    value = value < slider.mMin ? slider.mMin : (value > slider.mMax ? slider.mMax : value);
+    if (value == slider.mValue)
+    {
+        return kNothing;
+    }
+    PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), value - slider.mValue);
+    return value < slider.mValue ? kLowered : kRaised;
 }
 
 // A setting's value, or a binding's key and pad input; empty for other items.
@@ -458,7 +515,7 @@ void GetLayout(Layout* pLayout)
         {
             ItemValues(pItems[i], value, pad);
             nameWidth = Max(nameWidth, Width(ItemName(pItems[i]), normal));
-            valueWidth = Max(valueWidth, Width(value, normal));
+            valueWidth = Max(valueWidth, TextOffset(pItems[i]) + Width(value, normal));
             padWidth = Max(padWidth, Width(pad, normal));
         }
     }
@@ -589,6 +646,7 @@ void Open()
     sPage = kMainPage;
     sSelected[kMainPage] = 0;
     sCapturing = -1;
+    sDragging = false;
 #if defined(GTA2_PORT_SDL)
     float x;
     float y;
@@ -718,19 +776,25 @@ Result HandleMouse(f32 scale, f32 left, f32 top)
     }
     if (rightClicks)
     {
+        sDragging = false;
         return Back();
     }
     const f32 x = (frameX - left) / scale;
     const f32 y = (frameY - top) / scale;
     Layout layout;
     GetLayout(&layout);
+    s32& selected = sSelected[sPage];
+    sDragging = sDragging && port_MouseLeftDown();
+    if (sDragging)
+    {
+        return SetSliderAt(layout.mItems[selected], x, layout.mValueX);
+    }
     const s32 line = LineAt(layout, x, y);
     if (line < 0)
     {
         return kNothing;
     }
     const Item& item = layout.mItems[line];
-    s32& selected = sSelected[sPage];
     Result result = kNothing;
     if (moved || leftClicks || wheel)
     {
@@ -744,6 +808,13 @@ Result HandleMouse(f32 scale, f32 left, f32 top)
         {
             sColumn = x >= layout.mPadX - kArrowGap - 6 ? 1 : 0;
         }
+    }
+    Slider slider;
+    if (leftClicks && GetSlider(item, &slider) && x >= layout.mValueX - 6 && x < layout.mValueX + kSliderWidth + 6)
+    {
+        sDragging = true;
+        const Result changed = SetSliderAt(item, x, layout.mValueX);
+        return changed != kNothing ? changed : result;
     }
     if (item.mKind == kSetting && (wheel || leftClicks))
     {
@@ -777,7 +848,7 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
     const s16 normal = gFrontendNormalFont;
     if (panel)
     {
-        Panel(layout.mPanelLeft, 130, layout.mPanelRight, 470);
+        Rect(layout.mPanelLeft, 130, layout.mPanelRight, 470, 0);
     }
     if (layout.mControls)
     {
@@ -797,7 +868,13 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
         const s16 font = selected ? gFrontendSelectedFont : normal;
         ItemValues(item, value, pad);
         Text(ItemName(item), layout.mX, y, font);
-        Text(value, layout.mValueX, y, font);
+        Slider slider;
+        if (GetSlider(item, &slider))
+        {
+            DrawSlider(slider, layout.mValueX, y, selected);
+        }
+        const f32 valueX = layout.mValueX + TextOffset(item);
+        Text(value, valueX, y, font);
         if (layout.mPadColumn && item.mKind == kBinding)
         {
             Text(pad, layout.mPadX, y, font);
@@ -809,7 +886,7 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
         if (selected && item.mKind == kSetting && MouseMode())
         {
             Sprite(kLeftArrowSprite, layout.mValueX - kArrowGap, y + 6);
-            Sprite(kArrowSprite, layout.mValueX + Width(value, font) + kArrowGap, y + 6);
+            Sprite(kArrowSprite, valueX + Width(value, font) + kArrowGap, y + 6);
         }
     }
     DrawHints();

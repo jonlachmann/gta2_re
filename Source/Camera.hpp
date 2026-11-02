@@ -219,6 +219,8 @@ Fix16 PortUiY(Fix16 y);
 Fix16 PortUiStringX(const wchar_t* pStr, Fix16 x, u16 font);
 // The screen's width over that of a 4:3 screen of the same height (1 when not wider).
 Fix16 PortViewWidthFactor();
+// A camera zoom with the player's zoom setting applied, for everything that depends on the view's size.
+Fix16 PortCameraZoom(Fix16 zoom);
 #define UI_X(x) PortUiX(x)
 #define UI_Y(y) PortUiY(y)
 #define UI_STR_X(str, x, font) PortUiStringX(str, x, font)

@@ -3562,7 +3562,11 @@ void MapRenderer::Draw()
             if (bDo_show_camera)
             {
             }
+#if defined(GTA2_PORT)
+            Fix16 layer_row_width = z_distance / PortCameraZoom(gViewCamera->mCurPos.mZoom);
+#else
             Fix16 layer_row_width = z_distance / gViewCamera->mCurPos.mZoom;
+#endif
 
             // narrow the y direction because of assymetric monitor resolution
             Fix16 layer_column_width = layer_row_width * kScreenAspectRatio;
