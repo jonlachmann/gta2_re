@@ -33,6 +33,7 @@ enum Id
     kCamera,
     kShadows,
     kCameraTilt,
+    kCameraTurnSpeed,
     kCount,
 };
 
@@ -72,6 +73,8 @@ f32 HudScale();
 bool ChinatownCamera();
 // CAMERA TILT: the CHINATOWN camera's pitch on foot, in degrees, 0 to 15.
 s32 CameraTilt();
+// ROTATION SPEED: how fast the CHINATOWN camera turns after the vehicle, 1 to 10.
+s32 CameraTurnSpeed();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();

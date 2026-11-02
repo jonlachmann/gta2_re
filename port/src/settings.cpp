@@ -49,7 +49,7 @@ const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kView[] = {kZoom, kCamera, kCameraTilt, kHudScale, kSafeArea};
+const Id kView[] = {kZoom, kCamera, kCameraTilt, kCameraTurnSpeed, kHudScale, kSafeArea};
 #else
 const Id kView[] = {kZoom, kHudScale, kSafeArea};
 #endif
@@ -60,7 +60,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED"};
 
 struct Language
 {
@@ -131,6 +131,7 @@ const Translation kTranslations[] = {
     {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
     {L"CAMERA", NULL, {L"CAMERA", L"KAMERA", L"TELECAMERA", L"CÁMARA"}},
     {L"CLASSIC", NULL, {L"CLASSIQUE", L"KLASSISCH", L"CLASSICA", L"CLÁSICA"}},
+    {L"ROTATION SPEED", NULL, {L"VITESSE ROTATION", L"DREHTEMPO", L"VELOCITÀ ROTAZIONE", L"VELOCIDAD GIRO"}},
     {L"CAMERA TILT", NULL, {L"INCLINAISON", L"NEIGUNG", L"INCLINAZIONE", L"INCLINACIÓN"}},
     {L"CHINATOWN", NULL, {L"CHINATOWN", L"CHINATOWN", L"CHINATOWN", L"CHINATOWN"}},
     {L"LIGHT EFFECTS", NULL, {L"EFFETS LUMINEUX", L"LICHTEFFEKTE", L"EFFETTI LUCE", L"EFECTOS DE LUZ"}},
@@ -262,6 +263,8 @@ const char* ScreenName(Id id)
             return "camera_cw";
         case kCameraTilt:
             return "camera_tilt";
+        case kCameraTurnSpeed:
+            return "camera_turn_speed";
         case kShadows:
             return "gl_soft_shadows";
         default:
@@ -287,6 +290,10 @@ s32 ScreenDefault(Id id)
     if (id == kCameraTilt)
     {
         return 8;
+    }
+    if (id == kCameraTurnSpeed)
+    {
+        return 5;
     }
     return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
@@ -331,6 +338,8 @@ s32 sSafeArea = -1;
 s32 sCamera = -1;
 s32 sCameraTilt = -1;
 const s32 kMaxCameraTilt = 15;
+s32 sCameraTurnSpeed = -1;
+const s32 kMaxCameraTurnSpeed = 10;
 
 s32 HudScalePercent()
 {
@@ -453,7 +462,7 @@ f32 SafeArea()
 
 Id Requirement(Id id)
 {
-    if (id == kCameraTilt)
+    if (id == kCameraTilt || id == kCameraTurnSpeed)
     {
         return kCamera;
     }
@@ -492,6 +501,15 @@ s32 CameraTilt()
         sCameraTilt = Clamp(Screen(kCameraTilt), 0, kMaxCameraTilt);
     }
     return sCameraTilt;
+}
+
+s32 CameraTurnSpeed()
+{
+    if (sCameraTurnSpeed < 0)
+    {
+        sCameraTurnSpeed = Clamp(Screen(kCameraTurnSpeed), 1, kMaxCameraTurnSpeed);
+    }
+    return sCameraTurnSpeed;
 }
 
 bool Headlights()
@@ -558,6 +576,11 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pMax = kMaxCameraTilt;
             *pValue = CameraTilt();
             return true;
+        case kCameraTurnSpeed:
+            *pMin = 1;
+            *pMax = kMaxCameraTurnSpeed;
+            *pValue = CameraTurnSpeed();
+            return true;
         default:
             return false;
     }
@@ -612,6 +635,9 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kCameraTilt:
             swprintf(pOut, L"%d", CameraTilt());
+            break;
+        case kCameraTurnSpeed:
+            swprintf(pOut, L"%d", CameraTurnSpeed());
             break;
         case kBloom:
             if (Screen(id))
@@ -826,6 +852,10 @@ void Change(Id id, s32 delta)
         case kCameraTilt:
             sCameraTilt = Clamp(CameraTilt() + delta, 0, kMaxCameraTilt);
             gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTilt);
+            break;
+        case kCameraTurnSpeed:
+            sCameraTurnSpeed = Clamp(CameraTurnSpeed() + delta, 1, kMaxCameraTurnSpeed);
+            gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTurnSpeed);
             break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
