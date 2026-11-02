@@ -80,6 +80,12 @@ LightInternal gLights[256];
 u32 gNumLights;
 f32 gAmbient = 255.0f;
 f32 gWindow[4];
+// port_SetViewTurn: what is drawn is moved by (mTx, mTy), then turned about (mCx, mCy).
+struct ViewTurn
+{
+    bool mOn;
+    f32 mCx, mCy, mCos, mSin, mTx, mTy;
+} gViewTurn;
 s32 gScreenTable[1700];
 u32 gTextureId;
 u32 gSceneCount;
@@ -439,7 +445,7 @@ void Trace(const char* what, u32 flags, STexture* pTexture, const Vert* pVerts, 
 
 const u32 FLAG_INTERNAL_BLIT = 0x80000000u;
 
-void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 baseColour)
+void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 baseColour)
 {
     if (gTraceScene && gSceneCount == gTraceScene)
     {
@@ -596,6 +602,32 @@ void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 bas
     }
     gRenderer->DrawTriangles(tris, n, pTex, state);
     gGlobals.mNumPolysDrawn += count - 2;
+}
+
+// Turned in place and put back: the game draws some vertices twice (a car's damage over its sprite).
+void RenderVerts(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 baseColour)
+{
+    if (!gViewTurn.mOn || (flags & (FLAG_INTERNAL_BLIT | FLAG_FIT_TO_TEXTURE)) || count < 3 || count > 4)
+    {
+        RenderVertsUnturned(flags, pTexture, pVerts, count, baseColour);
+        return;
+    }
+    f32 keep[4][2];
+    for (s32 i = 0; i < count; i++)
+    {
+        keep[i][0] = pVerts[i].x;
+        keep[i][1] = pVerts[i].y;
+        const f32 x = pVerts[i].x + gViewTurn.mTx - gViewTurn.mCx;
+        const f32 y = pVerts[i].y + gViewTurn.mTy - gViewTurn.mCy;
+        pVerts[i].x = gViewTurn.mCx + gViewTurn.mCos * x - gViewTurn.mSin * y;
+        pVerts[i].y = gViewTurn.mCy + gViewTurn.mSin * x + gViewTurn.mCos * y;
+    }
+    RenderVertsUnturned(flags, pTexture, pVerts, count, baseColour);
+    for (s32 i = 0; i < count; i++)
+    {
+        pVerts[i].x = keep[i][0];
+        pVerts[i].y = keep[i][1];
+    }
 }
 
 void DrawColouredQuad(f32 l, f32 t, f32 r, f32 b, u32 argb)
@@ -931,6 +963,18 @@ void port_SpotLight(f32 dx, f32 dy, f32 cosOuter, f32 cosInner)
         LightInternal& l = gLights[gNumLights - 1];
         l.mDx = dx, l.mDy = dy, l.mCosOuter = cosOuter, l.mCosInner = cosInner;
     }
+}
+
+// The CHINATOWN camera (port/src/view.hpp): the world drawn turned while on.
+void port_SetViewTurn(bool on, f32 cx, f32 cy, f32 c, f32 s, f32 tx, f32 ty)
+{
+    gViewTurn.mOn = on;
+    gViewTurn.mCx = cx;
+    gViewTurn.mCy = cy;
+    gViewTurn.mCos = c;
+    gViewTurn.mSin = s;
+    gViewTurn.mTx = tx;
+    gViewTurn.mTy = ty;
 }
 
 GBH_EXPORT void GTA2_CC gbh_SetAmbient(f32 ambient)
