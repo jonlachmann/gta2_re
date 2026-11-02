@@ -54,7 +54,7 @@ else
     cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_EAX=OFF -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=i686 -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc-posix \
           -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres \
-          "-DCMAKE_SHARED_LINKER_FLAGS=-static -static-libgcc -static-libstdc++"
+          "-DCMAKE_SHARED_LINKER_FLAGS=-s -static -static-libgcc -static-libstdc++"
 fi
 ninja -C "$B/b_openal" -j"$J" install
 

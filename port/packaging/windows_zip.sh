@@ -8,8 +8,7 @@ NAME=gta2_re-${GTA2_VERSION:-dev}-windows-i686
 Z=$(mktemp -d)/$NAME
 mkdir -p "$Z" "$OUT"
 llvm-strip --strip-debug -o "$Z/gta2.exe" "$B/gta2.exe"
-llvm-strip --strip-debug -o "$Z/OpenAL32.dll" "$B/OpenAL32.dll"
-cp "$B/SDL3.dll" "$Z/"
+cp "$B/SDL3.dll" "$B/OpenAL32.dll" "$Z/"
 cp "$HERE/../README.md" "$Z/README.md"
 cp -r "$P/licenses" "$Z/"
 # The DLLs they import, for the log: SDL3.dll and system ones.
