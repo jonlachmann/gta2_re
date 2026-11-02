@@ -28,6 +28,9 @@
 #include "TextureCache.hpp"
 #include "winmain.hpp" // for gLighting
 #include "block_face.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/shadows.hpp"
+#endif
 
 // Forward declarations: the functions below are in address order
 EXPORT void __stdcall ProjectOntoAxis(const Fix16& xpos1, const Fix16& ypos1, const Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY);
@@ -1198,7 +1201,11 @@ void Sprite::Draw()
         }
     }
 
-    if (Sprite::CastsShadow())
+    if (Sprite::CastsShadow()
+#if defined(GTA2_PORT)
+        && !PortShadows::Draw(this, pTexture)
+#endif
+    )
     {
         Vert pShadowVerts[4];
 
