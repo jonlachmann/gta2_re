@@ -374,9 +374,11 @@ s32 Width(const wchar_t* pText, s16 font)
     return Frontend::GetMaxTextWidth(const_cast<wchar_t*>(pText), font);
 }
 
-void Text(const wchar_t* pText, f32 x, f32 y, s16 font)
+// Dim: half transparent, grey on the panel or the frontend's black.
+void Text(const wchar_t* pText, f32 x, f32 y, s16 font, bool dim = false)
 {
-    DrawStringDefaultPalette(pText, Fx(sLeft + x * sScale), Fx(sTop + y * sScale), font, Fx(sScale));
+    DrawString(pText, Fx(sLeft + x * sScale), Fx(sTop + y * sScale), font, Fx(sScale), palette_types_enum::sprites_2, 0,
+               dim ? 1 : 0, dim ? 12 : 0);
 }
 
 void Sprite(s16 sprite, f32 x, f32 y)
@@ -426,14 +428,28 @@ f32 TextOffset(const Item& item)
 }
 
 // The frontend's text colours, a darker grey for the empty part of the track.
-void DrawSlider(const Slider& slider, f32 x, f32 y, bool selected)
+void DrawSlider(const Slider& slider, f32 x, f32 y, bool selected, bool dim)
 {
-    const s32 colour = selected ? 0xFF1000 : 0xFFFFFF;
+    const s32 colour = dim ? (selected ? 0x701000 : 0x707070) : (selected ? 0xFF1000 : 0xFFFFFF);
     const f32 middle = y + 7;
     const f32 knob = x + kSliderWidth * (slider.mValue - slider.mMin) / (slider.mMax - slider.mMin);
     Rect(x, middle - 1.5f, kSliderWidth + x, middle + 1.5f, 0x606060);
     Rect(x, middle - 1.5f, knob, middle + 1.5f, colour);
     Rect(knob - 3, middle - 7, knob + 3, middle + 7, colour);
+}
+
+bool IsEnabled(const Item& item)
+{
+    return item.mKind != kSetting || PortSettings::Enabled(static_cast<PortSettings::Id>(item.mArg));
+}
+
+// Under the page, for a greyed setting: the one it needs.
+void DrawRequirement(const Item& item, f32 x, f32 y)
+{
+    const PortSettings::Id requirement = PortSettings::Requirement(static_cast<PortSettings::Id>(item.mArg));
+    wchar_t text[64];
+    swprintf(text, L"%ls %ls", Translate(L"NEEDS"), Translate(PortSettings::Name(requirement)));
+    Text(text, x, y, gFrontendNormalFont);
 }
 
 // The value under the mouse on a slider's track, or nearest to it.
@@ -683,6 +699,10 @@ Result HandleInput(Input input)
             return kMovedDown;
         case kLeft:
         case kRight:
+            if (!IsEnabled(item))
+            {
+                return kNothing;
+            }
             if (item.mKind == kSetting)
             {
                 PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), input == kLeft ? -1 : 1);
@@ -703,6 +723,10 @@ Result HandleInput(Input input)
                     GoTo(static_cast<Page>(item.mArg));
                     return kEntered;
                 case kSetting:
+                    if (!IsEnabled(item))
+                    {
+                        return kNothing;
+                    }
                     PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), 1);
                     return kRaised;
                 case kBinding:
@@ -819,6 +843,10 @@ Result HandleMouse(f32 scale, f32 left, f32 top)
             sColumn = x >= layout.mPadX - kArrowGap - 6 ? 1 : 0;
         }
     }
+    if (!IsEnabled(item))
+    {
+        return result;
+    }
     Slider slider;
     if (leftClicks && GetSlider(item, &slider) && x >= layout.mValueX - 6 && x < layout.mValueX + kSliderWidth + 6)
     {
@@ -876,15 +904,20 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
         const f32 y = layout.mY[i];
         const bool selected = i == sSelected[sPage];
         const s16 font = selected ? gFrontendSelectedFont : normal;
+        const bool dim = !IsEnabled(item);
         ItemValues(item, value, pad);
-        Text(ItemName(item), layout.mX, y, font);
+        Text(ItemName(item), layout.mX, y, font, dim);
         Slider slider;
         if (GetSlider(item, &slider))
         {
-            DrawSlider(slider, layout.mValueX, y, selected);
+            DrawSlider(slider, layout.mValueX, y, selected, dim);
         }
         const f32 valueX = layout.mValueX + TextOffset(item);
-        Text(value, valueX, y, font);
+        Text(value, valueX, y, font, dim);
+        if (selected && dim)
+        {
+            DrawRequirement(item, layout.mX, layout.mY[layout.mCount - 1] + kGapStep + 4);
+        }
         if (layout.mPadColumn && item.mKind == kBinding)
         {
             Text(pad, layout.mPadX, y, font);
@@ -893,7 +926,7 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
                 Sprite(kArrowSprite, (sColumn ? layout.mPadX : layout.mValueX) - 12, y + 6);
             }
         }
-        if (selected && item.mKind == kSetting && MouseMode())
+        if (selected && item.mKind == kSetting && !dim && MouseMode())
         {
             Sprite(kLeftArrowSprite, layout.mValueX - kArrowGap, y + 6);
             Sprite(kArrowSprite, valueX + Width(value, font) + kArrowGap, y + 6);

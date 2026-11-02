@@ -51,10 +51,15 @@ const wchar_t* Name(Id id);
 void Value(Id id, wchar_t* pOut);
 // The numeric settings, shown as sliders: false for the others.
 bool Range(Id id, s32* pMin, s32* pMax, s32* pValue);
+// The setting another one only works with, kCount if none.
+Id Requirement(Id id);
+// False while the setting's requirement is off: the menu shows it greyed and doesn't change it, and its
+// stored value is kept.
+bool Enabled(Id id);
 // Changing the language reloads the text table and lays the frontend's or the HUD's texts out again.
 void Change(Id id, s32 delta);
 
-// Car headlight beams, and the other added lights (lights.hpp), with the dusk lighting.
+// Car headlight beams, and the other added lights (lights.hpp), with the dusk and pixel lighting.
 bool Headlights();
 bool LightEffects();
 

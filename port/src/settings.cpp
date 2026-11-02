@@ -136,6 +136,7 @@ const Translation kTranslations[] = {
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
     {L"GRAPHICS", NULL, {L"GRAPHISMES", L"GRAFIK", L"GRAFICA", L"GRÁFICOS"}},
     {L"VIEW", NULL, {L"VUE", L"ANSICHT", L"VISTA", L"VISTA"}},
+    {L"NEEDS", NULL, {L"NECESSITE", L"BENÖTIGT", L"RICHIEDE", L"REQUIERE"}},
     {L"CONTROLS", NULL, {L"COMMANDES", L"STEUERUNG", L"COMANDI", L"CONTROLES"}},
     {L"MORE", NULL, {L"SUITE", L"MEHR", L"ALTRI", L"MÁS"}},
     {L"DEFAULT KEYS", NULL, {L"CONTROLES PAR DEFAUT", L"STANDARDSTEUERUNG", L"COMANDI PREDEFINITI", L"CONTROLES PREDETERMINADOS"}},
@@ -426,14 +427,31 @@ f32 SafeArea()
     return SafeAreaPercent() / 100.0f;
 }
 
+Id Requirement(Id id)
+{
+#if defined(GTA2_PORT_SDL)
+    if (id == kHeadlights || id == kLightEffects)
+    {
+        return kPerPixelLighting;
+    }
+#endif
+    return kCount;
+}
+
+bool Enabled(Id id)
+{
+    const Id requirement = Requirement(id);
+    return requirement == kCount || Screen(requirement) != 0;
+}
+
 bool Headlights()
 {
-    return Screen(kHeadlights) != 0;
+    return Enabled(kHeadlights) && Screen(kHeadlights) != 0;
 }
 
 bool LightEffects()
 {
-    return Screen(kLightEffects) != 0;
+    return Enabled(kLightEffects) && Screen(kLightEffects) != 0;
 }
 
 // The original's max_frame_rate is not read: off, it ran the game as fast as the machine.
