@@ -75,21 +75,22 @@ Fix16 PortUiStringX(const wchar_t* pStr, Fix16 x, u16 font)
 }
 
 // The layout fits the safe area's height on wide screens, its width on tall ones. Scaled up, it can go
-// past the height (its edges stay anchored) but not the width, which its texts span.
+// past the height (its edges stay anchored) but not the width, which its texts span. In fixed point:
+// the defaults give the scale the screen alone gives.
 Fix16 PortHudUiScale(u32 width, u32 height)
 {
-    const f32 safe = 1 - 2 * PortSettings::SafeArea();
-    const f32 byWidth = width * safe / 640;
-    const f32 byHeight = height * safe / 480;
-    const f32 scale = (byHeight < byWidth ? byHeight : byWidth) * PortSettings::HudScale();
-    return FromF(scale < byWidth ? scale : byWidth);
+    const Fix16 safe = FromF(1 - 2 * PortSettings::SafeArea());
+    const Fix16 byWidth = Fix16(width) / 640 * safe;
+    const Fix16 byHeight = Fix16(height) / 480 * safe;
+    const Fix16 scale = (byHeight < byWidth ? byHeight : byWidth) * FromF(PortSettings::HudScale());
+    return scale < byWidth ? scale : byWidth;
 }
 
 Fix16 PortScreenUiScale()
 {
-    const f32 byWidth = gViewCamera->mScreenPxWidth / 640.0f;
-    const f32 byHeight = gViewCamera->mScreenPxHeight / 480.0f;
-    return FromF(byHeight < byWidth ? byHeight : byWidth);
+    const Fix16 byWidth = Fix16(gViewCamera->mScreenPxWidth) / 640;
+    const Fix16 byHeight = Fix16(gViewCamera->mScreenPxHeight) / 480;
+    return byHeight < byWidth ? byHeight : byWidth;
 }
 
 Fix16 PortViewWidthFactor()
