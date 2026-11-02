@@ -80,3 +80,13 @@
 #define OutputDebugStringA port_OutputDebugStringA
 #define GetDriveTypeA port_GetDriveTypeA
 #define ShellExecuteA port_ShellExecuteA
+
+// Files: only paths on a drive letter change, see crt.cpp. MinGW's _findfirst is _findfirst64i32.
+#include <io.h>
+#include <stdint.h>
+#include <stdio.h>
+FILE* port_fopen(const char* path, const char* mode);
+intptr_t port_findfirst(const char* pattern, struct _finddata_t* pData);
+#undef _findfirst
+#define fopen port_fopen
+#define _findfirst port_findfirst

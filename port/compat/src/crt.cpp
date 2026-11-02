@@ -1,12 +1,48 @@
+// The CD's files are installed in data (GTAudio for the music, Movie): a path on a drive letter that
+// does not exist is looked up there, so the game's probe of C: to Z: for the music finds it on C:.
+static bool IsDrivePath(const char* path)
+{
+    return ((path[0] | 0x20) >= 'a' && (path[0] | 0x20) <= 'z') && path[1] == ':' && (path[2] == '\\' || path[2] == '/');
+}
+
 #if defined(_WIN32)
+#include <io.h>
 #include <limits.h>
 #include <stdio.h>
+#include <windows.h>
+
+#undef fopen
 
 // Windows paths are the host's: the file system ignores case.
 const char* port_resolve_path(const char* path, char* out)
 {
-    snprintf(out, PATH_MAX, "%s", path);
+    if (IsDrivePath(path) && GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES)
+    {
+        snprintf(out, PATH_MAX, "data\\%s", path + 3);
+    }
+    else
+    {
+        snprintf(out, PATH_MAX, "%s", path);
+    }
     return out;
+}
+
+FILE* port_fopen(const char* path, const char* mode)
+{
+    char real[PATH_MAX];
+    return fopen(port_resolve_path(path, real), mode);
+}
+
+intptr_t port_findfirst(const char* pattern, struct _finddata_t* pData)
+{
+    const intptr_t handle = _findfirst64i32(pattern, pData);
+    if (handle != -1 || !IsDrivePath(pattern))
+    {
+        return handle;
+    }
+    char data[PATH_MAX];
+    snprintf(data, PATH_MAX, "data\\%s", pattern + 3);
+    return _findfirst64i32(data, pData);
 }
 #else
 #include <ctype.h>
@@ -26,7 +62,7 @@ const char* port_resolve_path(const char* path, char* out)
 
 // Each component that does not exist as written is looked up in its directory without regard to case.
 // A missing last component keeps its spelling, so new files are created as the game names them.
-const char* port_resolve_path(const char* path, char* out)
+static const char* ResolveHostPath(const char* path, char* out)
 {
     std::string p(path);
     for (char& c : p)
@@ -80,6 +116,17 @@ const char* port_resolve_path(const char* path, char* out)
         }
     }
     snprintf(out, PATH_MAX, "%s", done.empty() ? "." : done.c_str());
+    return out;
+}
+
+const char* port_resolve_path(const char* path, char* out)
+{
+    ResolveHostPath(path, out);
+    if (IsDrivePath(path) && access(out, F_OK) != 0)
+    {
+        const std::string data = std::string("data\\") + (path + 3);
+        ResolveHostPath(data.c_str(), out);
+    }
     return out;
 }
 
