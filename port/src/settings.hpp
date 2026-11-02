@@ -35,7 +35,7 @@ extern const s32 kNumGraphics;
 
 const wchar_t* Name(Id id);
 void Value(Id id, wchar_t* pOut);
-// Changing the language reloads the text table; the caller lays its own texts out again.
+// Changing the language reloads the text table and lays the frontend's or the HUD's texts out again.
 void Change(Id id, s32 delta);
 
 // Headlights: 0 none, 1 glow (the game's point lights), 2 beams.

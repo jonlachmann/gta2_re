@@ -251,18 +251,9 @@ void AddOption(Frontend* pFrontend, u16 page, const wchar_t* pName, Action actio
     ItemAt(page, i) = Item{action, arg};
 }
 
-void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
+void ChangeValue(Frontend*, const Item& item, s32 delta)
 {
-    const PortSettings::Id id = static_cast<PortSettings::Id>(item.mArg);
-    PortSettings::Change(id, delta);
-    if (id == PortSettings::kLanguage)
-    {
-        // The frontend's texts are copied into its pages: set them up again.
-        const u16 page = pFrontend->mCurrentPageIdx;
-        const u16 option = pFrontend->mMenuPagesArray[page].mCurrentOptionIdx;
-        pFrontend->SetupMenuStringsOptionsElements();
-        pFrontend->mMenuPagesArray[page].mCurrentOptionIdx = option;
-    }
+    PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), delta);
 }
 
 void AddSettings(Frontend* pFrontend, u16 page, const PortSettings::Id* pIds, s32 count)

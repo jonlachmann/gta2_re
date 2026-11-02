@@ -5,6 +5,7 @@
 #include "Globals.hpp"
 #include "Hud.hpp"
 #include "TextTable.hpp"
+#include "map_0x370.hpp"
 #include "registry.hpp"
 #include "root_sound.hpp"
 #include <stdio.h>
@@ -124,6 +125,35 @@ s32 Screen(Id id)
 {
     return gRegistry.Get_Screen_Setting(ScreenName(id), ScreenDefault(id));
 }
+
+// The zone name on screen is a copy of the text table's.
+void RefreshZoneName()
+{
+    Hud_MapZone& zone = gHud_2B00->mZoneName;
+    gmp_map_zone* pZone = zone.mLocalNavZone ? zone.mLocalNavZone : zone.mNavZone;
+    wchar_t* pName = zone.mTimer && pZone ? pZone->get_zone_str() : NULL;
+    if (pName)
+    {
+        wcsncpy(zone.mWstr, gText_0x14->StrToUpper(pName), 64);
+        zone.mWstr[64] = 0;
+    }
+}
+
+// The frontend copies its texts into its pages: set them up again, keeping the selected options.
+void RefreshFrontend()
+{
+    const s32 numPages = sizeof(gFrontend->mMenuPagesArray) / sizeof(gFrontend->mMenuPagesArray[0]);
+    u16 selected[numPages];
+    for (s32 i = 0; i < numPages; i++)
+    {
+        selected[i] = gFrontend->mMenuPagesArray[i].mCurrentOptionIdx;
+    }
+    gFrontend->SetupMenuStringsOptionsElements();
+    for (s32 i = 0; i < numPages; i++)
+    {
+        gFrontend->mMenuPagesArray[i].mCurrentOptionIdx = selected[i];
+    }
+}
 } // namespace
 
 const wchar_t* Name(Id id)
@@ -241,7 +271,12 @@ void Change(Id id, s32 delta)
             gText_0x14->Load();
             if (inGame)
             {
+                RefreshZoneName();
                 gHud_2B00->RecalcTextLayout();
+            }
+            else if (gFrontend)
+            {
+                RefreshFrontend();
             }
             break;
         }
