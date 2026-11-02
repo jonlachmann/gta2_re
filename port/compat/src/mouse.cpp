@@ -94,6 +94,12 @@ void port_MouseEndFrame()
     sRight = 0;
     sWheel = 0;
 
+    static bool sCursorSet;
+    if (!sCursorSet)
+    {
+        sCursorSet = true;
+        port_SetGameCursor();
+    }
     const bool show = port_MouseMode() && port_MenuUsesMouse();
     if (show != sCursorShown)
     {
