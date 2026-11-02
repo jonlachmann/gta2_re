@@ -82,8 +82,8 @@ class IRenderer
     virtual void SetClipRect(f32 left, f32 top, f32 right, f32 bottom) = 0;
 
     virtual const RenderOptions& Options() const = 0;
-    // Lights for per pixel lighting; ambient in 0..255 units as gbh_SetAmbient stores it.
-    virtual void SetLights(const RLight* pLights, s32 count, f32 ambient) = 0;
+    // Lights for per pixel lighting; ambient red, green and blue in 0..255 units as gbh_SetAmbient stores it.
+    virtual void SetLights(const RLight* pLights, s32 count, const f32* pAmbient) = 0;
 
     // Stats exposed through gbh_GetGlobals.
     virtual u32 GetDrawCallCount() const = 0;
