@@ -143,7 +143,7 @@ const char* kSceneFS =
     "            float att = (r - dist) * uLightCol[i].w;\n"
     "            vec4 s = uLightDir[i];\n"
     "            float c = dist > 0.0 ? dot(d.xy, s.xy) / dist : 0.0;\n"
-    "            if (att > 0.0 && s.w > -1.0) spots += uLightCol[i].rgb * att * smoothstep(s.z, s.w, c) * smoothstep(0.0, 0.3 * r, dist);\n"
+    "            if (att > 0.0 && s.w > -1.0) spots += uLightCol[i].rgb * att * att * smoothstep(s.z, s.w, c) * smoothstep(0.0, 0.3 * r, dist);\n"
     "            else if (att > 0.0) acc += uLightCol[i].rgb * att;\n"
     "        }\n"
     "    }\n"

@@ -387,7 +387,7 @@ f32 SmoothStep(f32 t)
 }
 
 // 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light. A spot also brightens
-// over the first 30% of its range, so it peaks ahead of its apex.
+// over the first 30% of its range and fades faster after it (its distance falloff squared).
 f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
 {
     if (light.mCosInner <= -1.0f)
@@ -395,7 +395,8 @@ f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
         return 1.0f;
     }
     const f32 c = dist > 0.0f ? (dx * light.mDx + dy * light.mDy) / dist : 0.0f;
-    return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) * SmoothStep(dist / (0.3f * light.mRadius));
+    const f32 fade = (light.mRadius - dist) * light.mInvRadius;
+    return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) * SmoothStep(dist / (0.3f * light.mRadius)) * fade;
 }
 
 // The most the spot lights together add to a point (the port's headlights), so that a group of cars
