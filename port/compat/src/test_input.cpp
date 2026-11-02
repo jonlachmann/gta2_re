@@ -6,7 +6,8 @@
 //                                                   or the mouse: "mouse.<x>x<y>" moves it to that
 //                                                   window position, "mouse.left" and "mouse.right"
 //                                                   click, "mouse.wheelup" and "mouse.wheeldown" turn
-//                                                   the wheel one notch
+//                                                   the wheel one notch; "focus.lost" and "focus.gained"
+//                                                   for the window's keyboard focus, as with Alt+Tab
 //   GTA2_EXIT_AT=<frame>                            quit at that frame
 // Frames count Vid_FlipBuffers calls, but logic steps while the game runs (port_FrameCount), so the same
 // script presses the same keys on the same game step at any frame rate.
@@ -28,7 +29,7 @@ struct KeyEvent
     int mPadButton; // -1: keyboard
     int mPadAxis;   // -1: not an axis
     Sint16 mAxisValue;
-    Uint32 mMouseEvent; // 0: not the mouse
+    Uint32 mMouseEvent; // the mouse or focus event, 0 for a key or the pad
     float mX;           // motion: the position; button: which; wheel: the notches
     float mY;
 };
@@ -98,6 +99,12 @@ void Load()
             key = key.substr(4);
         }
         const unsigned held = c2 == std::string::npos ? 2 : (unsigned)atoi(item.c_str() + c2 + 1);
+        if (key == "focus.lost" || key == "focus.gained")
+        {
+            const Uint32 type = key == "focus.lost" ? SDL_EVENT_WINDOW_FOCUS_LOST : SDL_EVENT_WINDOW_FOCUS_GAINED;
+            Events().push_back(KeyEvent{frame, SDL_SCANCODE_UNKNOWN, mod, true, -1, -1, 0, type, 0, 0});
+            continue;
+        }
         if (key.compare(0, 6, "mouse.") == 0)
         {
             const std::string name = key.substr(6);
@@ -220,6 +227,17 @@ void port_InjectTestInput(unsigned frame)
         if (it->mFrame > frame)
         {
             ++it;
+            continue;
+        }
+        if (it->mMouseEvent == SDL_EVENT_WINDOW_FOCUS_LOST || it->mMouseEvent == SDL_EVENT_WINDOW_FOCUS_GAINED)
+        {
+            SDL_Event e = {};
+            e.type = it->mMouseEvent;
+            SDL_Window* pWindow = port_MainSDLWindow();
+            e.window.windowID = pWindow ? SDL_GetWindowID(pWindow) : 0;
+            SDL_PushEvent(&e);
+            SDL_Log("test input: frame %u focus %s", frame, it->mMouseEvent == SDL_EVENT_WINDOW_FOCUS_LOST ? "lost" : "gained");
+            it = Events().erase(it);
             continue;
         }
         if (it->mMouseEvent)
