@@ -21,7 +21,8 @@ void OnVideoModeChanged();
 char_type IsWindowedModeAvailable();
 bool port_GameRunning();
 #if defined(GTA2_PORT_SDL)
-void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting);
+void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting, int textureFilter, int msaa);
+int port_MaxMsaaSamples();
 void port_ApplyVsync();
 int port_FullscreenModeCount();
 int port_FullscreenModeIndex();
@@ -40,7 +41,7 @@ const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingS
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kHeadlights};
+const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kTextureFilter, kAntiAliasing, kHeadlights};
 #else
 const Id kGraphics[] = {kHeadlights};
 #endif
@@ -51,7 +52,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE"};
+                                       L"VSYNC", L"DISPLAY MODE", L"TEXTURE FILTERING", L"ANTI-ALIASING"};
 
 struct Language
 {
@@ -64,6 +65,10 @@ const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
 const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
 const s32 kMaxFpsValues[] = {30, 60, 120, 144, 240, 0};
 const s32 kNumMaxFpsValues = sizeof(kMaxFpsValues) / sizeof(kMaxFpsValues[0]);
+const wchar_t* const kTextureFilters[] = {L"BILINEAR", L"TRILINEAR", L"ANISOTROPIC"};
+const s32 kNumTextureFilters = sizeof(kTextureFilters) / sizeof(kTextureFilters[0]);
+const s32 kMsaaValues[] = {0, 2, 4, 8};
+const s32 kNumMsaaValues = sizeof(kMsaaValues) / sizeof(kMsaaValues[0]);
 
 // A text of the port's menus: a key of the game's text table, or the text in French, German, Italian
 // and Spanish (Latin-1 letters, uppercase as the game writes them), many from GTA2 Manager's data\bob_?.gxt.
@@ -113,6 +118,11 @@ const Translation kTranslations[] = {
     {L"TRUE COLOUR", NULL, {L"VRAIES COULEURS", L"ECHTFARBEN", L"COLORI REALI", L"COLOR REAL"}},
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
+    {L"TEXTURE FILTERING", NULL, {L"FILTRAGE TEXTURES", L"TEXTURFILTER", L"FILTRO TEXTURE", L"FILTRADO TEXTURAS"}},
+    {L"BILINEAR", NULL, {L"BILINEAIRE", L"BILINEAR", L"BILINEARE", L"BILINEAL"}},
+    {L"TRILINEAR", NULL, {L"TRILINEAIRE", L"TRILINEAR", L"TRILINEARE", L"TRILINEAL"}},
+    {L"ANISOTROPIC", NULL, {L"ANISOTROPE", L"ANISOTROP", L"ANISOTROPICO", L"ANISOTRÓPICO"}},
+    {L"ANTI-ALIASING", NULL, {L"ANTICRENELAGE", L"KANTENGLÄTTUNG", L"ANTI-ALIASING", L"ANTIALIASING"}},
     {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
@@ -216,17 +226,25 @@ const char* ScreenName(Id id)
             return "gl_bloom";
         case kPerPixelLighting:
             return "gl_pixel_lighting";
+        case kTextureFilter:
+            return "gl_texture_filter";
+        case kAntiAliasing:
+            return "gl_msaa";
         default:
             return "car_headlights";
     }
 }
 
-// The game's own settings are on by default; the port's graphics additions off.
+// The game's own settings are on by default; the port's graphics additions off, except mipmaps.
 s32 ScreenDefault(Id id)
 {
     if (id == kFrameLimit)
     {
         return 30;
+    }
+    if (id == kTextureFilter)
+    {
+        return 2;
     }
     return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
@@ -235,6 +253,21 @@ s32 Screen(Id id)
 {
     return gRegistry.Get_Screen_Setting(ScreenName(id), ScreenDefault(id));
 }
+
+#if defined(GTA2_PORT_SDL)
+// The stored sample count, lowered to one the renderer can do.
+s32 MsaaIndex()
+{
+    const s32 stored = Screen(kAntiAliasing);
+    const s32 max = port_MaxMsaaSamples();
+    s32 i = kNumMsaaValues - 1;
+    while (i > 0 && (kMsaaValues[i] > stored || kMsaaValues[i] > max))
+    {
+        i--;
+    }
+    return i;
+}
+#endif
 
 // The zone name on screen is a copy of the text table's.
 void RefreshZoneName()
@@ -326,7 +359,8 @@ s32 MaxFps()
 void ApplyRenderOptions()
 {
 #if defined(GTA2_PORT_SDL)
-    port_SetRenderOptions(Screen(kTrueColour) != 0, Screen(kBloom), Screen(kPerPixelLighting) != 0);
+    port_SetRenderOptions(Screen(kTrueColour) != 0, Screen(kBloom), Screen(kPerPixelLighting) != 0,
+                          Clamp(Screen(kTextureFilter), 0, kNumTextureFilters - 1), kMsaaValues[MsaaIndex()]);
 #endif
 }
 
@@ -383,6 +417,19 @@ void Value(Id id, wchar_t* pOut)
             }
             break;
 #if defined(GTA2_PORT_SDL)
+        case kTextureFilter:
+            wcscpy(pOut, Translate(kTextureFilters[Clamp(Screen(id), 0, kNumTextureFilters - 1)]));
+            break;
+        case kAntiAliasing:
+            if (MsaaIndex())
+            {
+                swprintf(pOut, L"%dX", kMsaaValues[MsaaIndex()]);
+            }
+            else
+            {
+                wcscpy(pOut, Translate(L"OFF"));
+            }
+            break;
         case kDisplayMode:
         {
             const int index = port_FullscreenModeIndex();
@@ -507,6 +554,22 @@ void Change(Id id, s32 delta)
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             port_ApplyVsync();
             break;
+        case kTextureFilter:
+            gRegistry.Set_Screen_Setting(ScreenName(id), Wrap(Clamp(Screen(id), 0, kNumTextureFilters - 1) + delta, kNumTextureFilters));
+            ApplyRenderOptions();
+            break;
+        case kAntiAliasing:
+        {
+            const s32 max = port_MaxMsaaSamples();
+            s32 i = MsaaIndex();
+            do
+            {
+                i = Wrap(i + delta, kNumMsaaValues);
+            } while (kMsaaValues[i] > max);
+            gRegistry.Set_Screen_Setting(ScreenName(id), kMsaaValues[i]);
+            ApplyRenderOptions();
+            break;
+        }
         case kDisplayMode:
             port_SetFullscreenModeIndex(Wrap(port_FullscreenModeIndex() + delta, port_FullscreenModeCount()));
             if (gRegistry.Get_Screen_Setting("start_mode", 1))

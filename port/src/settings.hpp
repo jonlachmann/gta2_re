@@ -24,6 +24,8 @@ enum Id
     kHeadlights,
     kVsync,
     kDisplayMode,
+    kTextureFilter,
+    kAntiAliasing,
     kCount,
 };
 

@@ -42,17 +42,25 @@ void PollToggleKey(VidSystem* pSys)
 }
 } // namespace
 
-void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting)
+void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting, int textureFilter, int msaa)
 {
     sGameOptions = RenderOptions();
     sGameOptions.mTrueColour = trueColour;
     sGameOptions.mBloom = bloomTenths / 10.0f;
     sGameOptions.mPerPixelLighting = perPixelLighting;
+    sGameOptions.mTextureFilter = textureFilter;
+    sGameOptions.mMsaa = msaa;
     sHasGameOptions = true;
     if (sVidSystem)
     {
         sVidSystem->SetConfiguredOptions(sGameOptions);
     }
+}
+
+// 8 until the renderer has a context.
+int port_MaxMsaaSamples()
+{
+    return sVidSystem && sVidSystem->Renderer().MaxSamples() > 0 ? sVidSystem->Renderer().MaxSamples() : 8;
 }
 
 unsigned port_FrameCount()
