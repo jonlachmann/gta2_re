@@ -42,8 +42,8 @@ void Value(Id id, wchar_t* pOut);
 // Changing the language reloads the text table and lays the frontend's or the HUD's texts out again.
 void Change(Id id, s32 delta);
 
-// Headlights: 0 none, 1 glow (the game's point lights), 2 beams.
-s32 Headlights();
+// Car headlight beams, with the dusk lighting.
+bool Headlights();
 
 // The renderer's options from the registry, at start-up.
 void ApplyRenderOptions();
