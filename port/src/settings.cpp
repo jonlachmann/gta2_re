@@ -51,7 +51,6 @@ const Language kLanguages[] = {{'e', L"ENGLISH"}, {'f', L"FRANCAIS"}, {'g', L"DE
 const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
 
 const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
-const wchar_t* const kHeadlightNames[] = {L"OFF", L"GLOW", L"BEAMS"};
 
 // A text of the port's menus: a key of the game's text table, or the text in French, German, Italian
 // and Spanish (Latin-1 letters, uppercase as the game writes them), many from GTA2 Manager's data\bob_?.gxt.
@@ -98,8 +97,6 @@ const Translation kTranslations[] = {
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
     {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
-    {L"GLOW", NULL, {L"HALO", L"LEUCHTEN", L"ALONE", L"HALO"}},
-    {L"BEAMS", NULL, {L"FAISCEAUX", L"LICHTKEGEL", L"FASCI", L"HACES"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
     {L"GRAPHICS", NULL, {L"GRAPHISMES", L"GRAFIK", L"GRAFICA", L"GRÁFICOS"}},
     {L"CONTROLS", NULL, {L"COMMANDES", L"STEUERUNG", L"COMANDI", L"CONTROLES"}},
@@ -283,9 +280,9 @@ const wchar_t* Name(Id id)
     return kNames[id];
 }
 
-s32 Headlights()
+bool Headlights()
 {
-    return Screen(kHeadlights);
+    return Screen(kHeadlights) != 0;
 }
 
 void ApplyRenderOptions()
@@ -331,9 +328,6 @@ void Value(Id id, wchar_t* pOut)
             {
                 wcscpy(pOut, Translate(L"OFF"));
             }
-            break;
-        case kHeadlights:
-            wcscpy(pOut, Translate(kHeadlightNames[Clamp(Screen(id), 0, 2)]));
             break;
         default:
             wcscpy(pOut, Translate(Screen(id) ? L"ON" : L"OFF"));
@@ -423,7 +417,7 @@ void Change(Id id, s32 delta)
             ApplyRenderOptions();
             break;
         case kHeadlights:
-            gRegistry.Set_Screen_Setting(ScreenName(id), Wrap(Screen(id) + delta, 3));
+            gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
