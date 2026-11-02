@@ -40,6 +40,8 @@ struct Sample
     S32 mLoopEnd = -1;
     U32 mStatus = SMP_DONE;
     double mPos = 0; // in frames
+    float mGain[2] = {-1, -1}; // left and right as mixed, -1 until the first frame
+    int mFade = -1;            // frames left in a fade-out, -1 when not stopping
 };
 
 // A WAV file read block by block on the audio thread.
@@ -63,6 +65,13 @@ struct Stream
     std::vector<s16> mBuf; // decoded frames, interleaved
     u32 mBufFirst = 0;     // frame index of mBuf[0]
     double mPos = 0;       // frame position
+    float mGain = -1;
+    int mFade = -1;
+
+    // The frames on each side of the position, for the interpolation.
+    u32 mCurFrame = UINT_MAX;
+    float mCur[2] = {};
+    float mNext[2] = {};
 };
 
 struct Driver
@@ -71,7 +80,31 @@ struct Driver
     S32 mMasterVolume = 127;
     std::vector<Sample*> mSamples;
     std::vector<Stream*> mStreams;
+    // Copies of samples stopped while playing, and closed streams, until their fade-out ends.
+    std::vector<Sample*> mFadingSamples;
+    std::vector<Stream*> mFadingStreams;
 };
+
+// A stop fades out, and a volume or pan change ramps, over this many frames (7.5 ms), as a step in the
+// waveform clicks.
+const int kRampFrames = kOutRate * 3 / 400;
+
+float Ramp(float current, float target)
+{
+    const float step = 1.0f / kRampFrames;
+    return current < 0 ? target : current + SDL_clamp(target - current, -step, step);
+}
+
+// 1 while playing, then down to 0 over a fade-out; false once it ended.
+bool FadeStep(int* pFade, float* pGain)
+{
+    if (*pFade == 0)
+    {
+        return false;
+    }
+    *pGain = *pFade > 0 ? (float)(*pFade)-- / kRampFrames : 1.0f;
+    return true;
+}
 
 Driver* sDriver;
 
@@ -243,6 +276,34 @@ bool FillStream(Stream* s, u32 f)
     return true;
 }
 
+bool StreamFrame(Stream* s, u32 f, float* pL, float* pR);
+
+// Frames f and f + 1; moving on by one frame reads only the new one, so a block is not read again.
+bool StreamFrames(Stream* s, u32 f)
+{
+    if (f == s->mCurFrame)
+    {
+        return true;
+    }
+    if (s->mCurFrame != UINT_MAX && f == s->mCurFrame + 1)
+    {
+        s->mCur[0] = s->mNext[0];
+        s->mCur[1] = s->mNext[1];
+    }
+    else if (!StreamFrame(s, f, &s->mCur[0], &s->mCur[1]))
+    {
+        return false;
+    }
+    s->mCurFrame = f;
+    const u32 next = f + 1 < s->mTotalFrames ? f + 1 : (s->mLoopCount == 1 ? f : 0);
+    if (!StreamFrame(s, next, &s->mNext[0], &s->mNext[1]))
+    {
+        s->mNext[0] = s->mCur[0];
+        s->mNext[1] = s->mCur[1];
+    }
+    return true;
+}
+
 bool StreamFrame(Stream* s, u32 f, float* pL, float* pR)
 {
     if (f < s->mBufFirst || f >= s->mBufFirst + s->mBuf.size() / s->mChannels)
@@ -294,6 +355,14 @@ void MixSample(Sample* s, float* out, int frames)
     const float right = vol * SDL_min(1.0f, s->mPan / 63.5f);
     for (int i = 0; i < frames; i++)
     {
+        float fade;
+        if (!FadeStep(&s->mFade, &fade))
+        {
+            s->mStatus = SMP_DONE;
+            return;
+        }
+        s->mGain[0] = Ramp(s->mGain[0], left);
+        s->mGain[1] = Ramp(s->mGain[1], right);
         u32 f = (u32)s->mPos;
         if (f >= loopEnd)
         {
@@ -318,8 +387,8 @@ void MixSample(Sample* s, float* out, int frames)
         const u32 f2 = f + 1 < loopEnd ? f + 1 : f;
         const float l = SampleValue(s, f, 0) * (1 - t) + SampleValue(s, f2, 0) * t;
         const float r = SampleValue(s, f, 1) * (1 - t) + SampleValue(s, f2, 1) * t;
-        out[i * 2] += l * left;
-        out[i * 2 + 1] += r * right;
+        out[i * 2] += l * s->mGain[0] * fade;
+        out[i * 2 + 1] += r * s->mGain[1] * fade;
         s->mPos += step;
     }
 }
@@ -330,6 +399,13 @@ void MixStream(Stream* s, float* out, int frames)
     const float vol = s->mVolume / 127.0f * sDriver->mMasterVolume / 127.0f;
     for (int i = 0; i < frames; i++)
     {
+        float fade;
+        if (!FadeStep(&s->mFade, &fade))
+        {
+            s->mStatus = SMP_DONE;
+            return;
+        }
+        s->mGain = Ramp(s->mGain, vol);
         u32 f = (u32)s->mPos;
         if (f >= s->mTotalFrames)
         {
@@ -345,15 +421,15 @@ void MixStream(Stream* s, float* out, int frames)
             s->mPos = 0;
             f = 0;
         }
-        float l;
-        float r;
-        if (!StreamFrame(s, f, &l, &r))
+        if (!StreamFrames(s, f))
         {
             s->mStatus = SMP_DONE;
             return;
         }
-        out[i * 2] += l * vol;
-        out[i * 2 + 1] += r * vol;
+        const float t = (float)(s->mPos - f);
+        const float gain = s->mGain * fade;
+        out[i * 2] += (s->mCur[0] * (1 - t) + s->mNext[0] * t) * gain;
+        out[i * 2 + 1] += (s->mCur[1] * (1 - t) + s->mNext[1] * t) * gain;
         s->mPos += step;
     }
 }
@@ -425,6 +501,31 @@ void SDLCALL AudioCallback(void*, SDL_AudioStream* stream, int additional, int)
                     MixStream(s, mix.data(), frames);
                 }
             }
+            for (size_t i = 0; i < sDriver->mFadingSamples.size();)
+            {
+                Sample* s = sDriver->mFadingSamples[i];
+                MixSample(s, mix.data(), frames);
+                if (s->mStatus == SMP_PLAYING)
+                {
+                    i++;
+                    continue;
+                }
+                delete s;
+                sDriver->mFadingSamples.erase(sDriver->mFadingSamples.begin() + i);
+            }
+            for (size_t i = 0; i < sDriver->mFadingStreams.size();)
+            {
+                Stream* s = sDriver->mFadingStreams[i];
+                MixStream(s, mix.data(), frames);
+                if (s->mStatus == SMP_PLAYING)
+                {
+                    i++;
+                    continue;
+                }
+                fclose(s->mFile);
+                delete s;
+                sDriver->mFadingStreams.erase(sDriver->mFadingStreams.begin() + i);
+            }
         }
     }
     Miles3D_Render(mix.data(), frames);
@@ -439,6 +540,37 @@ void SDLCALL AudioCallback(void*, SDL_AudioStream* stream, int additional, int)
 Sample* S(HSAMPLE h)
 {
     return reinterpret_cast<Sample*>(h);
+}
+
+// Stops the sample at once for the game, while a copy of it fades out.
+void StopSample(Sample* s)
+{
+    if (sDriver && s->mStatus == SMP_PLAYING && s->mFade < 0)
+    {
+        Sample* pCopy = new Sample(*s);
+        pCopy->mFade = kRampFrames;
+        sDriver->mFadingSamples.push_back(pCopy);
+    }
+    s->mStatus = SMP_DONE;
+}
+
+void DropFading()
+{
+    if (!sDriver)
+    {
+        return;
+    }
+    for (Sample* s : sDriver->mFadingSamples)
+    {
+        delete s;
+    }
+    for (Stream* s : sDriver->mFadingStreams)
+    {
+        fclose(s->mFile);
+        delete s;
+    }
+    sDriver->mFadingSamples.clear();
+    sDriver->mFadingStreams.clear();
 }
 
 Stream* St(HSTREAM h)
@@ -456,6 +588,9 @@ DXDEC void FAR* AILCALL AIL_mem_alloc_lock(U32 size)
 
 DXDEC void AILCALL AIL_mem_free_lock(void FAR* ptr)
 {
+    // The fading copies of samples may point into it.
+    LOCK;
+    DropFading();
     free(ptr);
 }
 
@@ -516,6 +651,7 @@ DXDEC S32 AILCALL AIL_waveOutOpen(HDIGDRIVER FAR* drvr, LPHWAVEOUT FAR*, S32, LP
 DXDEC void AILCALL AIL_waveOutClose(HDIGDRIVER)
 {
     LOCK;
+    DropFading();
     delete sDriver;
     sDriver = NULL;
 }
@@ -555,6 +691,7 @@ DXDEC void AILCALL AIL_release_sample_handle(HSAMPLE h)
     LOCK;
     if (sDriver && h)
     {
+        StopSample(S(h));
         sDriver->mSamples.erase(std::find(sDriver->mSamples.begin(), sDriver->mSamples.end(), S(h)));
         delete S(h);
     }
@@ -563,16 +700,17 @@ DXDEC void AILCALL AIL_release_sample_handle(HSAMPLE h)
 DXDEC void AILCALL AIL_init_sample(HSAMPLE h)
 {
     LOCK;
+    StopSample(S(h));
     *S(h) = Sample();
 }
 
 DXDEC void AILCALL AIL_set_sample_address(HSAMPLE h, void FAR* start, U32 len)
 {
     LOCK;
+    StopSample(S(h));
     S(h)->mData = static_cast<const u8*>(start);
     S(h)->mLen = len;
     S(h)->mPos = 0;
-    S(h)->mStatus = SMP_DONE;
 }
 
 DXDEC void AILCALL AIL_set_sample_type(HSAMPLE h, S32 format, U32 flags)
@@ -585,14 +723,16 @@ DXDEC void AILCALL AIL_set_sample_type(HSAMPLE h, S32 format, U32 flags)
 DXDEC void AILCALL AIL_start_sample(HSAMPLE h)
 {
     LOCK;
+    StopSample(S(h));
     S(h)->mPos = 0;
+    S(h)->mGain[0] = S(h)->mGain[1] = -1;
     S(h)->mStatus = SMP_PLAYING;
 }
 
 DXDEC void AILCALL AIL_end_sample(HSAMPLE h)
 {
     LOCK;
-    S(h)->mStatus = SMP_DONE;
+    StopSample(S(h));
 }
 
 DXDEC void AILCALL AIL_set_sample_playback_rate(HSAMPLE h, S32 playback_rate)
@@ -665,6 +805,12 @@ DXDEC void AILCALL AIL_close_stream(HSTREAM h)
     if (sDriver && h)
     {
         sDriver->mStreams.erase(std::find(sDriver->mStreams.begin(), sDriver->mStreams.end(), St(h)));
+        if (St(h)->mStatus == SMP_PLAYING)
+        {
+            St(h)->mFade = kRampFrames;
+            sDriver->mFadingStreams.push_back(St(h));
+            return;
+        }
         fclose(St(h)->mFile);
         delete St(h);
     }
@@ -674,6 +820,8 @@ DXDEC void AILCALL AIL_start_stream(HSTREAM h)
 {
     LOCK;
     St(h)->mPos = 0;
+    St(h)->mGain = -1;
+    St(h)->mCurFrame = UINT_MAX;
     St(h)->mStatus = SMP_PLAYING;
 }
 
@@ -718,6 +866,7 @@ DXDEC void AILCALL AIL_set_stream_ms_position(HSTREAM h, S32 milliseconds)
     LOCK;
     Stream* s = St(h);
     s->mPos = SDL_min((double)milliseconds * s->mRate / 1000.0, (double)s->mTotalFrames);
+    s->mCurFrame = UINT_MAX;
 }
 
 DXDEC void AILCALL AIL_stream_ms_position(HSTREAM h, S32 FAR* total_milliseconds, S32 FAR* current_milliseconds)
