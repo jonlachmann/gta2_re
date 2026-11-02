@@ -13,7 +13,7 @@
 #include <string.h>
 
 #if defined(GTA2_PORT_SDL)
-void port_SetViewTurn(bool on, f32 cx, f32 cy, f32 c, f32 s, f32 tx, f32 ty);
+void port_SetViewTurn(s32 kind, f32 cx, f32 cy, f32 c, f32 s, f32 tx, f32 ty, f32 cosP, f32 sinP, f32 scale, f32 markerDepth);
 #endif
 
 namespace PortView
@@ -34,6 +34,9 @@ const s32 kMaxStep = 6 * 4 * kSub;
 const s32 kFastSpeed = 4 * 16384;
 // Backing up this many steps turns the view round (Chinatown Wars' Auto Reverse).
 const s32 kReverseSteps = 40;
+// The tilt in 1/256 degrees: the CAMERA TILT setting, up to half as much again in a fast vehicle, eased in.
+const s32 kMaxPitch = 20 * 256;
+const s32 kPitchFollow = 12;
 // The farthest the subject is drawn from the screen's centre, in half screen heights.
 const f32 kMaxLead = 0.5f;
 
@@ -42,6 +45,8 @@ s32 sPrevYaw;
 bool sValid;
 bool sRecentre;
 s32 sReverse;
+s32 sPitch;
+s32 sPrevPitch;
 Car* spCar;
 f32 sStepCos = 1.0f;
 f32 sStepSin;
@@ -53,6 +58,11 @@ f32 sCx;
 f32 sCy;
 f32 sMarkX;
 f32 sMarkY;
+f32 sCosP = 1.0f;
+f32 sSinP;
+f32 sScale = 1.0f;
+f32 sHalfHeight = 1.0f;
+f32 sMarkerDepth = 1.0f;
 Camera* spCamera;
 u8 sCameraBytes[sizeof(Camera)];
 
@@ -87,7 +97,7 @@ Ped* Subject(Player* pPlayer)
     return pPlayer->mCameraMode == 2 ? pPlayer->mAuxPed : pPlayer->mPlayerPed;
 }
 
-s32 CarTarget(Car* pCar, s32* pFollow)
+s32 CarTarget(Car* pCar, s32* pFollow, s32* pSpeed)
 {
     const Ang16 rotation = pCar->GetCarRotation();
     const Fix16_Point velocity = pCar->GetLinearVelocity();
@@ -99,6 +109,7 @@ s32 CarTarget(Car* pCar, s32* pFollow)
     s32 speed = velocity.GetLength_41E260().mValue * 16;
     speed = speed < kFastSpeed ? speed : kFastSpeed;
     *pFollow = kFollowSlow + (kFollowFast - kFollowSlow) * (speed / 64) / (kFastSpeed / 64);
+    *pSpeed = (speed / 64) * 256 / (kFastSpeed / 64);
     return (rotation.rValue + 720 + (sReverse >= kReverseSteps ? 720 : 0)) * kSub;
 }
 
@@ -131,11 +142,25 @@ void Lead(Camera* pCamera)
     lx = lx < -limit ? -limit : (lx > limit ? limit : lx);
     ly = ly < -limit ? -limit : (ly > limit ? limit : ly);
     const f32 dx = sCos * ox - sSin * oy - (lx - px);
-    const f32 dy = sSin * ox + sCos * oy - (ly - py);
+    sMarkerDepth = depth;
+    // Tilted, the subject seen as far below the centre as unturned: the eye goes back by depth * tan(pitch).
+    const f32 tilted = scale * tanf(atanf((ly - py) / scale) - atan2f(sSinP, sCosP));
+    const f32 dy = sSin * ox + sCos * oy - tilted;
     sMarkX = -(sCos * dx + sSin * dy);
     sMarkY = -(-sSin * dx + sCos * dy);
     pCamera->mCurPos.mX += Fix16(-sMarkX * depth / scale);
     pCamera->mCurPos.mY += Fix16(-sMarkY * depth / scale);
+}
+
+// Half extents of the view at some depth grown to the tilted view's (symmetric about the eye, which keeps the
+// map's far to near order), then to the bounding box of the turned ones.
+void TurnExtent(f32* pHalfX, f32* pHalfY)
+{
+    const f32 v = sHalfHeight;
+    const f32 x = *pHalfX / (sCosP - v * sSinP);
+    const f32 y = *pHalfY * (sCosP + sSinP / v) / (sCosP - v * sSinP);
+    *pHalfX = fabsf(sCos) * x + fabsf(sSin) * y;
+    *pHalfY = fabsf(sSin) * x + fabsf(sCos) * y;
 }
 
 // The sprites drawn are those of the turned view's bounding box.
@@ -144,10 +169,11 @@ void WidenBounds(Camera* pCamera)
     WorldRect& bounds = pCamera->mViewBounds;
     const Fix16 x = pCamera->mCurPos.mX;
     const Fix16 y = pCamera->mCurPos.mY;
-    const f32 hx = ToF(bounds.mRight - x > x - bounds.mLeft ? bounds.mRight - x : x - bounds.mLeft);
-    const f32 hy = ToF(bounds.mBottom - y > y - bounds.mTop ? bounds.mBottom - y : y - bounds.mTop);
-    const Fix16 turnedX(fabsf(sCos) * hx + fabsf(sSin) * hy);
-    const Fix16 turnedY(fabsf(sSin) * hx + fabsf(sCos) * hy);
+    f32 hx = ToF(bounds.mRight - x > x - bounds.mLeft ? bounds.mRight - x : x - bounds.mLeft);
+    f32 hy = ToF(bounds.mBottom - y > y - bounds.mTop ? bounds.mBottom - y : y - bounds.mTop);
+    TurnExtent(&hx, &hy);
+    const Fix16 turnedX(hx);
+    const Fix16 turnedY(hy);
     bounds.mLeft = x - turnedX;
     bounds.mRight = x + turnedX;
     bounds.mTop = y - turnedY;
@@ -158,6 +184,7 @@ void WidenBounds(Camera* pCamera)
 void Snapshot()
 {
     sPrevYaw = sYaw;
+    sPrevPitch = sPitch;
 }
 
 void Clear()
@@ -165,6 +192,8 @@ void Clear()
     sValid = false;
     sYaw = 0;
     sPrevYaw = 0;
+    sPitch = 0;
+    sPrevPitch = 0;
     spCar = NULL;
 }
 
@@ -180,10 +209,13 @@ void Step()
     }
     s32 target = sYaw;
     s32 follow = kFollowFast;
+    s32 speed = 0;
+    s32 pitch = PortSettings::CameraTilt() * 256;
     Car* pCar = NULL;
     if (Scripted(pPlayer))
     {
         target = 0;
+        pitch = 0;
     }
     else
     {
@@ -192,7 +224,9 @@ void Step()
         if (pCar && pCar->mCarSprite)
         {
             sRecentre = sRecentre || pCar != spCar;
-            target = CarTarget(pCar, &follow);
+            target = CarTarget(pCar, &follow, &speed);
+            pitch += pitch * speed / 512;
+            pitch = pitch < kMaxPitch ? pitch : kMaxPitch;
         }
         else
         {
@@ -206,6 +240,8 @@ void Step()
     {
         sYaw = target;
         sPrevYaw = target;
+        sPitch = pitch;
+        sPrevPitch = pitch;
         sValid = true;
     }
     else
@@ -213,6 +249,7 @@ void Step()
         s32 step = static_cast<s32>(static_cast<long long>(left) * (sRecentre ? kFollowRecentre : follow) / 256);
         step = step < -kMaxStep ? -kMaxStep : (step > kMaxStep ? kMaxStep : step);
         sYaw = (sYaw + step + kTurn) % kTurn;
+        sPitch += (pitch - sPitch) * kPitchFollow / 256;
     }
     if (left < 10 * 4 * kSub && left > -10 * 4 * kSub)
     {
@@ -228,6 +265,11 @@ f32 Yaw(f32 alpha)
     return yaw < 0.0f ? yaw + 1440.0f : yaw;
 }
 
+f32 Pitch(f32 alpha)
+{
+    return (sPrevPitch + (sPitch - sPrevPitch) * alpha) / 256.0f;
+}
+
 void BeginDraw(f32 alpha)
 {
     sDrawn = false;
@@ -239,8 +281,14 @@ void BeginDraw(f32 alpha)
     const f32 yaw = Radians(Yaw(alpha) * kSub);
     sCos = cosf(yaw);
     sSin = sinf(yaw);
+    const f32 pitch = Pitch(alpha) * (3.14159265f / 180.0f);
+    sCosP = cosf(pitch);
+    sSinP = sinf(pitch);
     sMarkX = 0.0f;
     sMarkY = 0.0f;
+    sScale = ToF(pCamera->mScreenScale.x);
+    sHalfHeight = pCamera->mScreenPxHeight / (2.0f * sScale);
+    sMarkerDepth = ToF(pCamera->mCurPos.mZ) + 6.0f;
     memcpy(sCameraBytes, pCamera, sizeof(Camera));
     spCamera = pCamera;
     Lead(pCamera);
@@ -265,19 +313,32 @@ void EndDraw()
 void SetTurn(Turn turn)
 {
 #if defined(GTA2_PORT_SDL)
-    const bool on = sDrawn && turn != kOff;
-    port_SetViewTurn(on, sCx, sCy, sCos, sSin, turn == kMarkers ? sMarkX : 0.0f, turn == kMarkers ? sMarkY : 0.0f);
+    port_SetViewTurn(sDrawn ? turn : kOff,
+                     sCx,
+                     sCy,
+                     sCos,
+                     sSin,
+                     turn == kMarkers ? sMarkX : 0.0f,
+                     turn == kMarkers ? sMarkY : 0.0f,
+                     sCosP,
+                     sSinP,
+                     sScale,
+                     sMarkerDepth);
 #endif
 }
 
-void TurnPoint(Fix16& x, Fix16& y)
+void TurnPoint(Fix16& x, Fix16& y, Fix16 z)
 {
     if (sDrawn)
     {
         const f32 dx = ToF(x) - sCx;
         const f32 dy = ToF(y) - sCy;
-        x = Fix16(sCx + sCos * dx - sSin * dy);
-        y = Fix16(sCy + sSin * dx + sCos * dy);
+        const f32 rx = sCos * dx - sSin * dy;
+        const f32 ry = sSin * dx + sCos * dy;
+        const f32 d = ToF(spCamera->mCurPos.mZ - z) + 8.0f;
+        const f32 k = d / (d * sCosP - ry * d / sScale * sSinP);
+        x = Fix16(sCx + rx * k);
+        y = Fix16(sCy + (ry * sCosP + sScale * sSinP) * k);
     }
 }
 } // namespace PortView
@@ -286,10 +347,11 @@ void PortViewTurnedExtent(Fix16& width, Fix16& height)
 {
     if (PortView::sDrawn)
     {
-        const f32 w = PortView::ToF(width);
-        const f32 h = PortView::ToF(height);
-        width = Fix16(fabsf(PortView::sCos) * w + fabsf(PortView::sSin) * h);
-        height = Fix16(fabsf(PortView::sSin) * w + fabsf(PortView::sCos) * h);
+        f32 w = PortView::ToF(width);
+        f32 h = PortView::ToF(height);
+        PortView::TurnExtent(&w, &h);
+        width = Fix16(w);
+        height = Fix16(h);
     }
 }
 

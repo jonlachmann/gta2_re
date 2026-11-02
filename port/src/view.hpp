@@ -20,14 +20,18 @@ enum Turn
 {
     kOff,
     kWorld,
+    // Sprites keep their shape: only their centre is tilted.
+    kSprites,
     // HUD markers placed with the game camera: also moved as the drawn camera was.
     kMarkers,
 };
 void SetTurn(Turn turn);
 
-// A screen point turned about the screen's centre (upright text anchored in the world).
-void TurnPoint(Fix16& x, Fix16& y);
+// A screen point of height z turned and tilted with the view (upright text anchored in the world).
+void TurnPoint(Fix16& x, Fix16& y, Fix16 z);
 
 // The turn drawn at alpha between the last two steps, in Ang16 units, for the trace.
 f32 Yaw(f32 alpha);
+// The same for the tilt, in degrees.
+f32 Pitch(f32 alpha);
 } // namespace PortView

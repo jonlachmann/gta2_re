@@ -3,6 +3,9 @@
 #include "enums.hpp"
 #include "error.hpp"
 #include "sprite.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/view.hpp"
+#endif
 
 // Forward declarations: the functions below are in address order
 EXPORT s32 get_rdtsc();
@@ -41,7 +44,13 @@ MATCH_FUNC(0x495560)
 void SpriteRenderer::Draw(s32 layer)
 {
     const s32 rdtsc = get_rdtsc();
+#if defined(GTA2_PORT)
+    PortView::SetTurn(PortView::kSprites);
     mLayers[layer - 1]->Draw();
+    PortView::SetTurn(PortView::kWorld);
+#else
+    mLayers[layer - 1]->Draw();
+#endif
     gDisplayDraw += get_rdtsc() - rdtsc;
 }
 
