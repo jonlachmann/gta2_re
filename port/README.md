@@ -27,8 +27,8 @@ cmake -S port -B build_linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain
 ninja -C build_linux
 ```
 
-Run it from a copy of the game folder (it writes `gta2_registry.ini` and the saves there), or set
-`GTA2_DIR` to that folder:
+On its first start the port asks for the game's files (see [Game data](#game-data-and-first-start)).
+A developer can also run it from a copy of the game folder, or point `GTA2_DIR` to one:
 
 ```bash
 GTA2_DIR=~/games/gta2 ./build_linux/gta2
@@ -41,6 +41,59 @@ The menus also take the mouse: pointing selects, a click enters or changes a val
 button goes back, the wheel changes a value; the cursor shows while the mouse is in use over a menu.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
+
+## Game data and first start
+
+The port does not include GTA2's files. It runs in the first of these folders that holds the game's
+data (`data/fstyle.sty`), and writes its settings and saves there:
+
+1. `GTA2_DIR`, if set;
+2. the current folder, then the executable's folder (a game folder the port was copied into);
+3. the per-user folder, which the setup fills. Packages (AppImage, Flatpak, a macOS bundle, an
+   installed Windows build) always end up here: nothing is written next to the executable.
+
+| Platform | Per-user folder (`SDL_GetPrefPath`) |
+|---|---|
+| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` |
+| Flatpak | `~/.var/app/<app id>/data/gta2_re/` |
+| Windows | `%APPDATA%\gta2_re\` |
+| macOS | `~/Library/Application Support/gta2_re/` |
+
+It holds `data/` (the game's data, the music in `data/GTAudio/`), `gta2_registry.ini` (settings),
+`gta2gl.ini` (renderer options), `player/` (saves and high scores) and `test/` (replays, logs).
+
+Without the data there, a message box offers three choices:
+
+- **Use an existing install:** a GTA2 folder (the one holding `data`, or `data` itself). Its
+  `data` folder is copied, with `gta2_registry.ini`, `gta2gl.ini` and `player/` if the port ran there.
+- **Install from a file:** an installer, archive or disc image, read by the port (nothing is run).
+- **I don't have the game:** a short text (`kNoGameText` in `setup/setup.cpp`) and a link to the
+  Internet Archive's copy of Rockstar's former download page.
+
+The files are copied into a temporary folder, checked (the essential files are listed in
+`setup/install.cpp`), then moved into place. Without the music (the 22 tracks of `GTAudio` on the
+original CD) the game runs, and the setup offers to add it from a folder (the CD, its `GTAudio`), a
+disc image or an archive. `gta2 --setup` shows the setup again, to replace the data or add the music.
+
+| Source | Read |
+|---|---|
+| Folder | yes |
+| `.zip` (also self-extracting) | yes (miniz) |
+| `.7z` | yes (LZMA SDK; a solid block is unpacked in memory) |
+| `.iso`, `.bin` (ISO 9660, Joliet) | yes |
+| NSIS installer `.exe` (2.x and 3.x, LZMA or deflate, solid or not), for example the community one | yes |
+| NSIS with bzip2 or the x86 filter, Unicode NSIS 2 ("Park") | no |
+| InstallShield installer or cabinets (`data1.cab`): the original CD and the 2004 Rockstar Classics `GTA2.exe` | no: install the game with it, then use the folder |
+| Inno Setup | no: install it, or unpack it with innoextract |
+
+InstallShield would need its cabinet format (unshield, MIT, with zlib) and, for the Rockstar Classics
+`GTA2.exe`, the outer setup wrapper that holds the cabinets.
+
+Message boxes are SDL's: task dialogs on Windows, `NSAlert` on macOS. On Linux, zenity if installed
+(GTK dialogs), else SDL's own X11 box; when neither is available (a Flatpak on Wayland without the X11
+socket) the port draws the question in a window of its own. The folder and file pickers are SDL's
+(the xdg-desktop-portal on Linux, so they work in a Flatpak, else zenity). The progress is a small SDL
+window; closing it cancels the copy.
 
 ## Frame rate
 
@@ -90,6 +143,15 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 `-DHAVE_WFUNCTION_EFFECTS=OFF` works around recent clang rejecting OpenAL Soft 1.25.2's
 `-Werror=function-effects`.
 
+## Third-party code
+
+| Code | Version | License | Use |
+|---|---|---|---|
+| [SDL 3](https://libsdl.org) | 3.4 | zlib | platform layer (linked) |
+| [OpenAL Soft](https://github.com/kcat/openal-soft) | 1.25.2 | LGPL | 3D sound (loaded at run time, optional) |
+| [miniz](https://github.com/richgel999/miniz/releases/tag/3.1.2) | 3.1.2 | MIT | `third_party/miniz`: zip, deflate |
+| [LZMA SDK](https://www.7-zip.org/sdk.html) ([lzma2605.7z](https://github.com/ip7z/7zip/releases/download/26.05/lzma2605.7z)) | 26.05 | public domain | `third_party/lzma`: 7z, LZMA (the decoder files of `C/`, unchanged) |
+
 ## Layout
 
 - `compat/`: the Win32 subset the game calls, on SDL3 and POSIX (window, registry, files,
@@ -98,6 +160,8 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
   MinGW's headers declare it and `win32_redirect.hpp` sends the game's calls to the same code.
 - `renderer/`: the OpenGL ES renderer behind the game's `gbh_*` and `Vid_*` tables.
 - `include/`: copies of headers whose originals don't build outside MSVC.
+- `setup/`: the game folder and the first-start setup (archive readers, copy, message boxes).
+- `third_party/`: vendored libraries, with their licenses.
 
 ## Unattended runs
 
@@ -115,6 +179,9 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 | `GTA2_NO_MESSAGEBOX=1` | message boxes only logged, never shown |
 | `GTA2_AUDIO_DRIVER`, `GTA2_AUDIO_FILE` | SDL's audio driver and disk output file (wine hides `SDL_*` variables from Windows programs) |
 | `GTA2_DEBUG_OUTPUT=1` | the game's debug strings on stderr |
+| `GTA2_SETUP_PATH=<folder or file>` | the setup installs from it, without the first question and the dialog (messages shown after it still wait, unless `GTA2_NO_MESSAGEBOX=1`) |
+| `GTA2_SETUP_DRAWN=1` | the setup's questions in its own window, not in message boxes |
+| `GTA2_SETUP_CAPTURE=<dir>` | the setup's windows written there as BMP |
 
 Frames count presented frames, except that while the game runs they count its logic steps, so a
 script does the same at any frame rate. A run nobody sees, with the sound written to a file:

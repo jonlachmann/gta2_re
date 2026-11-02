@@ -51,6 +51,23 @@ else()
     add_library(gta2gl STATIC ${renderer_src})
     target_link_libraries(gta2gl PRIVATE SDL3::SDL3)
 
+    # First-run setup (setup/): the game folder, and copying the game's data into the per-user one
+    # from an install, an archive or an installer, with miniz and the LZMA SDK's decoders.
+    set(third_party ${CMAKE_CURRENT_LIST_DIR}/third_party)
+    set(lzma_src 7zAlloc 7zArcIn 7zBuf 7zBuf2 7zCrc 7zCrcOpt 7zDec 7zFile 7zStream Bcj2 Bra Bra86 BraIA64
+        CpuArch Delta Lzma2Dec LzmaDec Ppmd7 Ppmd7Dec)
+    list(TRANSFORM lzma_src PREPEND ${third_party}/lzma/)
+    list(TRANSFORM lzma_src APPEND .c)
+    file(GLOB setup_src ${CMAKE_CURRENT_LIST_DIR}/setup/*.cpp)
+    add_library(gta2setup STATIC ${setup_src} ${lzma_src} ${third_party}/miniz/miniz.c)
+    target_include_directories(gta2setup PRIVATE ${third_party}/lzma ${third_party}/miniz)
+    target_compile_definitions(gta2setup PRIVATE _FILE_OFFSET_BITS=64)
+    target_link_libraries(gta2setup PRIVATE SDL3::SDL3)
+    if(NOT WIN32)
+        # The C++ library's wchar_t.
+        target_compile_options(gta2setup PRIVATE -fno-short-wchar)
+    endif()
+
     set(compat ${CMAKE_CURRENT_LIST_DIR}/compat)
     set(compat_src crt cursor dinput dll guids kernel main miles mouse pad miles3d registry test_input video_port window)
     if(NOT WIN32)
@@ -77,7 +94,7 @@ else()
         ${ROOT}/Source/3rdParty/bink.cpp
         src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
-    target_link_libraries(gta2 PRIVATE gta2gl SDL3::SDL3)
+    target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3)
     if(openal_runtime)
         add_custom_command(TARGET gta2 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${openal_runtime} $<TARGET_FILE_DIR:gta2>)
@@ -85,7 +102,7 @@ else()
 
     if(WIN32)
         # MinGW's headers declare the Win32 API; win32_redirect.hpp sends the game's calls to compat/.
-        target_sources(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/resources.rc)
+        target_sources(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/resources.rc ${CMAKE_CURRENT_LIST_DIR}/setup/manifest.rc)
         set_target_properties(gta2 PROPERTIES WIN32_EXECUTABLE ON)
         target_compile_options(gta2 PRIVATE -include ${compat}/win32_redirect.hpp)
         target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
