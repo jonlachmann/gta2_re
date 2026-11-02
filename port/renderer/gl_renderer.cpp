@@ -112,6 +112,7 @@ const char* kSceneFS =
     "uniform int uPerPixel;\n"
     "uniform int uNumLights;\n"
     "uniform vec3 uAmbient;\n"
+    "uniform float uUnlitAmbient;\n"
     "uniform int uShadow;\n"
     "layout(std140) uniform Lights\n"
     "{\n"
@@ -193,7 +194,7 @@ const char* kSceneFS =
     "    vec4 c = vCol;\n"
     "    if (uPerPixel != 0 && vLit > 0.5)\n"
     "    {\n"
-    "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * LightSum() + uAmbient) / 255.0, vec3(1.0)), vUnlit.a);\n"
+    "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * LightSum() + uAmbient * (1.0 - uUnlitAmbient * (1.0 - vUnlit.rgb))) / 255.0, vec3(1.0)), vUnlit.a);\n"
     "    }\n"
     "    oColor = t * c;\n"
     "    oShadow = vec4(0.0, 0.0, 0.0, oColor.a);\n"
@@ -357,7 +358,7 @@ GLRenderer::GLRenderer()
       mDownProgram(0), mBlurProgram(0), mComposeProgram(0), mVao(0), mVbo(0), mLightUbo(0), mSamplerNearest(0), mSamplerLinear(0),
       mSamplerMip(0), mMaxAnisotropy(1.0f), mWhiteTex(0), mSurfaceTex(0), mSurfaceW(0), mSurfaceH(0), mBatchTex(0), mBatchState(0), mAppliedState(0), mStateValid(false),
       mOffsetX(0.5f - 1.0f / 2048.0f), mOffsetY(0.5f - 1.0f / 2048.0f), mSampleShift(1.0f / 1024.0f), mNumLights(0),
-      mAmbient{255.0f, 255.0f, 255.0f}, mDrawCalls(0), mUploads(0), mVertices(0)
+      mAmbient{255.0f, 255.0f, 255.0f}, mUnlitAmbient(0.0f), mDrawCalls(0), mUploads(0), mVertices(0)
 {
     memset(mScene, 0, sizeof(mScene));
     mActiveScene = 0;
@@ -449,6 +450,7 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
         sp.mPerPixel = gl.glGetUniformLocation(sp.mId, "uPerPixel");
         sp.mNumLights = gl.glGetUniformLocation(sp.mId, "uNumLights");
         sp.mAmbient = gl.glGetUniformLocation(sp.mId, "uAmbient");
+        sp.mUnlitAmbient = gl.glGetUniformLocation(sp.mId, "uUnlitAmbient");
         sp.mShadow = gl.glGetUniformLocation(sp.mId, "uShadow");
         gl.glUseProgram(sp.mId);
         gl.glUniform1i(gl.glGetUniformLocation(sp.mId, "uTex"), 0);
@@ -963,7 +965,7 @@ void GLRenderer::SetClipRect(f32, f32, f32, f32)
 {
 }
 
-void GLRenderer::SetLights(const RLight* pLights, s32 count, const f32* pAmbient)
+void GLRenderer::SetLights(const RLight* pLights, s32 count, const f32* pAmbient, f32 unlitAmbient)
 {
     if (!mReady)
     {
@@ -990,6 +992,7 @@ void GLRenderer::SetLights(const RLight* pLights, s32 count, const f32* pAmbient
     gl.glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(data), data);
     mNumLights = count;
     mAmbient[0] = pAmbient[0], mAmbient[1] = pAmbient[1], mAmbient[2] = pAmbient[2];
+    mUnlitAmbient = unlitAmbient;
     mStateValid = false;
 }
 
@@ -1024,6 +1027,7 @@ void GLRenderer::ApplyState(u32 state)
         gl.glUniform1i(sp.mPerPixel, mOptions.mPerPixelLighting ? 1 : 0);
         gl.glUniform1i(sp.mNumLights, mNumLights);
         gl.glUniform3f(sp.mAmbient, mAmbient[0], mAmbient[1], mAmbient[2]);
+        gl.glUniform1f(sp.mUnlitAmbient, mUnlitAmbient);
         gl.glUniform1i(sp.mShadow, (state & RS_SHADOW) ? 1 : 0);
     }
     gl.glBindSampler(0, (state & kStateMipmap) ? mSamplerMip : (state & RS_FILTER_LINEAR) ? mSamplerLinear : mSamplerNearest);

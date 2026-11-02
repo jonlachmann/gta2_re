@@ -343,7 +343,7 @@ void UploadLights()
         o.r = l.mR * l.mBrightness, o.g = l.mG * l.mBrightness, o.b = l.mB * l.mBrightness;
         o.dx = l.mDx, o.dy = l.mDy, o.cosOuter = l.mCosOuter, o.cosInner = l.mCosInner;
     }
-    gRenderer->SetLights(sLights, n, gAmbient);
+    gRenderer->SetLights(sLights, n, gAmbient, 1.0f - gLightScale);
     gLightsDirty = false;
 }
 
@@ -416,6 +416,13 @@ f32 Cap(f32 v)
     return v > kSpotCap ? kSpotCap : v;
 }
 
+// The ambient light on a colour channel. As the lights fade out (the DAY-NIGHT CYCLE's day) it takes on the
+// unlit colour, so that at full ambient it draws as unlit.
+f32 Ambient(s32 i, u32 channel)
+{
+    return gAmbient[i] - (1.0f - gLightScale) * (255 - channel) * (gAmbient[i] / 255.0f);
+}
+
 u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
 {
     f32 lr = 0.0f, lg = 0.0f, lb = 0.0f;
@@ -450,9 +457,11 @@ u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
     lg += Cap(sg);
     lb += Cap(sb);
     const f32 n = shade / 255.0f;
-    f32 r = n * ((colour >> 16) & 0xFF) * lr + gAmbient[0];
-    f32 g = n * ((colour >> 8) & 0xFF) * lg + gAmbient[1];
-    f32 b = n * (colour & 0xFF) * lb + gAmbient[2];
+    // Rounded while the lights fade, so that it meets the unlit colour.
+    const f32 round = gLightScale < 1.0f ? 0.5f : 0.0f;
+    f32 r = n * ((colour >> 16) & 0xFF) * lr + Ambient(0, (colour >> 16) & 0xFF) + round;
+    f32 g = n * ((colour >> 8) & 0xFF) * lg + Ambient(1, (colour >> 8) & 0xFF) + round;
+    f32 b = n * (colour & 0xFF) * lb + Ambient(2, colour & 0xFF) + round;
     const u32 ri = r > 255.0f ? 255 : (u32)r;
     const u32 gi = g > 255.0f ? 255 : (u32)g;
     const u32 bi = b > 255.0f ? 255 : (u32)b;
