@@ -76,7 +76,7 @@ class GLRenderer : public IRenderer
     u32 GetUploadCount() const { return mUploads; }
     u32 GetVertexCount() const { return mVertices; }
     const RenderOptions& Options() const { return mOptions; }
-    void SetLights(const RLight* pLights, s32 count, const f32* pAmbient);
+    void SetLights(const RLight* pLights, s32 count, const f32* pAmbient, f32 unlitAmbient);
 
   private:
     void Flush();
@@ -126,7 +126,7 @@ class GLRenderer : public IRenderer
     struct SceneProgram
     {
         GLuint mId;
-        GLint mScale, mOffset, mAlphaTest, mUseTex, mSampleShift, mSmooth, mAdditive, mPerPixel, mNumLights, mAmbient, mShadow;
+        GLint mScale, mOffset, mAlphaTest, mUseTex, mSampleShift, mSmooth, mAdditive, mPerPixel, mNumLights, mAmbient, mUnlitAmbient, mShadow;
     };
     SceneProgram mScene[2];
     int mActiveScene;
@@ -167,6 +167,7 @@ class GLRenderer : public IRenderer
     RenderOptions mOptions;
     s32 mNumLights;
     f32 mAmbient[3];
+    f32 mUnlitAmbient;
     f32 mGamma[3];
     u32 mDrawCalls;
     u32 mUploads;
