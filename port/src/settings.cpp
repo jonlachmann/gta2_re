@@ -23,7 +23,7 @@ void OnVideoModeChanged();
 char_type IsWindowedModeAvailable();
 bool port_GameRunning();
 #if defined(GTA2_PORT_SDL)
-void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting, int textureFilter, int msaa);
+void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting, int textureFilter, int msaa, bool softShadows);
 int port_MaxMsaaSamples();
 void port_ApplyVsync();
 int port_FullscreenModeCount();
@@ -44,7 +44,7 @@ const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingS
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kTextureFilter, kAntiAliasing, kHeadlights, kLightEffects};
+const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kTextureFilter, kAntiAliasing, kShadows, kHeadlights, kLightEffects};
 #else
 const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
@@ -55,7 +55,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"SHADOWS"};
 
 struct Language
 {
@@ -130,6 +130,8 @@ const Translation kTranslations[] = {
     {L"TRILINEAR", NULL, {L"TRILINEAIRE", L"TRILINEAR", L"TRILINEARE", L"TRILINEAL"}},
     {L"ANISOTROPIC", NULL, {L"ANISOTROPE", L"ANISOTROP", L"ANISOTROPICO", L"ANISOTRÓPICO"}},
     {L"ANTI-ALIASING", NULL, {L"ANTICRENELAGE", L"KANTENGLÄTTUNG", L"ANTI-ALIASING", L"ANTIALIASING"}},
+    {L"SHADOWS", NULL, {L"OMBRES", L"SCHATTEN", L"OMBRE", L"SOMBRAS"}},
+    {L"SOFT", NULL, {L"DOUCES", L"WEICH", L"MORBIDE", L"SUAVES"}},
     {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
@@ -245,6 +247,8 @@ const char* ScreenName(Id id)
             return "gl_texture_filter";
         case kAntiAliasing:
             return "gl_msaa";
+        case kShadows:
+            return "gl_soft_shadows";
         default:
             return "car_headlights";
     }
@@ -492,7 +496,7 @@ void ApplyRenderOptions()
 {
 #if defined(GTA2_PORT_SDL)
     port_SetRenderOptions(Screen(kTrueColour) != 0, Screen(kBloom), Screen(kPerPixelLighting) != 0,
-                          Clamp(Screen(kTextureFilter), 0, kNumTextureFilters - 1), kMsaaValues[MsaaIndex()]);
+                          Clamp(Screen(kTextureFilter), 0, kNumTextureFilters - 1), kMsaaValues[MsaaIndex()], Screen(kShadows) != 0);
 #endif
 }
 
@@ -560,6 +564,9 @@ void Value(Id id, wchar_t* pOut)
 #if defined(GTA2_PORT_SDL)
         case kTextureFilter:
             wcscpy(pOut, Translate(kTextureFilters[Clamp(Screen(id), 0, kNumTextureFilters - 1)]));
+            break;
+        case kShadows:
+            wcscpy(pOut, Translate(Screen(id) ? L"SOFT" : L"ORIGINAL"));
             break;
         case kAntiAliasing:
             if (MsaaIndex())

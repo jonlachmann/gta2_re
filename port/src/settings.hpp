@@ -30,6 +30,7 @@ enum Id
     kLightEffects,
     kTextureFilter,
     kAntiAliasing,
+    kShadows,
     kCount,
 };
 
