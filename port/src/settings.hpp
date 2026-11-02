@@ -39,6 +39,8 @@ const wchar_t* Translate(const wchar_t* pEnglish);
 // In English, as the key to Translate.
 const wchar_t* Name(Id id);
 void Value(Id id, wchar_t* pOut);
+// The numeric settings, shown as sliders: false for the others.
+bool Range(Id id, s32* pMin, s32* pMax, s32* pValue);
 // Changing the language reloads the text table and lays the frontend's or the HUD's texts out again.
 void Change(Id id, s32 delta);
 

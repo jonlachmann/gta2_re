@@ -285,6 +285,31 @@ bool Headlights()
     return Screen(kHeadlights) != 0;
 }
 
+bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
+{
+    switch (id)
+    {
+        case kSfxVolume:
+        case kMusicVolume:
+            *pMin = 0;
+            *pMax = 10;
+            *pValue = VolumeStep(gRegistry.Get_Sound_Setting(id == kSfxVolume ? "SFXVol" : "CDVol", 127));
+            return true;
+        case kBrightness:
+            *pMin = 1;
+            *pMax = 20;
+            *pValue = Clamp(gRegistry.Get_Screen_Setting("gamma", 10), 1, 20);
+            return true;
+        case kBloom:
+            *pMin = 0;
+            *pMax = 10;
+            *pValue = Clamp(Screen(id), 0, 10);
+            return true;
+        default:
+            return false;
+    }
+}
+
 void ApplyRenderOptions()
 {
 #if defined(GTA2_PORT_SDL)
