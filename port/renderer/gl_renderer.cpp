@@ -191,8 +191,15 @@ const char* kSceneFS =
     "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * LightSum() + uAmbient) / 255.0, vec3(1.0)), vUnlit.a);\n"
     "    }\n"
     "    oColor = t * c;\n"
-    "    oBloom = uAdditive != 0 ? oColor : vec4(0.0, 0.0, 0.0, oColor.a);\n"
     "    oShadow = vec4(0.0, 0.0, 0.0, oColor.a);\n"
+    // With a shadow mask, additive draws blend with (1, 1 - alpha): no alpha keeps them additive, and the
+    // mask is lightened by their brightness, as a shadow under them would have been.
+    "    if (uAdditive == 2)\n"
+    "    {\n"
+    "        oShadow.a = max(oColor.r, max(oColor.g, oColor.b));\n"
+    "        oColor.a = 0.0;\n"
+    "    }\n"
+    "    oBloom = uAdditive != 0 ? oColor : vec4(0.0, 0.0, 0.0, oColor.a);\n"
     "}\n";
 
 // Fullscreen triangle; also composites the CPU surface (alpha 0 where the game did not write).
@@ -992,7 +999,7 @@ void GLRenderer::ApplyState(u32 state)
     if (state & RS_BLEND_ADD)
     {
         gl.glEnable(GL_BLEND);
-        gl.glBlendFunc(GL_ONE, GL_ONE);
+        gl.glBlendFunc(GL_ONE, mTargetsShadows ? GL_ONE_MINUS_SRC_ALPHA : GL_ONE);
     }
     else if (state & RS_BLEND_ALPHA)
     {
@@ -1008,7 +1015,7 @@ void GLRenderer::ApplyState(u32 state)
     gl.glUniform1i(sp.mUseTex, (state & RS_NO_TEXTURE) ? 0 : 1);
     if (mActiveScene == 1)
     {
-        gl.glUniform1i(sp.mAdditive, (state & RS_BLEND_ADD) ? 1 : 0);
+        gl.glUniform1i(sp.mAdditive, (state & RS_BLEND_ADD) ? (mTargetsShadows ? 2 : 1) : 0);
         gl.glUniform1i(sp.mPerPixel, mOptions.mPerPixelLighting ? 1 : 0);
         gl.glUniform1i(sp.mNumLights, mNumLights);
         gl.glUniform1f(sp.mAmbient, mAmbient);
