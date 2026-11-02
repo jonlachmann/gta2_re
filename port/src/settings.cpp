@@ -37,10 +37,9 @@ namespace PortSettings
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kExplodingScores,
-                      kZoom, kHudScale, kSafeArea};
+const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kExplodingScores};
 #else
-const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores, kZoom, kHudScale, kSafeArea};
+const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores};
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
@@ -49,6 +48,8 @@ const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kTextureFilter, 
 const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
+const Id kView[] = {kZoom, kHudScale, kSafeArea};
+const s32 kNumView = sizeof(kView) / sizeof(kView[0]);
 
 namespace
 {
@@ -134,6 +135,7 @@ const Translation kTranslations[] = {
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
     {L"GRAPHICS", NULL, {L"GRAPHISMES", L"GRAFIK", L"GRAFICA", L"GRÁFICOS"}},
+    {L"VIEW", NULL, {L"VUE", L"ANSICHT", L"VISTA", L"VISTA"}},
     {L"CONTROLS", NULL, {L"COMMANDES", L"STEUERUNG", L"COMANDI", L"CONTROLES"}},
     {L"MORE", NULL, {L"SUITE", L"MEHR", L"ALTRI", L"MÁS"}},
     {L"DEFAULT KEYS", NULL, {L"CONTROLES PAR DEFAUT", L"STANDARDSTEUERUNG", L"COMANDI PREDEFINITI", L"CONTROLES PREDETERMINADOS"}},

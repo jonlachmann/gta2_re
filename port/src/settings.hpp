@@ -40,6 +40,8 @@ extern const Id kScreen[];
 extern const s32 kNumScreen;
 extern const Id kGraphics[];
 extern const s32 kNumGraphics;
+extern const Id kView[];
+extern const s32 kNumView;
 
 // The port's menu texts in the language of the loaded text table, from their English text.
 const wchar_t* Translate(const wchar_t* pEnglish);

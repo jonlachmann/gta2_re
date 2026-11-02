@@ -38,6 +38,7 @@ enum Page
 {
     kMainPage,
     kScreenPage,
+    kViewPage,
     kGraphicsPage,
     kControlsPage,
     kControls2Page,
@@ -63,7 +64,7 @@ struct Item
 };
 
 const s32 kMaxItems = 12;
-const wchar_t* const kTitles[kNumPages] = {L"OPTIONS", L"SCREEN", L"GRAPHICS", L"CONTROLS", L"CONTROLS"};
+const wchar_t* const kTitles[kNumPages] = {L"OPTIONS", L"SCREEN", L"VIEW", L"GRAPHICS", L"CONTROLS", L"CONTROLS"};
 
 const s32 kNumControls = 12;
 const s32 kDefaultControls[kNumControls] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGHT, DIK_LCONTROL, DIK_RETURN,
@@ -131,6 +132,7 @@ s32 Items(Page page, Item* pItems)
                 pItems[n++] = Item{kResume, 0, false};
             }
             pItems[n++] = Item{kGoTo, kScreenPage, false};
+            pItems[n++] = Item{kGoTo, kViewPage, false};
             pItems[n++] = Item{kGoTo, kGraphicsPage, false};
             pItems[n++] = Item{kGoTo, kControlsPage, false};
             n = AddSettings(pItems, n, PortSettings::kGeneral, PortSettings::kNumGeneral, true);
@@ -138,6 +140,10 @@ s32 Items(Page page, Item* pItems)
             break;
         case kScreenPage:
             n = AddSettings(pItems, n, PortSettings::kScreen, PortSettings::kNumScreen, false);
+            pItems[n++] = Item{kBack, 0, true};
+            break;
+        case kViewPage:
+            n = AddSettings(pItems, n, PortSettings::kView, PortSettings::kNumView, false);
             pItems[n++] = Item{kBack, 0, true};
             break;
         case kGraphicsPage:
