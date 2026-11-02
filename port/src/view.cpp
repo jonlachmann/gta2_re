@@ -25,12 +25,18 @@ namespace
 const s32 kSub = 64;
 const s32 kTurn = 1440 * kSub;
 const s32 kHalfTurn = kTurn / 2;
-// Per step, out of 256, of the angle left: slow at rest, faster with speed, fast after getting in.
-const s32 kFollowSlow = 15;
-const s32 kFollowFast = 36;
-const s32 kFollowRecentre = 48;
-const s32 kMaxStep = 6 * 4 * kSub;
-// The speed (Fix16, as the camera's look-ahead measures it) from which it follows at kFollowFast.
+// The yaw follows the direction of travel, critically damped: per step and ROTATION SPEED point, the pull's
+// rate out of 256 and the most it turns, in 1/256 degrees. Twice as fast to get behind a car just entered.
+const s32 kOmegaPerSpeed = 5;
+const s32 kMaxRatePerSpeed = 256 * 4 / 10;
+// Heading changes smaller than this (lane changes, skids) leave the view alone, unless the heading then holds
+// within kSteady for kSteadySteps.
+const s32 kDeadZone = 15 * 256;
+const s32 kSteady = 2 * 256;
+const s32 kSteadySteps = 30;
+// Slower than this (Fix16, as the camera's look-ahead measures speed) the view doesn't turn; the tilt is at its
+// most from kFastSpeed.
+const s32 kMinSpeed = 16384 / 2;
 const s32 kFastSpeed = 4 * 16384;
 // Backing up this many steps turns the view round (Chinatown Wars' Auto Reverse).
 const s32 kReverseSteps = 40;
@@ -44,6 +50,11 @@ s32 sYaw;
 s32 sPrevYaw;
 bool sValid;
 bool sRecentre;
+bool sEngaged;
+s32 sTarget;
+s32 sRate;
+s32 sSteadyHeading;
+s32 sSteadySteps;
 s32 sReverse;
 s32 sPitch;
 s32 sPrevPitch;
@@ -69,6 +80,12 @@ u8 sCameraBytes[sizeof(Camera)];
 s32 Wrap(s32 v)
 {
     return ((v % kTurn) + kTurn + kHalfTurn) % kTurn - kHalfTurn;
+}
+
+bool Within(s32 delta, s32 limit)
+{
+    delta = Wrap(delta);
+    return delta < limit && delta > -limit;
 }
 
 f32 Radians(f32 yaw)
@@ -97,7 +114,8 @@ Ped* Subject(Player* pPlayer)
     return pPlayer->mCameraMode == 2 ? pPlayer->mAuxPed : pPlayer->mPlayerPed;
 }
 
-s32 CarTarget(Car* pCar, s32* pFollow, s32* pSpeed)
+// The heading to follow, or -1 to keep the view as it is.
+s32 CarHeading(Car* pCar, s32* pSpeed)
 {
     const Ang16 rotation = pCar->GetCarRotation();
     const Fix16_Point velocity = pCar->GetLinearVelocity();
@@ -108,9 +126,14 @@ s32 CarTarget(Car* pCar, s32* pFollow, s32* pSpeed)
 
     s32 speed = velocity.GetLength_41E260().mValue * 16;
     speed = speed < kFastSpeed ? speed : kFastSpeed;
-    *pFollow = kFollowSlow + (kFollowFast - kFollowSlow) * (speed / 64) / (kFastSpeed / 64);
     *pSpeed = (speed / 64) * 256 / (kFastSpeed / 64);
-    return (rotation.rValue + 720 + (sReverse >= kReverseSteps ? 720 : 0)) * kSub;
+    if (speed < kMinSpeed)
+    {
+        return sRecentre ? (rotation.rValue + 720 + 1440) % 1440 * kSub : -1;
+    }
+    // Backing up, the view stays behind the nose until Auto Reverse.
+    const s32 travel = velocity.GetAngle().rValue + (forward < 0 && sReverse < kReverseSteps ? 720 : 0);
+    return (travel % 1440 + 2160) % 1440 * kSub;
 }
 
 Camera* ViewCamera()
@@ -194,6 +217,9 @@ void Clear()
     sPrevYaw = 0;
     sPitch = 0;
     sPrevPitch = 0;
+    sTarget = 0;
+    sRate = 0;
+    sEngaged = false;
     spCar = NULL;
 }
 
@@ -207,14 +233,14 @@ void Step()
         sStepSin = 0.0f;
         return;
     }
-    s32 target = sYaw;
-    s32 follow = kFollowFast;
+    s32 heading = -1;
     s32 speed = 0;
     s32 pitch = PortSettings::CameraTilt() * 256;
     Car* pCar = NULL;
     if (Scripted(pPlayer))
     {
-        target = 0;
+        heading = 0;
+        sEngaged = true;
         pitch = 0;
     }
     else
@@ -224,7 +250,7 @@ void Step()
         if (pCar && pCar->mCarSprite)
         {
             sRecentre = sRecentre || pCar != spCar;
-            target = CarTarget(pCar, &follow, &speed);
+            heading = CarHeading(pCar, &speed);
             pitch += pitch * speed / 512;
             pitch = pitch < kMaxPitch ? pitch : kMaxPitch;
         }
@@ -235,24 +261,41 @@ void Step()
     }
     spCar = pCar;
 
-    const s32 left = Wrap(target - sYaw);
+    const bool steady = heading >= 0 && Within(heading - sSteadyHeading, kSteady);
+    sSteadySteps = steady ? sSteadySteps + 1 : 0;
+    sSteadyHeading = steady ? sSteadyHeading : heading;
+    if (heading >= 0 &&
+        (sRecentre || !Within(heading - sTarget, kDeadZone) || (sSteadySteps >= kSteadySteps && !Within(heading - sYaw, kSteady))))
+    {
+        sEngaged = true;
+    }
+    if (heading >= 0 && sEngaged)
+    {
+        sTarget = heading;
+    }
     if (!sValid)
     {
-        sYaw = target;
-        sPrevYaw = target;
+        sYaw = sTarget;
+        sPrevYaw = sTarget;
+        sRate = 0;
         sPitch = pitch;
         sPrevPitch = pitch;
         sValid = true;
     }
     else
     {
-        s32 step = static_cast<s32>(static_cast<long long>(left) * (sRecentre ? kFollowRecentre : follow) / 256);
-        step = step < -kMaxStep ? -kMaxStep : (step > kMaxStep ? kMaxStep : step);
-        sYaw = (sYaw + step + kTurn) % kTurn;
+        // The rate in 1/256 of a yaw unit per step.
+        const long long omega = kOmegaPerSpeed * PortSettings::CameraTurnSpeed() + 1;
+        const s32 maxRate = kMaxRatePerSpeed * PortSettings::CameraTurnSpeed() * (sRecentre ? 2 : 1) * 256;
+        sRate += static_cast<s32>(omega * omega * Wrap(sTarget - sYaw) / 256 - 2 * omega * sRate / 256);
+        sRate = sRate < -maxRate ? -maxRate : (sRate > maxRate ? maxRate : sRate);
+        sYaw = (sYaw + sRate / 256 + kTurn) % kTurn;
         sPitch += (pitch - sPitch) * kPitchFollow / 256;
     }
-    if (left < 10 * 4 * kSub && left > -10 * 4 * kSub)
+    if (sEngaged && Within(sTarget - sYaw, kSteady) &&
+        (heading < 0 || (Within(heading - sYaw, kSteady) && sSteadySteps >= kSteadySteps / 4)))
     {
+        sEngaged = false;
         sRecentre = false;
     }
     sStepCos = cosf(Radians(static_cast<f32>(sYaw)));
