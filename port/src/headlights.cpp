@@ -1,5 +1,4 @@
 #include "headlights.hpp"
-#include "Camera.hpp"
 #include "Car.hpp"
 #include "CarInfoTable.hpp"
 #include "Fix16_Point.hpp"
@@ -10,18 +9,17 @@
 #include "gtx_0x106C.hpp"
 #include "settings.hpp"
 #include "sprite.hpp"
-#include "winmain.hpp"
 #include "3rdParty/GTA2Hax/d3ddll/d3ddll.hpp"
 #include <string.h>
+
+#if defined(GTA2_PORT_SDL)
+void port_SpotLight(f32 dx, f32 dy, f32 cosOuter, f32 cosInner);
+#endif
 
 namespace PortHeadlights
 {
 namespace
 {
-// The game's draw flags (DMA's d3ddll): additive blending, colours per vertex.
-const s32 kBlendAdd = 0x200;
-const s32 kVertexDiffuse = 0x2000;
-
 // A car sprite's delta 6 is its lit headlight, set as delta bit 6 and, mirrored, bit 23 (Car::SetHeadlightDeltas);
 // front damage clears the bit (Car::DamageArea). The deltas apply to rows of 256 pixels, as for the sprite masks.
 const u8 kHeadlightDelta = 6;
@@ -66,87 +64,21 @@ bool LampPosition(Sprite* pSprite, bool mirrored, f32& x, f32& y)
     y = (pSprite->mXy.y + offset.y).ToFloat();
     return true;
 }
-
-// A point on the ground at height z, projected as MapRenderer projects the tiles' tops.
-void Project(f32 x, f32 y, f32 z, u32 colour, Vert& v)
-{
-    const f32 inv = 1.0f / (gViewCamera->mCurPos.mZ.ToFloat() - z + 8.0f);
-    const f32 scale = inv * gViewCamera->mScreenScale.x.ToFloat();
-    v.x = (x - gViewCamera->mCurPos.mX.ToFloat()) * scale + static_cast<u32>(gViewCamera->mScreenPxCenterX);
-    v.y = (y - gViewCamera->mCurPos.mY.ToFloat()) * scale + static_cast<u32>(gViewCamera->mScreenPxCenterY);
-    v.z = inv;
-    v.w = inv;
-    v.diff = colour;
-    v.spec = 0;
-    v.u = 0.0f;
-    v.v = 0.0f;
-}
-
-u32 Colour(f32 intensity)
-{
-    const s32 i = static_cast<s32>(intensity * 255.0f);
-    const s32 c = i < 0 ? 0 : (i > 255 ? 255 : i);
-    return 0xFF000000u | (c << 16) | ((c * 235 / 255) << 8) | (c * 200 / 255);
-}
-
-// One lamp's beam along forward (fx, fy): a cone on the ground, brightest along its axis near the lamp.
-void DrawBeam(f32 lx, f32 ly, f32 z, f32 fx, f32 fy, f32 side)
-{
-    const f32 kLength = 5.0f;
-    const f32 kSpread = 0.3f; // half-width per block of length
-    const f32 kPeak = 0.42f;
-    const s32 kRings = 7;
-    const s32 kColumns = 5;
-    const f32 kAcross[kColumns] = {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f};
-    const f32 kProfile[kColumns] = {0.0f, 0.55f, 1.0f, 0.55f, 0.0f};
-
-    const f32 ax = fy;
-    const f32 ay = -fx;
-    // Slightly outwards, as real headlights are aimed.
-    const f32 dx = fx + ax * 0.06f * side;
-    const f32 dy = fy + ay * 0.06f * side;
-
-    Vert rings[kRings][kColumns];
-    for (s32 r = 0; r < kRings; r++)
-    {
-        const f32 t = static_cast<f32>(r) / (kRings - 1);
-        const f32 along = t * t * kLength; // rings closer together near the lamp
-        const f32 halfWidth = 0.04f + along * kSpread;
-        const f32 fade = 1.0f - along / kLength;
-        // A short rise from the lamp, then the light falls off with distance.
-        const f32 intensity = kPeak * fade * fade * (r == 0 ? 0.5f : 1.0f);
-        for (s32 c = 0; c < kColumns; c++)
-        {
-            const f32 x = lx + dx * along + ax * halfWidth * kAcross[c];
-            const f32 y = ly + dy * along + ay * halfWidth * kAcross[c];
-            Project(x, y, z, Colour(intensity * kProfile[c]), rings[r][c]);
-        }
-    }
-    for (s32 r = 0; r + 1 < kRings; r++)
-    {
-        for (s32 c = 0; c + 1 < kColumns; c++)
-        {
-            Vert quad[8];
-            quad[0] = rings[r][c];
-            quad[1] = rings[r][c + 1];
-            quad[2] = rings[r + 1][c + 1];
-            quad[3] = rings[r + 1][c];
-            pgbh_DrawQuad(kBlendAdd | kVertexDiffuse, NULL, quad, 0);
-        }
-    }
-}
 } // namespace
 
-void DrawBeams(s32 zLayer)
+void Submit(s32 min_x, s32 min_y, s32 max_x, s32 max_y)
 {
-    if (!gCar_BC_Pool || !gGtx_0x106C || !gLighting || !PortSettings::Headlights())
+    if (!gCar_BC_Pool || !gGtx_0x106C || !PortSettings::Headlights())
     {
         return;
     }
+    // As the game's lights (Light.cpp): bit 16 on, radius in blocks * 32, intensity; a warm halogen colour.
+    const u32 kLight = 0x10000 | (5 * 32) << 8 | 200;
+    const u32 kColour = 0xFFFFDCA0;
     for (Car* pCar = gCar_BC_Pool->GetFirstCar_420E50(); pCar; pCar = pCar->mpNext)
     {
         Sprite* pSprite = pCar->mCarSprite;
-        if (!pSprite || pSprite->mZoom || static_cast<s32>(pSprite->mZpos.ToFloat()) != zLayer + 1)
+        if (!pSprite || pSprite->mZoom)
         {
             continue;
         }
@@ -156,12 +88,24 @@ void DrawBeams(s32 zLayer)
         const s32 kBits[2] = {CarDeltaBitsEnum::FrontRightHeadlight_6, CarDeltaBitsEnum::FrontLeftHeadlight_23};
         for (s32 i = 0; i < 2; i++)
         {
-            f32 x;
-            f32 y;
-            if (pCar->mDamagedAreas.mask_bit(kBits[i]) && LampPosition(pSprite, i == 1, x, y))
+            SLight light;
+            if (!pCar->mDamagedAreas.mask_bit(kBits[i]) || !LampPosition(pSprite, i == 1, light.field_4_x, light.field_8_y) ||
+                light.field_4_x < min_x - 6 || light.field_4_x > max_x + 6 || light.field_8_y < min_y - 6 || light.field_8_y > max_y + 6)
             {
-                DrawBeam(x, y, pSprite->mZpos.ToFloat(), fx, fy, i == 0 ? 1.0f : -1.0f);
+                continue;
             }
+            light.field_0 = kLight;
+            light.field_C_z = pSprite->mZpos.ToFloat();
+            light.field_10_colour = kColour;
+#if defined(GTA2_PORT_SDL)
+            pgbh_AddLight(&light);
+            port_SpotLight(fx, fy, 0.9f, 0.98f);
+#else
+            // The original renderer has no spot lights: a point light ahead of the lamp.
+            light.field_4_x += fx * 1.5f;
+            light.field_8_y += fy * 1.5f;
+            pgbh_AddLight(&light);
+#endif
         }
     }
 }

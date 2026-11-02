@@ -3627,6 +3627,9 @@ void MapRenderer::Draw()
                 pgbh_ResetLights();
                 pgbh_SetCamera(static_cast<f32>(min_x), static_cast<f32>(min_y), static_cast<f32>(max_x), static_cast<f32>(max_y));
                 LightGrid::SubmitLightsInArea(min_x, min_y, max_x, max_y);
+#if defined(GTA2_PORT)
+                PortHeadlights::Submit(min_x, min_y, max_x, max_y);
+#endif
             }
 
             // Reset the size of draw layer size
@@ -3657,9 +3660,6 @@ void MapRenderer::Draw()
                 pIter--;
             }
         }
-#if defined(GTA2_PORT)
-        PortHeadlights::DrawBeams(zLayer);
-#endif
     }
     gSpriteRenderer->Draw(7);    // draw all sprites on the highest layer
 }

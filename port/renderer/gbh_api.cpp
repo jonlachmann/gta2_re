@@ -69,6 +69,7 @@ struct LightInternal
     f32 mInvRadius;
     f32 mX, mY, mZ;
     f32 mR, mG, mB;
+    f32 mDx, mDy, mCosOuter, mCosInner;
 };
 
 IRenderer* gRenderer;
@@ -313,6 +314,7 @@ void UploadLights()
         o.radius = l.mRadius;
         o.invRadius = l.mInvRadius;
         o.r = l.mR * l.mBrightness, o.g = l.mG * l.mBrightness, o.b = l.mB * l.mBrightness;
+        o.dx = l.mDx, o.dy = l.mDy, o.cosOuter = l.mCosOuter, o.cosInner = l.mCosInner;
     }
     gRenderer->SetLights(sLights, n, gAmbient);
     gLightsDirty = false;
@@ -354,6 +356,15 @@ f32 TableSqrt(f32 x)
     return v.f;
 }
 
+// 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light.
+f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
+{
+    const f32 c = dist > 0.0f ? (dx * light.mDx + dy * light.mDy) / dist : 0.0f;
+    f32 t = (c - light.mCosOuter) / (light.mCosInner - light.mCosOuter);
+    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
 {
     f32 lr = 0.0f, lg = 0.0f, lb = 0.0f;
@@ -372,10 +383,11 @@ u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
         {
             continue;
         }
-        const f32 att = (light.mRadius - TableSqrt(d2)) * light.mInvRadius;
+        const f32 dist = TableSqrt(d2);
+        const f32 att = (light.mRadius - dist) * light.mInvRadius;
         if (att > 0.0f)
         {
-            const f32 k = att * light.mBrightness;
+            const f32 k = att * light.mBrightness * SpotCone(light, dx, dy, dist);
             lr += light.mR * k;
             lg += light.mG * k;
             lb += light.mB * k;
@@ -889,7 +901,20 @@ GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
     l.mRadius = ((pLight->field_0 >> 8) & 0xFF) * k * 8.0f;
     l.mRadiusSquared = l.mRadius * l.mRadius;
     l.mInvRadius = l.mRadius > 0.0f ? 1.0f / l.mRadius : 0.0f;
+    l.mDx = l.mDy = 0.0f;
+    l.mCosOuter = -2.0f;
+    l.mCosInner = -1.0f;
     return idx * 0x2C;
+}
+
+// The port's headlights: the last light added becomes a spot light along (dx, dy).
+void port_SpotLight(f32 dx, f32 dy, f32 cosOuter, f32 cosInner)
+{
+    if (gNumLights)
+    {
+        LightInternal& l = gLights[gNumLights - 1];
+        l.mDx = dx, l.mDy = dy, l.mCosOuter = cosOuter, l.mCosInner = cosInner;
+    }
 }
 
 GBH_EXPORT void GTA2_CC gbh_SetAmbient(f32 ambient)
