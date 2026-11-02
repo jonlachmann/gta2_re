@@ -43,7 +43,8 @@ const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingS
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kTextureFilter, kAntiAliasing, kShadows, kHeadlights, kLightEffects};
+const Id kGraphics[] = {kPreset,        kTrueColour, kBloom,      kPerPixelLighting, kTextureFilter,
+                        kAntiAliasing, kShadows,    kHeadlights, kLightEffects};
 #else
 const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
@@ -60,7 +61,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET"};
 
 struct Language
 {
@@ -145,6 +146,10 @@ const Translation kTranslations[] = {
     {L"ANTI-ALIASING", NULL, {L"ANTICRENELAGE", L"KANTENGLÄTTUNG", L"ANTI-ALIASING", L"ANTIALIASING"}},
     {L"SHADOWS", NULL, {L"OMBRES", L"SCHATTEN", L"OMBRE", L"SOMBRAS"}},
     {L"SOFT", NULL, {L"DOUCES", L"WEICH", L"MORBIDE", L"SUAVES"}},
+    {L"PRESET", NULL, {L"PRESET", L"VOREINSTELLUNG", L"PRESET", L"PREAJUSTE"}},
+    {L"CLASSIC", NULL, {L"CLASSIQUE", L"KLASSISCH", L"CLASSICO", L"CLÁSICO"}},
+    {L"ENHANCED", NULL, {L"AMELIORE", L"VERBESSERT", L"MIGLIORATO", L"MEJORADO"}},
+    {L"CUSTOM", NULL, {L"PERSO", L"EIGENE", L"PERSONAL.", L"PERSONAL"}},
     {L"ON", NULL, {L"OUI", L"AN", L"SÌ", L"SÍ"}},
     {L"OFF", NULL, {L"NON", L"AUS", L"NO", L"NO"}},
     {L"SCREEN", NULL, {L"ECRAN", L"BILDSCHIRM", L"SCHERMO", L"PANTALLA"}},
@@ -374,10 +379,9 @@ void RefreshHud()
     }
 }
 #if defined(GTA2_PORT_SDL)
-// The stored sample count, lowered to one the renderer can do.
-s32 MsaaIndex()
+// A sample count, lowered to one the renderer can do.
+s32 MsaaIndex(s32 stored)
 {
-    const s32 stored = Screen(kAntiAliasing);
     const s32 max = port_MaxMsaaSamples();
     s32 i = kNumMsaaValues - 1;
     while (i > 0 && (kMsaaValues[i] > stored || kMsaaValues[i] > max))
@@ -385,6 +389,69 @@ s32 MsaaIndex()
         i--;
     }
     return i;
+}
+
+s32 MsaaIndex()
+{
+    return MsaaIndex(Screen(kAntiAliasing));
+}
+
+// PRESET: the GRAPHICS settings' values for CLASSIC, the original's look, and ENHANCED. It shows
+// CUSTOM when the settings match neither.
+enum Preset
+{
+    kClassic,
+    kEnhanced,
+    kCustom,
+};
+const wchar_t* const kPresetNames[] = {L"CLASSIC", L"ENHANCED", L"CUSTOM"};
+
+struct PresetValue
+{
+    Id mId;
+    s32 mValue[2];
+};
+const PresetValue kPresetValues[] = {{kTrueColour, {0, 1}},   {kBloom, {0, 3}},        {kPerPixelLighting, {0, 1}},
+                                     {kTextureFilter, {0, 2}}, {kAntiAliasing, {0, 4}}, {kShadows, {0, 1}},
+                                     {kHeadlights, {0, 1}},    {kLightEffects, {0, 1}}};
+const s32 kNumPresetValues = sizeof(kPresetValues) / sizeof(kPresetValues[0]);
+
+// As the menu shows them: anti-aliasing at what the renderer can do, the others as their lines read them.
+s32 PresetSetting(Id id)
+{
+    switch (id)
+    {
+        case kAntiAliasing:
+            return kMsaaValues[MsaaIndex()];
+        case kTextureFilter:
+            return Clamp(Screen(id), 0, kNumTextureFilters - 1);
+        case kBloom:
+            return Clamp(Screen(id), 0, 10);
+        default:
+            return Screen(id) != 0;
+    }
+}
+
+s32 PresetTarget(const PresetValue& value, s32 preset)
+{
+    return value.mId == kAntiAliasing ? kMsaaValues[MsaaIndex(value.mValue[preset])] : value.mValue[preset];
+}
+
+Preset CurrentPreset()
+{
+    for (s32 preset = kClassic; preset <= kEnhanced; preset++)
+    {
+        s32 i = 0;
+        while (i < kNumPresetValues && PresetSetting(kPresetValues[i].mId) == PresetTarget(kPresetValues[i], preset))
+        {
+            i++;
+        }
+        if (i == kNumPresetValues)
+        {
+            return static_cast<Preset>(preset);
+        }
+    }
+    return kCustom;
 }
 #endif
 
@@ -689,6 +756,9 @@ void Value(Id id, wchar_t* pOut)
         case kShadows:
             wcscpy(pOut, Translate(Screen(id) ? L"SOFT" : L"ORIGINAL"));
             break;
+        case kPreset:
+            wcscpy(pOut, Translate(kPresetNames[CurrentPreset()]));
+            break;
         case kAntiAliasing:
             if (MsaaIndex())
             {
@@ -832,6 +902,18 @@ void Change(Id id, s32 delta)
             gRegistry.Set_Screen_Setting(ScreenName(id), Wrap(Clamp(Screen(id), 0, kNumTextureFilters - 1) + delta, kNumTextureFilters));
             ApplyRenderOptions();
             break;
+        case kPreset:
+        {
+            // CLASSIC and ENHANCED in turn; from CUSTOM, left gives CLASSIC and right ENHANCED.
+            const Preset current = CurrentPreset();
+            const s32 preset = current == kCustom ? (delta < 0 ? kClassic : kEnhanced) : (current == kClassic ? kEnhanced : kClassic);
+            for (s32 i = 0; i < kNumPresetValues; i++)
+            {
+                gRegistry.Set_Screen_Setting(ScreenName(kPresetValues[i].mId), PresetTarget(kPresetValues[i], preset));
+            }
+            ApplyRenderOptions();
+            break;
+        }
         case kAntiAliasing:
         {
             const s32 max = port_MaxMsaaSamples();
