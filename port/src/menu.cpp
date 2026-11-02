@@ -465,7 +465,25 @@ void DrawHints()
     const s32 count = capturing ? 1 : 2;
     const s16 font = gFrontendNormalFont;
     const s16 buttonFont = gFrontendHeadingFont;
-    f32 x = 120;
+    // Between the frontend's two logos (x 70 to 550): longer translations start further left, then
+    // come closer together.
+    const f32 kLeft = 70;
+    const f32 kRight = 550;
+    const f32 kDisc = 34;
+    f32 width = 0;
+    for (s32 i = 0; i < count; i++)
+    {
+        const bool button = pad && pHints[i].mButton;
+        width += (button ? kDisc : Width(Translate(pHints[i].mKey), font) + 10) + Width(Translate(pHints[i].mLabel), font);
+    }
+    f32 gap = 40;
+    f32 x = kRight - width - gap * (count - 1);
+    x = x > 120 ? 120 : (x < kLeft ? kLeft : x);
+    if (count > 1 && x + width + gap > kRight)
+    {
+        gap = kRight - x - width > 10 ? kRight - x - width : 10;
+    }
+
     const f32 y = 440;
     for (s32 i = 0; i < count; i++)
     {
@@ -473,7 +491,7 @@ void DrawHints()
         {
             Sprite(kDiscSprite, x + 10, y + 12);
             Text(pHints[i].mButton, x + 10 - Width(pHints[i].mButton, buttonFont) / 2, y, buttonFont);
-            x += 34;
+            x += kDisc;
         }
         else
         {
@@ -483,7 +501,7 @@ void DrawHints()
         }
         const wchar_t* pLabel = Translate(pHints[i].mLabel);
         Text(pLabel, x, y, font);
-        x += Width(pLabel, font) + 40;
+        x += Width(pLabel, font) + gap;
     }
 }
 } // namespace
