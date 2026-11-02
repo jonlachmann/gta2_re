@@ -1,5 +1,5 @@
-// The port's lights among the game's, with the dusk lighting: car headlights (CAR HEADLIGHTS), and tail and
-// brake lights, explosions, fires and muzzle flashes (LIGHT EFFECTS), where the game has none of its own.
+// The port's lights among the game's, with the dusk lighting: car headlights (CAR HEADLIGHTS), and brake
+// lights, explosions, fires and muzzle flashes (LIGHT EFFECTS), where the game has none of its own.
 #pragma once
 
 #include "types.hpp"

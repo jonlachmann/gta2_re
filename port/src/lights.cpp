@@ -117,7 +117,6 @@ void CarLights(Car* pCar, bool headlights, bool effects)
     BitSet32& bits = pCar->mDamagedAreas;
     const s32 kHead[2] = {CarDeltaBitsEnum::FrontRightHeadlight_6, CarDeltaBitsEnum::FrontLeftHeadlight_23};
     const s32 kBrake[2] = {CarDeltaBitsEnum::BackRightBrakeLight_5, CarDeltaBitsEnum::BackLeftBrakeLight_22};
-    const s32 kRearDamage[2] = {CarDeltaBitsEnum::TopRightDamage_1, CarDeltaBitsEnum::TopLeftDamage_0};
     for (s32 i = 0; i < 2; i++)
     {
         f32 x;
@@ -125,14 +124,12 @@ void CarLights(Car* pCar, bool headlights, bool effects)
         if (headlights && bits.mask_bit(kHead[i]) && LampPosition(pSprite, kHeadlightDelta, i == 1, x, y))
         {
             // The apex inside the car: the two beams overlap from the bumper on.
-            AddLight(x - fx * 0.4f, y - fy * 0.4f, z, 5.0f, 240, kHalogen, fx, fy, 0.9f, 0.98f);
+            AddLight(x - fx * 0.4f, y - fy * 0.4f, z, 5.0f, 190, kHalogen, fx, fy, 0.9f, 0.98f);
         }
-        // The game lights the lamp only when braking; dimmer tail lights while the headlights are on.
-        const bool braking = bits.mask_bit(kBrake[i]);
-        const bool tail = pCar->mBfA4.bHeadlights && !bits.mask_bit(kRearDamage[i]);
-        if (effects && (braking || tail) && LampPosition(pSprite, kBrakeLightDelta, i == 1, x, y))
+        // A soft red pool behind a brake light while the game shows it lit (Car::UpdateBrakeLights).
+        if (effects && bits.mask_bit(kBrake[i]) && LampPosition(pSprite, kBrakeLightDelta, i == 1, x, y))
         {
-            AddLight(x, y, z, braking ? 3.5f : 2.5f, braking ? 255 : 180, kRed, -fx, -fy, 0.2f, 0.7f);
+            AddLight(x, y, z, 1.5f, 150, kRed, -fx, -fy, 0.0f, 0.6f);
         }
     }
 }
