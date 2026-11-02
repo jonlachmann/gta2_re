@@ -25,8 +25,23 @@ const char* kFaithfulVS =
     "    vUV = aUV;\n"
     "}\n";
 
+// Sharp bilinear: magnified texels stay square with a one pixel soft edge (the frame is drawn at the
+// size it is shown); at 1:1 or when minified it is the plain bilinear sample.
+#define SHARP_SAMPLE \
+    "vec4 SharpSample(vec2 uv)\n" \
+    "{\n" \
+    "    vec2 size = vec2(textureSize(uTex, 0));\n" \
+    "    vec2 texel = uv * size;\n" \
+    "    vec2 scale = max(1.0 / max(fwidth(texel), vec2(1e-6)), vec2(1.0));\n" \
+    "    vec2 d = fract(texel) - 0.5;\n" \
+    "    vec2 range = 0.5 - 0.5 / scale;\n" \
+    "    vec2 f = (d - clamp(d, -range, range)) * scale + 0.5;\n" \
+    "    return texture(uTex, (floor(texel) + f) / size);\n" \
+    "}\n"
+
 const char* kFaithfulFS =
     "uniform sampler2D uTex;\n"
+    SHARP_SAMPLE
     "uniform int uAlphaTest;\n"
     "uniform int uUseTex;\n"
     "uniform float uSampleShift;\n"
@@ -36,7 +51,7 @@ const char* kFaithfulFS =
     "void main()\n"
     "{\n"
     "    vec2 uv = vUV - (dFdx(vUV) + dFdy(vUV)) * uSampleShift;\n"
-    "    vec4 t = uUseTex != 0 ? texture(uTex, uv) : vec4(1.0);\n"
+    "    vec4 t = uUseTex != 0 ? SharpSample(uv) : vec4(1.0);\n"
     "    if (uAlphaTest != 0 && t.a < 0.5) discard;\n"
     "    oColor = t * vCol;\n"
     "}\n";
@@ -74,6 +89,7 @@ const char* kSceneVS =
 // Per pixel lighting is the original's LightVertex formula with a real square root.
 const char* kSceneFS =
     "uniform sampler2D uTex;\n"
+    SHARP_SAMPLE
     "uniform int uAlphaTest;\n"
     "uniform int uUseTex;\n"
     "uniform float uSampleShift;\n"
@@ -97,7 +113,7 @@ const char* kSceneFS =
     "void main()\n"
     "{\n"
     "    vec2 uv = vUV - (dFdx(vUV) + dFdy(vUV)) * uSampleShift;\n"
-    "    vec4 t = uUseTex != 0 ? texture(uTex, uv) : vec4(1.0);\n"
+    "    vec4 t = uUseTex != 0 ? SharpSample(uv) : vec4(1.0);\n"
     "    if (uAlphaTest != 0 && t.a < 0.5) discard;\n"
     "    vec4 c = vCol;\n"
     "    if (uPerPixel != 0 && vLit > 0.5)\n"
