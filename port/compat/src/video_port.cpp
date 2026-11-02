@@ -42,7 +42,7 @@ void PollToggleKey(VidSystem* pSys)
 }
 } // namespace
 
-void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting, int textureFilter, int msaa)
+void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting, int textureFilter, int msaa, bool softShadows)
 {
     sGameOptions = RenderOptions();
     sGameOptions.mTrueColour = trueColour;
@@ -50,11 +50,18 @@ void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighti
     sGameOptions.mPerPixelLighting = perPixelLighting;
     sGameOptions.mTextureFilter = textureFilter;
     sGameOptions.mMsaa = msaa;
+    sGameOptions.mSoftShadows = softShadows;
     sHasGameOptions = true;
     if (sVidSystem)
     {
         sVidSystem->SetConfiguredOptions(sGameOptions);
     }
+}
+
+// As the renderer draws them: off with Scroll Lock's faithful rendering.
+bool port_SoftShadows()
+{
+    return sVidSystem && sVidSystem->Renderer().Options().mSoftShadows;
 }
 
 // 8 until the renderer has a context.

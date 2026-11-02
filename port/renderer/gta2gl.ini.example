@@ -13,3 +13,5 @@ per_pixel_lighting = 0
 texture_filter = 0
 ; multisample anti-aliasing: samples per pixel (2, 4, 8), 0 = off
 msaa = 0
+; 1: sprite shadows with soft edges, on the ground under the sprite, overlaps darkened once
+soft_shadows = 0

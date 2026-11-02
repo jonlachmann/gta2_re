@@ -31,6 +31,7 @@ enum Id
     kTextureFilter,
     kAntiAliasing,
     kCamera,
+    kShadows,
     kCount,
 };
 

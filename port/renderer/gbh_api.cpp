@@ -444,6 +444,38 @@ void Trace(const char* what, u32 flags, STexture* pTexture, const Vert* pVerts, 
 }
 
 const u32 FLAG_INTERNAL_BLIT = 0x80000000u;
+// The port's sprite shadow (port/src/shadows.cpp): a quad with world positions in pVerts[4..7] and its blur
+// radius in the red channel (texels * 32), drawn soft when the option is on.
+const u32 FLAG_SOFT_SHADOW = 0x40000000u;
+
+// Grows a sprite quad (corners in the order of increasing u, then v) by its blur radius plus a texel.
+void ExpandShadow(Vert* pVerts)
+{
+    const f32 du = pVerts[1].u - pVerts[0].u;
+    const f32 dv = pVerts[3].v - pVerts[0].v;
+    if (du <= 0.0f || dv <= 0.0f)
+    {
+        return;
+    }
+    const f32 e = ((pVerts[0].diff >> 16) & 0xFF) / 32.0f + 1.0f;
+    for (s32 k = 0; k < 8; k += 4)
+    {
+        const f32 ux = (pVerts[k + 1].x - pVerts[k].x) / du, uy = (pVerts[k + 1].y - pVerts[k].y) / du;
+        const f32 vx = (pVerts[k + 3].x - pVerts[k].x) / dv, vy = (pVerts[k + 3].y - pVerts[k].y) / dv;
+        for (s32 i = 0; i < 4; i++)
+        {
+            const f32 su = i == 1 || i == 2 ? e : -e;
+            const f32 sv = i >= 2 ? e : -e;
+            pVerts[k + i].x += su * ux + sv * vx;
+            pVerts[k + i].y += su * uy + sv * vy;
+        }
+    }
+    for (s32 i = 0; i < 4; i++)
+    {
+        pVerts[i].u += i == 1 || i == 2 ? e : -e;
+        pVerts[i].v += i >= 2 ? e : -e;
+    }
+}
 
 void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count, u32 baseColour)
 {
@@ -454,6 +486,11 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
     if (count < 3 || count > 4 || pVerts[0].z <= 0.0f || !gRenderer)
     {
         return;
+    }
+    const bool softShadow = (flags & FLAG_SOFT_SHADOW) && count == 4 && gRenderer->Options().mSoftShadows;
+    if (softShadow)
+    {
+        ExpandShadow(pVerts);
     }
     // As the original: skip primitives entirely outside the gbh_SetWindow rectangle.
     f32 minX = pVerts[0].x, maxX = minX, minY = pVerts[0].y, maxY = minY;
@@ -520,7 +557,8 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
         }
     }
     const bool lit = (flags & FLAG_LIGHTING) && gAmbient != 255.0f;
-    const bool perPixel = lit && gRenderer->Options().mPerPixelLighting;
+    const bool shadowLit = softShadow && gAmbient != 255.0f;
+    const bool perPixel = (lit || shadowLit) && gRenderer->Options().mPerPixelLighting;
     u32 unlit[4];
     if (lit)
     {
@@ -529,10 +567,27 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
             unlit[i] = pVerts[i].diff;
             pVerts[i].diff = LightVertex(pVerts[i + 4], shade, pVerts[i].diff);
         }
-        if (perPixel && gLightsDirty)
+    }
+    else if (shadowLit)
+    {
+        // A shadow takes away the ambient light and half of the lights', so it fades in a lit pool but not in
+        // the dark (per pixel in the shader).
+        for (s32 i = 0; i < count; i++)
         {
-            UploadLights();
+            unlit[i] = 0xFFFFFFFFu;
+            if (!perPixel)
+            {
+                const u32 l = LightVertex(pVerts[i + 4], 255, 0xFFFFFFu);
+                const f32 sum = (f32)(((l >> 16) & 0xFF) + ((l >> 8) & 0xFF) + (l & 0xFF));
+                const f32 ratio = 3.0f * gAmbient / (sum > 1.0f ? sum : 1.0f);
+                const u32 a = (u32)((pVerts[i].diff >> 24) * (0.5f + 0.5f * (ratio < 1.0f ? ratio : 1.0f)));
+                pVerts[i].diff = (pVerts[i].diff & 0xFFFFFFu) | (a << 24);
+            }
         }
+    }
+    if (perPixel && gLightsDirty)
+    {
+        UploadLights();
     }
 
     // As the original: additive is ONE/ONE, the colour key and alpha flags both use alpha blending
@@ -553,6 +608,10 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
     if (flags & FLAG_INTERNAL_BLIT)
     {
         state |= RS_PIXEL_EXACT;
+    }
+    if (softShadow)
+    {
+        state |= RS_SHADOW;
     }
 
     LogPrim(pVerts, count, state, pTexture, (flags & FLAG_INTERNAL_BLIT) != 0);

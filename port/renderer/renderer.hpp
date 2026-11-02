@@ -25,6 +25,7 @@ struct RenderOptions
     bool mPerPixelLighting = false; // gbh_AddLight lights evaluated per fragment
     s32 mTextureFilter = 0;         // minified textures: 0 bilinear, 1 trilinear, 2 anisotropic
     s32 mMsaa = 0;                  // samples per pixel of the render target, 0 or 1 for none
+    bool mSoftShadows = false;      // sprite shadows with soft edges, overlaps darkened once
     u32 mGeneration = 0;            // bumped on every change
 };
 
@@ -47,6 +48,9 @@ enum RenderStateBits
     RS_FILTER_LINEAR = 1 << 3,
     RS_NO_TEXTURE = 1 << 4,
     RS_PIXEL_EXACT = 1 << 5,  // no D3D pixel centre offset: integer quads copy texels 1:1 (DirectDraw blits)
+    // Soft shadow (mSoftShadows): texture alpha blurred by the vertex red channel (texels * 32), times the vertex
+    // alpha, into a shadow mask that FinishFrame applies; what is drawn later over it lightens the mask.
+    RS_SHADOW = 1 << 6,
 };
 
 // Mip levels to build for a texture: none, or averaged with or without regard to transparent texels.
