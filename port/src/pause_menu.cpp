@@ -87,19 +87,19 @@ const wchar_t* LineName(s32 line)
     switch (line)
     {
         case kResume:
-            return L"RESUME";
+            return PortSettings::Translate(L"RESUME");
         case kScreen:
-            return L"SCREEN";
+            return PortSettings::Translate(L"SCREEN");
         case kGraphics:
-            return L"GRAPHICS";
+            return PortSettings::Translate(L"GRAPHICS");
         case kControls:
-            return L"CONTROLS";
+            return PortSettings::Translate(L"CONTROLS");
         case kQuit:
-            return L"QUIT GAME";
+            return PortSettings::Translate(L"QUIT GAME");
         case kBack:
-            return L"BACK";
+            return PortSettings::Translate(L"BACK");
         default:
-            return PortSettings::Name(static_cast<PortSettings::Id>(line));
+            return PortSettings::Translate(PortSettings::Name(static_cast<PortSettings::Id>(line)));
     }
 }
 
@@ -379,9 +379,9 @@ void Draw()
 
     const s32 count = PortOptionsMenu::NumControls();
     Panel(60, 160, 580, 160 + (count + 2) * 18 + 10);
-    Text(L"KEYBOARD", 300, 165, false);
+    Text(PortSettings::Translate(L"KEYBOARD"), 300, 165, false);
 #if defined(GTA2_PORT_SDL)
-    Text(L"GAMEPAD", 460, 165, false);
+    Text(PortSettings::Translate(L"GAMEPAD"), 460, 165, false);
 #endif
     wchar_t key[24];
     wchar_t pad[24];
@@ -391,13 +391,13 @@ void Draw()
         const bool selected = i == sControlSelected;
         if (i == count)
         {
-            Text(L"BACK", 80, y, selected);
+            Text(PortSettings::Translate(L"BACK"), 80, y, selected);
             break;
         }
         PortOptionsMenu::BindingNames(i, key, pad);
         if (selected && sCapturing)
         {
-            wcscpy(sColumn ? pad : key, L"PRESS");
+            wcscpy(sColumn ? pad : key, PortSettings::Translate(L"PRESS"));
         }
         Text(PortOptionsMenu::ControlName(i), 80, y, selected);
         Text(key, 300, y, selected && sColumn == 0);

@@ -142,16 +142,16 @@ void PadName(s32 code, wchar_t* pOut)
     switch (code)
     {
         case kPadLeft:
-            wcscpy(pOut, L"LEFT");
+            wcscpy(pOut, PortSettings::Translate(L"LEFT"));
             break;
         case kPadRight:
-            wcscpy(pOut, L"RIGHT");
+            wcscpy(pOut, PortSettings::Translate(L"RIGHT"));
             break;
         case kPadUp:
-            wcscpy(pOut, L"UP");
+            wcscpy(pOut, PortSettings::Translate(L"UP"));
             break;
         case kPadDown:
-            wcscpy(pOut, L"DOWN");
+            wcscpy(pOut, PortSettings::Translate(L"DOWN"));
             break;
         default:
             wcscpy(pOut, code >= 0 && code < 12 ? kPadButtonNames[code] : L"-");
@@ -226,7 +226,7 @@ void SetTitle(MenuPage* pPage, const wchar_t* pTitle, s16 font)
     pPage->mElementsArray[0].mXpos = 35;
     pPage->mElementsArray[0].mYpos = 11;
     pPage->mElementsArray[0].mIsItDisplayed = 1;
-    wcsncpy(pPage->mElementsArray[0].mElementNameStr, pTitle, 50);
+    wcsncpy(pPage->mElementsArray[0].mElementNameStr, PortSettings::Translate(pTitle), 50);
     pPage->mElementsArray[0].mFontType = font;
     pPage->mElementsArray[0].mFontPalette = 5;
 }
@@ -245,7 +245,7 @@ void AddOption(Frontend* pFrontend, u16 page, const wchar_t* pName, Action actio
     item.mIsUnlocked = 1;
     item.mXPos = 120;
     item.mYPos = static_cast<s16>(y);
-    wcsncpy(item.mOptionNameStr, pName, 50);
+    wcsncpy(item.mOptionNameStr, PortSettings::Translate(pName), 50);
     item.mMenuPageTarget = static_cast<s16>(action == kGoTo ? arg : 268);
     pPage->mOptionStates[i].mIsOptionUnlocked = 1;
     ItemAt(page, i) = Item{action, arg};
@@ -370,15 +370,25 @@ void UpdateHints(Frontend* pFrontend, MenuPage* pPage)
         }
         else
         {
-            wchar_t key[16];
-            wcscpy(key, pHints[i].mKey);
+            wchar_t key[32];
+            wcsncpy(key, PortSettings::Translate(pHints[i].mKey), 31);
+            key[31] = 0;
             SetText(pElems[1], static_cast<s16>(x), y, key, font);
             x += Frontend::GetMaxTextWidth(key, font) + 10;
         }
-        wchar_t label[16];
-        wcscpy(label, pHints[i].mLabel);
+        wchar_t label[32];
+        wcsncpy(label, PortSettings::Translate(pHints[i].mLabel), 31);
+        label[31] = 0;
         SetText(pElems[2], static_cast<s16>(x), y, label, font);
         x += Frontend::GetMaxTextWidth(label, font) + 40;
+    }
+    // Longer translations move left, then closer together, to stay clear of the logo.
+    const s32 overflow = x - 40 - 550;
+    for (s32 i = 1; overflow > 0 && i < 7; i++)
+    {
+        const s32 maxShift = i < 4 ? 40 : 64;
+        const s32 shift = overflow < maxShift ? overflow : maxShift;
+        pPage->mElementsArray[i].mXpos = static_cast<s16>(pPage->mElementsArray[i].mXpos - shift);
     }
 }
 
@@ -404,11 +414,11 @@ void UpdateColumns(Frontend* pFrontend, MenuPage* pPage)
     }
     const u16 font = pFrontend->mNormalFont;
     pPage->mNumberOfElements = 10;
-    SetText(pPage->mElementsArray[7], 300, 140, L"KEYBOARD", font);
+    SetText(pPage->mElementsArray[7], 300, 140, PortSettings::Translate(L"KEYBOARD"), font);
     pPage->mElementsArray[8].mIsItDisplayed = 0;
     pPage->mElementsArray[9].mIsItDisplayed = 0;
 #if defined(GTA2_PORT_SDL)
-    SetText(pPage->mElementsArray[8], 470, 140, L"GAMEPAD", font);
+    SetText(pPage->mElementsArray[8], 470, 140, PortSettings::Translate(L"GAMEPAD"), font);
     const MenuItem& item = pPage->mOptionsArray[pPage->mCurrentOptionIdx];
     if (ItemAt(page, pPage->mCurrentOptionIdx).mAction == kBinding)
     {
@@ -443,7 +453,7 @@ s32 NumControls()
 
 const wchar_t* ControlName(s32 control)
 {
-    return kControlNames[control];
+    return PortSettings::Translate(kControlNames[control]);
 }
 
 void BindingNames(s32 control, wchar_t* pKey, wchar_t* pPad)
@@ -652,7 +662,7 @@ bool GetOptionText(Frontend* pFrontend, u16 page, u16 option, wchar_t** ppText)
             PadName(GetPad(item.mArg), pad);
             if (sCapturing == item.mArg)
             {
-                wcscpy(sColumn ? pad : key, L"PRESS");
+                wcscpy(sColumn ? pad : key, PortSettings::Translate(L"PRESS"));
             }
             wcscpy(sText, menuItem.mOptionNameStr);
             PadTo(pFrontend, sText, menuItem.mXPos, 300);
