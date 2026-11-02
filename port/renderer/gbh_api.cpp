@@ -398,9 +398,19 @@ f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
     return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) * SmoothStep(dist / (0.3f * light.mRadius));
 }
 
+// The most the spot lights together add to a point (the port's headlights), so that a group of cars
+// doesn't light a whole junction; the game's own lights add up freely.
+const f32 kSpotCap = 0.6f;
+
+f32 Cap(f32 v)
+{
+    return v > kSpotCap ? kSpotCap : v;
+}
+
 u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
 {
     f32 lr = 0.0f, lg = 0.0f, lb = 0.0f;
+    f32 sr = 0.0f, sg = 0.0f, sb = 0.0f;
     for (u32 j = 0; j < gNumLights; j++)
     {
         const LightInternal& light = gLights[j];
@@ -421,11 +431,15 @@ u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
         if (att > 0.0f)
         {
             const f32 k = att * light.mBrightness * SpotCone(light, dx, dy, dist);
-            lr += light.mR * k;
-            lg += light.mG * k;
-            lb += light.mB * k;
+            const bool spot = light.mCosInner > -1.0f;
+            (spot ? sr : lr) += light.mR * k;
+            (spot ? sg : lg) += light.mG * k;
+            (spot ? sb : lb) += light.mB * k;
         }
     }
+    lr += Cap(sr);
+    lg += Cap(sg);
+    lb += Cap(sb);
     const f32 n = shade / 255.0f;
     f32 r = n * ((colour >> 16) & 0xFF) * lr + gAmbient;
     f32 g = n * ((colour >> 8) & 0xFF) * lg + gAmbient;

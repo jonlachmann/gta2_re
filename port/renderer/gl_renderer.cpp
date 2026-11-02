@@ -131,6 +131,7 @@ const char* kSceneFS =
     "vec3 LightSum()\n"
     "{\n"
     "    vec3 acc = vec3(0.0);\n"
+    "    vec3 spots = vec3(0.0);\n"
     "    for (int i = 0; i < uNumLights; i++)\n"
     "    {\n"
     "        vec3 d = vWorld - uLightPos[i].xyz;\n"
@@ -142,11 +143,11 @@ const char* kSceneFS =
     "            float att = (r - dist) * uLightCol[i].w;\n"
     "            vec4 s = uLightDir[i];\n"
     "            float c = dist > 0.0 ? dot(d.xy, s.xy) / dist : 0.0;\n"
-    "            float spot = s.w > -1.0 ? smoothstep(s.z, s.w, c) * smoothstep(0.0, 0.3 * r, dist) : 1.0;\n"
-    "            if (att > 0.0) acc += uLightCol[i].rgb * att * spot;\n"
+    "            if (att > 0.0 && s.w > -1.0) spots += uLightCol[i].rgb * att * smoothstep(s.z, s.w, c) * smoothstep(0.0, 0.3 * r, dist);\n"
+    "            else if (att > 0.0) acc += uLightCol[i].rgb * att;\n"
     "        }\n"
     "    }\n"
-    "    return acc;\n"
+    "    return acc + min(spots, vec3(0.6));\n" // kSpotCap in gbh_api.cpp
     "}\n"
     // The texture's alpha averaged over a square of that radius in texels; outside the texture is transparent.
     "float SoftAlpha(vec2 uv, float radius)\n"

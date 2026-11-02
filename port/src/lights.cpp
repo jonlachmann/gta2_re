@@ -125,12 +125,12 @@ void CarLights(Car* pCar, bool headlights, bool effects)
         if (headlights && bits.mask_bit(kHead[i]) && LampPosition(pSprite, kHeadlightDelta, i == 1, x, y))
         {
             // The apex inside the car: the two beams overlap from the bumper on.
-            AddLight(x - fx * 0.4f, y - fy * 0.4f, z, 5.0f, 190, kHalogen, fx, fy, 0.9f, 0.98f);
+            AddLight(x - fx * 0.5f, y - fy * 0.5f, z, 4.0f, 180, kHalogen, fx, fy, 0.96f, 0.99f);
         }
-        // A soft red pool behind a brake light while the game shows it lit (Car::UpdateBrakeLights).
+        // A small red glow behind a brake light while the game shows it lit (Car::UpdateBrakeLights).
         if (effects && bits.mask_bit(kBrake[i]) && LampPosition(pSprite, kBrakeLightDelta, i == 1, x, y))
         {
-            AddLight(x, y, z, 1.5f, 150, kRed, -fx, -fy, 0.0f, 0.6f);
+            AddLight(x, y, z, 0.7f, 160, kRed, -fx, -fy, 0.3f, 0.8f);
         }
     }
 }
