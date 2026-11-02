@@ -366,7 +366,7 @@ const s32 kMaxCameraTilt = 15;
 s32 sCameraTurnSpeed = -1;
 s32 sCameraFollows = -1;
 const s32 kMaxCameraTurnSpeed = 10;
-const s32 kMinDayLength = 6;
+const s32 kMinDayLength = 3;
 const s32 kMaxDayLength = 60;
 #if defined(GTA2_PORT_SDL)
 const wchar_t* const kLightings[] = {L"NOON", L"DUSK", L"DAY-NIGHT CYCLE"};
