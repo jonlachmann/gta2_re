@@ -179,6 +179,28 @@ into the same prefix, then pass `-DZLIB_LIBRARY=$P/lib/libzs.a -DZLIB_INCLUDE_DI
 -DLIBLZMA_LIBRARY=$P/lib/liblzma.a -DLIBLZMA_INCLUDE_DIR=$P/include -DCMAKE_C_FLAGS=-DLZMA_API_STATIC`
 to unshield and libarchive.
 
+## Packages
+
+`.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
+release) and on demand. Each job is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
+downloads the sources pinned in `packaging/versions.sh`, builds the libraries (`packaging/deps.sh`), the
+port, then the package. The same runs locally, from the repository's root:
+
+```bash
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
+docker run --rm -v $PWD/../work/out:/app:ro -v $PWD/port/packaging:/p:ro debian:trixie sh -c 'sh /p/smoke_test.sh /app/*.AppImage'
+```
+
+- Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
+  the libraries' licences.
+- Linux: `gta2_re-<version>-x86_64.AppImage`. The game inside is i686, built in an i386 Debian userland; the
+  AppImage brings that userland's glibc and loader, Mesa (EGL, GLX, llvmpipe and the GPU drivers) and the
+  libraries SDL3 loads, and `AppRun` starts the game through the bundled `ld-linux.so.2 --library-path`. It
+  needs no 32-bit library on the host, only a kernel that runs 32-bit programs (IA32 emulation, which
+  distributions enable). The GPU drivers are Mesa's: an NVIDIA GPU with its proprietary driver gets llvmpipe.
+  `smoke_test.sh` starts it with no game data in a container without 32-bit libraries.
+
 ## Layout
 
 - `compat/`: the Win32 subset the game calls, on SDL3 and POSIX (window, registry, files,

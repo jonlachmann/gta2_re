@@ -1,0 +1,88 @@
+name: Port
+
+# The native port (port/), 32-bit: a Windows zip and a Linux AppImage. Each job runs
+# port/packaging/ci.sh in a Debian 13 container, the same command as a local run (port/README.md, Packages).
+on:
+  push:
+    branches: ['port/**']
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: port-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: mingw32
+            image: debian:trixie
+            setarch: ''
+            artifact: gta2_re-windows-i686
+            files: '*.zip'
+          # i386 userland: the libraries the AppImage bundles come from it.
+          - target: linux32
+            image: i386/debian:trixie
+            setarch: linux32
+            artifact: gta2_re-linux-appimage
+            files: '*.AppImage'
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version and work folder
+        run: |
+          echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=$(git rev-parse --short HEAD); fi
+          echo "GTA2_VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Restore libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/work/dl
+            ${{ runner.temp }}/work/deps-${{ matrix.target }}
+          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh') }}
+
+      - name: Build and package
+        run: |
+          mkdir -p "$WORK"
+          docker run --rm -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -w /src ${{ matrix.image }} \
+              ${{ matrix.setarch }} sh port/packaging/ci.sh ${{ matrix.target }} /work
+          docker run --rm -v "$WORK:/work" ${{ matrix.image }} chown -R "$(id -u):$(id -g)" /work
+
+      - name: Smoke test on a host without 32-bit libraries
+        if: matrix.target == 'linux32'
+        run: |
+          docker run --rm -v "$WORK/out:/app:ro" -v "$PWD/port/packaging:/p:ro" debian:trixie \
+              sh -c 'sh /p/smoke_test.sh /app/*.AppImage'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/work/out/${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME"
