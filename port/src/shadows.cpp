@@ -23,6 +23,10 @@ const f32 kOffsetPerHeight = 0.25f;
 const f32 kBlur = 1.0f;
 const f32 kBlurPerHeight = 2.0f;
 const f32 kMaxHeight = 2.0f;
+// The ground is probed this far above the sprite: drawn between two steps, a sprite on a slope can sit just
+// under its surface, and the ground below that is a block lower. Heights under kContact count as none.
+const Fix16 kProbe = Fix16(0x800, 0);
+const f32 kContact = 1.0f / 16;
 // The game's shadow flags, and the renderer's soft shadow (gbh_api.cpp FLAG_SOFT_SHADOW).
 const s32 kShadowFlags = 0x2180;
 const s32 kSoftShadowFlag = 0x40000000;
@@ -35,8 +39,8 @@ bool Draw(Sprite* pSprite, STexture* pTexture)
     {
         return false;
     }
-    const Fix16 ground = gMap_0x370->GetGroundZBelowCoord(pSprite->mXy.x, pSprite->mXy.y, pSprite->mZpos);
-    f32 height = (pSprite->mZpos - ground).ToFloat();
+    const Fix16 ground = gMap_0x370->GetGroundZBelowCoord(pSprite->mXy.x, pSprite->mXy.y, pSprite->mZpos + kProbe);
+    f32 height = (pSprite->mZpos - ground).ToFloat() - kContact;
     height = height < 0.0f ? 0.0f : (height > kMaxHeight ? kMaxHeight : height);
     const f32 offset = kOffset + height * kOffsetPerHeight;
     const u32 blur = static_cast<u32>((kBlur + height * kBlurPerHeight) * 32.0f);
