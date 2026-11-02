@@ -132,7 +132,7 @@ void CarLights(Car* pCar, bool headlights, bool effects)
         {
             // Just behind the lamp's pixels, aimed a little inwards so the two beams meet ahead of the bumper.
             const f32 inward = (pSprite->mXy.x.ToFloat() - x) * fy - (pSprite->mXy.y.ToFloat() - y) * fx > 0.0f ? 0.07f : -0.07f;
-            AddLight(x - fx * 0.08f, y - fy * 0.08f, z, 2.8f, 140, kHalogen, fx + fy * inward, fy - fx * inward, 0.965f, 0.985f);
+            AddLight(x - fx * 0.08f, y - fy * 0.08f, z, 2.8f, 100, kHalogen, fx + fy * inward, fy - fx * inward, 0.95f, 0.995f);
         }
         // A small red glow behind a brake light while the game shows it lit (Car::UpdateBrakeLights).
         if (effects && bits.mask_bit(kBrake[i]) && LampPosition(pSprite, kBrakeLightDelta, i == 1, x, y))
