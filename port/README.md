@@ -9,18 +9,21 @@ Native builds of the decompiled game with clang, 32-bit. Plan: `docs/port_plan.m
 
 ## Windows
 
-Needs SDL3 for MinGW (`SDL3-devel-<version>-mingw` from the SDL releases). `SDL3.dll` is copied
-next to `gta2.exe`; the exe needs no DirectX, Miles or Bink DLL.
+Needs SDL3 for MinGW (`SDL3-devel-<version>-mingw` from the SDL releases), and libarchive and
+unshield (see [Setup libraries](#setup-libraries)). `SDL3.dll` is copied next to `gta2.exe`; the exe
+needs no DirectX, Miles or Bink DLL.
 
 ```bash
 cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-mingw32-clang.cmake \
-      -DSDL3_DIR=<SDL3-devel>/i686-w64-mingw32/lib/cmake/SDL3 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      -DSDL3_DIR=<SDL3-devel>/i686-w64-mingw32/lib/cmake/SDL3 -DGTA2_SETUP_DEPS_DIR=<prefix> \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build_port
 ```
 
 ## Linux
 
-Needs clang, lld, ninja, cmake and 32-bit SDL3 (`lib32-sdl3` on Arch).
+Needs clang, lld, ninja, cmake, 32-bit SDL3 (`lib32-sdl3` on Arch), libarchive and unshield (see
+[Setup libraries](#setup-libraries); `-DGTA2_SETUP_DEPS_DIR=<prefix>` where they are not on the system).
 
 ```bash
 cmake -S port -B build_linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux32-clang.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -66,28 +69,23 @@ Without the data there, a message box offers three choices:
 
 - **Use an existing install:** a GTA2 folder (the one holding `data`, or `data` itself). Its
   `data` folder is copied, with `gta2_registry.ini`, `gta2gl.ini` and `player/` if the port ran there.
-- **Install from a file:** an installer, archive or disc image, read by the port (nothing is run).
+- **Install from a file:** the game's installer or a disc image, read by the port (nothing is run).
 - **I don't have the game:** a short text (`kNoGameText` in `setup/setup.cpp`) and a link to the
   Internet Archive's copy of Rockstar's former download page.
 
 The files are copied into a temporary folder, checked (the essential files are listed in
 `setup/install.cpp`), then moved into place. Without the music (the 22 tracks of `GTAudio` on the
 original CD) the game runs, and the setup offers to add it from a folder (the CD, its `GTAudio`), a
-disc image or an archive. `gta2 --setup` shows the setup again, to replace the data or add the music.
+disc image or the installer. `gta2 --setup` shows the setup again, to replace the data or add the music.
 
-| Source | Read |
+| Source | Read with |
 |---|---|
-| Folder | yes |
-| `.zip` (also self-extracting) | yes (miniz) |
-| `.7z` | yes (LZMA SDK; a solid block is unpacked in memory) |
-| `.iso`, `.bin` (ISO 9660, Joliet) | yes |
-| NSIS installer `.exe` (2.x and 3.x, LZMA or deflate, solid or not), for example the community one | yes |
-| NSIS with bzip2 or the x86 filter, Unicode NSIS 2 ("Park") | no |
-| InstallShield installer or cabinets (`data1.cab`): the original CD and the 2004 Rockstar Classics `GTA2.exe` | no: install the game with it, then use the folder |
-| Inno Setup | no: install it, or unpack it with innoextract |
+| A game folder, or its `data` or `GTAudio` folder | |
+| InstallShield setup `.exe` (the 2004 Rockstar Classics `GTA2.exe`): its files follow the PE image | `setup/install.cpp`, then unshield |
+| InstallShield cabinets (`data1.hdr`, `data*.cab`: the original CD), in a folder or a disc image | unshield |
+| Disc images (`.iso`, Joliet names), `.zip`, `.7z` and the other formats of libarchive | libarchive |
 
-InstallShield would need its cabinet format (unshield, MIT, with zlib) and, for the Rockstar Classics
-`GTA2.exe`, the outer setup wrapper that holds the cabinets.
+Other installers (NSIS, Inno Setup) are not read: install the game with them, then use its folder.
 
 Message boxes are SDL's: task dialogs on Windows, `NSAlert` on macOS. On Linux, zenity if installed
 (GTK dialogs), else SDL's own X11 box; when neither is available (a Flatpak on Wayland without the X11
@@ -149,8 +147,37 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 |---|---|---|---|
 | [SDL 3](https://libsdl.org) | 3.4 | zlib | platform layer (linked) |
 | [OpenAL Soft](https://github.com/kcat/openal-soft) | 1.25.2 | LGPL | 3D sound (loaded at run time, optional) |
-| [miniz](https://github.com/richgel999/miniz/releases/tag/3.1.2) | 3.1.2 | MIT | `third_party/miniz`: zip, deflate |
-| [LZMA SDK](https://www.7-zip.org/sdk.html) ([lzma2605.7z](https://github.com/ip7z/7zip/releases/download/26.05/lzma2605.7z)) | 26.05 | public domain | `third_party/lzma`: 7z, LZMA (the decoder files of `C/`, unchanged) |
+| [libarchive](https://github.com/libarchive/libarchive/releases/tag/v3.8.11) | 3.8.11 | BSD | setup: disc images and archives (linked) |
+| [unshield](https://github.com/twogood/unshield/releases/tag/1.6.2) | 1.6.2 | MIT | setup: InstallShield cabinets (linked) |
+| [zlib](https://github.com/madler/zlib/releases/tag/v1.3.2), [xz](https://github.com/tukaani-project/xz/releases/tag/v5.8.4) | 1.3.2, 5.8.4 | zlib, 0BSD | their compression, where the system has none (MinGW) |
+
+### Setup libraries
+
+The setup links libarchive and unshield. Distributions, Homebrew and the Flatpak runtimes have
+libarchive; unshield is packaged by most distributions and Homebrew (a Flatpak builds it as a module).
+CMake finds them on the system, or in `GTA2_SETUP_DEPS_DIR`, an install prefix with both built
+static (and, for MinGW, zlib as `libzs.a` and liblzma). Arch has no 32-bit libarchive or unshield;
+build them from their releases with the port's toolchain files, for example:
+
+```bash
+P=$PWD/setup_deps    # then -DGTA2_SETUP_DEPS_DIR=$P
+TC="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux32-clang.cmake -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_C_FLAGS=-m32"
+cmake -S unshield-1.6.2 -B b_unshield $TC -DBUILD_STATIC=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+ninja -C b_unshield install
+# The static library leaves out unshield's MD5 objects.
+llvm-ar rs $P/lib/libunshield.a b_unshield/lib/md5/CMakeFiles/md5.dir/md5c.c.o
+cmake -S libarchive-3.8.11 -B b_archive $TC -DBUILD_SHARED_LIBS=OFF -DPOSIX_REGEX_LIB=NONE -DENABLE_TEST=OFF \
+      -DENABLE_TAR=OFF -DENABLE_CPIO=OFF -DENABLE_CAT=OFF -DENABLE_UNZIP=OFF -DENABLE_OPENSSL=OFF \
+      -DENABLE_CNG=OFF -DENABLE_LIBXML2=OFF -DENABLE_EXPAT=OFF -DENABLE_ZSTD=OFF -DENABLE_LZ4=OFF \
+      -DENABLE_BZip2=OFF -DENABLE_ACL=OFF -DENABLE_XATTR=OFF -DENABLE_ICONV=OFF -DENABLE_LIBB2=OFF
+ninja -C b_archive install
+```
+
+For MinGW, first build zlib (`-DZLIB_BUILD_SHARED=OFF`) and xz (`-DBUILD_SHARED_LIBS=OFF -DXZ_ASM_I386=OFF`)
+into the same prefix, then pass `-DZLIB_LIBRARY=$P/lib/libzs.a -DZLIB_INCLUDE_DIR=$P/include
+-DLIBLZMA_LIBRARY=$P/lib/liblzma.a -DLIBLZMA_INCLUDE_DIR=$P/include -DCMAKE_C_FLAGS=-DLZMA_API_STATIC`
+to unshield and libarchive.
 
 ## Layout
 
@@ -160,8 +187,7 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
   MinGW's headers declare it and `win32_redirect.hpp` sends the game's calls to the same code.
 - `renderer/`: the OpenGL ES renderer behind the game's `gbh_*` and `Vid_*` tables.
 - `include/`: copies of headers whose originals don't build outside MSVC.
-- `setup/`: the game folder and the first-start setup (archive readers, copy, message boxes).
-- `third_party/`: vendored libraries, with their licenses.
+- `setup/`: the game folder and the first-start setup (copy, message boxes).
 
 ## Unattended runs
 

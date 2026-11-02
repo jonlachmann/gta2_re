@@ -1,17 +1,28 @@
-// Copying the game's data from an install folder, an archive or an installer into the game folder.
+// Copying the game's data into the game folder (the working directory) from an install folder,
+// a disc, an archive or an installer.
 #pragma once
 
-#include "fs.hpp"
-
+#include <stdint.h>
+#include <stdio.h>
 #include <atomic>
+#include <filesystem>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace setup
 {
+namespace fs = std::filesystem;
+
+fs::path PathFromUtf8(const std::string& s);
+std::string PathToUtf8(const fs::path& p);
+FILE* OpenFile(const fs::path& p, const char* mode);
+// rel uses '/'; each component that does not exist as written is matched without regard to case.
+bool FindNoCase(const fs::path& root, const std::string& rel, fs::path* pFound);
+
 struct DataCheck
 {
-    std::vector<std::string> mMissing; // essential files, relative to the game folder
+    std::vector<std::string> mMissing; // essential files
     int mMusicFound = 0;
     int mMusicTotal = 0;
 };
@@ -19,8 +30,7 @@ DataCheck CheckGameData(const fs::path& root);
 
 struct Progress
 {
-    std::atomic<uint64_t> mDone{0}, mTotal{0}; // bytes, or files when the sizes are not known
-    std::atomic<bool> mCountsFiles{false};
+    std::atomic<uint64_t> mDone{0}, mTotal{0}; // bytes
     std::atomic<bool> mCancel{false};
     std::mutex mMutex;
     std::string mStatus; // under mMutex
@@ -41,12 +51,10 @@ struct InstallResult
 {
     bool mOk = false;
     bool mCancelled = false;
-    bool mMusicOnly = false; // the source had only the music, added to the data already there
     std::string mError;
     DataCheck mCheck;
 };
 
-// source: a folder or a file (archive, disc image, installer). dest: the game folder, which gets
-// data/, player/ and test/.
-InstallResult Install(const fs::path& source, const fs::path& dest, Progress& progress);
+// source: a folder, or a file (InstallShield setup, disc image, archive).
+InstallResult Install(const fs::path& source, Progress& progress);
 } // namespace setup

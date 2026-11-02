@@ -42,8 +42,7 @@ static void EnterGameFolder(int argc, char** argv)
     {
         forceSetup |= IsSetupArg(argv[i]);
     }
-    port_EnterGameFolder();
-    if (!port_RunSetup(forceSetup))
+    if (!port_PrepareGameFolder(forceSetup))
     {
         exit(0);
     }

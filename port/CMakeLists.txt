@@ -51,18 +51,30 @@ else()
     add_library(gta2gl STATIC ${renderer_src})
     target_link_libraries(gta2gl PRIVATE SDL3::SDL3)
 
-    # First-run setup (setup/): the game folder, and copying the game's data into the per-user one
-    # from an install, an archive or an installer, with miniz and the LZMA SDK's decoders.
-    set(third_party ${CMAKE_CURRENT_LIST_DIR}/third_party)
-    set(lzma_src 7zAlloc 7zArcIn 7zBuf 7zBuf2 7zCrc 7zCrcOpt 7zDec 7zFile 7zStream Bcj2 Bra Bra86 BraIA64
-        CpuArch Delta Lzma2Dec LzmaDec Ppmd7 Ppmd7Dec)
-    list(TRANSFORM lzma_src PREPEND ${third_party}/lzma/)
-    list(TRANSFORM lzma_src APPEND .c)
+    # First-start setup (setup/): finds the game folder, or copies the game's data into the per-user
+    # one. libarchive reads disc images and archives, unshield InstallShield cabinets: from the system,
+    # or from GTA2_SETUP_DEPS_DIR (an install prefix with both, built static, and for MinGW zlib and xz).
+    set(GTA2_SETUP_DEPS_DIR "" CACHE PATH "Install prefix of libarchive and unshield")
     file(GLOB setup_src ${CMAKE_CURRENT_LIST_DIR}/setup/*.cpp)
-    add_library(gta2setup STATIC ${setup_src} ${lzma_src} ${third_party}/miniz/miniz.c)
-    target_include_directories(gta2setup PRIVATE ${third_party}/lzma ${third_party}/miniz)
-    target_compile_definitions(gta2setup PRIVATE _FILE_OFFSET_BITS=64)
+    add_library(gta2setup STATIC ${setup_src})
     target_link_libraries(gta2setup PRIVATE SDL3::SDL3)
+    if(GTA2_SETUP_DEPS_DIR)
+        target_include_directories(gta2setup PRIVATE ${GTA2_SETUP_DEPS_DIR}/include)
+        target_compile_definitions(gta2setup PRIVATE LIBARCHIVE_STATIC)
+        set(deps ${GTA2_SETUP_DEPS_DIR}/lib)
+        target_link_libraries(gta2setup PRIVATE ${deps}/libarchive.a ${deps}/libunshield.a)
+        if(WIN32)
+            target_link_libraries(gta2setup PRIVATE ${deps}/liblzma.a ${deps}/libzs.a bcrypt)
+        else()
+            target_link_libraries(gta2setup PRIVATE lzma z)
+        endif()
+    else()
+        find_package(LibArchive REQUIRED)
+        find_library(UNSHIELD_LIBRARY unshield REQUIRED)
+        find_path(UNSHIELD_INCLUDE_DIR libunshield.h REQUIRED)
+        target_include_directories(gta2setup PRIVATE ${UNSHIELD_INCLUDE_DIR})
+        target_link_libraries(gta2setup PRIVATE LibArchive::LibArchive ${UNSHIELD_LIBRARY})
+    endif()
     if(NOT WIN32)
         # The C++ library's wchar_t.
         target_compile_options(gta2setup PRIVATE -fno-short-wchar)
