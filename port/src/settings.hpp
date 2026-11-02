@@ -34,6 +34,7 @@ enum Id
     kShadows,
     kCameraTilt,
     kCameraTurnSpeed,
+    kCameraRotation,
     kCount,
 };
 
@@ -75,6 +76,8 @@ bool ChinatownCamera();
 s32 CameraTilt();
 // ROTATION SPEED: how fast the CHINATOWN camera turns after the vehicle, 1 to 10.
 s32 CameraTurnSpeed();
+// ROTATION: STREETS turns the CHINATOWN camera to the street the vehicle has taken, FOLLOW after its heading.
+bool CameraFollows();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();

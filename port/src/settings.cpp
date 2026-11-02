@@ -49,7 +49,7 @@ const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kView[] = {kZoom, kCamera, kCameraTilt, kCameraTurnSpeed, kHudScale, kSafeArea};
+const Id kView[] = {kZoom, kCamera, kCameraRotation, kCameraTurnSpeed, kCameraTilt, kHudScale, kSafeArea};
 #else
 const Id kView[] = {kZoom, kHudScale, kSafeArea};
 #endif
@@ -60,7 +60,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION"};
 
 struct Language
 {
@@ -131,6 +131,9 @@ const Translation kTranslations[] = {
     {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
     {L"CAMERA", NULL, {L"CAMERA", L"KAMERA", L"TELECAMERA", L"CÁMARA"}},
     {L"CLASSIC", NULL, {L"CLASSIQUE", L"KLASSISCH", L"CLASSICA", L"CLÁSICA"}},
+    {L"ROTATION", NULL, {L"ROTATION", L"DREHUNG", L"ROTAZIONE", L"ROTACIÓN"}},
+    {L"STREETS", NULL, {L"RUES", L"STRASSEN", L"STRADE", L"CALLES"}},
+    {L"FOLLOW", NULL, {L"SUIVI", L"FOLGEN", L"SEGUI", L"SEGUIR"}},
     {L"ROTATION SPEED", NULL, {L"VITESSE ROTATION", L"DREHTEMPO", L"VELOCITÀ ROTAZIONE", L"VELOCIDAD GIRO"}},
     {L"CAMERA TILT", NULL, {L"INCLINAISON", L"NEIGUNG", L"INCLINAZIONE", L"INCLINACIÓN"}},
     {L"CHINATOWN", NULL, {L"CHINATOWN", L"CHINATOWN", L"CHINATOWN", L"CHINATOWN"}},
@@ -265,6 +268,8 @@ const char* ScreenName(Id id)
             return "camera_tilt";
         case kCameraTurnSpeed:
             return "camera_turn_speed";
+        case kCameraRotation:
+            return "camera_follow";
         case kShadows:
             return "gl_soft_shadows";
         default:
@@ -339,6 +344,7 @@ s32 sCamera = -1;
 s32 sCameraTilt = -1;
 const s32 kMaxCameraTilt = 15;
 s32 sCameraTurnSpeed = -1;
+s32 sCameraFollows = -1;
 const s32 kMaxCameraTurnSpeed = 10;
 
 s32 HudScalePercent()
@@ -462,7 +468,7 @@ f32 SafeArea()
 
 Id Requirement(Id id)
 {
-    if (id == kCameraTilt || id == kCameraTurnSpeed)
+    if (id == kCameraTilt || id == kCameraTurnSpeed || id == kCameraRotation)
     {
         return kCamera;
     }
@@ -510,6 +516,15 @@ s32 CameraTurnSpeed()
         sCameraTurnSpeed = Clamp(Screen(kCameraTurnSpeed), 1, kMaxCameraTurnSpeed);
     }
     return sCameraTurnSpeed;
+}
+
+bool CameraFollows()
+{
+    if (sCameraFollows < 0)
+    {
+        sCameraFollows = Screen(kCameraRotation) != 0;
+    }
+    return sCameraFollows != 0;
 }
 
 bool Headlights()
@@ -638,6 +653,9 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kCameraTurnSpeed:
             swprintf(pOut, L"%d", CameraTurnSpeed());
+            break;
+        case kCameraRotation:
+            wcscpy(pOut, Translate(CameraFollows() ? L"FOLLOW" : L"STREETS"));
             break;
         case kBloom:
             if (Screen(id))
@@ -856,6 +874,10 @@ void Change(Id id, s32 delta)
         case kCameraTurnSpeed:
             sCameraTurnSpeed = Clamp(CameraTurnSpeed() + delta, 1, kMaxCameraTurnSpeed);
             gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTurnSpeed);
+            break;
+        case kCameraRotation:
+            sCameraFollows = !CameraFollows();
+            gRegistry.Set_Screen_Setting(ScreenName(id), sCameraFollows);
             break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
