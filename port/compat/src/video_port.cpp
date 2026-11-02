@@ -57,6 +57,15 @@ unsigned port_FrameCount()
     return sFrameCount;
 }
 
+void port_FrameSize(int* pW, int* pH)
+{
+    if (sVidSystem)
+    {
+        *pW = sVidSystem->Renderer().LogicalWidth();
+        *pH = sVidSystem->Renderer().LogicalHeight();
+    }
+}
+
 namespace
 {
 DWORD ScreenGet(const char* name, DWORD def)
@@ -255,6 +264,7 @@ VID_EXPORT void GTA2_CC Vid_FlipBuffers(SVideo* pVideo)
         PollToggleKey(pSys);
         pSys->Flip();
     }
+    port_MouseEndFrame();
 }
 
 VID_EXPORT void GTA2_CC Vid_ReleaseSurface(SVideo*)

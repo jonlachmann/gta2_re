@@ -35,6 +35,7 @@ enum
 };
 void port_OpenGamepad();
 bool port_PadMode(); // the gamepad gave the last input
+bool port_MouseMode(); // the mouse gave the last input
 int port_GetPadBinding(int control);
 void port_SetPadBinding(int control, int code);
 int port_DefaultPadBinding(int control);
@@ -45,6 +46,15 @@ void port_AddPadMenuKeys(BYTE* pKeys);
 void port_PadEvent(const SDL_Event& e);
 void port_UpdatePad();
 
+// The mouse for the menus (mouse.cpp): the position in the game's frame and the clicks and wheel
+// notches since the last call, true if it moved; what the frame leaves is dropped at its end.
+void port_MouseEvent(const SDL_Event& e);
+bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel);
+void port_MouseEndFrame();
+
+// The size of the frame the game draws (video_port.cpp).
+void port_FrameSize(int* pW, int* pH);
+
 // Keyboard events for the game (dinput.cpp).
 DWORD port_DikFromScancode(SDL_Scancode sc);
 void port_PushKey(DWORD dik, bool down);
@@ -53,6 +63,7 @@ void port_PushKey(DWORD dik, bool down);
 bool port_GameRunning();
 bool port_QuitMessageShown(); // or the pause menu
 bool port_FrontendActive();
+bool port_MenuUsesMouse(); // the frontend or the pause menu
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

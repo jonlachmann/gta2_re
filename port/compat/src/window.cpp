@@ -409,17 +409,10 @@ HWND WINAPI FindWindowExA(HWND, HWND, LPCSTR, LPCSTR)
     return NULL;
 }
 
+// The cursor follows the menus' mouse use (mouse.cpp), not the game's display mode.
 INT WINAPI ShowCursor(BOOL show)
 {
     sCursorCount += show ? 1 : -1;
-    if (sCursorCount >= 0)
-    {
-        SDL_ShowCursor();
-    }
-    else
-    {
-        SDL_HideCursor();
-    }
     return sCursorCount;
 }
 

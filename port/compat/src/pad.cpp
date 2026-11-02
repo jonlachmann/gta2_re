@@ -22,7 +22,13 @@ const int kDefaultPad[kNumControls] = {kPadUp, kPadDown, kPadLeft, kPadRight, 0,
 const Sint16 kThreshold = 24000;
 
 SDL_Gamepad* sGamepad;
-bool sPadMode;
+enum Mode
+{
+    kKeyboardMode,
+    kPadMode,
+    kMouseMode,
+};
+Mode sMode; // the device that gave the last input
 bool sHeld[kNumControls];
 DWORD sHeldKey[kNumControls];
 bool sPrevCode[256];
@@ -173,7 +179,12 @@ void port_OpenGamepad()
 
 bool port_PadMode()
 {
-    return sPadMode;
+    return sMode == kPadMode;
+}
+
+bool port_MouseMode()
+{
+    return sMode == kMouseMode;
 }
 
 int port_GetPadBinding(int control)
@@ -262,7 +273,7 @@ void port_PadEvent(const SDL_Event& e)
         case SDL_EVENT_KEY_DOWN:
             if (!e.key.repeat)
             {
-                sPadMode = false;
+                sMode = kKeyboardMode;
                 sCapturedKey = static_cast<int>(port_DikFromScancode(e.key.scancode));
             }
             break;
@@ -280,14 +291,24 @@ void port_PadEvent(const SDL_Event& e)
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
             if (sGamepad && e.gbutton.which == SDL_GetGamepadID(sGamepad))
             {
-                sPadMode = true;
+                sMode = kPadMode;
             }
             break;
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
             if (sGamepad && e.gaxis.which == SDL_GetGamepadID(sGamepad) && (e.gaxis.value > kThreshold || e.gaxis.value < -kThreshold))
             {
-                sPadMode = true;
+                sMode = kPadMode;
             }
+            break;
+        case SDL_EVENT_MOUSE_MOTION:
+            if (e.motion.xrel != 0 || e.motion.yrel != 0)
+            {
+                sMode = kMouseMode;
+            }
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_WHEEL:
+            sMode = kMouseMode;
             break;
         default:
             break;

@@ -15,6 +15,11 @@ bool port_FrontendActive()
     return gFrontend != NULL;
 }
 
+bool port_MenuUsesMouse()
+{
+    return port_FrontendActive() || PortPauseMenu::IsOpen();
+}
+
 bool port_QuitMessageShown()
 {
     return port_GameRunning() && gGame_0x40->mLocalPlayer &&
