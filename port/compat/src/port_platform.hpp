@@ -52,6 +52,7 @@ void port_PushKey(DWORD dik, bool down);
 // Game state the gamepad needs (port/src/game_hooks.cpp).
 bool port_GameRunning();
 bool port_QuitMessageShown(); // or the pause menu
+bool port_FrontendActive();
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

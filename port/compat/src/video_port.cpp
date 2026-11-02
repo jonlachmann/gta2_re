@@ -229,6 +229,7 @@ VID_EXPORT void GTA2_CC Vid_FlipBuffers(SVideo* pVideo)
     VidSystem* pSys = Sys(pVideo);
     if (pSys)
     {
+        pSys->Renderer().SetSmoothMagnify(port_FrontendActive());
         PollToggleKey(pSys);
         pSys->Flip();
     }

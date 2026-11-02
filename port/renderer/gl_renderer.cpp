@@ -25,23 +25,38 @@ const char* kFaithfulVS =
     "    vUV = aUV;\n"
     "}\n";
 
-// Sharp bilinear: magnified texels stay square with a one pixel soft edge (the frame is drawn at the
-// size it is shown); at 1:1 or when minified it is the plain bilinear sample.
-#define SHARP_SAMPLE \
-    "vec4 SharpSample(vec2 uv)\n" \
+// Smooth magnification for the menus: the colour is the bilinear mix of the visible texels only
+// (transparent texels keep their palette colour), and the edge is one screen pixel wide where the
+// bilinear alpha crosses one half, so magnified glyphs are neither blurred nor blocky. Opaque
+// texels get the plain bilinear sample.
+#define SMOOTH_SAMPLE \
+    "uniform int uSmooth;\n" \
+    "vec4 SmoothSample(vec2 uv)\n" \
     "{\n" \
+    "    vec4 c = texture(uTex, uv);\n" \
     "    vec2 size = vec2(textureSize(uTex, 0));\n" \
-    "    vec2 texel = uv * size;\n" \
-    "    vec2 scale = max(1.0 / max(fwidth(texel), vec2(1e-6)), vec2(1.0));\n" \
-    "    vec2 d = fract(texel) - 0.5;\n" \
-    "    vec2 range = 0.5 - 0.5 / scale;\n" \
-    "    vec2 f = (d - clamp(d, -range, range)) * scale + 0.5;\n" \
-    "    return texture(uTex, (floor(texel) + f) / size);\n" \
+    "    vec2 p = uv * size - 0.5;\n" \
+    "    float scale = 1.0 / max(max(fwidth(p).x, fwidth(p).y), 1e-6);\n" \
+    "    if (uSmooth == 0 || scale <= 1.0 || c.a >= 0.999)\n" \
+    "        return c;\n" \
+    "    ivec2 i0 = ivec2(floor(p));\n" \
+    "    ivec2 hi = ivec2(size) - 1;\n" \
+    "    vec2 f = fract(p);\n" \
+    "    vec4 t00 = texelFetch(uTex, clamp(i0, ivec2(0), hi), 0);\n" \
+    "    vec4 t10 = texelFetch(uTex, clamp(i0 + ivec2(1, 0), ivec2(0), hi), 0);\n" \
+    "    vec4 t01 = texelFetch(uTex, clamp(i0 + ivec2(0, 1), ivec2(0), hi), 0);\n" \
+    "    vec4 t11 = texelFetch(uTex, clamp(i0 + ivec2(1, 1), ivec2(0), hi), 0);\n" \
+    "    vec4 w = vec4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);\n" \
+    "    vec4 wa = w * vec4(t00.a, t10.a, t01.a, t11.a);\n" \
+    "    float a = wa.x + wa.y + wa.z + wa.w;\n" \
+    "    vec3 rgb = (t00.rgb * wa.x + t10.rgb * wa.y + t01.rgb * wa.z + t11.rgb * wa.w) / max(a, 1e-5);\n" \
+    "    float e = 0.5 / scale;\n" \
+    "    return vec4(rgb, smoothstep(0.5 - e, 0.5 + e, a));\n" \
     "}\n"
 
 const char* kFaithfulFS =
     "uniform sampler2D uTex;\n"
-    SHARP_SAMPLE
+    SMOOTH_SAMPLE
     "uniform int uAlphaTest;\n"
     "uniform int uUseTex;\n"
     "uniform float uSampleShift;\n"
@@ -51,7 +66,7 @@ const char* kFaithfulFS =
     "void main()\n"
     "{\n"
     "    vec2 uv = vUV - (dFdx(vUV) + dFdy(vUV)) * uSampleShift;\n"
-    "    vec4 t = uUseTex != 0 ? SharpSample(uv) : vec4(1.0);\n"
+    "    vec4 t = uUseTex != 0 ? SmoothSample(uv) : vec4(1.0);\n"
     "    if (uAlphaTest != 0 && t.a < 0.5) discard;\n"
     "    oColor = t * vCol;\n"
     "}\n";
@@ -89,7 +104,7 @@ const char* kSceneVS =
 // Per pixel lighting is the original's LightVertex formula with a real square root.
 const char* kSceneFS =
     "uniform sampler2D uTex;\n"
-    SHARP_SAMPLE
+    SMOOTH_SAMPLE
     "uniform int uAlphaTest;\n"
     "uniform int uUseTex;\n"
     "uniform float uSampleShift;\n"
@@ -113,7 +128,7 @@ const char* kSceneFS =
     "void main()\n"
     "{\n"
     "    vec2 uv = vUV - (dFdx(vUV) + dFdy(vUV)) * uSampleShift;\n"
-    "    vec4 t = uUseTex != 0 ? SharpSample(uv) : vec4(1.0);\n"
+    "    vec4 t = uUseTex != 0 ? SmoothSample(uv) : vec4(1.0);\n"
     "    if (uAlphaTest != 0 && t.a < 0.5) discard;\n"
     "    vec4 c = vCol;\n"
     "    if (uPerPixel != 0 && vLit > 0.5)\n"
@@ -295,6 +310,7 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
         sp.mAlphaTest = gl.glGetUniformLocation(sp.mId, "uAlphaTest");
         sp.mUseTex = gl.glGetUniformLocation(sp.mId, "uUseTex");
         sp.mSampleShift = gl.glGetUniformLocation(sp.mId, "uSampleShift");
+        sp.mSmooth = gl.glGetUniformLocation(sp.mId, "uSmooth");
         sp.mAdditive = gl.glGetUniformLocation(sp.mId, "uAdditive");
         sp.mPerPixel = gl.glGetUniformLocation(sp.mId, "uPerPixel");
         sp.mNumLights = gl.glGetUniformLocation(sp.mId, "uNumLights");
@@ -740,6 +756,7 @@ void GLRenderer::Flush()
     }
     gl.glUseProgram(mScene[scene].mId);
     gl.glUniform2f(mScene[scene].mScale, 2.0f / mLogicalW, 2.0f / mLogicalH);
+    gl.glUniform1i(mScene[scene].mSmooth, mSmoothMagnify ? 1 : 0);
     gl.glBindVertexArray(mVao);
     gl.glBindBuffer(GL_ARRAY_BUFFER, mVbo);
     gl.glBufferData(GL_ARRAY_BUFFER, kMaxBatchVerts * sizeof(RVertex), NULL, GL_STREAM_DRAW);

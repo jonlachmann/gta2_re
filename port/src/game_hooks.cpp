@@ -10,6 +10,11 @@ bool port_GameRunning()
     return gGame_0x40 && !gFrontend;
 }
 
+bool port_FrontendActive()
+{
+    return gFrontend != NULL;
+}
+
 bool port_QuitMessageShown()
 {
     return port_GameRunning() && gGame_0x40->mLocalPlayer &&

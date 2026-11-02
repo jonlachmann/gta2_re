@@ -26,6 +26,8 @@ class GLRenderer : public IRenderer
     void Shutdown();
 
     void SetLogicalSize(s32 width, s32 height);
+    // Menus: magnified textures with transparency get smooth edges (SmoothSample in the shaders).
+    void SetSmoothMagnify(bool smooth) { mSmoothMagnify = smooth; }
     s32 LogicalWidth() const { return mLogicalW; }
     s32 LogicalHeight() const { return mLogicalH; }
     // The render target: the logical frame at the size it is shown (sharp scaling), or the logical
@@ -109,7 +111,7 @@ class GLRenderer : public IRenderer
     struct SceneProgram
     {
         GLuint mId;
-        GLint mScale, mOffset, mAlphaTest, mUseTex, mSampleShift, mAdditive, mPerPixel, mNumLights, mAmbient;
+        GLint mScale, mOffset, mAlphaTest, mUseTex, mSampleShift, mSmooth, mAdditive, mPerPixel, mNumLights, mAmbient;
     };
     SceneProgram mScene[2];
     int mActiveScene;
@@ -143,6 +145,7 @@ class GLRenderer : public IRenderer
     f32 mOffsetX;
     f32 mOffsetY;
     f32 mSampleShift;
+    bool mSmoothMagnify = false;
     RenderOptions mOptions;
     s32 mNumLights;
     f32 mAmbient;
