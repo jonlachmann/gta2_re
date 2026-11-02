@@ -48,7 +48,11 @@ const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kTextureFilter, 
 const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
+#if defined(GTA2_PORT_SDL)
+const Id kView[] = {kZoom, kCamera, kHudScale, kSafeArea};
+#else
 const Id kView[] = {kZoom, kHudScale, kSafeArea};
+#endif
 const s32 kNumView = sizeof(kView) / sizeof(kView[0]);
 
 namespace
@@ -56,7 +60,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA"};
 
 struct Language
 {
@@ -125,6 +129,9 @@ const Translation kTranslations[] = {
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
     {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
+    {L"CAMERA", NULL, {L"CAMERA", L"KAMERA", L"TELECAMERA", L"CÁMARA"}},
+    {L"CLASSIC", NULL, {L"CLASSIQUE", L"KLASSISCH", L"CLASSICA", L"CLÁSICA"}},
+    {L"CHINATOWN", NULL, {L"CHINATOWN", L"CHINATOWN", L"CHINATOWN", L"CHINATOWN"}},
     {L"LIGHT EFFECTS", NULL, {L"EFFETS LUMINEUX", L"LICHTEFFEKTE", L"EFFETTI LUCE", L"EFECTOS DE LUZ"}},
     {L"TEXTURE FILTERING", NULL, {L"FILTRAGE TEXTURES", L"TEXTURFILTER", L"FILTRO TEXTURE", L"FILTRADO TEXTURAS"}},
     {L"BILINEAR", NULL, {L"BILINEAIRE", L"BILINEAR", L"BILINEARE", L"BILINEAL"}},
@@ -248,6 +255,8 @@ const char* ScreenName(Id id)
             return "gl_texture_filter";
         case kAntiAliasing:
             return "gl_msaa";
+        case kCamera:
+            return "camera_cw";
         default:
             return "car_headlights";
     }
@@ -307,6 +316,8 @@ const s32 kMaxHudScale = 150;
 const s32 kMaxSafeArea = 10;
 s32 sHudScale = -1;
 s32 sSafeArea = -1;
+// Cached: the view reads it every step and frame.
+s32 sCamera = -1;
 
 s32 HudScalePercent()
 {
@@ -444,6 +455,19 @@ bool Enabled(Id id)
     return requirement == kCount || Screen(requirement) != 0;
 }
 
+bool ChinatownCamera()
+{
+#if defined(GTA2_PORT_SDL)
+    if (sCamera < 0)
+    {
+        sCamera = Screen(kCamera) != 0;
+    }
+    return sCamera != 0;
+#else
+    return false;
+#endif
+}
+
 bool Headlights()
 {
     return Enabled(kHeadlights) && Screen(kHeadlights) != 0;
@@ -542,6 +566,9 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kLighting:
             wcscpy(pOut, Translate(Screen(id) ? L"DUSK" : L"NOON"));
+            break;
+        case kCamera:
+            wcscpy(pOut, Translate(ChinatownCamera() ? L"CHINATOWN" : L"CLASSIC"));
             break;
         case kZoom:
             swprintf(pOut, L"%d", Zoom());
@@ -699,6 +726,10 @@ void Change(Id id, s32 delta)
         case kHeadlights:
         case kLightEffects:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
+            break;
+        case kCamera:
+            sCamera = !ChinatownCamera();
+            gRegistry.Set_Screen_Setting(ScreenName(id), sCamera);
             break;
         case kFrameLimit:
         {

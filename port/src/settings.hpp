@@ -30,6 +30,7 @@ enum Id
     kLightEffects,
     kTextureFilter,
     kAntiAliasing,
+    kCamera,
     kCount,
 };
 
@@ -65,6 +66,9 @@ bool LightEffects();
 
 // HUD SCALE: 1 for the original's size.
 f32 HudScale();
+// CAMERA: CHINATOWN turns the view with the player's vehicle (view.hpp).
+bool ChinatownCamera();
+
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();
 
