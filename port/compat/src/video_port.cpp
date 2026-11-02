@@ -15,6 +15,10 @@ VidSystem* Sys(SVideo* pVideo)
 }
 
 void* sVidFuncs;
+VidSystem* sVidSystem;
+// The options last set from the game's menu, for a renderer made later.
+RenderOptions sGameOptions;
+bool sHasGameOptions;
 unsigned sFrameCount;
 
 // Scroll Lock toggles faithful rendering and the gta2gl.ini options.
@@ -34,6 +38,19 @@ void PollToggleKey(VidSystem* pSys)
     sWasDown = down;
 }
 } // namespace
+
+void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting)
+{
+    sGameOptions = RenderOptions();
+    sGameOptions.mTrueColour = trueColour;
+    sGameOptions.mBloom = bloomTenths / 10.0f;
+    sGameOptions.mPerPixelLighting = perPixelLighting;
+    sHasGameOptions = true;
+    if (sVidSystem)
+    {
+        sVidSystem->SetConfiguredOptions(sGameOptions);
+    }
+}
 
 unsigned port_FrameCount()
 {
@@ -127,6 +144,11 @@ VID_EXPORT SVideo* GTA2_CC Vid_Init_SYS(void* hInstance, u16 flags)
 {
     VidSystem* pSys = new VidSystem();
     pSys->Init(hInstance, flags, sVidFuncs, "gta2gl.ini");
+    sVidSystem = pSys;
+    if (sHasGameOptions)
+    {
+        pSys->SetConfiguredOptions(sGameOptions);
+    }
     return pSys->Video();
 }
 
@@ -245,7 +267,12 @@ VID_EXPORT void GTA2_CC Vid_GrabSurface(SVideo*)
 
 VID_EXPORT void GTA2_CC Vid_ShutDown_SYS(SVideo* pVideo)
 {
-    delete Sys(pVideo);
+    VidSystem* pSys = Sys(pVideo);
+    if (pSys == sVidSystem)
+    {
+        sVidSystem = NULL;
+    }
+    delete pSys;
 }
 
 VID_EXPORT s32 GTA2_CC Vid_EnableWrites(SVideo* pVideo)

@@ -257,7 +257,11 @@ struct Frontend
     s16 mTitleFont; // 0x130
     u16 mCurrentPageIdx; // 0x132
     s16 mUnused134; // 0x134
+#if defined(GTA2_PORT)
+    MenuPage mMenuPagesArray[18]; // 0x136, the port's graphics page last
+#else
     MenuPage mMenuPagesArray[17]; // 0x136
+#endif
     wchar_t mCurrPlyrName[9]; // 0xC9A0
     u8 mCurrPlyrNameLength; // 0xC9B2
     bool mKeyHeld; // 0xC9B3

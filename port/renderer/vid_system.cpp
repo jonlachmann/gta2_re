@@ -206,6 +206,12 @@ void VidSystem::ApplyOptions()
     }
 }
 
+void VidSystem::SetConfiguredOptions(const RenderOptions& options)
+{
+    mOptions.SetConfigured(options);
+    ApplyOptions();
+}
+
 void VidSystem::ToggleFaithful()
 {
     mOptions.ToggleFaithful();

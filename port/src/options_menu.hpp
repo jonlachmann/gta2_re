@@ -1,5 +1,5 @@
 // In-game settings, in place of the external GTA2 Manager: frontend pages the original leaves unused
-// (12, 13, 15, 16), reached from the start menu's "Options".
+// (12, 13, 15, 16) and one more (17), reached from the start menu's "Options".
 #pragma once
 
 #include "Frontend.hpp"
@@ -26,7 +26,6 @@ void PadKeyHint(u8 hint, wchar_t* pText);
 // keyboard, 1 the gamepad; a binding in use elsewhere moves to the control being changed).
 s32 NumControls();
 const wchar_t* ControlName(s32 control);
-const wchar_t* TextSpeedName(s32 speed);
 void BindingNames(s32 control, wchar_t* pKey, wchar_t* pPad);
 void SetBinding(s32 column, s32 control, s32 binding);
 } // namespace PortOptionsMenu

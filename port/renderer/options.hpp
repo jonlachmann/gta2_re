@@ -14,6 +14,8 @@ class OptionsFile
     void Poll(double nowSeconds);
     // Live A/B switch between the faithful renderer and the configured options.
     void ToggleFaithful();
+    // The port's settings menu, in place of the file's values.
+    void SetConfigured(const RenderOptions& options);
     const RenderOptions& Effective() const { return mEffective; }
 
   private:

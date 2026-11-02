@@ -6,8 +6,7 @@
 #include "dma_video.hpp"
 #include "input.hpp"
 #include "registry.hpp"
-#include "root_sound.hpp"
-#include "TextTable.hpp"
+#include "settings.hpp"
 #include <stdio.h>
 #include <string.h>
 #include <vector>
@@ -26,11 +25,6 @@ int port_CapturedKey();
 int port_CapturedPad();
 #endif
 
-void __stdcall SetStartMode(s32 startMode);
-void __stdcall SetVideoModeFromSettings();
-void OnVideoModeChanged();
-char_type IsWindowedModeAvailable();
-
 namespace PortOptionsMenu
 {
 namespace
@@ -41,23 +35,14 @@ enum Page
     kScreenPage = 13,
     kControlsPage = 15,
     kControls2Page = 16,
+    kGraphicsPage = 17,
 };
 
 enum Action
 {
     kNone,
     kGoTo,
-    kSfxVolume,
-    kMusicVolume,
-    k3dSound,
-    kTextSpeed,
-    kLanguage,
-    kDisplay,
-    kBrightness,
-    kLighting,
-    kHeadlights,
-    kExplodingScores,
-    kFrameLimit,
+    kSetting,
     kBinding,
     kDefaultKeys,
 };
@@ -65,11 +50,11 @@ enum Action
 struct Item
 {
     Action mAction;
-    s32 mArg; // target page, or control index
+    s32 mArg; // target page, setting, or control index
 };
 
 // [page - 12][option]
-Item sItems[5][10];
+Item sItems[6][10];
 
 const s32 kNumControls = 12;
 const s32 kDefaultControls[kNumControls] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGHT, DIK_LCONTROL, DIK_RETURN,
@@ -104,7 +89,8 @@ Item& ItemAt(u16 page, u16 option)
 
 bool IsOurs(u16 page)
 {
-    return page == kOptionsPage || page == kScreenPage || page == kControlsPage || page == kControls2Page;
+    return page == kOptionsPage || page == kScreenPage || page == kControlsPage || page == kControls2Page ||
+           page == kGraphicsPage;
 }
 
 // The key names GTA2 Manager showed: data\keyboard\<lang>_kb.cfg, one name per DirectInput code.
@@ -228,50 +214,9 @@ void Bind(s32 column, s32 control, s32 binding)
     column ? SetPad(control, binding) : SetControl(control, binding);
 }
 
-struct Language
-{
-    char mCode;
-    const wchar_t* mName;
-};
-const Language kLanguages[] = {{'e', L"ENGLISH"}, {'f', L"FRANCAIS"}, {'g', L"DEUTSCH"}, {'i', L"ITALIANO"}, {'s', L"ESPANOL"}};
-const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
-
-const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
-
-void SetOptionValue(const char* name, DWORD type, const void* pData, DWORD size)
-{
-    HKEY hKey;
-    if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Option", 0, NULL, 0, KEY_ALL_ACCESS, NULL,
-                        &hKey, NULL) == ERROR_SUCCESS)
-    {
-        RegSetValueExA(hKey, name, 0, type, static_cast<const BYTE*>(pData), size);
-        RegCloseKey(hKey);
-    }
-}
-
-s32 LanguageIndex()
-{
-    char code[16] = "e";
-    gRegistry.Get_Option("language", reinterpret_cast<BYTE*>(code), sizeof(code));
-    for (s32 i = 0; i < kNumLanguages; i++)
-    {
-        if (kLanguages[i].mCode == code[0])
-        {
-            return i;
-        }
-    }
-    return 0;
-}
-
 s32 Wrap(s32 i, s32 n)
 {
     return (i % n + n) % n;
-}
-
-// Volumes are shown 0 to 10, stored 0 to 127.
-s32 VolumeStep(s32 volume)
-{
-    return (volume * 10 + 63) / 127;
 }
 
 void SetTitle(MenuPage* pPage, const wchar_t* pTitle, s16 font)
@@ -308,79 +253,23 @@ void AddOption(Frontend* pFrontend, u16 page, const wchar_t* pName, Action actio
 
 void ChangeValue(Frontend* pFrontend, const Item& item, s32 delta)
 {
-    switch (item.mAction)
+    const PortSettings::Id id = static_cast<PortSettings::Id>(item.mArg);
+    PortSettings::Change(id, delta);
+    if (id == PortSettings::kLanguage)
     {
-        case kSfxVolume:
-        case kMusicVolume:
-        {
-            const char* name = item.mAction == kSfxVolume ? "SFXVol" : "CDVol";
-            s32 step = VolumeStep(gRegistry.Get_Sound_Setting(name, 127)) + delta;
-            step = step < 0 ? 0 : (step > 10 ? 10 : step);
-            const s32 volume = step * 127 / 10;
-            gRegistry.Set_Sound_Setting(name, volume);
-            if (item.mAction == kSfxVolume)
-            {
-                gRoot_sound.SetSfxVol(static_cast<u8>(volume));
-            }
-            else
-            {
-                gRoot_sound.SetCDVol(static_cast<u8>(volume));
-            }
-            break;
-        }
-        case k3dSound:
-            gRegistry.Clear_Or_Delete_Sound_Setting("do_3d_sound", !gRegistry.Sound_Setting_Exists("do_3d_sound"));
-            break;
-        case kTextSpeed:
-        {
-            s32 speed = gRegistry.Get_Option_Int("text_speed", 3) + delta;
-            speed = speed < 1 ? 1 : (speed > 5 ? 5 : speed);
-            const DWORD value = speed;
-            SetOptionValue("text_speed", REG_DWORD, &value, sizeof(value));
-            break;
-        }
-        case kLanguage:
-        {
-            const char code[2] = {kLanguages[Wrap(LanguageIndex() + delta, kNumLanguages)].mCode, 0};
-            SetOptionValue("language", REG_SZ, code, sizeof(code));
-            // The frontend's texts are copied into its pages: reload the table and set them up again.
-            const u16 page = pFrontend->mCurrentPageIdx;
-            const u16 option = pFrontend->mMenuPagesArray[page].mCurrentOptionIdx;
-            delete gText_0x14;
-            gText_0x14 = new TextTable();
-            gText_0x14->Load();
-            pFrontend->SetupMenuStringsOptionsElements();
-            pFrontend->mMenuPagesArray[page].mCurrentOptionIdx = option;
-            break;
-        }
-        case kDisplay:
-            // As Alt+Enter: start_mode 1 is full screen, 0 a window.
-            if (IsWindowedModeAvailable())
-            {
-                SetStartMode(gRegistry.Get_Screen_Setting("start_mode", 1) ? 0 : 1);
-                SetVideoModeFromSettings();
-                OnVideoModeChanged();
-            }
-            break;
-        case kBrightness:
-        {
-            s32 gamma = gRegistry.Get_Screen_Setting("gamma", 10) + delta;
-            gamma = gamma < 1 ? 1 : (gamma > 20 ? 20 : gamma);
-            gRegistry.Set_Screen_Setting("gamma", gamma);
-            SetGamma(gamma);
-            break;
-        }
-        case kLighting:
-        case kHeadlights:
-        case kExplodingScores:
-        case kFrameLimit:
-        {
-            const char* name = item.mAction == kLighting ? "lighting" : (item.mAction == kHeadlights ? "car_headlights" : (item.mAction == kExplodingScores ? "exploding_on" : "max_frame_rate"));
-            gRegistry.Set_Screen_Setting(name, gRegistry.Get_Screen_Setting(name, 1) ? 0 : 1);
-            break;
-        }
-        default:
-            break;
+        // The frontend's texts are copied into its pages: set them up again.
+        const u16 page = pFrontend->mCurrentPageIdx;
+        const u16 option = pFrontend->mMenuPagesArray[page].mCurrentOptionIdx;
+        pFrontend->SetupMenuStringsOptionsElements();
+        pFrontend->mMenuPagesArray[page].mCurrentOptionIdx = option;
+    }
+}
+
+void AddSettings(Frontend* pFrontend, u16 page, const PortSettings::Id* pIds, s32 count)
+{
+    for (s32 i = 0; i < count; i++)
+    {
+        AddOption(pFrontend, page, PortSettings::Name(pIds[i]), kSetting, pIds[i], i == 0 && page == kOptionsPage);
     }
 }
 
@@ -566,11 +455,6 @@ const wchar_t* ControlName(s32 control)
     return kControlNames[control];
 }
 
-const wchar_t* TextSpeedName(s32 speed)
-{
-    return kTextSpeeds[speed < 1 ? 0 : (speed > 5 ? 4 : speed - 1)];
-}
-
 void BindingNames(s32 control, wchar_t* pKey, wchar_t* pPad)
 {
     if (sKeyNames.empty())
@@ -588,7 +472,7 @@ void SetBinding(s32 column, s32 control, s32 binding)
 
 void Setup(Frontend* pFrontend)
 {
-    for (u16 page : {kOptionsPage, kScreenPage, kControlsPage, kControls2Page})
+    for (u16 page : {kOptionsPage, kScreenPage, kControlsPage, kControls2Page, kGraphicsPage})
     {
         MenuPage* pPage = &pFrontend->mMenuPagesArray[page];
         pPage->mNumberOfOptions = 0;
@@ -599,22 +483,18 @@ void Setup(Frontend* pFrontend)
     const s16 title = pFrontend->mTitleFont;
     SetTitle(&pFrontend->mMenuPagesArray[kOptionsPage], L"OPTIONS", title);
     AddOption(pFrontend, kOptionsPage, L"SCREEN", kGoTo, kScreenPage);
+    AddOption(pFrontend, kOptionsPage, L"GRAPHICS", kGoTo, kGraphicsPage);
     AddOption(pFrontend, kOptionsPage, L"CONTROLS", kGoTo, kControlsPage);
-    AddOption(pFrontend, kOptionsPage, L"SOUND EFFECTS", kSfxVolume, 0, true);
-    AddOption(pFrontend, kOptionsPage, L"MUSIC", kMusicVolume, 0);
-    AddOption(pFrontend, kOptionsPage, L"3D SOUND", k3dSound, 0);
-    AddOption(pFrontend, kOptionsPage, L"TEXT SPEED", kTextSpeed, 0, true);
-    AddOption(pFrontend, kOptionsPage, L"LANGUAGE", kLanguage, 0);
+    AddSettings(pFrontend, kOptionsPage, PortSettings::kGeneral, PortSettings::kNumGeneral);
     AddOption(pFrontend, kOptionsPage, L"BACK", kGoTo, MENUPAGE_START_MENU, true);
 
     SetTitle(&pFrontend->mMenuPagesArray[kScreenPage], L"SCREEN", title);
-    AddOption(pFrontend, kScreenPage, L"DISPLAY", kDisplay, 0);
-    AddOption(pFrontend, kScreenPage, L"BRIGHTNESS", kBrightness, 0);
-    AddOption(pFrontend, kScreenPage, L"LIGHTING", kLighting, 0, true);
-    AddOption(pFrontend, kScreenPage, L"CAR HEADLIGHTS", kHeadlights, 0);
-    AddOption(pFrontend, kScreenPage, L"EXPLODING SCORES", kExplodingScores, 0);
-    AddOption(pFrontend, kScreenPage, L"FRAME LIMIT", kFrameLimit, 0);
+    AddSettings(pFrontend, kScreenPage, PortSettings::kScreen, PortSettings::kNumScreen);
     AddOption(pFrontend, kScreenPage, L"BACK", kGoTo, kOptionsPage, true);
+
+    SetTitle(&pFrontend->mMenuPagesArray[kGraphicsPage], L"GRAPHICS", title);
+    AddSettings(pFrontend, kGraphicsPage, PortSettings::kGraphics, PortSettings::kNumGraphics);
+    AddOption(pFrontend, kGraphicsPage, L"BACK", kGoTo, kOptionsPage, true);
 
     SetTitle(&pFrontend->mMenuPagesArray[kControlsPage], L"CONTROLS", title);
     for (s32 i = 0; i < 8; i++)
@@ -641,6 +521,8 @@ void Setup(Frontend* pFrontend)
             pPage->mOptionsArray[i].mXPos = 60;
         }
     }
+
+    PortSettings::ApplyRenderOptions();
 
     // The start menu's "Options" opened GTA2 Manager.
     pFrontend->mMenuPagesArray[MENUPAGE_START_MENU].mOptionsArray[1].mMenuPageTarget = kOptionsPage;
@@ -767,39 +649,8 @@ bool GetOptionText(Frontend* pFrontend, u16 page, u16 option, wchar_t** ppText)
     wchar_t value[40] = {};
     switch (item.mAction)
     {
-        case kSfxVolume:
-        case kMusicVolume:
-            swprintf(value, L"%d", VolumeStep(gRegistry.Get_Sound_Setting(item.mAction == kSfxVolume ? "SFXVol" : "CDVol", 127)));
-            break;
-        case k3dSound:
-            wcscpy(value, gRegistry.Sound_Setting_Exists("do_3d_sound") ? L"ON" : L"OFF");
-            break;
-        case kTextSpeed:
-        {
-            const s32 speed = gRegistry.Get_Option_Int("text_speed", 3);
-            wcscpy(value, kTextSpeeds[speed < 1 ? 0 : (speed > 5 ? 4 : speed - 1)]);
-            break;
-        }
-        case kLanguage:
-            wcscpy(value, kLanguages[LanguageIndex()].mName);
-            break;
-        case kDisplay:
-            wcscpy(value, gRegistry.Get_Screen_Setting("start_mode", 1) ? L"FULL SCREEN" : L"WINDOW");
-            break;
-        case kLighting:
-            wcscpy(value, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
-            break;
-        case kHeadlights:
-            wcscpy(value, gRegistry.Get_Screen_Setting("car_headlights", 1) ? L"ON" : L"OFF");
-            break;
-        case kExplodingScores:
-            wcscpy(value, gRegistry.Get_Screen_Setting("exploding_on", 1) ? L"ON" : L"OFF");
-            break;
-        case kFrameLimit:
-            wcscpy(value, gRegistry.Get_Screen_Setting("max_frame_rate", 1) ? L"ON" : L"OFF");
-            break;
-        case kBrightness:
-            swprintf(value, L"%d", gRegistry.Get_Screen_Setting("gamma", 10));
+        case kSetting:
+            PortSettings::Value(static_cast<PortSettings::Id>(item.mArg), value);
             break;
         case kBinding:
         {

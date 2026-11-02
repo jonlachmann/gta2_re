@@ -115,6 +115,12 @@ void OptionsFile::ToggleFaithful()
     Update();
 }
 
+void OptionsFile::SetConfigured(const RenderOptions& options)
+{
+    mConfigured = options;
+    Update();
+}
+
 void OptionsFile::Update()
 {
     RenderOptions next = mFaithful ? RenderOptions() : mConfigured;

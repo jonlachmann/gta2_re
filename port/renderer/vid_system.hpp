@@ -27,6 +27,7 @@ class VidSystem
     void Init(void* hInstance, u16 flags, void* pVidFuncs, const char* iniPath);
     // Live switch between the faithful renderer and the ini options.
     void ToggleFaithful();
+    void SetConfiguredOptions(const RenderOptions& options);
 
     s32 CheckMode(s32 width, s32 height, s32 bpp);
     SDisplayMode* FindMode(s32 modeId);

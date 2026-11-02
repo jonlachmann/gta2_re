@@ -11,8 +11,7 @@
 #include "debug.hpp"
 #include "gbh_graphics.hpp"
 #include "options_menu.hpp"
-#include "registry.hpp"
-#include "root_sound.hpp"
+#include "settings.hpp"
 #include <stdio.h>
 #include <string.h>
 
@@ -20,11 +19,6 @@
 
 EXTERN_GLOBAL(s16, word_7064D8);
 
-void __stdcall SetStartMode(s32 startMode);
-void __stdcall Init_FrameRateLightingAndExplodingScores();
-void __stdcall SetVideoModeFromSettings();
-void OnVideoModeChanged();
-char_type IsWindowedModeAvailable();
 #if defined(GTA2_PORT_SDL)
 void port_CaptureStart();
 int port_CapturedKey();
@@ -35,65 +29,84 @@ namespace PortPauseMenu
 {
 namespace
 {
-enum Item
+enum Page
 {
-    kResume,
-    kSfx,
-    kMusic,
-    k3dSound,
-    kBrightness,
-    kDisplay,
-    kLighting,
-    kHeadlights,
-    kExplodingScores,
-    kFrameLimit,
-    kTextSpeed,
-    kLanguage,
+    kMainPage,
+    kScreenPage,
+    kGraphicsPage,
+    kControlsPage,
+};
+
+// A line of a page: a setting, or one of these.
+enum Action
+{
+    kResume = PortSettings::kCount,
+    kScreen,
+    kGraphics,
     kControls,
     kQuit,
-    kNumItems,
+    kBack,
 };
 
-const wchar_t* const kItemNames[kNumItems] = {L"RESUME", L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"BRIGHTNESS",
-                                              L"DISPLAY", L"LIGHTING", L"CAR HEADLIGHTS", L"EXPLODING SCORES", L"FRAME LIMIT",
-                                              L"TEXT SPEED", L"LANGUAGE", L"CONTROLS", L"QUIT GAME"};
+const s32 kMaxLines = 16;
 
-struct Language
+// The lines of a page; returns their number.
+s32 Lines(Page page, s32* pLines)
 {
-    char mCode;
-    const wchar_t* mName;
-};
-const Language kLanguages[] = {{'e', L"ENGLISH"}, {'f', L"FRANCAIS"}, {'g', L"DEUTSCH"}, {'i', L"ITALIANO"}, {'s', L"ESPANOL"}};
-const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
-
-s32 LanguageIndex()
-{
-    char code[16] = "e";
-    gRegistry.Get_Option("language", reinterpret_cast<BYTE*>(code), sizeof(code));
-    for (s32 i = 0; i < kNumLanguages; i++)
+    s32 n = 0;
+    if (page == kMainPage)
     {
-        if (kLanguages[i].mCode == code[0])
-        {
-            return i;
-        }
+        pLines[n++] = kResume;
     }
-    return 0;
+    const PortSettings::Id* pIds = page == kMainPage ? PortSettings::kGeneral
+                                   : page == kScreenPage ? PortSettings::kScreen
+                                                         : PortSettings::kGraphics;
+    const s32 count = page == kMainPage ? PortSettings::kNumGeneral
+                      : page == kScreenPage ? PortSettings::kNumScreen
+                                            : PortSettings::kNumGraphics;
+    for (s32 i = 0; i < count; i++)
+    {
+        pLines[n++] = pIds[i];
+    }
+    if (page == kMainPage)
+    {
+        pLines[n++] = kScreen;
+        pLines[n++] = kGraphics;
+        pLines[n++] = kControls;
+        pLines[n++] = kQuit;
+    }
+    else
+    {
+        pLines[n++] = kBack;
+    }
+    return n;
 }
 
-void SetOption(const char* name, DWORD type, const void* pData, DWORD size)
+const wchar_t* LineName(s32 line)
 {
-    HKEY hKey;
-    if (RegCreateKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\DMA Design Ltd\\GTA2\\Option", 0, NULL, 0, KEY_ALL_ACCESS,
-                        NULL, &hKey, NULL) == ERROR_SUCCESS)
+    switch (line)
     {
-        RegSetValueExA(hKey, name, 0, type, static_cast<const BYTE*>(pData), size);
-        RegCloseKey(hKey);
+        case kResume:
+            return L"RESUME";
+        case kScreen:
+            return L"SCREEN";
+        case kGraphics:
+            return L"GRAPHICS";
+        case kControls:
+            return L"CONTROLS";
+        case kQuit:
+            return L"QUIT GAME";
+        case kBack:
+            return L"BACK";
+        default:
+            return PortSettings::Name(static_cast<PortSettings::Id>(line));
     }
 }
 
 bool sOpen;
-bool sControlsPage;
+Page sPage;
 s32 sSelected;
+s32 sMainSelected; // the line to come back to from a subpage
 s32 sControlSelected; // NumControls() is the BACK line
 s32 sColumn;          // 0 keyboard, 1 gamepad
 bool sCapturing;
@@ -141,131 +154,28 @@ void Panel(f32 left, f32 top, f32 right, f32 bottom)
     pgbh_DrawFlatRect(verts, 0);
 }
 
-s32 Clamp(s32 v, s32 lo, s32 hi)
+void Change(s32 line, s32 delta)
 {
-    return v < lo ? lo : (v > hi ? hi : v);
-}
-
-void Change(s32 item, s32 delta)
-{
-    switch (item)
+    if (line < PortSettings::kCount)
     {
-        case kSfx:
-        case kMusic:
-        {
-            const char* name = item == kSfx ? "SFXVol" : "CDVol";
-            const s32 step = Clamp((gRegistry.Get_Sound_Setting(name, 127) * 10 + 63) / 127 + delta, 0, 10);
-            const s32 volume = step * 127 / 10;
-            gRegistry.Set_Sound_Setting(name, volume);
-            if (item == kSfx)
-            {
-                gRoot_sound.SetSfxVol(static_cast<u8>(volume));
-            }
-            else
-            {
-                gRoot_sound.SetCDVol(static_cast<u8>(volume));
-            }
-            break;
-        }
-        case kBrightness:
-        {
-            const s32 gamma = Clamp(gRegistry.Get_Screen_Setting("gamma", 10) + delta, 1, 20);
-            gRegistry.Set_Screen_Setting("gamma", gamma);
-            SetGamma(gamma);
-            break;
-        }
-        case kDisplay:
-            if (IsWindowedModeAvailable())
-            {
-                SetStartMode(gRegistry.Get_Screen_Setting("start_mode", 1) ? 0 : 1);
-                SetVideoModeFromSettings();
-                OnVideoModeChanged();
-            }
-            break;
-        case kTextSpeed:
-        {
-            const DWORD speed = static_cast<DWORD>(Clamp(gRegistry.Get_Option_Int("text_speed", 3) + delta, 1, 5));
-            SetOption("text_speed", REG_DWORD, &speed, sizeof(speed));
-            gHud_2B00->GetTextSpeed();
-            break;
-        }
-        case k3dSound:
-        {
-            // As the game does when it starts: the setting stays on only if a 3D provider opened.
-            gRoot_sound.Set3DSound(!gRegistry.Sound_Setting_Exists("do_3d_sound"));
-            gRegistry.Clear_Or_Delete_Sound_Setting("do_3d_sound", gRoot_sound.Get3DSound());
-            break;
-        }
-        case kLighting:
-        case kHeadlights:
-        case kExplodingScores:
-        case kFrameLimit:
-        {
-            const char* name = item == kLighting ? "lighting" : (item == kHeadlights ? "car_headlights" : (item == kExplodingScores ? "exploding_on" : "max_frame_rate"));
-            gRegistry.Set_Screen_Setting(name, gRegistry.Get_Screen_Setting(name, 1) ? 0 : 1);
-            Init_FrameRateLightingAndExplodingScores();
-            break;
-        }
-        case kLanguage:
-        {
-            const char code[2] = {kLanguages[(LanguageIndex() + delta + kNumLanguages) % kNumLanguages].mCode, 0};
-            SetOption("language", REG_SZ, code, sizeof(code));
-            delete gText_0x14;
-            gText_0x14 = new TextTable();
-            gText_0x14->Load();
-            gHud_2B00->RecalcTextLayout();
-            break;
-        }
-        default:
-            break;
+        PortSettings::Change(static_cast<PortSettings::Id>(line), delta);
     }
 }
 
-void Value(s32 item, wchar_t* pOut)
+void OpenPage(Page page)
 {
-    pOut[0] = 0;
-    switch (item)
+    if (sPage == kMainPage)
     {
-        case kSfx:
-        case kMusic:
-            swprintf(pOut, L"%d", (gRegistry.Get_Sound_Setting(item == kSfx ? "SFXVol" : "CDVol", 127) * 10 + 63) / 127);
-            break;
-        case kBrightness:
-            swprintf(pOut, L"%d", gRegistry.Get_Screen_Setting("gamma", 10));
-            break;
-        case kDisplay:
-            wcscpy(pOut, gRegistry.Get_Screen_Setting("start_mode", 1) ? L"FULL SCREEN" : L"WINDOW");
-            break;
-        case kTextSpeed:
-            wcscpy(pOut, PortOptionsMenu::TextSpeedName(gRegistry.Get_Option_Int("text_speed", 3)));
-            break;
-        case k3dSound:
-            wcscpy(pOut, gRegistry.Sound_Setting_Exists("do_3d_sound") ? L"ON" : L"OFF");
-            break;
-        case kLighting:
-            wcscpy(pOut, gRegistry.Get_Screen_Setting("lighting", 1) ? L"DUSK" : L"NOON");
-            break;
-        case kHeadlights:
-            wcscpy(pOut, gRegistry.Get_Screen_Setting("car_headlights", 1) ? L"ON" : L"OFF");
-            break;
-        case kExplodingScores:
-            wcscpy(pOut, gRegistry.Get_Screen_Setting("exploding_on", 1) ? L"ON" : L"OFF");
-            break;
-        case kFrameLimit:
-            wcscpy(pOut, gRegistry.Get_Screen_Setting("max_frame_rate", 1) ? L"ON" : L"OFF");
-            break;
-        case kLanguage:
-            wcscpy(pOut, kLanguages[LanguageIndex()].mName);
-            break;
-        default:
-            break;
+        sMainSelected = sSelected;
     }
+    sPage = page;
+    sSelected = page == kMainPage ? sMainSelected : 0;
 }
 
 void Close()
 {
     sOpen = false;
-    sControlsPage = false;
+    sPage = kMainPage;
     sCapturing = false;
     if (gGame_0x40->IsPaused())
     {
@@ -304,7 +214,7 @@ bool HandleControlsKey(s32 action)
         case DIK_RETURN:
             if (sControlSelected == count)
             {
-                sControlsPage = false;
+                OpenPage(kMainPage);
             }
             else
             {
@@ -315,7 +225,7 @@ bool HandleControlsKey(s32 action)
             }
             break;
         case DIK_ESCAPE:
-            sControlsPage = false;
+            OpenPage(kMainPage);
             break;
         default:
             break;
@@ -338,7 +248,8 @@ bool HandleKey(s32 action, Player* pPlayer)
             return false;
         }
         sOpen = true;
-        sSelected = kResume;
+        sPage = kMainPage;
+        sSelected = 0;
         if (!gGame_0x40->IsPaused())
         {
             gGame_0x40->Pause();
@@ -349,44 +260,62 @@ bool HandleKey(s32 action, Player* pPlayer)
     {
         return true;
     }
-    if (sControlsPage)
+    if (sPage == kControlsPage)
     {
         return HandleControlsKey(action);
     }
+    s32 lines[kMaxLines];
+    const s32 count = Lines(sPage, lines);
+    const s32 line = lines[sSelected];
     switch (action)
     {
         case DIK_UP:
-            sSelected = (sSelected + kNumItems - 1) % kNumItems;
+            sSelected = (sSelected + count - 1) % count;
             break;
         case DIK_DOWN:
-            sSelected = (sSelected + 1) % kNumItems;
+            sSelected = (sSelected + 1) % count;
             break;
         case DIK_LEFT:
         case DIK_RIGHT:
-            Change(sSelected, action == DIK_LEFT ? -1 : 1);
+            Change(line, action == DIK_LEFT ? -1 : 1);
             break;
         case DIK_RETURN:
-            if (sSelected == kResume)
+            switch (line)
             {
-                Close();
-            }
-            else if (sSelected == kControls)
-            {
-                sControlsPage = true;
-                sControlSelected = 0;
-            }
-            else if (sSelected == kQuit)
-            {
-                Close();
-                gGame_0x40->ExitGameNoBonus(1, GameExitType::PlayerQuit_2);
-            }
-            else
-            {
-                Change(sSelected, 1);
+                case kResume:
+                    Close();
+                    break;
+                case kScreen:
+                    OpenPage(kScreenPage);
+                    break;
+                case kGraphics:
+                    OpenPage(kGraphicsPage);
+                    break;
+                case kControls:
+                    OpenPage(kControlsPage);
+                    sControlSelected = 0;
+                    break;
+                case kQuit:
+                    Close();
+                    gGame_0x40->ExitGameNoBonus(1, GameExitType::PlayerQuit_2);
+                    break;
+                case kBack:
+                    OpenPage(kMainPage);
+                    break;
+                default:
+                    Change(line, 1);
+                    break;
             }
             break;
         case DIK_ESCAPE:
-            Close();
+            if (sPage == kMainPage)
+            {
+                Close();
+            }
+            else
+            {
+                OpenPage(kMainPage);
+            }
             break;
         default:
             break;
@@ -428,15 +357,21 @@ void Draw()
     wchar_t* pPause = gText_0x14->Find("pause");
     Text(pPause, 320.0f - Frontend::GetMaxTextWidth(pPause, static_cast<u16>(word_7064D8)) / 2.0f, 98, false);
 
-    wchar_t value[32];
-    if (!sControlsPage)
+    if (sPage != kControlsPage)
     {
-        Panel(130, 160, 510, 160 + kNumItems * 18 + 10);
-        for (s32 i = 0; i < kNumItems; i++)
+        s32 lines[kMaxLines];
+        const s32 count = Lines(sPage, lines);
+        Panel(130, 160, 510, 160 + count * 18 + 10);
+        wchar_t value[32];
+        for (s32 i = 0; i < count; i++)
         {
             const f32 y = 167.0f + i * 18;
-            Text(kItemNames[i], 150, y, i == sSelected);
-            Value(i, value);
+            Text(LineName(lines[i]), 150, y, i == sSelected);
+            value[0] = 0;
+            if (lines[i] < PortSettings::kCount)
+            {
+                PortSettings::Value(static_cast<PortSettings::Id>(lines[i]), value);
+            }
             Text(value, 370, y, i == sSelected);
         }
         return;
