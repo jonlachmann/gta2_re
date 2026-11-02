@@ -37,7 +37,7 @@ namespace PortSettings
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kExplodingScores};
+const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kDayLength, kStartTime, kExplodingScores};
 #else
 const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores};
 #endif
@@ -61,7 +61,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME"};
 
 struct Language
 {
@@ -117,6 +117,9 @@ const Translation kTranslations[] = {
     {L"LIGHTING", NULL, {L"ECLAIRAGE", L"LICHT", L"ILLUMINAZIONE", L"LUCES"}},
     {L"DUSK", NULL, {L"CREPUSCULE", L"DÄMMERUNG", L"CREPUSCOLO", L"ATARDECER"}},
     {L"NOON", NULL, {L"MIDI", L"MITTAG", L"MEZZOGIORNO", L"MEDIODÍA"}},
+    {L"DAY-NIGHT CYCLE", NULL, {L"CYCLE JOUR-NUIT", L"TAG-NACHT-ZYKLUS", L"CICLO GIORNO-NOTTE", L"CICLO DÍA-NOCHE"}},
+    {L"CYCLE LENGTH", NULL, {L"DUREE DU CYCLE", L"ZYKLUSDAUER", L"DURATA CICLO", L"DURACIÓN CICLO"}},
+    {L"START TIME", NULL, {L"HEURE DE DEPART", L"STARTZEIT", L"ORA INIZIALE", L"HORA INICIAL"}},
     {L"EXPLODING SCORES", NULL, {L"SCORES EXPLOSIFS", L"PUNKTE-EXPLOSION", L"PUNTI ESPLOSIVI", L"PUNTOS EXPLOSIVOS"}},
     {L"FRAME LIMIT", NULL, {L"LIMITE IMAGES", L"BILDRATENLIMIT", L"LIMITE FOTOGRAMMI", L"LÍMITE IMÁGENES"}},
     {L"VSYNC", NULL, {L"VSYNC", L"VSYNC", L"VSYNC", L"VSYNC"}},
@@ -277,6 +280,10 @@ const char* ScreenName(Id id)
             return "camera_follow";
         case kShadows:
             return "gl_soft_shadows";
+        case kDayLength:
+            return "day_length";
+        case kStartTime:
+            return "day_start";
         default:
             return "car_headlights";
     }
@@ -304,6 +311,14 @@ s32 ScreenDefault(Id id)
     if (id == kCameraTurnSpeed)
     {
         return 5;
+    }
+    if (id == kDayLength)
+    {
+        return 24;
+    }
+    if (id == kStartTime)
+    {
+        return 12;
     }
     return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
@@ -351,6 +366,14 @@ const s32 kMaxCameraTilt = 15;
 s32 sCameraTurnSpeed = -1;
 s32 sCameraFollows = -1;
 const s32 kMaxCameraTurnSpeed = 10;
+const s32 kMinDayLength = 6;
+const s32 kMaxDayLength = 60;
+#if defined(GTA2_PORT_SDL)
+const wchar_t* const kLightings[] = {L"NOON", L"DUSK", L"DAY-NIGHT CYCLE"};
+#else
+const wchar_t* const kLightings[] = {L"NOON", L"DUSK"};
+#endif
+const s32 kNumLightings = sizeof(kLightings) / sizeof(kLightings[0]);
 
 s32 HudScalePercent()
 {
@@ -545,13 +568,32 @@ Id Requirement(Id id)
         return kPerPixelLighting;
     }
 #endif
+    if (id == kDayLength || id == kStartTime)
+    {
+        return kLighting;
+    }
     return kCount;
 }
 
 bool Enabled(Id id)
 {
     const Id requirement = Requirement(id);
-    return requirement == kCount || Screen(requirement) != 0;
+    return requirement == kCount || (requirement == kLighting ? DayNightCycle() : Screen(requirement) != 0);
+}
+
+bool DayNightCycle()
+{
+    return Clamp(Screen(kLighting), 0, kNumLightings - 1) == 2;
+}
+
+s32 DayLength()
+{
+    return Clamp(Screen(kDayLength), kMinDayLength, kMaxDayLength);
+}
+
+s32 StartTime()
+{
+    return Clamp(Screen(kStartTime), 0, 23);
 }
 
 bool ChinatownCamera()
@@ -663,6 +705,16 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pMax = kMaxCameraTurnSpeed;
             *pValue = CameraTurnSpeed();
             return true;
+        case kDayLength:
+            *pMin = kMinDayLength;
+            *pMax = kMaxDayLength;
+            *pValue = DayLength();
+            return true;
+        case kStartTime:
+            *pMin = 0;
+            *pMax = 23;
+            *pValue = StartTime();
+            return true;
         default:
             return false;
     }
@@ -701,7 +753,13 @@ void Value(Id id, wchar_t* pOut)
             swprintf(pOut, L"%d", gRegistry.Get_Screen_Setting("gamma", 10));
             break;
         case kLighting:
-            wcscpy(pOut, Translate(Screen(id) ? L"DUSK" : L"NOON"));
+            wcscpy(pOut, Translate(kLightings[Clamp(Screen(id), 0, kNumLightings - 1)]));
+            break;
+        case kDayLength:
+            swprintf(pOut, L"%d MIN", DayLength());
+            break;
+        case kStartTime:
+            swprintf(pOut, L"%d:00", StartTime());
             break;
         case kCamera:
             wcscpy(pOut, Translate(ChinatownCamera() ? L"CHINATOWN" : L"CLASSIC"));
@@ -961,9 +1019,19 @@ void Change(Id id, s32 delta)
             sCameraFollows = !CameraFollows();
             gRegistry.Set_Screen_Setting(ScreenName(id), sCameraFollows);
             break;
+        case kLighting:
+            gRegistry.Set_Screen_Setting(ScreenName(id), Wrap(Clamp(Screen(id), 0, kNumLightings - 1) + delta, kNumLightings));
+            Init_FrameRateLightingAndExplodingScores();
+            break;
+        case kDayLength:
+            gRegistry.Set_Screen_Setting(ScreenName(id), Clamp(DayLength() + delta, kMinDayLength, kMaxDayLength));
+            break;
+        case kStartTime:
+            gRegistry.Set_Screen_Setting(ScreenName(id), Clamp(StartTime() + delta, 0, 23));
+            break;
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
-            if (id == kLighting || id == kExplodingScores)
+            if (id == kExplodingScores)
             {
                 Init_FrameRateLightingAndExplodingScores();
             }

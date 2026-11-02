@@ -448,7 +448,8 @@ void DrawRequirement(const Item& item, f32 x, f32 y)
 {
     const PortSettings::Id requirement = PortSettings::Requirement(static_cast<PortSettings::Id>(item.mArg));
     wchar_t text[64];
-    swprintf(text, L"%ls %ls", Translate(L"NEEDS"), Translate(PortSettings::Name(requirement)));
+    const wchar_t* pName = requirement == PortSettings::kLighting ? L"DAY-NIGHT CYCLE" : PortSettings::Name(requirement);
+    swprintf(text, L"%ls %ls", Translate(L"NEEDS"), Translate(pName));
     Text(text, x, y, gFrontendNormalFont);
 }
 
