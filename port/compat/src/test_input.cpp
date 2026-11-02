@@ -2,10 +2,15 @@
 //   GTA2_INPUT=<frame>:<key>[:<frames held>],...   SDL key names ("Return", "Down", "Escape", "A"),
 //                                                   "Alt+" for the Alt modifier ("Alt+Return"),
 //                                                   "pad.<button>" or "pad.<axis>+/-" for a virtual
-//                                                   gamepad ("pad.a", "pad.dpup", "pad.leftx-")
+//                                                   gamepad ("pad.a", "pad.dpup", "pad.leftx-"),
+//                                                   or the mouse: "mouse.<x>x<y>" moves it to that
+//                                                   window position, "mouse.left" and "mouse.right"
+//                                                   click, "mouse.wheelup" and "mouse.wheeldown" turn
+//                                                   the wheel one notch
 //   GTA2_EXIT_AT=<frame>                            quit at that frame
 // Frames count Vid_FlipBuffers calls.
 #include "port_platform.hpp"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
@@ -22,6 +27,9 @@ struct KeyEvent
     int mPadButton; // -1: keyboard
     int mPadAxis;   // -1: not an axis
     Sint16 mAxisValue;
+    Uint32 mMouseEvent; // 0: not the mouse
+    float mX;           // motion: the position; button: which; wheel: the notches
+    float mY;
 };
 
 SDL_Joystick* sPad;
@@ -89,6 +97,37 @@ void Load()
             key = key.substr(4);
         }
         const unsigned held = c2 == std::string::npos ? 2 : (unsigned)atoi(item.c_str() + c2 + 1);
+        if (key.compare(0, 6, "mouse.") == 0)
+        {
+            const std::string name = key.substr(6);
+            const KeyEvent mouse = {frame, SDL_SCANCODE_UNKNOWN, mod, true, -1, -1, 0, 0, 0, 0};
+            KeyEvent e = mouse;
+            if (name == "left" || name == "right")
+            {
+                e.mMouseEvent = SDL_EVENT_MOUSE_BUTTON_DOWN;
+                e.mX = name == "left" ? SDL_BUTTON_LEFT : SDL_BUTTON_RIGHT;
+                Events().push_back(e);
+                e.mFrame = frame + held;
+                e.mDown = false;
+                e.mMouseEvent = SDL_EVENT_MOUSE_BUTTON_UP;
+            }
+            else if (name == "wheelup" || name == "wheeldown")
+            {
+                e.mMouseEvent = SDL_EVENT_MOUSE_WHEEL;
+                e.mX = name == "wheelup" ? 1.0f : -1.0f;
+            }
+            else if (sscanf(name.c_str(), "%fx%f", &e.mX, &e.mY) == 2)
+            {
+                e.mMouseEvent = SDL_EVENT_MOUSE_MOTION;
+            }
+            else
+            {
+                SDL_Log("GTA2_INPUT: unknown mouse input %s", key.c_str());
+                continue;
+            }
+            Events().push_back(e);
+            continue;
+        }
         if (key.compare(0, 4, "pad.") == 0)
         {
             std::string name = key.substr(4);
@@ -114,8 +153,8 @@ void Load()
             {
                 AttachPad();
             }
-            Events().push_back(KeyEvent{frame, SDL_SCANCODE_UNKNOWN, mod, true, button, axis, value});
-            Events().push_back(KeyEvent{frame + held, SDL_SCANCODE_UNKNOWN, mod, false, button, axis, 0});
+            Events().push_back(KeyEvent{frame, SDL_SCANCODE_UNKNOWN, mod, true, button, axis, value, 0, 0, 0});
+            Events().push_back(KeyEvent{frame + held, SDL_SCANCODE_UNKNOWN, mod, false, button, axis, 0, 0, 0, 0});
             continue;
         }
         const SDL_Scancode sc = SDL_GetScancodeFromName(key.c_str());
@@ -124,9 +163,47 @@ void Load()
             SDL_Log("GTA2_INPUT: unknown key %s", key.c_str());
             continue;
         }
-        Events().push_back(KeyEvent{frame, sc, mod, true, -1, -1, 0});
-        Events().push_back(KeyEvent{frame + held, sc, mod, false, -1, -1, 0});
+        Events().push_back(KeyEvent{frame, sc, mod, true, -1, -1, 0, 0, 0, 0});
+        Events().push_back(KeyEvent{frame + held, sc, mod, false, -1, -1, 0, 0, 0, 0});
     }
+}
+float sMouseX;
+float sMouseY;
+
+void InjectMouse(const KeyEvent& event)
+{
+    SDL_Event e = {};
+    e.type = event.mMouseEvent;
+    SDL_Window* pWindow = port_MainSDLWindow();
+    const SDL_WindowID window = pWindow ? SDL_GetWindowID(pWindow) : 0;
+    switch (event.mMouseEvent)
+    {
+        case SDL_EVENT_MOUSE_MOTION:
+            e.motion.windowID = window;
+            e.motion.x = event.mX;
+            e.motion.y = event.mY;
+            e.motion.xrel = event.mX - sMouseX;
+            e.motion.yrel = event.mY - sMouseY;
+            sMouseX = event.mX;
+            sMouseY = event.mY;
+            break;
+        case SDL_EVENT_MOUSE_WHEEL:
+            e.wheel.windowID = window;
+            e.wheel.y = event.mX;
+            e.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+            e.wheel.mouse_x = sMouseX;
+            e.wheel.mouse_y = sMouseY;
+            break;
+        default:
+            e.button.windowID = window;
+            e.button.button = static_cast<Uint8>(event.mX);
+            e.button.down = event.mDown;
+            e.button.clicks = 1;
+            e.button.x = sMouseX;
+            e.button.y = sMouseY;
+            break;
+    }
+    SDL_PushEvent(&e);
 }
 } // namespace
 
@@ -142,6 +219,13 @@ void port_InjectTestInput(unsigned frame)
         if (it->mFrame > frame)
         {
             ++it;
+            continue;
+        }
+        if (it->mMouseEvent)
+        {
+            InjectMouse(*it);
+            SDL_Log("test input: frame %u mouse %u %g %g", frame, it->mMouseEvent, it->mX, it->mY);
+            it = Events().erase(it);
             continue;
         }
         if (it->mPadAxis >= 0 || it->mPadButton >= 0)
