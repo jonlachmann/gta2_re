@@ -63,6 +63,11 @@ struct Stream
     std::vector<s16> mBuf; // decoded frames, interleaved
     u32 mBufFirst = 0;     // frame index of mBuf[0]
     double mPos = 0;       // frame position
+
+    // The frames on each side of the position, for the interpolation.
+    u32 mCurFrame = UINT_MAX;
+    float mCur[2] = {};
+    float mNext[2] = {};
 };
 
 struct Driver
@@ -243,6 +248,34 @@ bool FillStream(Stream* s, u32 f)
     return true;
 }
 
+bool StreamFrame(Stream* s, u32 f, float* pL, float* pR);
+
+// Frames f and f + 1; moving on by one frame reads only the new one, so a block is not read again.
+bool StreamFrames(Stream* s, u32 f)
+{
+    if (f == s->mCurFrame)
+    {
+        return true;
+    }
+    if (s->mCurFrame != UINT_MAX && f == s->mCurFrame + 1)
+    {
+        s->mCur[0] = s->mNext[0];
+        s->mCur[1] = s->mNext[1];
+    }
+    else if (!StreamFrame(s, f, &s->mCur[0], &s->mCur[1]))
+    {
+        return false;
+    }
+    s->mCurFrame = f;
+    const u32 next = f + 1 < s->mTotalFrames ? f + 1 : (s->mLoopCount == 1 ? f : 0);
+    if (!StreamFrame(s, next, &s->mNext[0], &s->mNext[1]))
+    {
+        s->mNext[0] = s->mCur[0];
+        s->mNext[1] = s->mCur[1];
+    }
+    return true;
+}
+
 bool StreamFrame(Stream* s, u32 f, float* pL, float* pR)
 {
     if (f < s->mBufFirst || f >= s->mBufFirst + s->mBuf.size() / s->mChannels)
@@ -345,15 +378,14 @@ void MixStream(Stream* s, float* out, int frames)
             s->mPos = 0;
             f = 0;
         }
-        float l;
-        float r;
-        if (!StreamFrame(s, f, &l, &r))
+        if (!StreamFrames(s, f))
         {
             s->mStatus = SMP_DONE;
             return;
         }
-        out[i * 2] += l * vol;
-        out[i * 2 + 1] += r * vol;
+        const float t = (float)(s->mPos - f);
+        out[i * 2] += (s->mCur[0] * (1 - t) + s->mNext[0] * t) * vol;
+        out[i * 2 + 1] += (s->mCur[1] * (1 - t) + s->mNext[1] * t) * vol;
         s->mPos += step;
     }
 }
@@ -674,6 +706,7 @@ DXDEC void AILCALL AIL_start_stream(HSTREAM h)
 {
     LOCK;
     St(h)->mPos = 0;
+    St(h)->mCurFrame = UINT_MAX;
     St(h)->mStatus = SMP_PLAYING;
 }
 
@@ -718,6 +751,7 @@ DXDEC void AILCALL AIL_set_stream_ms_position(HSTREAM h, S32 milliseconds)
     LOCK;
     Stream* s = St(h);
     s->mPos = SDL_min((double)milliseconds * s->mRate / 1000.0, (double)s->mTotalFrames);
+    s->mCurFrame = UINT_MAX;
 }
 
 DXDEC void AILCALL AIL_stream_ms_position(HSTREAM h, S32 FAR* total_milliseconds, S32 FAR* current_milliseconds)
