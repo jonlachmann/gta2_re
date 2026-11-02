@@ -81,8 +81,13 @@ void UseGameStyle()
 void LoadStyle()
 {
     // Loading a style sets the font globals; the game's must stay.
-    const s16 fonts[] = {gStyleMessageFont, gStyleTextFont, gStyleCarNameFont, gStyleZoneNameFont,
-                         gStylePauseFont, gKanjiSmallFont, gKanjiLargeFont};
+    s16* const pFonts[] = {&gStyleMessageFont, &gStyleTextFont,  &gStyleCarNameFont, &gStyleZoneNameFont,
+                           &gStylePauseFont,   &gKanjiSmallFont, &gKanjiLargeFont};
+    s16 fonts[7];
+    for (s32 i = 0; i < 7; i++)
+    {
+        fonts[i] = *pFonts[i];
+    }
     sStyle = new gtx_0x106C();
     sTextures = new TextureCache();
     UseFrontendStyle(true);
@@ -90,13 +95,10 @@ void LoadStyle()
     sTextures->LoadStyleTextures();
     ConvertColourBanks();
     UseGameStyle();
-    gStyleMessageFont = fonts[0];
-    gStyleTextFont = fonts[1];
-    gStyleCarNameFont = fonts[2];
-    gStyleZoneNameFont = fonts[3];
-    gStylePauseFont = fonts[4];
-    gKanjiSmallFont = fonts[5];
-    gKanjiLargeFont = fonts[6];
+    for (s32 i = 0; i < 7; i++)
+    {
+        *pFonts[i] = fonts[i];
+    }
 }
 
 void FreeStyle()
@@ -158,31 +160,22 @@ bool HandleKey(s32 action, Player* pPlayer)
     {
         return true;
     }
-    PortMenu::Input input;
-    switch (action)
+    const struct
     {
-        case DIK_UP:
-            input = PortMenu::kUp;
-            break;
-        case DIK_DOWN:
-            input = PortMenu::kDown;
-            break;
-        case DIK_LEFT:
-            input = PortMenu::kLeft;
-            break;
-        case DIK_RIGHT:
-            input = PortMenu::kRight;
-            break;
-        case DIK_RETURN:
-            input = PortMenu::kSelect;
-            break;
-        case DIK_ESCAPE:
-            input = PortMenu::kCancel;
-            break;
-        default:
-            return true;
+        s32 mDik;
+        PortMenu::Input mInput;
+    } kInputs[] = {{DIK_UP, PortMenu::kUp},       {DIK_DOWN, PortMenu::kDown},     {DIK_LEFT, PortMenu::kLeft},
+                   {DIK_RIGHT, PortMenu::kRight}, {DIK_RETURN, PortMenu::kSelect}, {DIK_ESCAPE, PortMenu::kCancel}};
+    s32 i = 0;
+    while (i < 6 && kInputs[i].mDik != action)
+    {
+        i++;
     }
-    switch (PortMenu::HandleInput(input))
+    if (i == 6)
+    {
+        return true;
+    }
+    switch (PortMenu::HandleInput(kInputs[i].mInput))
     {
         case PortMenu::kClosed:
             Close();

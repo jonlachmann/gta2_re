@@ -96,15 +96,6 @@ struct KeyName
 };
 std::vector<KeyName> sKeyNames;
 
-bool PadMode()
-{
-#if defined(GTA2_PORT_SDL)
-    return port_PadMode();
-#else
-    return false;
-#endif
-}
-
 s32 AddSettings(Item* pItems, s32 n, const PortSettings::Id* pIds, s32 count, bool gap)
 {
     for (s32 i = 0; i < count; i++)
@@ -234,23 +225,14 @@ void KeyName(s32 dik, wchar_t* pOut)
 
 void PadName(s32 code, wchar_t* pOut)
 {
-    switch (code)
+    static const wchar_t* const kDirections[] = {L"LEFT", L"RIGHT", L"UP", L"DOWN"};
+    if (code >= kPadLeft && code <= kPadDown)
     {
-        case kPadLeft:
-            wcscpy(pOut, Translate(L"LEFT"));
-            break;
-        case kPadRight:
-            wcscpy(pOut, Translate(L"RIGHT"));
-            break;
-        case kPadUp:
-            wcscpy(pOut, Translate(L"UP"));
-            break;
-        case kPadDown:
-            wcscpy(pOut, Translate(L"DOWN"));
-            break;
-        default:
-            wcscpy(pOut, code >= 0 && code < 12 ? kPadButtonNames[code] : L"-");
-            break;
+        wcscpy(pOut, Translate(kDirections[code - kPadLeft]));
+    }
+    else
+    {
+        wcscpy(pOut, code >= 0 && code < 12 ? kPadButtonNames[code] : L"-");
     }
 }
 
@@ -274,35 +256,23 @@ void SetKey(s32 control, s32 key)
     RegCloseKey(hKey);
 }
 
-#if defined(GTA2_PORT_SDL)
-s32 GetPad(s32 control)
-{
-    return port_GetPadBinding(control);
-}
-
-void SetPad(s32 control, s32 code)
-{
-    port_SetPadBinding(control, code);
-}
-#else
-s32 GetPad(s32)
-{
-    return -1;
-}
-
-void SetPad(s32, s32)
-{
-}
-#endif
-
+// Column 0 the keyboard, 1 the gamepad.
 s32 GetBinding(s32 column, s32 control)
 {
-    return column ? GetPad(control) : GetKey(control);
+#if defined(GTA2_PORT_SDL)
+    return column ? port_GetPadBinding(control) : GetKey(control);
+#else
+    return column ? -1 : GetKey(control);
+#endif
 }
 
 void SetBinding(s32 column, s32 control, s32 binding)
 {
-    column ? SetPad(control, binding) : SetKey(control, binding);
+#if defined(GTA2_PORT_SDL)
+    column ? port_SetPadBinding(control, binding) : SetKey(control, binding);
+#else
+    column ? (void)0 : SetKey(control, binding);
+#endif
 }
 
 // The game reads the keyboard's bindings when it starts, the pad's at each press.
@@ -335,41 +305,15 @@ void DefaultKeys()
     {
         SetKey(i, kDefaultControls[i]);
 #if defined(GTA2_PORT_SDL)
-        SetPad(i, port_DefaultPadBinding(i));
+        port_SetPadBinding(i, port_DefaultPadBinding(i));
 #endif
     }
     ReloadKeys();
 }
 
-#if defined(GTA2_PORT_SDL)
-bool CaptureStart()
-{
-    port_CaptureStart();
-    return true;
-}
-
-s32 CapturedKey()
-{
-    return port_CapturedKey();
-}
-
-s32 CapturedPad()
-{
-    return port_CapturedPad();
-}
-#else
+#if !defined(GTA2_PORT_SDL)
 // The DirectX build has no SDL layer: the first key pressed in the frontend's key state.
-bool CaptureStart()
-{
-    if (!gFrontend)
-    {
-        return false;
-    }
-    memcpy(sPrevKeys, gFrontend->mKeys, sizeof(sPrevKeys));
-    return true;
-}
-
-s32 CapturedKey()
+s32 FrontendKeyPressed()
 {
     s32 result = -1;
     for (s32 i = 0; i < 256 && result < 0; i++)
@@ -382,17 +326,7 @@ s32 CapturedKey()
     memcpy(sPrevKeys, gFrontend->mKeys, sizeof(sPrevKeys));
     return result;
 }
-
-s32 CapturedPad()
-{
-    return -1;
-}
 #endif
-
-void ChangeSetting(s32 setting, s32 delta)
-{
-    PortSettings::Change(static_cast<PortSettings::Id>(setting), delta);
-}
 
 void GoTo(Page page)
 {
@@ -506,6 +440,15 @@ void DrawHints()
 }
 } // namespace
 
+bool PadMode()
+{
+#if defined(GTA2_PORT_SDL)
+    return port_PadMode();
+#else
+    return false;
+#endif
+}
+
 void Open()
 {
     sPage = kMainPage;
@@ -531,7 +474,7 @@ Result HandleInput(Input input)
         case kRight:
             if (item.mKind == kSetting)
             {
-                ChangeSetting(item.mArg, input == kLeft ? -1 : 1);
+                PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), input == kLeft ? -1 : 1);
                 return input == kLeft ? kLowered : kRaised;
             }
 #if defined(GTA2_PORT_SDL)
@@ -549,13 +492,18 @@ Result HandleInput(Input input)
                     GoTo(static_cast<Page>(item.mArg));
                     return kEntered;
                 case kSetting:
-                    ChangeSetting(item.mArg, 1);
+                    PortSettings::Change(static_cast<PortSettings::Id>(item.mArg), 1);
                     return kRaised;
                 case kBinding:
-                    if (!CaptureStart())
+#if defined(GTA2_PORT_SDL)
+                    port_CaptureStart();
+#else
+                    if (!gFrontend)
                     {
                         return kNothing;
                     }
+                    memcpy(sPrevKeys, gFrontend->mKeys, sizeof(sPrevKeys));
+#endif
                     sCapturing = item.mArg;
                     return kEntered;
                 case kDefaultKeys:
@@ -585,8 +533,13 @@ Result UpdateCapture()
         return kNothing;
     }
     // Escape cancels; B cancels on the keyboard column, Back on the pad column.
-    const s32 key = CapturedKey();
-    const s32 pad = CapturedPad();
+#if defined(GTA2_PORT_SDL)
+    const s32 key = port_CapturedKey();
+    const s32 pad = port_CapturedPad();
+#else
+    const s32 key = FrontendKeyPressed();
+    const s32 pad = -1;
+#endif
     if (key == DIK_ESCAPE || (sColumn == 0 && pad == kPadB) || (sColumn == 1 && pad == kPadBack))
     {
         sCapturing = -1;
@@ -650,7 +603,7 @@ void Draw(f32 scale, f32 left, f32 top)
         {
             wchar_t pad[24];
             KeyName(GetKey(item.mArg), value);
-            PadName(GetPad(item.mArg), pad);
+            PadName(GetBinding(1, item.mArg), pad);
             if (sCapturing == item.mArg)
             {
                 wcscpy(sColumn ? pad : value, Translate(L"PRESS"));

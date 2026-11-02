@@ -10,25 +10,12 @@
 
 EXTERN_GLOBAL(SoundObject, snd1);
 
-#if defined(GTA2_PORT_SDL)
-bool port_PadMode();
-#endif
-
 namespace PortOptionsMenu
 {
 namespace
 {
 const u16 kMenuPage = 12;
 bool sShown;
-
-bool PadMode()
-{
-#if defined(GTA2_PORT_SDL)
-    return port_PadMode();
-#else
-    return false;
-#endif
-}
 
 s32 Wrap(s32 i, s32 n)
 {
@@ -41,29 +28,19 @@ PortMenu::Result HandleInput(Frontend* pFrontend)
     {
         return PortMenu::UpdateCapture();
     }
-    if (pFrontend->mReturnPressed)
+    const struct
     {
-        return PortMenu::HandleInput(PortMenu::kSelect);
-    }
-    if (pFrontend->mEscapePressed)
+        bool Frontend::*mPressed;
+        PortMenu::Input mInput;
+    } kInputs[] = {{&Frontend::mReturnPressed, PortMenu::kSelect}, {&Frontend::mEscapePressed, PortMenu::kCancel},
+                   {&Frontend::mUpPressed, PortMenu::kUp},          {&Frontend::mDownPressed, PortMenu::kDown},
+                   {&Frontend::mLeftPressed, PortMenu::kLeft},      {&Frontend::mRightPressed, PortMenu::kRight}};
+    for (const auto& input : kInputs)
     {
-        return PortMenu::HandleInput(PortMenu::kCancel);
-    }
-    if (pFrontend->mUpPressed)
-    {
-        return PortMenu::HandleInput(PortMenu::kUp);
-    }
-    if (pFrontend->mDownPressed)
-    {
-        return PortMenu::HandleInput(PortMenu::kDown);
-    }
-    if (pFrontend->mLeftPressed)
-    {
-        return PortMenu::HandleInput(PortMenu::kLeft);
-    }
-    if (pFrontend->mRightPressed)
-    {
-        return PortMenu::HandleInput(PortMenu::kRight);
+        if (pFrontend->*input.mPressed)
+        {
+            return PortMenu::HandleInput(input.mInput);
+        }
     }
     return PortMenu::kNothing;
 }
@@ -130,7 +107,7 @@ void Draw(Frontend* pFrontend)
 
 bool UpdateNameEntry(Frontend* pFrontend)
 {
-    if (!PadMode())
+    if (!PortMenu::PadMode())
     {
         return false;
     }
@@ -182,7 +159,7 @@ bool UpdateNameEntry(Frontend* pFrontend)
 
 void PadKeyHint(u8 hint, wchar_t* pText)
 {
-    if (!PadMode())
+    if (!PortMenu::PadMode())
     {
         return;
     }

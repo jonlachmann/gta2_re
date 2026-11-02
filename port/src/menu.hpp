@@ -30,6 +30,9 @@ enum Result
     kQuitGame,
 };
 
+// The gamepad gave the last input.
+bool PadMode();
+
 // On the main page; in game it starts with RESUME and ends with QUIT GAME.
 void Open();
 
