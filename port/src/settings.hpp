@@ -22,6 +22,8 @@ enum Id
     kBloom,
     kPerPixelLighting,
     kHeadlights,
+    kVsync,
+    kDisplayMode,
     kCount,
 };
 
@@ -44,6 +46,9 @@ void Change(Id id, s32 delta);
 
 // Car headlight beams, with the dusk lighting.
 bool Headlights();
+
+// FRAME LIMIT: frames drawn per second, 30 the original's pacing, 0 no limit.
+s32 MaxFps();
 
 // The renderer's options from the registry, at start-up.
 void ApplyRenderOptions();

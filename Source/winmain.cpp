@@ -64,6 +64,9 @@
 #include "sound_obj.hpp"
 #include "sprite.hpp"
 #include "TextTable.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/frame_loop.hpp"
+#endif
 
 DEFINE_STATIC_GLOBAL(u8, sNetDisconnectPlayersBits, 0x6F56B8);
 DEFINE_STATIC_GLOBAL(u32, sNetworkPlayerIdx, 0x6F56C8);
@@ -376,6 +379,9 @@ EXPORT void __stdcall ResetFrameTimer()
 {
     sMatchStartTime = timeGetTime();
     sFramesSinceDraw = 0;
+#if defined(GTA2_PORT)
+    PortFrameLoop::Reset();
+#endif
 }
 
 MATCH_FUNC(0x5D8E00)
@@ -968,6 +974,9 @@ EXPORT void __stdcall InitializeGame()
     sFramesSinceDraw = 0;
     sbForceGameUpdate = false;
     sbInputsPending = true;
+#if defined(GTA2_PORT)
+    PortFrameLoop::Reset();
+#endif
 }
 
 MATCH_FUNC(0x5D9680)
@@ -1443,9 +1452,55 @@ EXPORT void __stdcall do_network_and_local_inputs()
     }
 }
 
+#if defined(GTA2_PORT)
+// The original's order (inputs, step, draw) on the port's pacing; one action per call, so that the
+// message loop runs between them.
+static bool PortRunGameFrame()
+{
+    bool exit_requested = false;
+    bool drew_frame = false;
+    bool updated_logic = false;
+    switch (PortFrameLoop::Next(gGame_0x40->GetFrameDurationMs(), sbForceGameUpdate, bSkip_draw))
+    {
+        case PortFrameLoop::kStep:
+            if (sbInputsPending)
+            {
+                do_network_and_local_inputs();
+                sbInputsPending = false;
+            }
+            PortFrameLoop::BeforeStep();
+            exit_requested = ExecuteGameTimed();
+            PortFrameLoop::AfterStep();
+            sbForceGameUpdate = false;
+            sbInputsPending = true;
+            updated_logic = true;
+            break;
+        case PortFrameLoop::kDraw:
+            PortFrameLoop::BeginDraw();
+            DrawAndFlip();
+            PortFrameLoop::EndDraw();
+            drew_frame = true;
+            break;
+        default:
+            break;
+    }
+    if (gFpsCounter)
+    {
+        gFpsCounter->UpdateFpsCounters(drew_frame, updated_logic);
+    }
+    return exit_requested;
+}
+#endif
+
 MATCH_FUNC(0x4DA850)
 EXPORT bool RunGameFrame()
 {
+#if defined(GTA2_PORT)
+    if (!bStartNetworkGame)
+    {
+        return PortRunGameFrame();
+    }
+#endif
     bool exit_requested = false;
     bool drew_frame = false;
     bool updated_logic = false;

@@ -4,6 +4,9 @@
 #include "Globals.hpp"
 #include "Player.hpp"
 #include <memory.h>
+#if defined(GTA2_PORT)
+#include "../port/src/frame_loop.hpp"
+#endif
 
 DEFINE_GLOBAL(ExplodingScorePool*, gExplodingScorePool, 0x702F34);
 
@@ -253,6 +256,10 @@ void ExplodingScore::DrawNumbers()
     Fix16 x_delta;
     Fix16 y_delta;
     Camera* pCamera = &gGame_0x40->mLocalPlayer->mViewCamera;
+#if defined(GTA2_PORT)
+    // The pull towards the screen's centre advances once per logic step, however often the score is drawn.
+    PortFrameLoop::StepLocked<Fix16> keep(mX, mY);
+#endif
     pCamera->ProjectWorldToScreen_4B90E0(mX, mY, mZ, &screen_x, &screen_y);
     if (screen_x < kFp160)
     {

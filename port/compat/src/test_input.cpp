@@ -8,7 +8,8 @@
 //                                                   click, "mouse.wheelup" and "mouse.wheeldown" turn
 //                                                   the wheel one notch
 //   GTA2_EXIT_AT=<frame>                            quit at that frame
-// Frames count Vid_FlipBuffers calls.
+// Frames count Vid_FlipBuffers calls, but logic steps while the game runs (port_FrameCount), so the same
+// script presses the same keys on the same game step at any frame rate.
 #include "port_platform.hpp"
 #include <stdio.h>
 #include <stdlib.h>

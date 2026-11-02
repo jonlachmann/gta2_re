@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "frame_loop.hpp"
 #include "Frontend.hpp"
 #include "Function.hpp"
 #include "Game.hpp"
@@ -21,13 +22,22 @@ char_type IsWindowedModeAvailable();
 bool port_GameRunning();
 #if defined(GTA2_PORT_SDL)
 void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighting);
+void port_ApplyVsync();
+int port_FullscreenModeCount();
+int port_FullscreenModeIndex();
+void port_FullscreenModeSize(int index, int* pW, int* pH, int* pCentiHz);
+void port_SetFullscreenModeIndex(int index);
 #endif
 
 namespace PortSettings
 {
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
-const Id kScreen[] = {kDisplay, kBrightness, kLighting, kExplodingScores, kFrameLimit};
+#if defined(GTA2_PORT_SDL)
+const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kExplodingScores};
+#else
+const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores};
+#endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
 const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kHeadlights};
@@ -40,7 +50,8 @@ namespace
 {
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
-                                       L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS"};
+                                       L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
+                                       L"VSYNC", L"DISPLAY MODE"};
 
 struct Language
 {
@@ -51,6 +62,8 @@ const Language kLanguages[] = {{'e', L"ENGLISH"}, {'f', L"FRANCAIS"}, {'g', L"DE
 const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
 
 const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
+const s32 kMaxFpsValues[] = {30, 60, 120, 144, 240, 0};
+const s32 kNumMaxFpsValues = sizeof(kMaxFpsValues) / sizeof(kMaxFpsValues[0]);
 
 // A text of the port's menus: a key of the game's text table, or the text in French, German, Italian
 // and Spanish (Latin-1 letters, uppercase as the game writes them), many from GTA2 Manager's data\bob_?.gxt.
@@ -92,6 +105,11 @@ const Translation kTranslations[] = {
     {L"NOON", NULL, {L"MIDI", L"MITTAG", L"MEZZOGIORNO", L"MEDIODÍA"}},
     {L"EXPLODING SCORES", NULL, {L"SCORES EXPLOSIFS", L"PUNKTE-EXPLOSION", L"PUNTI ESPLOSIVI", L"PUNTOS EXPLOSIVOS"}},
     {L"FRAME LIMIT", NULL, {L"LIMITE IMAGES", L"BILDRATENLIMIT", L"LIMITE FOTOGRAMMI", L"LÍMITE IMÁGENES"}},
+    {L"VSYNC", NULL, {L"VSYNC", L"VSYNC", L"VSYNC", L"VSYNC"}},
+    {L"ORIGINAL", NULL, {L"ORIGINAL", L"ORIGINAL", L"ORIGINALE", L"ORIGINAL"}},
+    {L"UNLIMITED", NULL, {L"ILLIMITE", L"UNBEGRENZT", L"ILLIMITATO", L"ILIMITADO"}},
+    {L"DISPLAY MODE", NULL, {L"MODE VIDEO", L"BILDSCHIRMMODUS", L"MODALITÀ VIDEO", L"MODO DE VÍDEO"}},
+    {L"DESKTOP", NULL, {L"BUREAU", L"DESKTOP", L"DESKTOP", L"ESCRITORIO"}},
     {L"TRUE COLOUR", NULL, {L"VRAIES COULEURS", L"ECHTFARBEN", L"COLORI REALI", L"COLOR REAL"}},
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
@@ -189,7 +207,9 @@ const char* ScreenName(Id id)
         case kExplodingScores:
             return "exploding_on";
         case kFrameLimit:
-            return "max_frame_rate";
+            return "port_max_fps";
+        case kVsync:
+            return "port_vsync";
         case kTrueColour:
             return "gl_true_colour";
         case kBloom:
@@ -204,7 +224,11 @@ const char* ScreenName(Id id)
 // The game's own settings are on by default; the port's graphics additions off.
 s32 ScreenDefault(Id id)
 {
-    return id == kLighting || id == kExplodingScores || id == kFrameLimit ? 1 : 0;
+    if (id == kFrameLimit)
+    {
+        return 30;
+    }
+    return id == kLighting || id == kExplodingScores || id == kVsync ? 1 : 0;
 }
 
 s32 Screen(Id id)
@@ -285,6 +309,20 @@ bool Headlights()
     return Screen(kHeadlights) != 0;
 }
 
+// The original's max_frame_rate is not read: off, it ran the game as fast as the machine.
+s32 MaxFps()
+{
+    const s32 fps = Screen(kFrameLimit);
+    for (s32 i = 0; i < kNumMaxFpsValues; i++)
+    {
+        if (kMaxFpsValues[i] == fps)
+        {
+            return fps;
+        }
+    }
+    return 30;
+}
+
 void ApplyRenderOptions()
 {
 #if defined(GTA2_PORT_SDL)
@@ -329,6 +367,40 @@ void Value(Id id, wchar_t* pOut)
                 wcscpy(pOut, Translate(L"OFF"));
             }
             break;
+        case kFrameLimit:
+            if (MaxFps() == 30)
+            {
+                wcscpy(pOut, L"30 ");
+                wcscpy(pOut + 3, Translate(L"ORIGINAL"));
+            }
+            else if (MaxFps())
+            {
+                swprintf(pOut, L"%d", MaxFps());
+            }
+            else
+            {
+                wcscpy(pOut, Translate(L"UNLIMITED"));
+            }
+            break;
+#if defined(GTA2_PORT_SDL)
+        case kDisplayMode:
+        {
+            const int index = port_FullscreenModeIndex();
+            int w;
+            int h;
+            int centiHz;
+            port_FullscreenModeSize(index, &w, &h, &centiHz);
+            if (!index)
+            {
+                wcscpy(pOut, Translate(L"DESKTOP"));
+            }
+            else
+            {
+                swprintf(pOut, L"%dX%d %dHZ", w, h, (centiHz + 50) / 100);
+            }
+            break;
+        }
+#endif
         default:
             wcscpy(pOut, Translate(Screen(id) ? L"ON" : L"OFF"));
             break;
@@ -419,9 +491,34 @@ void Change(Id id, s32 delta)
         case kHeadlights:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
+        case kFrameLimit:
+        {
+            s32 i = 0;
+            while (i < kNumMaxFpsValues - 1 && kMaxFpsValues[i] != MaxFps())
+            {
+                i++;
+            }
+            gRegistry.Set_Screen_Setting(ScreenName(id), kMaxFpsValues[Wrap(i + delta, kNumMaxFpsValues)]);
+            PortFrameLoop::ApplySettings();
+            break;
+        }
+#if defined(GTA2_PORT_SDL)
+        case kVsync:
+            gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
+            port_ApplyVsync();
+            break;
+        case kDisplayMode:
+            port_SetFullscreenModeIndex(Wrap(port_FullscreenModeIndex() + delta, port_FullscreenModeCount()));
+            if (gRegistry.Get_Screen_Setting("start_mode", 1))
+            {
+                SetVideoModeFromSettings();
+                OnVideoModeChanged();
+            }
+            break;
+#endif
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
-            if (id == kLighting || id == kExplodingScores || id == kFrameLimit)
+            if (id == kLighting || id == kExplodingScores)
             {
                 Init_FrameRateLightingAndExplodingScores();
             }

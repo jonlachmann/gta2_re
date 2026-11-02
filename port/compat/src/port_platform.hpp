@@ -17,8 +17,12 @@ void port_GetWindowSize(int* pW, int* pH);
 void port_SaveWindowSize(int w, int h);
 void port_UpdateGameResolution();
 
-// Number of Vid_FlipBuffers calls so far.
+// Test frames so far: Vid_FlipBuffers calls, except that while the game runs its logic steps count
+// instead of its frames, so scripted tests do the same at any frame rate.
 unsigned port_FrameCount();
+
+// The full screen mode chosen in the settings, NULL for the desktop's.
+const SDL_DisplayMode* port_FullscreenMode();
 
 // Scripted key presses and exit (GTA2_INPUT, GTA2_EXIT_AT), checked as the message loop pumps.
 void port_InitTestInput();

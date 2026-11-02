@@ -42,6 +42,21 @@ button goes back, the wheel changes a value; the cursor shows while the mouse is
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
 
+## Frame rate
+
+The game logic always runs in the original's steps of 33 ms (11 ms in fast forward), 30.3 per
+second, on a monotonic clock; the original's `max_frame_rate` (off: the game as fast as the
+machine) is not read. The SCREEN settings page chooses how often frames are drawn:
+
+- FRAME LIMIT (`port_max_fps`): 30 ORIGINAL draws once after each step, as the original; 60, 120,
+  144, 240 or UNLIMITED draw in between, with every sprite and the camera interpolated between the
+  last two steps (`src/interpolation.cpp`). That shows the game one step (33 ms) late.
+- VSYNC (`port_vsync`): adaptive where the driver has it.
+- DISPLAY MODE (`port_fullscreen_width`, `_height`, `_centihz`): full screen at the desktop's
+  mode (borderless) or one of the screen's own modes (resolution and refresh rate).
+
+After a stall the game catches up at most 4 steps before the next frame, then drops the rest.
+
 ## 3D sound (OpenAL Soft)
 
 The game's 3D sound option (`do_3d_sound` under `Sound` in `gta2_registry.ini`) uses
@@ -90,7 +105,9 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 |---|---|
 | `GTA2_INPUT=<frame>:<key>[:<frames held>],...` | key presses at given frames (SDL key names: `Return`, `Up`, `Left Ctrl`, `Alt+Return`), a virtual gamepad (`pad.a`, `pad.dpup`, `pad.lefty-`), or the mouse (`mouse.<x>x<y>` moves it to that window position, `mouse.left`, `mouse.right`, `mouse.wheelup`, `mouse.wheeldown`) |
 | `GTA2_EXIT_AT=<frame>` | quit at that frame |
-| `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP |
+| `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP (the first frame drawn at each); `GTA2GL_CAPTURE_FLIPS=1` counts presented frames instead |
+| `GTA2_LOOP_STATS=1` | logic steps and frames per second on stderr, every 5 seconds |
+| `GTA2_LOOP_TRACE=<file>` | the player's and the camera's position after each step (`S`) and as drawn (`D`) |
 | `GTA2_NO_SOUND=1` | no audio device |
 | `GTA2_NO_OPENAL=1`, `GTA2_HRTF=1` | no 3D sound; binaural 3D sound |
 | `GTA2_LOG_FILE=<file>` | SDL's log, debug strings and message boxes written to that file |
@@ -98,7 +115,8 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 | `GTA2_AUDIO_DRIVER`, `GTA2_AUDIO_FILE` | SDL's audio driver and disk output file (wine hides `SDL_*` variables from Windows programs) |
 | `GTA2_DEBUG_OUTPUT=1` | the game's debug strings on stderr |
 
-Frames count presented frames. A run nobody sees, with the sound written to a file:
+Frames count presented frames, except that while the game runs they count its logic steps, so a
+script does the same at any frame rate. A run nobody sees, with the sound written to a file:
 
 ```bash
 SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=/tmp/audio.raw \
