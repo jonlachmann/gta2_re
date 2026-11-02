@@ -774,7 +774,9 @@ void cSampleManager::Close3DProvider()
     {
         AIL_close_3D_provider(m3dProvider);
         m3dProvider = 0;
+#if !defined(GTA2_PORT_SDL)
         Sleep(1500u);
+#endif
     }
 }
 

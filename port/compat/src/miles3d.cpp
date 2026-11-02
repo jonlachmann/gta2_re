@@ -85,6 +85,7 @@ bool sLoadTried;
 bool sLoaded;
 ALCdevice* sDevice;
 ALCcontext* sContext;
+bool sOpen; // the game's provider is open; the context outlives it, so reopening is instant
 bool sHaveEfx;
 ALuint sEffect;
 ALuint sSlot;
@@ -247,6 +248,7 @@ bool OpenDevice()
 {
     if (sContext)
     {
+        sOpen = true;
         return true;
     }
     if (!Load())
@@ -303,9 +305,11 @@ bool OpenDevice()
         ApplyEnvironment();
     }
     SDL_Log("3D sound: OpenAL Soft%s", sHaveEfx ? " with EAX reverb" : "");
+    sOpen = true;
     return true;
 }
 
+// The game closes the provider when 3D sound is turned off: its samples go, the context stays.
 void CloseDevice()
 {
     for (Sample3D* s : Samples())
@@ -315,20 +319,7 @@ void CloseDevice()
         delete s;
     }
     Samples().clear();
-    if (sHaveEfx)
-    {
-        al.alDeleteAuxiliaryEffectSlots(1, &sSlot);
-        al.alDeleteEffects(1, &sEffect);
-        sHaveEfx = false;
-    }
-    if (sContext)
-    {
-        al.alcMakeContextCurrent(NULL);
-        al.alcDestroyContext(sContext);
-        al.alcCloseDevice(sDevice);
-    }
-    sContext = NULL;
-    sDevice = NULL;
+    sOpen = false;
 }
 
 Sample3D* S3(H3DSAMPLE h)
@@ -393,7 +384,7 @@ void ApplyGain(Sample3D* s)
 bool Miles3D_Render(float* pMix, int frames)
 {
     LOCK;
-    if (!sContext)
+    if (!sContext || !sOpen)
     {
         return false;
     }
@@ -482,7 +473,7 @@ DXDEC void AILCALL AIL_set_3D_provider_preference(HPROVIDER, C8 FAR* name, void 
 DXDEC H3DSAMPLE AILCALL AIL_allocate_3D_sample_handle(HPROVIDER)
 {
     LOCK;
-    if (!sContext || static_cast<S32>(Samples().size()) >= kMaxSamples)
+    if (!sOpen || static_cast<S32>(Samples().size()) >= kMaxSamples)
     {
         return NULL;
     }

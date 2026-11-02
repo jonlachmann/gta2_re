@@ -442,6 +442,10 @@ DXDEC void AILCALL AIL_delay(S32 intervals)
     SDL_Delay((Uint32)(intervals * 1000 / 60));
 }
 
+// The game closes and reopens the driver to switch 3D sound on or off: the SDL device stays open
+// (silent while no driver), since reopening it takes a noticeable time.
+static SDL_AudioStream* sDevice;
+
 DXDEC S32 AILCALL AIL_waveOutOpen(HDIGDRIVER FAR* drvr, LPHWAVEOUT FAR*, S32, LPWAVEFORMAT)
 {
     LOCK;
@@ -449,33 +453,26 @@ DXDEC S32 AILCALL AIL_waveOutOpen(HDIGDRIVER FAR* drvr, LPHWAVEOUT FAR*, S32, LP
     {
         return -1;
     }
-    const SDL_AudioSpec spec = {SDL_AUDIO_F32, 2, kOutRate};
-    SDL_AudioStream* pDevice = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, AudioCallback, NULL);
-    if (!pDevice)
+    if (!sDevice)
     {
-        SDL_Log("Audio: %s", SDL_GetError());
-        return -1;
+        const SDL_AudioSpec spec = {SDL_AUDIO_F32, 2, kOutRate};
+        sDevice = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, AudioCallback, NULL);
+        if (!sDevice)
+        {
+            SDL_Log("Audio: %s", SDL_GetError());
+            return -1;
+        }
+        SDL_Log("Audio: %s", SDL_GetCurrentAudioDriver());
     }
-    SDL_Log("Audio: %s", SDL_GetCurrentAudioDriver());
     sDriver = new Driver();
-    sDriver->mDevice = pDevice;
-    SDL_ResumeAudioStreamDevice(pDevice);
+    sDriver->mDevice = sDevice;
+    SDL_ResumeAudioStreamDevice(sDevice);
     *drvr = reinterpret_cast<HDIGDRIVER>(sDriver);
     return 0;
 }
 
 DXDEC void AILCALL AIL_waveOutClose(HDIGDRIVER)
 {
-    SDL_AudioStream* pDevice = NULL;
-    {
-        LOCK;
-        if (!sDriver)
-        {
-            return;
-        }
-        pDevice = sDriver->mDevice;
-    }
-    SDL_DestroyAudioStream(pDevice);
     LOCK;
     delete sDriver;
     sDriver = NULL;
