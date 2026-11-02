@@ -1,10 +1,14 @@
 #include "lights.hpp"
 #include "Car.hpp"
 #include "CarInfoTable.hpp"
+#include "Char_Pool.hpp"
 #include "Explosion.hpp"
 #include "Fix16_Point.hpp"
 #include "Globals.hpp"
 #include "Object_5C.hpp"
+#include "ObjectPool.hpp"
+#include "Ped.hpp"
+#include "char.hpp"
 #include "ParticleManager.hpp"
 #include "ang16.hpp"
 #include "enums.hpp"
@@ -33,6 +37,8 @@ const u8 kBrakeLightDelta = 5;
 const u32 kHalogen = 0xFFFFDCA0;
 const u32 kRed = 0xFFFF5038;
 const u32 kFire = 0xFFFF9030;
+const u32 kElectric = 0xFF5080FF;
+const u32 kExhaust = 0xFFFFD8A0;
 u8 sPixels[256 * 256];
 f32 sMinX, sMinY, sMaxX, sMaxY;
 
@@ -250,13 +256,49 @@ void Submit(s32 min_x, s32 min_y, s32 max_x, s32 max_y)
         }
     }
     // Muzzle flashes (ParticleManager::GunMuzzelFlash): states 40 and 41, mSubState counting their few steps.
+    // Flamethrower flames (ParticleManager::EmitFlameStreamSegment): state 31, a dim flickering light each.
+    // Electro gun arcs (ParticleManager::EmitElectricArcParticle): state 37, fading with mCounter.
     for (Particle_4C* p = gParticle_4C_Pool ? gParticle_4C_Pool->GetFirstUsed() : NULL; p; p = p->mpNext)
     {
-        if ((p->mState == 40 || p->mState == 41) && p->mpOwnSprite)
+        const Sprite* pSprite = p->mpOwnSprite;
+        if (!pSprite)
         {
-            const Sprite* pSprite = p->mpOwnSprite;
+            continue;
+        }
+        if (p->mState == 40 || p->mState == 41)
+        {
             AddLight(pSprite->mXy.x.ToFloat(), pSprite->mXy.y.ToFloat(), pSprite->mZpos.ToFloat(), 2.0f,
                      220 - 45 * p->mSubState, kFire);
+        }
+        else if (p->mState == 31)
+        {
+            AddLight(pSprite->mXy.x.ToFloat(), pSprite->mXy.y.ToFloat(), pSprite->mZpos.ToFloat(), 1.2f,
+                     static_cast<s32>(25 * FlameNow(p->mId * 8u)), kFire);
+        }
+        else if (p->mState == 37 && p->mInitialCounter)
+        {
+            AddLight(pSprite->mXy.x.ToFloat(), pSprite->mXy.y.ToFloat(), pSprite->mZpos.ToFloat(), 1.2f,
+                     static_cast<s32>(30 * FlameNow(p->mId * 8u) * p->mCounter / p->mInitialCounter), kElectric);
+        }
+    }
+    // Rockets in flight; thrown molotovs carry a game light already (Weapon::throwable).
+    for (Object* pObj = gObject_2C_Pool ? gObject_2C_Pool->GetFirstUsed() : NULL; pObj; pObj = pObj->mpNext)
+    {
+        if (pObj->mModel == objects::rocket_bullet_128 && pObj->mSprite)
+        {
+            const Sprite* pSprite = pObj->mSprite;
+            AddLight(pSprite->mXy.x.ToFloat(), pSprite->mXy.y.ToFloat(), pSprite->mZpos.ToFloat(), 1.3f,
+                     static_cast<s32>(90 * FlameNow(pObj->mId * 8u)), kExhaust);
+        }
+    }
+    // Burning peds (Ped::SetOnFire attaches a fire_197 object, without a light).
+    for (Ped* pPed = gPedPool ? gPedPool->mPool.GetFirstUsed() : NULL; pPed; pPed = pPed->mpNext)
+    {
+        const Sprite* pSprite = pPed->mGameObject ? pPed->mGameObject->mSpritePtr : NULL;
+        if (pPed->IsOnFire() && pSprite)
+        {
+            AddLight(pSprite->mXy.x.ToFloat(), pSprite->mXy.y.ToFloat(), pSprite->mZpos.ToFloat(), 1.4f,
+                     static_cast<s32>(70 * FlameNow(pPed->mId * 8u + 3)), kFire);
         }
     }
 }
