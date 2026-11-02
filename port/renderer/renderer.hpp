@@ -23,6 +23,8 @@ struct RenderOptions
     bool mTrueColour = false;       // 8-bit palette colours and an RGBA8 target
     f32 mBloom = 0.0f;              // 0..1, glow from additive draws
     bool mPerPixelLighting = false; // gbh_AddLight lights evaluated per fragment
+    s32 mTextureFilter = 0;         // minified textures: 0 bilinear, 1 trilinear, 2 anisotropic
+    s32 mMsaa = 0;                  // samples per pixel of the render target, 0 or 1 for none
     u32 mGeneration = 0;            // bumped on every change
 };
 
@@ -47,6 +49,14 @@ enum RenderStateBits
     RS_PIXEL_EXACT = 1 << 5,  // no D3D pixel centre offset: integer quads copy texels 1:1 (DirectDraw blits)
 };
 
+// Mip levels to build for a texture: none, or averaged with or without regard to transparent texels.
+enum RMipmaps
+{
+    RMIP_NONE,
+    RMIP_OPAQUE, // drawn without blending: every texel counts
+    RMIP_ALPHA,  // blended: transparent texels lend no colour
+};
+
 struct RTexture;
 
 class IRenderer
@@ -56,7 +66,7 @@ class IRenderer
 
     // Texture contents are given as RGBA8, top row first. The backend may defer GL work.
     virtual RTexture* CreateTexture() = 0;
-    virtual void UploadTexture(RTexture* pTex, s32 width, s32 height, const u32* pRgba) = 0;
+    virtual void UploadTexture(RTexture* pTex, s32 width, s32 height, const u32* pRgba, RMipmaps mipmaps) = 0;
     virtual void FreeTexture(RTexture* pTex) = 0;
 
     virtual void BeginScene() = 0;

@@ -124,6 +124,7 @@ void LogPrim(const Vert* pVerts, s32 count, u32 state, STexture* t, bool blit)
 }
 u32 gTraceScene; // GTA2GL_TRACE=<scene>: logs the draw calls of that scene to stderr
 bool gTrueColour;   // option: 8-bit palette channels instead of the original's 16-bit textures
+bool gMipmaps;      // option: textures uploaded with mip levels
 u32 gOptionsGeneration = ~0u;
 u32 gTextureEpoch;  // bumped when every texture has to be converted again
 bool gLightsDirty = true;
@@ -220,7 +221,7 @@ RTexture* Resolve(STexture* pTexture, int variant)
         const s32 h = pTexture->field_10_height;
         if (pData->mImage)
         {
-            gRenderer->UploadTexture(pData->mTex[variant], w, h, &pData->mPixels[0]);
+            gRenderer->UploadTexture(pData->mTex[variant], w, h, &pData->mPixels[0], RMIP_NONE);
         }
         else if (pTexture->field_14_original_pixel_data_ptr && pTexture->field_18_pPaltData && w > 0 && h > 0)
         {
@@ -245,7 +246,7 @@ RTexture* Resolve(STexture* pTexture, int variant)
             {
                 memcpy(&gConvertBuffer[(size_t)h * slot], &gConvertBuffer[(size_t)(h - 1) * slot], (size_t)slot * 4);
             }
-            gRenderer->UploadTexture(pData->mTex[variant], slot, slot, &gConvertBuffer[0]);
+            gRenderer->UploadTexture(pData->mTex[variant], slot, slot, &gConvertBuffer[0], variant == kAlpha ? RMIP_ALPHA : RMIP_OPAQUE);
         }
         else
         {
@@ -293,6 +294,12 @@ void SyncOptions()
                 ConvertPalette(gPals[i]);
             }
         }
+        gTextureEpoch++;
+    }
+    const bool mipmaps = gRenderer->Options().mTextureFilter > 0;
+    if (mipmaps != gMipmaps)
+    {
+        gMipmaps = mipmaps;
         gTextureEpoch++;
     }
     gLightsDirty = true;

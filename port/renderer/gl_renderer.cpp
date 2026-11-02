@@ -221,13 +221,88 @@ const char* kComposeFS =
 
 const s32 kMaxBatchVerts = 6 * 4096;
 const s32 kMaxLights = 256;
+const u32 kStateMipmap = 1u << 31; // the batch's texture has mip levels and is filtered
+const GLenum kTextureMaxAnisotropy = 0x84FE;
+const GLenum kMaxTextureMaxAnisotropy = 0x84FF;
+
+// A mip level from the one above it: 2x2 boxes, edges clamped. With alpha, transparent texels lend
+// no colour, and fully transparent ones take their neighbours' so filtering adds no dark fringe.
+void Downsample(const u32* src, s32 sw, s32 sh, u32* dst, s32 dw, s32 dh, bool alpha)
+{
+    for (s32 y = 0; y < dh; y++)
+    {
+        const s32 ys[2] = {2 * y < sh ? 2 * y : sh - 1, 2 * y + 1 < sh ? 2 * y + 1 : sh - 1};
+        for (s32 x = 0; x < dw; x++)
+        {
+            const s32 xs[2] = {2 * x < sw ? 2 * x : sw - 1, 2 * x + 1 < sw ? 2 * x + 1 : sw - 1};
+            u32 sum[3] = {0, 0, 0}, weighted[3] = {0, 0, 0}, a = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                const u32 c = src[(size_t)ys[i >> 1] * sw + xs[i & 1]];
+                const u32 ca = c >> 24;
+                for (int k = 0; k < 3; k++)
+                {
+                    const u32 v = (c >> (8 * k)) & 0xFF;
+                    sum[k] += v;
+                    weighted[k] += v * ca;
+                }
+                a += ca;
+            }
+            u32 out = ((a + 2) / 4) << 24;
+            for (int k = 0; k < 3; k++)
+            {
+                const u32 v = alpha && a ? (weighted[k] + a / 2) / a : (sum[k] + 2) / 4;
+                out |= v << (8 * k);
+            }
+            dst[(size_t)y * dw + x] = out;
+        }
+    }
+    if (!alpha)
+    {
+        return;
+    }
+    static std::vector<u32> sCopy;
+    sCopy.assign(dst, dst + (size_t)dw * dh);
+    for (s32 y = 0; y < dh; y++)
+    {
+        for (s32 x = 0; x < dw; x++)
+        {
+            if (sCopy[(size_t)y * dw + x] >> 24)
+            {
+                continue;
+            }
+            u32 weighted[3] = {0, 0, 0}, a = 0;
+            for (s32 ny = y - 1; ny <= y + 1; ny++)
+            {
+                for (s32 nx = x - 1; nx <= x + 1; nx++)
+                {
+                    if (nx < 0 || ny < 0 || nx >= dw || ny >= dh)
+                    {
+                        continue;
+                    }
+                    const u32 c = sCopy[(size_t)ny * dw + nx];
+                    const u32 ca = c >> 24;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        weighted[k] += ((c >> (8 * k)) & 0xFF) * ca;
+                    }
+                    a += ca;
+                }
+            }
+            if (a)
+            {
+                dst[(size_t)y * dw + x] = ((weighted[0] + a / 2) / a) | (((weighted[1] + a / 2) / a) << 8) | (((weighted[2] + a / 2) / a) << 16);
+            }
+        }
+    }
+}
 } // namespace
 
 GLRenderer::GLRenderer()
     : mReady(false), mLogicalW(640), mLogicalH(480), mTargetW(640), mTargetH(480), mDrawableW(0), mDrawableH(0), mFbo(0), mFboTex(0), mBloomSrcTex(0), mPostFbo(0), mPostTex(0), mBlurW(0),
-      mBlurH(0), mTargetsTrueColour(false), mTargetsBloom(false), mPostValid(false), mFrameFence(0), mProgram(0), mPresentProgram(0),
+      mBlurH(0), mTargetsTrueColour(false), mTargetsBloom(false), mPostValid(false), mFrameFence(0), mMsFbo(0), mTargetsSamples(0), mMaxSamples(0), mProgram(0), mPresentProgram(0),
       mDownProgram(0), mBlurProgram(0), mComposeProgram(0), mVao(0), mVbo(0), mLightUbo(0), mSamplerNearest(0), mSamplerLinear(0),
-      mWhiteTex(0), mSurfaceTex(0), mSurfaceW(0), mSurfaceH(0), mBatchTex(0), mBatchState(0), mAppliedState(0), mStateValid(false),
+      mSamplerMip(0), mMaxAnisotropy(1.0f), mWhiteTex(0), mSurfaceTex(0), mSurfaceW(0), mSurfaceH(0), mBatchTex(0), mBatchState(0), mAppliedState(0), mStateValid(false),
       mOffsetX(0.5f - 1.0f / 2048.0f), mOffsetY(0.5f - 1.0f / 2048.0f), mSampleShift(1.0f / 1024.0f), mNumLights(0),
       mAmbient(255.0f), mDrawCalls(0), mUploads(0), mVertices(0)
 {
@@ -237,6 +312,7 @@ GLRenderer::GLRenderer()
     mGamma[0] = mGamma[1] = mGamma[2] = 1.0f;
     mBlurFbo[0] = mBlurFbo[1] = 0;
     mBlurTex[0] = mBlurTex[1] = 0;
+    mMsColour[0] = mMsColour[1] = 0;
 }
 
 GLRenderer::~GLRenderer()
@@ -374,6 +450,25 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
         gl.glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         gl.glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
+    gl.glGenSamplers(1, &mSamplerMip);
+    gl.glSamplerParameteri(mSamplerMip, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    gl.glSamplerParameteri(mSamplerMip, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl.glSamplerParameteri(mSamplerMip, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl.glSamplerParameteri(mSamplerMip, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    GLint numExtensions = 0;
+    gl.glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+    for (GLint i = 0; i < numExtensions; i++)
+    {
+        const char* pName = reinterpret_cast<const char*>(gl.glGetStringi(GL_EXTENSIONS, i));
+        if (pName && (!strcmp(pName, "GL_EXT_texture_filter_anisotropic") || !strcmp(pName, "GL_ARB_texture_filter_anisotropic")))
+        {
+            GLint maxAnisotropy = 1;
+            gl.glGetIntegerv(kMaxTextureMaxAnisotropy, &maxAnisotropy);
+            mMaxAnisotropy = (f32)(maxAnisotropy < 16 ? maxAnisotropy : 16);
+        }
+    }
+    ApplyTextureFilter();
+    gl.glGetIntegerv(GL_MAX_SAMPLES, &mMaxSamples);
 
     const u32 white = 0xFFFFFFFFu;
     gl.glGenTextures(1, &mWhiteTex);
@@ -391,6 +486,8 @@ bool GLRenderer::Init(GLFuncs::Loader loader, const char** ppError)
     gl.glGenTextures(1, &mPostTex);
     gl.glGenFramebuffers(2, mBlurFbo);
     gl.glGenTextures(2, mBlurTex);
+    gl.glGenFramebuffers(1, &mMsFbo);
+    gl.glGenRenderbuffers(2, mMsColour);
 
     mBatch.reserve(kMaxBatchVerts);
     mReady = true;
@@ -427,6 +524,9 @@ void GLRenderer::Shutdown()
     gl.glDeleteTextures(1, &mBloomSrcTex);
     gl.glDeleteTextures(1, &mPostTex);
     gl.glDeleteTextures(2, mBlurTex);
+    gl.glDeleteFramebuffers(1, &mMsFbo);
+    gl.glDeleteRenderbuffers(2, mMsColour);
+    gl.glDeleteSamplers(1, &mSamplerMip);
     gl.glDeleteTextures(1, &mWhiteTex);
     gl.glDeleteTextures(1, &mSurfaceTex);
     gl.glDeleteSamplers(1, &mSamplerNearest);
@@ -445,9 +545,14 @@ void GLRenderer::Shutdown()
 
 void GLRenderer::SetOptions(const RenderOptions& options)
 {
-    const bool targetsChanged = options.mTrueColour != mOptions.mTrueColour || (options.mBloom > 0.0f) != (mOptions.mBloom > 0.0f);
+    const bool targetsChanged = options.mTrueColour != mOptions.mTrueColour || (options.mBloom > 0.0f) != (mOptions.mBloom > 0.0f) ||
+                                options.mMsaa != mOptions.mMsaa;
     Flush();
     mOptions = options;
+    if (mReady)
+    {
+        ApplyTextureFilter();
+    }
     if (targetsChanged && mReady)
     {
         CreateTargets();
@@ -504,6 +609,7 @@ void GLRenderer::CreateTargets()
     gl.glBindTexture(GL_TEXTURE_2D, mFboTex);
     gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
     bool complete = false;
+    GLenum colourFormat = GL_RGB565;
     if (!mOptions.mTrueColour)
     {
         // The original's 16-bit back buffer.
@@ -513,6 +619,7 @@ void GLRenderer::CreateTargets()
     }
     if (!complete)
     {
+        colourFormat = GL_RGBA8;
         gl.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mFboTex, 0);
     }
@@ -546,13 +653,75 @@ void GLRenderer::CreateTargets()
         gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, 0, 0);
         gl.glDrawBuffers(1, one);
     }
+    CreateMultisampleTarget(colourFormat);
     mPostValid = false;
     mStateValid = false;
 }
 
+void GLRenderer::CreateMultisampleTarget(GLenum colourFormat)
+{
+    gl.glBindFramebuffer(GL_FRAMEBUFFER, mMsFbo);
+    // New names free the old storage; deleting detaches them from the bound framebuffer.
+    gl.glDeleteRenderbuffers(2, mMsColour);
+    gl.glGenRenderbuffers(2, mMsColour);
+    mTargetsSamples = 0;
+    // The resolve blit needs the same formats as the single sample target's.
+    for (s32 samples = mOptions.mMsaa < mMaxSamples ? mOptions.mMsaa : mMaxSamples; samples > 1; samples /= 2)
+    {
+        for (int i = 0; i < 16 && gl.glGetError() != GL_NO_ERROR; i++)
+        {
+        }
+        const s32 count = mTargetsBloom ? 2 : 1;
+        for (s32 i = 0; i < count; i++)
+        {
+            gl.glBindRenderbuffer(GL_RENDERBUFFER, mMsColour[i]);
+            gl.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, i ? GL_RGBA8 : colourFormat, mTargetW, mTargetH);
+            gl.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, mMsColour[i]);
+        }
+        const GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+        gl.glDrawBuffers(count, buffers);
+        if (gl.glGetError() == GL_NO_ERROR && gl.glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+        {
+            mTargetsSamples = samples;
+            break;
+        }
+    }
+    gl.glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
+void GLRenderer::ResolveMultisample()
+{
+    if (!mTargetsSamples)
+    {
+        return;
+    }
+    gl.glBindFramebuffer(GL_READ_FRAMEBUFFER, mMsFbo);
+    gl.glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mFbo);
+    const s32 count = mTargetsBloom ? 2 : 1;
+    for (s32 i = 0; i < count; i++)
+    {
+        const GLenum buffers[2] = {i ? (GLenum)GL_NONE : (GLenum)GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+        gl.glReadBuffer(GL_COLOR_ATTACHMENT0 + i);
+        gl.glDrawBuffers(i + 1, buffers);
+        gl.glBlitFramebuffer(0, 0, mTargetW, mTargetH, 0, 0, mTargetW, mTargetH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    }
+    const GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+    gl.glDrawBuffers(count, buffers);
+    gl.glReadBuffer(GL_COLOR_ATTACHMENT0);
+    gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+}
+
+void GLRenderer::ApplyTextureFilter()
+{
+    if (mMaxAnisotropy > 1.0f)
+    {
+        gl.glSamplerParameterf(mSamplerMip, kTextureMaxAnisotropy, mOptions.mTextureFilter >= 2 ? mMaxAnisotropy : 1.0f);
+    }
+}
+
 void GLRenderer::BindTarget()
 {
-    gl.glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+    gl.glBindFramebuffer(GL_FRAMEBUFFER, mTargetsSamples ? mMsFbo : mFbo);
     gl.glViewport(0, 0, mTargetW, mTargetH);
 }
 
@@ -589,10 +758,11 @@ RTexture* GLRenderer::CreateTexture()
     pTex->mId = 0;
     pTex->mWidth = 0;
     pTex->mHeight = 0;
+    pTex->mLevels = 1;
     return pTex;
 }
 
-void GLRenderer::UploadTexture(RTexture* pTex, s32 width, s32 height, const u32* pRgba)
+void GLRenderer::UploadTexture(RTexture* pTex, s32 width, s32 height, const u32* pRgba, RMipmaps mipmaps)
 {
     if (!mReady || !pTex || width <= 0 || height <= 0)
     {
@@ -618,6 +788,27 @@ void GLRenderer::UploadTexture(RTexture* pTex, s32 width, s32 height, const u32*
     {
         gl.glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pRgba);
     }
+    s32 levels = 1;
+    if (mipmaps != RMIP_NONE && mOptions.mTextureFilter > 0)
+    {
+        // The levels below the base hold about a third of its texels; the margin covers thin sizes.
+        mMipBuffer.resize((size_t)width * height / 2 + width + height + 8);
+        const u32* pSrc = pRgba;
+        u32* pDst = &mMipBuffer[0];
+        for (s32 w = width, h = height; w > 1 || h > 1; levels++)
+        {
+            const s32 dw = w > 1 ? w / 2 : 1;
+            const s32 dh = h > 1 ? h / 2 : 1;
+            Downsample(pSrc, w, h, pDst, dw, dh, mipmaps == RMIP_ALPHA);
+            gl.glTexImage2D(GL_TEXTURE_2D, levels, GL_RGBA8, dw, dh, 0, GL_RGBA, GL_UNSIGNED_BYTE, pDst);
+            pSrc = pDst;
+            pDst += (size_t)dw * dh;
+            w = dw;
+            h = dh;
+        }
+    }
+    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels - 1);
+    pTex->mLevels = levels;
 }
 
 void GLRenderer::FreeTexture(RTexture* pTex)
@@ -712,11 +903,18 @@ void GLRenderer::ApplyState(u32 state)
         gl.glUniform1i(sp.mNumLights, mNumLights);
         gl.glUniform1f(sp.mAmbient, mAmbient);
     }
-    gl.glBindSampler(0, (state & RS_FILTER_LINEAR) ? mSamplerLinear : mSamplerNearest);
+    gl.glBindSampler(0, (state & kStateMipmap) ? mSamplerMip : (state & RS_FILTER_LINEAR) ? mSamplerLinear : mSamplerNearest);
     if (state & RS_PIXEL_EXACT)
     {
         gl.glUniform2f(sp.mOffset, 0.0f, 0.0f);
         gl.glUniform1f(sp.mSampleShift, 0.0f);
+    }
+    else if (mTargetsSamples)
+    {
+        // Edges of integer quads on pixel boundaries, so MSAA leaves them sharp; texels sampled
+        // where D3D's pixel centres would see them.
+        gl.glUniform2f(sp.mOffset, mOffsetX - 0.5f, mOffsetY - 0.5f);
+        gl.glUniform1f(sp.mSampleShift, mSampleShift + 0.5f * mTargetW / mLogicalW);
     }
     else
     {
@@ -770,7 +968,9 @@ void GLRenderer::Flush()
     gl.glBufferSubData(GL_ARRAY_BUFFER, 0, mBatch.size() * sizeof(RVertex), &mBatch[0]);
     gl.glActiveTexture(GL_TEXTURE0);
     gl.glBindTexture(GL_TEXTURE_2D, mBatchTex ? mBatchTex->mId : mWhiteTex);
-    ApplyState(mBatchState);
+    const bool mipmap = mOptions.mTextureFilter > 0 && mBatchTex && mBatchTex->mLevels > 1 &&
+                        (mBatchState & (RS_FILTER_LINEAR | RS_PIXEL_EXACT)) == RS_FILTER_LINEAR;
+    ApplyState(mipmap ? mBatchState | kStateMipmap : mBatchState);
     gl.glDrawArrays(GL_TRIANGLES, 0, (GLsizei)mBatch.size());
     mDrawCalls++;
     mVertices += (u32)mBatch.size();
@@ -845,6 +1045,7 @@ void GLRenderer::FinishFrame()
         return;
     }
     Flush();
+    ResolveMultisample();
     mPostValid = false;
     if (!mTargetsBloom || mOptions.mBloom <= 0.0f)
     {

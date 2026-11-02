@@ -28,6 +28,8 @@ enum Id
     kHudScale,
     kSafeArea,
     kLightEffects,
+    kTextureFilter,
+    kAntiAliasing,
     kCount,
 };
 
