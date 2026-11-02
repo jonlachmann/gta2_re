@@ -68,6 +68,12 @@
     X(PFNGLBINDSAMPLERPROC, glBindSampler)                                 \
     X(PFNGLSAMPLERPARAMETERIPROC, glSamplerParameteri)                     \
     X(PFNGLSAMPLERPARAMETERFPROC, glSamplerParameterf)                     \
+    X(PFNGLGENRENDERBUFFERSPROC, glGenRenderbuffers)                       \
+    X(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers)                 \
+    X(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)                       \
+    X(PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC, glRenderbufferStorageMultisample) \
+    X(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)         \
+    X(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)                         \
     X(PFNGLDRAWBUFFERSPROC, glDrawBuffers)                                 \
     X(PFNGLCLEARBUFFERFVPROC, glClearBufferfv)                             \
     X(PFNGLBINDBUFFERBASEPROC, glBindBufferBase)                           \

@@ -24,6 +24,7 @@ struct RenderOptions
     f32 mBloom = 0.0f;              // 0..1, glow from additive draws
     bool mPerPixelLighting = false; // gbh_AddLight lights evaluated per fragment
     s32 mTextureFilter = 0;         // minified textures: 0 bilinear, 1 trilinear, 2 anisotropic
+    s32 mMsaa = 0;                  // samples per pixel of the render target, 0 or 1 for none
     u32 mGeneration = 0;            // bumped on every change
 };
 

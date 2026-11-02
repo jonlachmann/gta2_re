@@ -1,7 +1,7 @@
 // Portable OpenGL 3.3 core renderer: logical size offscreen target, batched triangles,
 // a CPU 16-bit surface overlay for direct pixel writes, gamma, present and frame capture.
 // The offscreen target is stored top row first (y down) so edge ties follow D3D's top-left fill rule.
-// Optional enhancements (RenderOptions): true colour target, bloom, per pixel lighting, mipmaps.
+// Optional enhancements (RenderOptions): true colour target, bloom, per pixel lighting, mipmaps, MSAA.
 #pragma once
 
 #include "gl_funcs.hpp"
@@ -61,6 +61,8 @@ class GLRenderer : public IRenderer
     void SetSampleShift(f32 pixels) { mSampleShift = pixels; }
 
     void SetOptions(const RenderOptions& options);
+    // The most samples per pixel the render target can have (MSAA).
+    s32 MaxSamples() const { return mMaxSamples; }
 
     // IRenderer
     RTexture* CreateTexture();
@@ -81,6 +83,8 @@ class GLRenderer : public IRenderer
     void BindTarget();
     void ApplyState(u32 state);
     void CreateTargets();
+    void CreateMultisampleTarget(GLenum colourFormat);
+    void ResolveMultisample();
     void ApplyTextureFilter();
     void DrawFullscreen();
     GLuint CompileProgram(const char* vs, const char* fs, const char** ppError);
@@ -108,6 +112,11 @@ class GLRenderer : public IRenderer
     bool mTargetsBloom;
     bool mPostValid;
     GLsync mFrameFence;
+    // MSAA: the scene is drawn into these and resolved into mFbo by FinishFrame.
+    GLuint mMsFbo;
+    GLuint mMsColour[2];
+    s32 mTargetsSamples; // 0 without MSAA
+    s32 mMaxSamples;
 
     // Scene programs: 0 faithful, 1 enhanced (bloom output, per pixel lighting).
     struct SceneProgram

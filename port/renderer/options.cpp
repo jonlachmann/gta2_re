@@ -78,6 +78,10 @@ void OptionsFile::Load()
             {
                 o.mTextureFilter = (s32)value;
             }
+            else if (key == "msaa")
+            {
+                o.mMsaa = (s32)value;
+            }
         }
         fclose(f);
     }
@@ -97,6 +101,10 @@ void OptionsFile::Load()
     if (const char* e = getenv("GTA2GL_TEXTURE_FILTER"))
     {
         o.mTextureFilter = atoi(e);
+    }
+    if (const char* e = getenv("GTA2GL_MSAA"))
+    {
+        o.mMsaa = atoi(e);
     }
     mConfigured = o;
     Update();
@@ -134,7 +142,8 @@ void OptionsFile::Update()
     RenderOptions next = mFaithful ? RenderOptions() : mConfigured;
     next.mGeneration = mEffective.mGeneration;
     if (next.mTrueColour != mEffective.mTrueColour || next.mBloom != mEffective.mBloom ||
-        next.mPerPixelLighting != mEffective.mPerPixelLighting || next.mTextureFilter != mEffective.mTextureFilter)
+        next.mPerPixelLighting != mEffective.mPerPixelLighting || next.mTextureFilter != mEffective.mTextureFilter ||
+        next.mMsaa != mEffective.mMsaa)
     {
         next.mGeneration++;
     }
