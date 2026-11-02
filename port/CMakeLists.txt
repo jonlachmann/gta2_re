@@ -52,7 +52,7 @@ else()
     target_link_libraries(gta2gl PRIVATE SDL3::SDL3)
 
     set(compat ${CMAKE_CURRENT_LIST_DIR}/compat)
-    set(compat_src crt dinput dll guids kernel main miles mouse pad miles3d registry test_input video_port window)
+    set(compat_src crt cursor dinput dll guids kernel main miles mouse pad miles3d registry test_input video_port window)
     if(NOT WIN32)
         list(APPEND compat_src kernel_posix wstr)
     endif()

@@ -55,6 +55,7 @@ void port_UpdatePad();
 void port_MouseEvent(const SDL_Event& e);
 bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel);
 void port_MouseEndFrame();
+void port_SetGameCursor(); // cursor.cpp
 // The left button is held, for dragging.
 bool port_MouseLeftDown();
 
