@@ -24,6 +24,7 @@ enum Id
     kHeadlights,
     kVsync,
     kDisplayMode,
+    kLightEffects,
     kCount,
 };
 
@@ -44,8 +45,9 @@ void Value(Id id, wchar_t* pOut);
 // Changing the language reloads the text table and lays the frontend's or the HUD's texts out again.
 void Change(Id id, s32 delta);
 
-// Car headlight beams, with the dusk lighting.
+// Car headlight beams, and the other added lights (lights.hpp), with the dusk lighting.
 bool Headlights();
+bool LightEffects();
 
 // FRAME LIMIT: frames drawn per second, 30 the original's pacing, 0 no limit.
 s32 MaxFps();
