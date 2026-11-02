@@ -25,15 +25,17 @@ namespace
 const s32 kSub = 64;
 const s32 kTurn = 1440 * kSub;
 const s32 kHalfTurn = kTurn / 2;
-// The yaw eases in and out towards its target: per ROTATION SPEED point, the most it turns per step and the
-// most that changes per step, in 1/256 degrees. Twice as fast to get behind a car just entered.
+// STREETS: the target is the street axis (a multiple of 90 degrees) nearest the direction of travel, taken
+// once the travel has been within kAxisSnap of a new one for kAxisSteps; the view then turns to it in one
+// smootherstep of kTurnSteps[ROTATION SPEED] steps per quarter turn (0: at once).
+const s32 kQuarter = 90 * 256;
+const s32 kAxisSnap = 40 * 256;
+const s32 kAxisSteps = 4;
+const s32 kTurnSteps[] = {0, 36, 30, 25, 20, 16, 13, 11, 9, 7, 6};
+// FOLLOW: the yaw eases in and out after the heading: per ROTATION SPEED point, the most it turns per step and
+// the most that changes per step, in 1/256 degrees. Twice as fast to get behind a car just entered.
 const s32 kMaxRatePerSpeed = 256 * 6 / 10;
 const s32 kAccelPerSpeed = 256 * 4 / 100;
-// STREETS: the target is the street axis (a multiple of 90 degrees) nearest the direction of travel, taken
-// once the travel has been within kAxisSnap of a new one for kAxisSteps.
-const s32 kQuarter = 90 * 256;
-const s32 kAxisSnap = 25 * 256;
-const s32 kAxisSteps = 10;
 // FOLLOW: heading changes smaller than this (lane changes, skids) leave the view alone, unless the heading then
 // holds within kSteady for kSteadySteps.
 const s32 kDeadZone = 15 * 256;
@@ -56,6 +58,11 @@ bool sEngaged;
 s32 sTarget;
 s32 sRate;
 s32 sRateRest;
+s32 sTurnFrom;
+s32 sTurnTarget;
+s32 sTurnSteps;
+s32 sTurnAt;
+bool sTurnMoved;
 s32 sAxisSteps;
 s32 sSteadyHeading;
 s32 sSteadySteps;
@@ -84,6 +91,13 @@ u8 sCameraBytes[sizeof(Camera)];
 s32 Wrap(s32 v)
 {
     return ((v % kTurn) + kTurn + kHalfTurn) % kTurn - kHalfTurn;
+}
+
+// A point of the STREETS turn, t from 0 to 1, eased in and out.
+s32 TurnAt(f32 t)
+{
+    const f32 eased = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+    return (sTurnFrom + static_cast<s32>(Wrap(sTurnTarget - sTurnFrom) * eased) + kTurn) % kTurn;
 }
 
 bool Within(s32 delta, s32 limit)
@@ -161,11 +175,13 @@ void Lead(Camera* pCamera)
     const f32 px = ToF(pCamera->mPanX) * scale / ToF(pCamera->mScreenScale.y);
     const f32 py = ToF(pCamera->mPanY) * scale / ToF(pCamera->mScreenScale.y);
     const f32 limit = kMaxLead * pCamera->mScreenPxHeight / 2;
-    // Only the look-ahead along the screen's height: the car stays on the vertical centre line, the world turning
-    // about it.
+    // The look-ahead's length straight down the screen (up when backing): the car stays put as the world turns.
     const f32 lx = 0.0f;
-    f32 ly = sSin * (ox + px) + sCos * (oy + py);
-    ly = ly < -limit ? -limit : (ly > limit ? limit : ly);
+    const f32 length = sqrtf((ox + px) * (ox + px) + (oy + py) * (oy + py));
+    const f32 facing = (ox + px) * Ang16::sine(pSprite->mRotation).ToFloat() + (oy + py) * Ang16::cosine(pSprite->mRotation).ToFloat();
+    f32 side = length > 1.0f ? -3.0f * facing / length : 1.0f;
+    side = side < -1.0f ? -1.0f : (side > 1.0f ? 1.0f : side);
+    const f32 ly = (length < limit ? length : limit) * side;
     const f32 dx = sCos * ox - sSin * oy - (lx - px);
     sMarkerDepth = depth;
     // Tilted, the subject seen as far below the centre as unturned: the eye goes back by depth * tan(pitch).
@@ -223,6 +239,8 @@ void Clear()
     sRate = 0;
     sRateRest = 0;
     sAxisSteps = 0;
+    sTurnFrom = sTurnTarget = sTurnSteps = sTurnAt = 0;
+    sTurnMoved = false;
     sEngaged = false;
     spCar = NULL;
 }
@@ -294,15 +312,36 @@ void Step()
             sAxisSteps = 0;
         }
     }
+    sTurnMoved = false;
     if (!sValid)
     {
         sYaw = sTarget;
         sPrevYaw = sTarget;
+        sTurnTarget = sTarget;
+        sTurnAt = sTurnSteps = 0;
         sRate = 0;
         sRateRest = 0;
         sPitch = pitch;
         sPrevPitch = pitch;
         sValid = true;
+    }
+    else if (!PortSettings::CameraFollows())
+    {
+        if (sTarget != sTurnTarget)
+        {
+            const s32 angle = Wrap(sTarget - sYaw) < 0 ? -Wrap(sTarget - sYaw) : Wrap(sTarget - sYaw);
+            sTurnFrom = sYaw;
+            sTurnTarget = sTarget;
+            sTurnAt = 0;
+            sTurnSteps = kTurnSteps[PortSettings::CameraTurnSpeed()] * (angle > kQuarter ? angle : kQuarter) / kQuarter;
+        }
+        if (sTurnAt < sTurnSteps)
+        {
+            sTurnAt++;
+            sTurnMoved = true;
+        }
+        sYaw = TurnAt(sTurnSteps ? static_cast<f32>(sTurnAt) / sTurnSteps : 1.0f);
+        sPitch += (pitch - sPitch) * kPitchFollow / 256;
     }
     else
     {
@@ -318,6 +357,8 @@ void Step()
         sRateRest += sRate;
         sYaw = (sYaw + sRateRest / 256 + kTurn) % kTurn;
         sRateRest %= 256;
+        sYaw = PortSettings::CameraTurnSpeed() ? sYaw : sTarget;
+        sTurnTarget = sTarget;
         sPitch += (pitch - sPitch) * kPitchFollow / 256;
     }
     if (Within(sTarget - sYaw, kSteady) &&
@@ -332,7 +373,9 @@ void Step()
 
 f32 Yaw(f32 alpha)
 {
-    const f32 yaw = (sPrevYaw + Wrap(sYaw - sPrevYaw) * alpha) / kSub;
+    // ROTATION SPEED 0 cuts: no frame drawn half way.
+    alpha = PortSettings::CameraTurnSpeed() ? alpha : 1.0f;
+    const f32 yaw = (sTurnMoved ? TurnAt((sTurnAt - 1 + alpha) / sTurnSteps) : sPrevYaw + Wrap(sYaw - sPrevYaw) * alpha) / kSub;
     return yaw < 0.0f ? yaw + 1440.0f : yaw;
 }
 

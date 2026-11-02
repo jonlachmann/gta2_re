@@ -75,7 +75,7 @@ f32 HudScale();
 bool ChinatownCamera();
 // CAMERA TILT: the CHINATOWN camera's pitch on foot, in degrees, 0 to 15.
 s32 CameraTilt();
-// ROTATION SPEED: how fast the CHINATOWN camera turns after the vehicle, 1 to 10.
+// ROTATION SPEED: how fast the CHINATOWN camera turns after the vehicle, 1 to 10; 0 turns it at once.
 s32 CameraTurnSpeed();
 // ROTATION: STREETS turns the CHINATOWN camera to the street the vehicle has taken, FOLLOW after its heading.
 bool CameraFollows();
