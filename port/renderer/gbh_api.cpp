@@ -389,9 +389,9 @@ f32 SmoothStep(f32 t)
     return t * t * (3.0f - 2.0f * t);
 }
 
-// 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light. Nothing behind the
-// spot's position; the cone is measured from a point 25% of the range behind it, so it is already a little
-// wide where it starts. It brightens over the first 30% of the range and fades faster after it.
+// 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light. The cone is measured from
+// a point 10% of the range behind the spot, so it starts a little wide; it fades in from 0.1 block behind
+// the spot to 0.15 ahead, brightens over the first 30% of the range and fades faster after it.
 f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
 {
     if (light.mCosInner <= -1.0f)
@@ -399,14 +399,11 @@ f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
         return 1.0f;
     }
     const f32 along = dx * light.mDx + dy * light.mDy;
-    if (along <= 0.0f)
-    {
-        return 0.0f;
-    }
-    const f32 back = along + 0.25f * light.mRadius;
-    const f32 c = back / sqrtf(back * back + dx * dx + dy * dy - along * along);
+    const f32 back = (along > 0.0f ? along : 0.0f) + 0.1f * light.mRadius;
+    const f32 lateral2 = dx * dx + dy * dy - along * along;
+    const f32 c = back / sqrtf(back * back + (lateral2 > 0.0f ? lateral2 : 0.0f));
     const f32 fade = (light.mRadius - dist) * light.mInvRadius;
-    return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) *
+    return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) * SmoothStep((along + 0.1f) / 0.25f) *
         (0.4f + 0.6f * SmoothStep(along / (0.3f * light.mRadius))) * fade;
 }
 
