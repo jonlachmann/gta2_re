@@ -1,6 +1,7 @@
 #include "MapRenderer.hpp"
 #include "Camera.hpp"
 #if defined(GTA2_PORT)
+#include "../port/src/frame_loop.hpp"
 #include "../port/src/headlights.hpp"
 #endif
 #include "winmain.hpp"
@@ -3533,7 +3534,15 @@ void MapRenderer::Draw()
     if (gLighting)
     {
         pgbh_SetAmbient(mAmbient.ToFloat());
+#if defined(GTA2_PORT)
+        // The fade advances once per logic step, however often the frame is drawn.
+        for (u32 steps = PortFrameLoop::StepsBeforeDraw(); steps; steps--)
+        {
+            MapRenderer::ambient_light_tick();
+        }
+#else
         MapRenderer::ambient_light_tick();
+#endif
     }
 
     // render all things

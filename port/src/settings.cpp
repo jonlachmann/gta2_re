@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "frame_loop.hpp"
 #include "Frontend.hpp"
 #include "Function.hpp"
 #include "Game.hpp"
@@ -27,7 +28,7 @@ namespace PortSettings
 {
 const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage};
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
-const Id kScreen[] = {kDisplay, kBrightness, kLighting, kExplodingScores, kFrameLimit};
+const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores};
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
 const Id kGraphics[] = {kTrueColour, kBloom, kPerPixelLighting, kHeadlights};
@@ -52,6 +53,8 @@ const s32 kNumLanguages = sizeof(kLanguages) / sizeof(kLanguages[0]);
 
 const wchar_t* const kTextSpeeds[] = {L"VERY FAST", L"FAST", L"NORMAL", L"SLOW", L"VERY SLOW"};
 const wchar_t* const kHeadlightNames[] = {L"OFF", L"GLOW", L"BEAMS"};
+const s32 kMaxFpsValues[] = {30, 60, 120, 144, 240, 0};
+const s32 kNumMaxFpsValues = sizeof(kMaxFpsValues) / sizeof(kMaxFpsValues[0]);
 
 // A text of the port's menus: a key of the game's text table, or the text in French, German, Italian
 // and Spanish (Latin-1 letters, uppercase as the game writes them), many from GTA2 Manager's data\bob_?.gxt.
@@ -93,6 +96,8 @@ const Translation kTranslations[] = {
     {L"NOON", NULL, {L"MIDI", L"MITTAG", L"MEZZOGIORNO", L"MEDIODÍA"}},
     {L"EXPLODING SCORES", NULL, {L"SCORES EXPLOSIFS", L"PUNKTE-EXPLOSION", L"PUNTI ESPLOSIVI", L"PUNTOS EXPLOSIVOS"}},
     {L"FRAME LIMIT", NULL, {L"LIMITE IMAGES", L"BILDRATENLIMIT", L"LIMITE FOTOGRAMMI", L"LÍMITE IMÁGENES"}},
+    {L"ORIGINAL", NULL, {L"ORIGINAL", L"ORIGINAL", L"ORIGINALE", L"ORIGINAL"}},
+    {L"UNLIMITED", NULL, {L"ILLIMITE", L"UNBEGRENZT", L"ILLIMITATO", L"ILIMITADO"}},
     {L"TRUE COLOUR", NULL, {L"VRAIES COULEURS", L"ECHTFARBEN", L"COLORI REALI", L"COLOR REAL"}},
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
@@ -192,7 +197,7 @@ const char* ScreenName(Id id)
         case kExplodingScores:
             return "exploding_on";
         case kFrameLimit:
-            return "max_frame_rate";
+            return "port_max_fps";
         case kTrueColour:
             return "gl_true_colour";
         case kBloom:
@@ -207,7 +212,11 @@ const char* ScreenName(Id id)
 // The game's own settings are on by default; the port's graphics additions off.
 s32 ScreenDefault(Id id)
 {
-    return id == kLighting || id == kExplodingScores || id == kFrameLimit ? 1 : 0;
+    if (id == kFrameLimit)
+    {
+        return 30;
+    }
+    return id == kLighting || id == kExplodingScores ? 1 : 0;
 }
 
 s32 Screen(Id id)
@@ -288,6 +297,20 @@ s32 Headlights()
     return Screen(kHeadlights);
 }
 
+// The original's max_frame_rate is not read: off, it ran the game as fast as the machine.
+s32 MaxFps()
+{
+    const s32 fps = Screen(kFrameLimit);
+    for (s32 i = 0; i < kNumMaxFpsValues; i++)
+    {
+        if (kMaxFpsValues[i] == fps)
+        {
+            return fps;
+        }
+    }
+    return 30;
+}
+
 void ApplyRenderOptions()
 {
 #if defined(GTA2_PORT_SDL)
@@ -334,6 +357,21 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kHeadlights:
             wcscpy(pOut, Translate(kHeadlightNames[Clamp(Screen(id), 0, 2)]));
+            break;
+        case kFrameLimit:
+            if (MaxFps() == 30)
+            {
+                wcscpy(pOut, L"30 ");
+                wcscpy(pOut + 3, Translate(L"ORIGINAL"));
+            }
+            else if (MaxFps())
+            {
+                swprintf(pOut, L"%d", MaxFps());
+            }
+            else
+            {
+                wcscpy(pOut, Translate(L"UNLIMITED"));
+            }
             break;
         default:
             wcscpy(pOut, Translate(Screen(id) ? L"ON" : L"OFF"));
@@ -425,9 +463,20 @@ void Change(Id id, s32 delta)
         case kHeadlights:
             gRegistry.Set_Screen_Setting(ScreenName(id), Wrap(Screen(id) + delta, 3));
             break;
+        case kFrameLimit:
+        {
+            s32 i = 0;
+            while (i < kNumMaxFpsValues - 1 && kMaxFpsValues[i] != MaxFps())
+            {
+                i++;
+            }
+            gRegistry.Set_Screen_Setting(ScreenName(id), kMaxFpsValues[Wrap(i + delta, kNumMaxFpsValues)]);
+            PortFrameLoop::ApplySettings();
+            break;
+        }
         default:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
-            if (id == kLighting || id == kExplodingScores || id == kFrameLimit)
+            if (id == kLighting || id == kExplodingScores)
             {
                 Init_FrameRateLightingAndExplodingScores();
             }

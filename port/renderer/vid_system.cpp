@@ -26,7 +26,7 @@ void* LoadGL(const char* name)
 } // namespace
 
 VidSystem::VidSystem()
-    : mContext(0), mEnumIdx(0), mEnumBpp(0), mSurfaceW(0), mSurfaceH(0), mSurfaceGrabbed(false), mFrame(0), mStatsInterval(0), mStatsStart(0), mPresentSeconds(0), mWaitSeconds(0),
+    : mContext(0), mEnumIdx(0), mEnumBpp(0), mSurfaceW(0), mSurfaceH(0), mSurfaceGrabbed(false), mFrame(0), mCaptureFlips(false), mTestFrame(0), mCapturedFrame(~0u), mStatsInterval(0), mStatsStart(0), mPresentSeconds(0), mWaitSeconds(0),
       mStatsDraws(0), mStatsUploads(0), mStatsVerts(0)
 {
     memset(&mHeader, 0, sizeof(mHeader));
@@ -103,6 +103,7 @@ void VidSystem::Init(void* hInstance, u16 flags, void* pVidFuncs, const char* in
     v.field_70 = 0;
     v.field_10_found_rgb_bit_count = 16;
     mCapture.Init("gl");
+    mCaptureFlips = getenv("GTA2GL_CAPTURE_FLIPS") != NULL;
     const char* pStats = getenv("GTA2GL_STATS");
     mStatsInterval = pStats ? (u32)atoi(pStats) : 0;
     mOptions.Init(iniPath ? iniPath : "gta2gl.ini");
@@ -300,11 +301,13 @@ void VidSystem::Flip()
 
     const double t0 = mStatsInterval ? Now() : 0.0;
     mRenderer.FinishFrame();
-    if (mCapture.WantFrame(mFrame))
+    const u32 captureFrame = mCaptureFlips ? mFrame : mTestFrame;
+    if (captureFrame != mCapturedFrame && mCapture.WantFrame(captureFrame))
     {
+        mCapturedFrame = captureFrame;
         std::vector<u8> rgba;
         mRenderer.ReadLogical(rgba);
-        FrameCapture::WriteBmp(mCapture.PathFor(mFrame), &rgba[0], mRenderer.TargetWidth(), mRenderer.TargetHeight(), false);
+        FrameCapture::WriteBmp(mCapture.PathFor(captureFrame), &rgba[0], mRenderer.TargetWidth(), mRenderer.TargetHeight(), false);
     }
 
     int w = 0, h = 0;

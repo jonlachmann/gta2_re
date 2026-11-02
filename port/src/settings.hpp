@@ -45,6 +45,9 @@ void Change(Id id, s32 delta);
 // Headlights: 0 none, 1 glow (the game's point lights), 2 beams.
 s32 Headlights();
 
+// FRAME LIMIT: frames drawn per second, 30 the original's pacing, 0 no limit.
+s32 MaxFps();
+
 // The renderer's options from the registry, at start-up.
 void ApplyRenderOptions();
 } // namespace PortSettings

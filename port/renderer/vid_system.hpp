@@ -48,6 +48,8 @@ class VidSystem
 
     GLRenderer& Renderer() { return mRenderer; }
     const u32* FrameCounter() const { return &mFrame; }
+    // GTA2GL_CAPTURE frames are these test frames (port_FrameCount), or flips with GTA2GL_CAPTURE_FLIPS=1.
+    void SetTestFrame(u32 frame) { mTestFrame = frame; }
 
   private:
     void ResizeSurface(s32 width, s32 height);
@@ -65,6 +67,9 @@ class VidSystem
     bool mSurfaceGrabbed;
     u32 mFrame;
     FrameCapture mCapture;
+    bool mCaptureFlips;
+    u32 mTestFrame;
+    u32 mCapturedFrame;
     OptionsFile mOptions;
     std::vector<u32> mToggleFrames; // GTA2GL_TOGGLE_AT=<frame>,...: scripted ToggleFaithful for tests
     void ApplyOptions();

@@ -19,7 +19,9 @@ VidSystem* sVidSystem;
 // The options last set from the game's menu, for a renderer made later.
 RenderOptions sGameOptions;
 bool sHasGameOptions;
-unsigned sFrameCount;
+// Test frames: flips, except the game's own frames, for which logic steps count instead.
+unsigned sTestFrame;
+bool sGameFlip;
 
 // Scroll Lock toggles faithful rendering and the gta2gl.ini options.
 void PollToggleKey(VidSystem* pSys)
@@ -54,7 +56,27 @@ void port_SetRenderOptions(bool trueColour, int bloomTenths, bool perPixelLighti
 
 unsigned port_FrameCount()
 {
-    return sFrameCount;
+    return sTestFrame;
+}
+
+void port_CountGameStep()
+{
+    sTestFrame++;
+}
+
+void port_SetGameFlip(bool gameFlip)
+{
+    sGameFlip = gameFlip;
+}
+
+unsigned long long port_NowNs()
+{
+    return SDL_GetTicksNS();
+}
+
+void port_DelayNs(unsigned long long ns)
+{
+    SDL_DelayPrecise(ns);
 }
 
 namespace
@@ -247,10 +269,14 @@ VID_EXPORT s32 GTA2_CC Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
 
 VID_EXPORT void GTA2_CC Vid_FlipBuffers(SVideo* pVideo)
 {
-    sFrameCount++;
+    if (!sGameFlip)
+    {
+        sTestFrame++;
+    }
     VidSystem* pSys = Sys(pVideo);
     if (pSys)
     {
+        pSys->SetTestFrame(sTestFrame);
         pSys->Renderer().SetSmoothMagnify(port_FrontendActive());
         PollToggleKey(pSys);
         pSys->Flip();
