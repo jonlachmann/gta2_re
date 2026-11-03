@@ -52,13 +52,12 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 
 1. `GTA2_DIR`, if set;
 2. the current folder, then the executable's folder (a game folder the port was copied into);
-3. the per-user folder, which the setup fills. Packages (AppImage, Flatpak, a macOS bundle, an
+3. the per-user folder, which the setup fills. Packages (a macOS bundle, an
    installed Windows build) always end up here: nothing is written next to the executable.
 
 | Platform | Per-user folder (`SDL_GetPrefPath`) |
 |---|---|
 | Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` |
-| Flatpak | `~/.var/app/<app id>/data/gta2_re/` |
 | Windows | `%APPDATA%\gta2_re\` |
 | macOS | `~/Library/Application Support/gta2_re/` |
 
@@ -88,9 +87,9 @@ disc image or the installer. `gta2 --setup` shows the setup again, to replace th
 Other installers (NSIS, Inno Setup) are not read: install the game with them, then use its folder.
 
 Message boxes are SDL's: task dialogs on Windows, `NSAlert` on macOS. On Linux, zenity if installed
-(GTK dialogs), else SDL's own X11 box; when neither is available (a Flatpak on Wayland without the X11
-socket) the port draws the question in a window of its own. The folder and file pickers are SDL's
-(the xdg-desktop-portal on Linux, so they work in a Flatpak, else zenity). The progress is a small SDL
+(GTK dialogs), else SDL's own X11 box; when neither is available (Wayland without XWayland) the port
+draws the question in a window of its own. The folder and file pickers are SDL's (the
+xdg-desktop-portal on Linux, else zenity). The progress is a small SDL
 window; closing it cancels the copy.
 
 ## Frame rate
@@ -153,8 +152,8 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 
 ### Setup libraries
 
-The setup links libarchive and unshield. Distributions, Homebrew and the Flatpak runtimes have
-libarchive; unshield is packaged by most distributions and Homebrew (a Flatpak builds it as a module).
+The setup links libarchive and unshield. Distributions and Homebrew have libarchive; unshield is
+packaged by most distributions and Homebrew.
 CMake finds them on the system, or in `GTA2_SETUP_DEPS_DIR`, an install prefix with both built
 static (and, for MinGW, zlib as `libzs.a` and liblzma). Arch has no 32-bit libarchive or unshield;
 build them from their releases with the port's toolchain files, for example:
@@ -182,60 +181,17 @@ to unshield and libarchive.
 ## Packages
 
 `.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
-release) and on demand. The zip and the AppImage are `packaging/ci.sh` in a Debian 13 container, which
-installs the tools, downloads the sources pinned in `packaging/versions.sh`, builds the libraries
-(`packaging/deps.sh`), the port, then the package. The Flatpak is `packaging/flatpak.sh` in Flathub's
-flatpak-builder image. The same runs locally, from the repository's root:
+release) and on demand. The zip is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
+downloads the sources pinned in `packaging/versions.sh`, builds the libraries (`packaging/deps.sh`), the
+port, then the package. The same runs locally, from the repository's root:
 
 ```bash
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
-docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
-docker run --rm -v $PWD/../work/out:/app:ro -v $PWD/port/packaging:/p:ro debian:trixie sh -c 'sh /p/smoke_test.sh /app/*.AppImage'
-# bwrap, which runs flatpak's builds and apps, needs the --security-opt options in a container.
-docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
-    -v $PWD:/src:ro -v $PWD/../work:/work -w /src \
-    ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 sh port/packaging/flatpak.sh /work
-docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
-    -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro debian:trixie sh -c 'sh /p/flatpak_smoke_test.sh /out/*.flatpak'
 ```
-
-On Ubuntu 24.04 hosts, bwrap also needs `sysctl kernel.apparmor_restrict_unprivileged_userns=0`.
-
-`flatpak_smoke_test.sh` also takes a GTA2 folder (mounted read-only) as a second argument: the setup then
-installs the game from it, and the game plays 30 seconds under Xvfb.
 
 - Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
   the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later (Windows 7 and 8.1
   need the Universal C Runtime update).
-- Linux: `gta2_re-<version>-x86_64.AppImage`. The game inside is i686, built in an i386 Debian userland; the
-  AppImage brings that userland's glibc and loader, Mesa (EGL, GLX, llvmpipe and the GPU drivers) and the
-  libraries SDL3 loads, and `AppRun` starts the game through the bundled `ld-linux.so.2 --library-path`. It
-  needs no 32-bit library on the host, only a kernel that runs 32-bit programs (IA32 emulation, which
-  distributions enable). The GPU drivers are Mesa's: an NVIDIA GPU with its proprietary driver gets llvmpipe.
-  `smoke_test.sh` starts it with no game data in a container without 32-bit libraries.
-- Flatpak: `gta2_re-<version>-x86_64.flatpak`, app id `io.github.gta2re.gta2`, manifest in
-  `packaging/flatpak/`. An x86_64 app on `org.freedesktop.Platform` 26.08 whose game is i686. Like the
-  AppImage, it brings its 32-bit userland: `packaging/flatpak/lib32.sh` copies the loader, glibc and the
-  libraries the game and SDL3 load from the SDK's `Compat.i386` extension, and Mesa from the
-  `GL32.default` extension, into `/app/lib32`, and `/app/bin/gta2` starts the game through that
-  `ld-linux.so.2 --library-path`. The manifest builds SDL3, OpenAL Soft (with the SDK's i386 GCC),
-  unshield and libarchive from the archives of `versions.sh` (`flatpak.sh` checks they match), and the
-  game with the SDK's LLVM extension. The game's data goes to `~/.var/app/io.github.gta2re.gta2/data/gta2_re/`;
-  the setup reads a GTA2 folder, installer or disc image chosen in the file chooser portal, so the app
-  needs no file system permission. Its permissions: Wayland with X11 as a fallback, PulseAudio (which
-  PipeWire also serves), the GPU, gamepads (`--device=input`, or all devices where flatpak is older than
-  1.18), and multiarch for 32-bit code. Installing the bundle is enough; flatpak brings the runtime from
-  Flathub:
-
-  ```bash
-  flatpak install --user gta2_re-<version>-x86_64.flatpak
-  ```
-
-  The GPU driver is the bundled Mesa, unless a `GL32` extension of the 26.08 runtime is installed (other
-  32-bit apps on that runtime bring them, or by hand): the wrapper then puts it first. With NVIDIA's
-  driver, the bundled Mesa draws with llvmpipe, on the CPU; `org.freedesktop.Platform.GL32.nvidia-<version>//1.4`,
-  the version of the host's driver with dashes (as in the 64-bit `org.freedesktop.Platform.GL.nvidia-...`
-  that `flatpak list` shows), gives it the GPU. `flatpak_smoke_test.sh` runs its tests on the bundled Mesa, then with `GL32.default`.
 
 ## Layout
 
