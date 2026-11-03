@@ -1,10 +1,10 @@
 #!/bin/sh
-# smoke_test.sh <gta2_re-*-linux-i686.tar.gz | gta2-re_*_i386.deb> [<GTA2 folder>]: installs the package and
-# the 32-bit libraries it needs (the lists of linux/README.md, or the .deb's dependencies) as root in a clean
+# smoke_test.sh <gta2_re-*-linux-i686.tar.gz> [<GTA2 folder>]: installs the package and
+# the 32-bit libraries it needs (the lists of linux/README.md) as root in a clean
 # Debian, Ubuntu or Arch Linux container, then starts the game without its data: with SDL's dummy video
 # driver the setup finds no data and quits; under Xvfb its window is captured, drawn with OpenGL and with
 # OpenGL ES. With a GTA2 folder (read-only is fine), the setup installs the game from it, then the game
-# plays 30 seconds under Xvfb, with the sound written to a file. A .deb is then removed.
+# plays 30 seconds under Xvfb, with the sound written to a file.
 set -eu
 PKG=$(readlink -f "$1")
 GAME=${2:+$(readlink -f "$2")}
@@ -20,32 +20,24 @@ else
     pacman -Syu --noconfirm --needed xorg-server-xvfb > /dev/null
 fi
 
-case $PKG in
-*.deb)
-    apt-get install -y -qq "$PKG" > /dev/null
-    GTA2=/usr/games/gta2_re
-    ;;
-*)
-    tar -xzf "$PKG" -C "$T"
-    GTA2=$(echo "$T"/gta2_re-*/gta2)
-    rc=0
-    "$GTA2" 2> "$T/no32.log" || rc=$?
-    cat "$T/no32.log"
-    [ $rc = 1 ] && grep -q "no 32-bit libraries" "$T/no32.log"
-    if command -v apt-get > /dev/null; then
-        LIBS="libc6 libgcc-s1 libgl1 libegl1 libgles2 libgl1-mesa-dri libx11-6 libxext6 libxi6 libxcursor1
-              libxrandr2 libxss1 libxkbcommon0 libwayland-client0 libwayland-cursor0 libwayland-egl1 libpulse0
-              libdbus-1-3 libudev1"
-        # Debian 11 has no libdecor.
-        apt-cache show libdecor-0-0:i386 > /dev/null 2>&1 && LIBS="$LIBS libdecor-0-0"
-        apt-get install -y -qq $(printf '%s:i386 ' $LIBS) > /dev/null
-    else
-        pacman -S --noconfirm --needed lib32-glibc lib32-gcc-libs lib32-mesa lib32-libglvnd lib32-libx11 \
-            lib32-libxext lib32-libxi lib32-libxcursor lib32-libxrandr lib32-libxss lib32-libxkbcommon lib32-wayland \
-            lib32-libdecor lib32-libpulse lib32-dbus lib32-systemd > /dev/null
-    fi
-    ;;
-esac
+tar -xzf "$PKG" -C "$T"
+GTA2=$(echo "$T"/gta2_re-*/gta2)
+rc=0
+"$GTA2" 2> "$T/no32.log" || rc=$?
+cat "$T/no32.log"
+[ $rc = 1 ] && grep -q "no 32-bit libraries" "$T/no32.log"
+if command -v apt-get > /dev/null; then
+    LIBS="libc6 libgcc-s1 libgl1 libegl1 libgles2 libgl1-mesa-dri libx11-6 libxext6 libxi6 libxcursor1
+          libxrandr2 libxss1 libxkbcommon0 libwayland-client0 libwayland-cursor0 libwayland-egl1 libpulse0
+          libdbus-1-3 libudev1"
+    # Debian 11 has no libdecor.
+    apt-cache show libdecor-0-0:i386 > /dev/null 2>&1 && LIBS="$LIBS libdecor-0-0"
+    apt-get install -y -qq $(printf '%s:i386 ' $LIBS) > /dev/null
+else
+    pacman -S --noconfirm --needed lib32-glibc lib32-gcc-libs lib32-mesa lib32-libglvnd lib32-libx11 \
+        lib32-libxext lib32-libxi lib32-libxcursor lib32-libxrandr lib32-libxss lib32-libxkbcommon lib32-wayland \
+        lib32-libdecor lib32-libpulse lib32-dbus lib32-systemd > /dev/null
+fi
 
 export HOME=$T/home XDG_DATA_HOME=$T/data
 DATA=$XDG_DATA_HOME/gta2_re
@@ -94,12 +86,4 @@ if [ -n "$GAME" ]; then
     cp "$(ls "$C"/*.bmp | tail -n 1)" "$T/game.bmp"
 fi
 
-case $PKG in
-*.deb)
-    apt-get remove -y -qq gta2-re > /dev/null
-    dpkg -s gta2-re > /dev/null 2>&1 && { dpkg -s gta2-re; exit 1; }
-    left=$(find / -xdev -path "$T" -prune -o \( -iname '*gta2*' -print \))
-    [ -z "$left" ] || { echo "left behind: $left"; exit 1; }
-    ;;
-esac
 echo "smoke test passed ($T)"

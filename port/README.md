@@ -188,9 +188,8 @@ port, then the packages. The same runs locally, from the repository's root:
 ```bash
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
-# The Linux packages in clean containers; a GTA2 folder as a second argument also installs and plays the game.
+# The Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
 docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/gta2_re-<version>-linux-i686.tar.gz
-docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro debian:trixie sh /p/smoke_test.sh /out/gta2-re_<version>_i386.deb
 ```
 
 - Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
@@ -200,24 +199,16 @@ docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro debian:
   SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system's
   32-bit libraries, so it uses the system's GPU driver, NVIDIA's included. `packaging/linux/README.md`, its
   README, lists the packages per distribution; `./gta2` says which libraries are missing.
-- Linux, Debian and Ubuntu: `gta2-re_<version>_i386.deb`, the same files in `/usr/lib/gta2_re`, started with
-  `gta2_re` or from the desktop's menu. It depends on the 32-bit libraries, which apt installs once i386 is
-  enabled (as for Wine or Steam), on Debian 12 and later and Ubuntu 24.04 and later:
 
-  ```bash
-  sudo dpkg --add-architecture i386 && sudo apt update
-  sudo apt install ./gta2-re_<version>_i386.deb
-  ```
-
-With NVIDIA's proprietary driver, both need its 32-bit libraries, of the driver's version (Steam installs
+With NVIDIA's proprietary driver, it needs its 32-bit libraries, of the driver's version (Steam installs
 them too): `lib32-nvidia-utils` on Arch, `nvidia-driver-libs:i386` on Debian, `libnvidia-gl-<version>:i386`
 on Ubuntu. Without them, Mesa draws on the CPU (llvmpipe).
 
 The Linux build compiles with Debian 13's clang (OpenAL Soft with its GCC) against an i386 system root of
 Debian 11 (`packaging/sysroot.sh`, glibc 2.31; `packaging/linux32-sysroot.cmake`), so it starts on
 distributions as old as that. The C++ runtime is linked statically; OpenAL Soft's needs a few glibc 2.32+
-functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs a package in a
-clean Debian, Ubuntu or Arch Linux container with the libraries it needs (and removes the `.deb` again).
+functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs the tarball in a
+clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
 
 ## Layout
 

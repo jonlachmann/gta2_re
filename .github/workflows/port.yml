@@ -1,6 +1,6 @@
 name: Port
 
-# The native port (port/), 32-bit: a Windows zip, and for Linux a portable tarball and a .deb. Each job runs
+# The native port (port/), 32-bit: a Windows zip and a portable Linux tarball. Each job runs
 # a script of port/packaging in a container, the same command as a local run (port/README.md, Packages).
 on:
   push:
@@ -60,8 +60,7 @@ jobs:
         if: matrix.target == 'linux32'
         run: |
           set -f
-          for pkg in "debian:bookworm *.tar.gz" "ubuntu:24.04 *.tar.gz" "archlinux:latest *.tar.gz" \
-                     "debian:trixie *.deb" "ubuntu:24.04 *.deb"; do
+          for pkg in "debian:bookworm *.tar.gz" "ubuntu:24.04 *.tar.gz" "archlinux:latest *.tar.gz"; do
               set -- $pkg
               echo "::group::$1 $2"
               docker run --rm -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" "$1" sh -c "sh /p/smoke_test.sh /out/$2"

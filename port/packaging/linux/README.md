@@ -12,7 +12,7 @@ Tested on Debian 11 and 12, Ubuntu 24.04 and Arch Linux.
 
 ## 32-bit libraries
 
-Debian and Ubuntu (the `.deb` package installs them by itself; Debian 11 has no `libdecor-0-0`):
+Debian and Ubuntu (Debian 11 has no `libdecor-0-0`):
 
 ```bash
 sudo dpkg --add-architecture i386

@@ -1,4 +1,0 @@
-# The binaries are the portable build's, which links zlib statically for the setup.
-embedded-library zlib [usr/lib/gta2_re/gta2]
-# Not a package of the Debian archive: no ITP bug to close.
-initial-upload-closes-no-bugs
