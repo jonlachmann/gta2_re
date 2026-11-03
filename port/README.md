@@ -52,7 +52,7 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 
 1. `GTA2_DIR`, if set;
 2. the current folder, then the executable's folder (a game folder the port was copied into);
-3. the per-user folder, which the setup fills. Packages (a macOS bundle, an
+3. the per-user folder, which the setup fills. Packages (the Linux ones, a macOS bundle, an
    installed Windows build) always end up here: nothing is written next to the executable.
 
 | Platform | Per-user folder (`SDL_GetPrefPath`) |
@@ -181,17 +181,34 @@ to unshield and libarchive.
 ## Packages
 
 `.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
-release) and on demand. The zip is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
+release) and on demand. Each is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
 downloads the sources pinned in `packaging/versions.sh`, builds the libraries (`packaging/deps.sh`), the
-port, then the package. The same runs locally, from the repository's root:
+port, then the packages. The same runs locally, from the repository's root:
 
 ```bash
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
+# The Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
+docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/gta2_re-<version>-linux-i686.tar.gz
 ```
 
 - Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
   the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later (Windows 7 and 8.1
   need the Universal C Runtime update).
+- Linux, portable: `gta2_re-<version>-linux-i686.tar.gz`. Extract it anywhere and start `./gta2`. It brings
+  SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system's
+  32-bit libraries, so it uses the system's GPU driver, NVIDIA's included. `packaging/linux/README.md`, its
+  README, lists the packages per distribution; `./gta2` says which libraries are missing.
+
+With NVIDIA's proprietary driver, it needs its 32-bit libraries, of the driver's version (Steam installs
+them too): `lib32-nvidia-utils` on Arch, `nvidia-driver-libs:i386` on Debian, `libnvidia-gl-<version>:i386`
+on Ubuntu. Without them, Mesa draws on the CPU (llvmpipe).
+
+The Linux build compiles with Debian 13's clang (OpenAL Soft with its GCC) against an i386 system root of
+Debian 11 (`packaging/sysroot.sh`, glibc 2.31; `packaging/linux32-sysroot.cmake`), so it starts on
+distributions as old as that. The C++ runtime is linked statically; OpenAL Soft's needs a few glibc 2.32+
+functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs the tarball in a
+clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
 
 ## Layout
 

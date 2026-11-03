@@ -36,6 +36,8 @@ if [ ! -f "$W/deps-$T/.complete" ]; then
 fi
 sh "$HERE/build.sh" "$T" "$W/deps-$T" "$W/build-$T"
 mkdir -p "$W/out"
-if [ "$T" = mingw32 ]; then
+if [ "$T" = linux32 ]; then
+    sh "$HERE/linux_packages.sh" "$W/build-$T" "$W/deps-$T" "$W/out"
+else
     sh "$HERE/windows_zip.sh" "$W/build-$T" "$W/deps-$T" "$W/out"
 fi

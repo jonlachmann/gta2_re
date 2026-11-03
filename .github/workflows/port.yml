@@ -1,6 +1,6 @@
 name: Port
 
-# The native port (port/), 32-bit: a Windows zip. Each job runs
+# The native port (port/), 32-bit: a Windows zip and a portable Linux tarball. Each job runs
 # a script of port/packaging in a container, the same command as a local run (port/README.md, Packages).
 on:
   push:
@@ -25,7 +25,11 @@ jobs:
             image: debian:trixie
             setarch: ''
             artifact: gta2_re-windows-i686
-            files: '*.zip'
+          # i386 userland: GCC and the system root's wayland-scanner run natively.
+          - target: linux32
+            image: i386/debian:trixie
+            setarch: linux32
+            artifact: gta2_re-linux-i686
     name: ${{ matrix.target }}
     runs-on: ubuntu-24.04
     steps:
@@ -52,10 +56,21 @@ jobs:
               ${{ matrix.setarch }} sh port/packaging/ci.sh ${{ matrix.target }} /work
           docker run --rm -v "$WORK:/work" ${{ matrix.image }} chown -R "$(id -u):$(id -g)" /work
 
+      - name: Smoke tests in clean containers
+        if: matrix.target == 'linux32'
+        run: |
+          set -f
+          for pkg in "debian:bookworm *.tar.gz" "ubuntu:24.04 *.tar.gz" "archlinux:latest *.tar.gz"; do
+              set -- $pkg
+              echo "::group::$1 $2"
+              docker run --rm -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" "$1" sh -c "sh /p/smoke_test.sh /out/$2"
+              echo "::endgroup::"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ runner.temp }}/work/out/${{ matrix.files }}
+          path: ${{ runner.temp }}/work/out/*
           if-no-files-found: error
           retention-days: 14
 

@@ -7,13 +7,10 @@ measured, so the work can start from here.
 
 The port is i686 only. That costs:
 
-- **NVIDIA on Linux.** A 32-bit process needs the 32-bit GL driver. The AppImage and the Flatpak
-  bundle Mesa, which cannot drive a GPU under NVIDIA's proprietary driver, so NVIDIA users fall
-  back to llvmpipe (rendering on the CPU). Only a host 32-bit NVIDIA driver (installed with Steam)
-  or the Flatpak `GL32.nvidia-*` extension avoids that.
-- **Package size.** The AppImage (85 MB) and the Flatpak (58 MB) carry an i386 glibc, Mesa and
-  LLVM. A 64-bit build uses the host's drivers: about 10 MB, and a few MB as a Flatpak (the 64-bit
-  GL extensions belong to the Flathub runtime, so Flatpak installs them by itself).
+- **32-bit libraries on Linux.** The portable build and the .deb take glibc, OpenGL, X11, Wayland
+  and sound from the host's 32-bit libraries, which most distributions do not install by default
+  (Steam brings them). With NVIDIA's proprietary driver, its 32-bit libraries are needed too, else
+  Mesa draws with llvmpipe (on the CPU). A 64-bit build would use the libraries already there.
 - **macOS.** No 32-bit code since 10.15; Rosetta 2 translates x86_64 only.
 - **Android** would be plain arm64 instead of OpenCE's ILP32 guest (see below).
 
@@ -72,8 +69,3 @@ above, then whatever the replay tests show).
   the web build is wasm32. macOS is in progress.
 - **Julius/Augustus** (Caesar III) are rewritten in portable C and parse the game files field by
   field, so they are 64-bit natively. That route is not open to a matching decompilation.
-
-## Interim option for NVIDIA
-
-Until then, the AppImage (and a portable build) could prefer the host's 32-bit NVIDIA driver
-through libglvnd when it is installed, keeping the bundled Mesa as the fallback.
