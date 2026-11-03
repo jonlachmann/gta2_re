@@ -182,15 +182,27 @@ to unshield and libarchive.
 ## Packages
 
 `.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
-release) and on demand. Each job is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
-downloads the sources pinned in `packaging/versions.sh`, builds the libraries (`packaging/deps.sh`), the
-port, then the package. The same runs locally, from the repository's root:
+release) and on demand. The zip and the AppImage are `packaging/ci.sh` in a Debian 13 container, which
+installs the tools, downloads the sources pinned in `packaging/versions.sh`, builds the libraries
+(`packaging/deps.sh`), the port, then the package. The Flatpak is `packaging/flatpak.sh` in Flathub's
+flatpak-builder image. The same runs locally, from the repository's root:
 
 ```bash
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
 docker run --rm -v $PWD/../work/out:/app:ro -v $PWD/port/packaging:/p:ro debian:trixie sh -c 'sh /p/smoke_test.sh /app/*.AppImage'
+# bwrap, which runs flatpak's builds and apps, needs the --security-opt options in a container.
+docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
+    -v $PWD:/src:ro -v $PWD/../work:/work -w /src \
+    ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 sh port/packaging/flatpak.sh /work
+docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
+    -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro debian:trixie sh -c 'sh /p/flatpak_smoke_test.sh /out/*.flatpak'
 ```
+
+On Ubuntu 24.04 hosts, bwrap also needs `sysctl kernel.apparmor_restrict_unprivileged_userns=0`.
+
+`flatpak_smoke_test.sh` also takes a GTA2 folder (mounted read-only) as a second argument: the setup then
+installs the game from it, and the game plays 30 seconds under Xvfb.
 
 - Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
   the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later (Windows 7 and 8.1
@@ -201,6 +213,25 @@ docker run --rm -v $PWD/../work/out:/app:ro -v $PWD/port/packaging:/p:ro debian:
   needs no 32-bit library on the host, only a kernel that runs 32-bit programs (IA32 emulation, which
   distributions enable). The GPU drivers are Mesa's: an NVIDIA GPU with its proprietary driver gets llvmpipe.
   `smoke_test.sh` starts it with no game data in a container without 32-bit libraries.
+- Flatpak: `gta2_re-<version>-x86_64.flatpak`, app id `io.github.gta2re.gta2`, manifest in
+  `packaging/flatpak/`. An x86_64 app on `org.freedesktop.Platform` 26.08 whose game is i686, as Steam and
+  Wine do on Flathub: the runtime's `Compat.i386` extension brings the 32-bit libraries and loader, and the
+  `GL32` extensions the host's GPU driver (Mesa, or NVIDIA's matching the host's). The manifest builds
+  SDL3, OpenAL Soft (with the SDK's i386 GCC), unshield and libarchive from the archives of `versions.sh`
+  (`flatpak.sh` checks they match), zlib and liblzma come from the runtime, and the game builds with the
+  SDK's LLVM extension. The game's data goes to `~/.var/app/io.github.gta2re.gta2/data/gta2_re/`; the
+  setup reads a GTA2 folder, installer or disc image chosen in the file chooser portal, so the app needs no
+  file system permission. Its permissions: Wayland with X11 as a fallback, PulseAudio (which PipeWire
+  also serves), the GPU, gamepads (`--device=input`, or all devices where flatpak is older than 1.18), and
+  multiarch for 32-bit code. A bundle does not install the app's extensions:
+
+  ```bash
+  flatpak install --user gta2_re-<version>-x86_64.flatpak
+  flatpak install --user flathub org.freedesktop.Platform.Compat.i386//26.08 org.freedesktop.Platform.GL32.default//26.08
+  ```
+
+  With NVIDIA's driver, also `org.freedesktop.Platform.GL32.nvidia-<version>`, the version of the
+  host's driver with dashes (`flatpak list` shows the 64-bit one, `org.freedesktop.Platform.GL.nvidia-...`).
 
 ## Layout
 
