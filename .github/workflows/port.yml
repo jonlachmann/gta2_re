@@ -43,7 +43,7 @@ jobs:
           path: |
             ${{ runner.temp }}/work/dl
             ${{ runner.temp }}/work/deps-${{ matrix.target }}
-          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh') }}
+          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh', 'port/packaging/sysroot.sh', 'port/packaging/linux32-sysroot.cmake', 'port/packaging/glibc_compat.c') }}
 
       - name: Build and package
         run: |

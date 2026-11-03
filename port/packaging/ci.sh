@@ -10,23 +10,19 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 COMMON="cmake ninja-build pkg-config curl ca-certificates xz-utils file"
 if [ "$T" = linux32 ]; then
-    # SDL3's build headers and the static libraries' compression libraries.
-    apt-get install -y -qq --no-install-recommends $COMMON clang clang-tools lld llvm g++ \
-        libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev libxtst-dev \
-        libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev libegl-dev libgles-dev libgl-dev \
-        libpulse-dev libasound2-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libudev-dev libdbus-1-dev \
-        zlib1g-dev liblzma-dev > /dev/null
+    # The headers and libraries come from the system root that deps.sh makes with mmdebstrap.
+    apt-get install -y -qq --no-install-recommends $COMMON clang lld llvm g++ mmdebstrap gpg debian-archive-keyring \
+        > /dev/null
 else
     # GCC for OpenAL Soft (deps.sh); the rest builds with llvm-mingw.
     apt-get install -y -qq --no-install-recommends $COMMON zip g++-mingw-w64-i686-posix > /dev/null
 fi
 
-SRC="openal-soft-1.25.2.tar.gz unshield-1.6.2.tar.gz libarchive-3.8.11.tar.xz"
+SRC="openal-soft-1.25.2.tar.gz unshield-1.6.2.tar.gz libarchive-3.8.11.tar.xz zlib-1.3.2.tar.gz xz-5.8.4.tar.gz"
 if [ "$T" = linux32 ]; then
     sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-3.4.18.tar.gz
 else
-    sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-devel-3.4.18-mingw.tar.gz zlib-1.3.2.tar.gz xz-5.8.4.tar.gz \
-        llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz
+    sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-devel-3.4.18-mingw.tar.gz llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz
     # llvm-mingw: clang with MinGW-w64 on UCRT, as the toolchain file expects it in PATH.
     rm -rf "$W/llvm-mingw"
     mkdir -p "$W/llvm-mingw"
