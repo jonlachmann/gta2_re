@@ -112,13 +112,14 @@ const char* kSceneFS =
     "uniform int uPerPixel;\n"
     "uniform int uNumLights;\n"
     "uniform vec3 uAmbient;\n"
+    "vec3 gHaze;\n"
     "uniform float uUnlitAmbient;\n"
     "uniform int uShadow;\n"
     "layout(std140) uniform Lights\n"
     "{\n"
     "    vec4 uLightPos[256];\n" // xyz, radius
     "    vec4 uLightCol[256];\n" // rgb * brightness, 1 / radius
-    "    vec4 uLightDir[256];\n" // spot direction xy, cos of the outer and inner cone
+    "    vec4 uLightDir[256];\n" // beam direction xy, width, 1 for a beam
     "};\n"
     "in vec4 vCol;\n"
     "in vec2 vUV;\n"
@@ -133,6 +134,7 @@ const char* kSceneFS =
     "{\n"
     "    vec3 acc = vec3(0.0);\n"
     "    vec3 spots = vec3(0.0);\n"
+    "    gHaze = vec3(0.0);\n"
     "    for (int i = 0; i < uNumLights; i++)\n"
     "    {\n"
     "        vec3 d = vWorld - uLightPos[i].xyz;\n"
@@ -143,12 +145,15 @@ const char* kSceneFS =
     "            float dist = sqrt(d2);\n"
     "            float att = (r - dist) * uLightCol[i].w;\n"
     "            vec4 s = uLightDir[i];\n"
-    // As SpotCone in gbh_api.cpp.
+    // As Beam in gbh_api.cpp.
     "            float along = dot(d.xy, s.xy);\n"
-    "            float back = max(along, 0.0) + 0.1 * r;\n"
-    "            float c = back / sqrt(back * back + max(dot(d.xy, d.xy) - along * along, 0.0));\n"
-    "            float near = smoothstep(-0.1, 0.15, along) * (0.5 + 0.5 * smoothstep(0.0, 0.4 * r, along));\n"
-    "            if (att > 0.0 && s.w > -1.0) spots += uLightCol[i].rgb * att * smoothstep(0.0, 1.0, att) * smoothstep(s.z, s.w, c) * near;\n"
+    "            float ahead = max(along, 0.0);\n"
+    "            float sigma = s.z + 0.58 * ahead;\n"
+    "            float cone = exp(-ahead / (0.33 * r)) * exp(-max(dot(d.xy, d.xy) - along * along, 0.0) / (2.0 * sigma * sigma));\n"
+    "            float glow = exp(-dot(d.xy, d.xy) / 0.0288);\n"
+    "            float beam = smoothstep(-0.02, 0.08, along) * (1.0 - smoothstep(0.7 * r, r, along)) * (cone + glow);\n"
+    // A little of a beam's light is added as haze, on top of lighting the texture.
+    "            if (s.w > 0.0) { spots += uLightCol[i].rgb * beam; gHaze += uLightCol[i].rgb * beam * 0.12; }\n"
     "            else if (att > 0.0) acc += uLightCol[i].rgb * att;\n"
     "        }\n"
     "    }\n"
@@ -197,6 +202,7 @@ const char* kSceneFS =
     "        c = vec4(min((vShade * vUnlit.rgb * 255.0 * LightSum() + uAmbient * (1.0 - uUnlitAmbient * (1.0 - vUnlit.rgb))) / 255.0, vec3(1.0)), vUnlit.a);\n"
     "    }\n"
     "    oColor = t * c;\n"
+    "    if (uPerPixel != 0 && vLit > 0.5) oColor.rgb += min(gHaze, vec3(0.3)) * t.a;\n"
     "    oShadow = vec4(0.0, 0.0, 0.0, oColor.a);\n"
     // With a shadow mask, additive draws blend with (1, 1 - alpha): no alpha keeps them additive, and the
     // mask is lightened by their brightness, as a shadow under them would have been.
@@ -986,7 +992,7 @@ void GLRenderer::SetLights(const RLight* pLights, s32 count, const f32* pAmbient
         pos[0] = l.x, pos[1] = l.y, pos[2] = l.z, pos[3] = l.radius;
         col[0] = l.r, col[1] = l.g, col[2] = l.b, col[3] = l.invRadius;
         f32* dir = &data[kMaxLights * 8 + i * 4];
-        dir[0] = l.dx, dir[1] = l.dy, dir[2] = l.cosOuter, dir[3] = l.cosInner;
+        dir[0] = l.dx, dir[1] = l.dy, dir[2] = l.width, dir[3] = l.beam;
     }
     gl.glBindBuffer(GL_UNIFORM_BUFFER, mLightUbo);
     gl.glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(data), data);

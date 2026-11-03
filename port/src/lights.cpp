@@ -22,7 +22,7 @@
 #include <string.h>
 
 #if defined(GTA2_PORT_SDL)
-void port_SpotLight(f32 dx, f32 dy, f32 cosOuter, f32 cosInner);
+void port_BeamLight(f32 dx, f32 dy, f32 width);
 #endif
 
 namespace PortLights
@@ -81,10 +81,9 @@ bool LampPosition(Sprite* pSprite, u8 delta, bool mirrored, f32& x, f32& y)
     y = (pSprite->mXy.y + offset.y).ToFloat();
     return true;
 }
-// One light as Light.cpp submits the game's: bit 16 on, radius in blocks * 32, intensity. A spot light along
-// (dx, dy) when cosInner > -1.
-void AddLight(f32 x, f32 y, f32 z, f32 radius, s32 intensity, u32 colour, f32 dx = 0.0f, f32 dy = 0.0f,
-              f32 cosOuter = -2.0f, f32 cosInner = -1.0f)
+// One light as Light.cpp submits the game's: bit 16 on, radius in blocks * 32, intensity. A beam along
+// (dx, dy) of that length when width > 0 (port_BeamLight).
+void AddLight(f32 x, f32 y, f32 z, f32 radius, s32 intensity, u32 colour, f32 dx = 0.0f, f32 dy = 0.0f, f32 width = 0.0f)
 {
     if (intensity <= 0 || x < sMinX || x > sMaxX || y < sMinY || y > sMaxY)
     {
@@ -98,12 +97,12 @@ void AddLight(f32 x, f32 y, f32 z, f32 radius, s32 intensity, u32 colour, f32 dx
     light.field_10_colour = colour;
 #if defined(GTA2_PORT_SDL)
     pgbh_AddLight(&light);
-    if (cosInner > -1.0f)
+    if (width > 0.0f)
     {
-        port_SpotLight(dx, dy, cosOuter, cosInner);
+        port_BeamLight(dx, dy, width);
     }
 #else
-    // The original renderer has no spot lights: a point light a third of the range ahead.
+    // The original renderer has no beams: a point light a third of the range ahead.
     light.field_4_x += dx * radius / 3;
     light.field_8_y += dy * radius / 3;
     pgbh_AddLight(&light);
@@ -130,14 +129,12 @@ void CarLights(Car* pCar, bool headlights, bool effects)
         f32 y;
         if (headlights && bits.mask_bit(kHead[i]) && LampPosition(pSprite, kHeadlightDelta, i == 1, x, y))
         {
-            // Just behind the lamp's pixels, aimed a little inwards so the two beams meet ahead of the bumper.
-            const f32 inward = (pSprite->mXy.x.ToFloat() - x) * fy - (pSprite->mXy.y.ToFloat() - y) * fx > 0.0f ? 0.07f : -0.07f;
-            AddLight(x - fx * 0.08f, y - fy * 0.08f, z, 2.8f, 100, kHalogen, fx + fy * inward, fy - fx * inward, 0.95f, 0.995f);
+            AddLight(x, y, z, 1.2f, 110, kHalogen, fx, fy, 0.06f);
         }
         // A small red glow behind a brake light while the game shows it lit (Car::UpdateBrakeLights).
         if (effects && bits.mask_bit(kBrake[i]) && LampPosition(pSprite, kBrakeLightDelta, i == 1, x, y))
         {
-            AddLight(x, y, z, 0.45f, 105, kRed, -fx, -fy, 0.3f, 0.8f);
+            AddLight(x, y, z, 0.45f, 105, kRed, -fx, -fy, 0.06f);
         }
     }
 }

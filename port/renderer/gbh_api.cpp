@@ -69,7 +69,7 @@ struct LightInternal
     f32 mInvRadius;
     f32 mX, mY, mZ;
     f32 mR, mG, mB;
-    f32 mDx, mDy, mCosOuter, mCosInner;
+    f32 mDx, mDy, mWidth, mBeam;
 };
 
 IRenderer* gRenderer;
@@ -341,7 +341,7 @@ void UploadLights()
         o.radius = l.mRadius;
         o.invRadius = l.mInvRadius;
         o.r = l.mR * l.mBrightness, o.g = l.mG * l.mBrightness, o.b = l.mB * l.mBrightness;
-        o.dx = l.mDx, o.dy = l.mDy, o.cosOuter = l.mCosOuter, o.cosInner = l.mCosInner;
+        o.dx = l.mDx, o.dy = l.mDy, o.width = l.mWidth, o.beam = l.mBeam;
     }
     gRenderer->SetLights(sLights, n, gAmbient, 1.0f - gLightScale);
     gLightsDirty = false;
@@ -389,25 +389,21 @@ f32 SmoothStep(f32 t)
     return t * t * (3.0f - 2.0f * t);
 }
 
-// 1 inside a spot light's cone, 0 outside, smooth in between; 1 for a point light. The cone is measured from
-// a point 10% of the range behind the spot, so it starts a little wide; it fades in from 0.1 block behind
-// the spot to 0.15 ahead, brightens over the first 40% of the range and fades out softly after it.
-f32 SpotCone(const LightInternal& light, f32 dx, f32 dy, f32 dist)
+// A beam's light at (dx, dy) from its lamp, 0 to 2: a glow on the lamp and a wide soft cone, gaussian
+// across (sigma the light's width, opening about 60 degrees), fading fast along. Nothing behind the lamp.
+f32 Beam(const LightInternal& light, f32 dx, f32 dy)
 {
-    if (light.mCosInner <= -1.0f)
-    {
-        return 1.0f;
-    }
+    const f32 r = light.mRadius;
     const f32 along = dx * light.mDx + dy * light.mDy;
-    const f32 back = (along > 0.0f ? along : 0.0f) + 0.1f * light.mRadius;
-    const f32 lateral2 = dx * dx + dy * dy - along * along;
-    const f32 c = back / sqrtf(back * back + (lateral2 > 0.0f ? lateral2 : 0.0f));
-    const f32 fade = (light.mRadius - dist) * light.mInvRadius;
-    return SmoothStep((c - light.mCosOuter) / (light.mCosInner - light.mCosOuter)) * SmoothStep((along + 0.1f) / 0.25f) *
-        (0.5f + 0.5f * SmoothStep(along / (0.4f * light.mRadius))) * SmoothStep(fade);
+    const f32 ahead = along > 0.0f ? along : 0.0f;
+    const f32 across2 = dx * dx + dy * dy - along * along;
+    const f32 sigma = light.mWidth + 0.58f * ahead;
+    const f32 cone = expf(-ahead / (0.33f * r)) * expf(-across2 / (2.0f * sigma * sigma));
+    const f32 glow = expf(-(dx * dx + dy * dy) / (2.0f * 0.12f * 0.12f));
+    return SmoothStep((along + 0.02f) / 0.1f) * (1.0f - SmoothStep((along - 0.7f * r) / (0.3f * r))) * (cone + glow);
 }
 
-// The most the spot lights together add to a point (the port's headlights), so that a group of cars
+// The most the beams together add to a point (the port's headlights), so that a group of cars
 // doesn't light a whole junction; the game's own lights add up freely.
 const f32 kSpotCap = 0.6f;
 
@@ -446,8 +442,8 @@ u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
         const f32 att = (light.mRadius - dist) * light.mInvRadius;
         if (att > 0.0f)
         {
-            const f32 k = att * light.mBrightness * SpotCone(light, dx, dy, dist);
-            const bool spot = light.mCosInner > -1.0f;
+            const bool spot = light.mBeam > 0.0f;
+            const f32 k = light.mBrightness * (spot ? Beam(light, dx, dy) : att);
             (spot ? sr : lr) += light.mR * k;
             (spot ? sg : lg) += light.mG * k;
             (spot ? sb : lb) += light.mB * k;
@@ -1097,19 +1093,17 @@ GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
     l.mRadius = ((pLight->field_0 >> 8) & 0xFF) * k * 8.0f;
     l.mRadiusSquared = l.mRadius * l.mRadius;
     l.mInvRadius = l.mRadius > 0.0f ? 1.0f / l.mRadius : 0.0f;
-    l.mDx = l.mDy = 0.0f;
-    l.mCosOuter = -2.0f;
-    l.mCosInner = -1.0f;
+    l.mDx = l.mDy = l.mWidth = l.mBeam = 0.0f;
     return idx * 0x2C;
 }
 
-// The port's headlights: the last light added becomes a spot light along (dx, dy).
-void port_SpotLight(f32 dx, f32 dy, f32 cosOuter, f32 cosInner)
+// The port's headlights: the last light added becomes a beam along (dx, dy), its range the light's radius.
+void port_BeamLight(f32 dx, f32 dy, f32 width)
 {
     if (gNumLights)
     {
         LightInternal& l = gLights[gNumLights - 1];
-        l.mDx = dx, l.mDy = dy, l.mCosOuter = cosOuter, l.mCosInner = cosInner;
+        l.mDx = dx, l.mDy = dy, l.mWidth = width, l.mBeam = 1.0f;
     }
 }
 

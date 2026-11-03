@@ -36,8 +36,8 @@ struct RLight
     f32 radius;
     f32 invRadius;
     f32 r, g, b; // colour times brightness
-    f32 dx, dy;            // a spot light's direction on the ground
-    f32 cosOuter, cosInner; // its cone: dark outside cosOuter, full inside cosInner (-2, -1 for a point light)
+    f32 dx, dy;              // a beam's direction on the ground
+    f32 width, beam;         // a beam's gaussian sigma at the lamp, and 1 for a beam, 0 for a point light
 };
 
 enum RenderStateBits
