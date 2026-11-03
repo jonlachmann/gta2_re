@@ -214,24 +214,28 @@ installs the game from it, and the game plays 30 seconds under Xvfb.
   distributions enable). The GPU drivers are Mesa's: an NVIDIA GPU with its proprietary driver gets llvmpipe.
   `smoke_test.sh` starts it with no game data in a container without 32-bit libraries.
 - Flatpak: `gta2_re-<version>-x86_64.flatpak`, app id `io.github.gta2re.gta2`, manifest in
-  `packaging/flatpak/`. An x86_64 app on `org.freedesktop.Platform` 26.08 whose game is i686, as Steam and
-  Wine do on Flathub: the runtime's `Compat.i386` extension brings the 32-bit libraries and loader, and the
-  `GL32` extensions the host's GPU driver (Mesa, or NVIDIA's matching the host's). The manifest builds
-  SDL3, OpenAL Soft (with the SDK's i386 GCC), unshield and libarchive from the archives of `versions.sh`
-  (`flatpak.sh` checks they match), zlib and liblzma come from the runtime, and the game builds with the
-  SDK's LLVM extension. The game's data goes to `~/.var/app/io.github.gta2re.gta2/data/gta2_re/`; the
-  setup reads a GTA2 folder, installer or disc image chosen in the file chooser portal, so the app needs no
-  file system permission. Its permissions: Wayland with X11 as a fallback, PulseAudio (which PipeWire
-  also serves), the GPU, gamepads (`--device=input`, or all devices where flatpak is older than 1.18), and
-  multiarch for 32-bit code. A bundle does not install the app's extensions:
+  `packaging/flatpak/`. An x86_64 app on `org.freedesktop.Platform` 26.08 whose game is i686. Like the
+  AppImage, it brings its 32-bit userland: `packaging/flatpak/lib32.sh` copies the loader, glibc and the
+  libraries the game and SDL3 load from the SDK's `Compat.i386` extension, and Mesa from the
+  `GL32.default` extension, into `/app/lib32`, and `/app/bin/gta2` starts the game through that
+  `ld-linux.so.2 --library-path`. The manifest builds SDL3, OpenAL Soft (with the SDK's i386 GCC),
+  unshield and libarchive from the archives of `versions.sh` (`flatpak.sh` checks they match), and the
+  game with the SDK's LLVM extension. The game's data goes to `~/.var/app/io.github.gta2re.gta2/data/gta2_re/`;
+  the setup reads a GTA2 folder, installer or disc image chosen in the file chooser portal, so the app
+  needs no file system permission. Its permissions: Wayland with X11 as a fallback, PulseAudio (which
+  PipeWire also serves), the GPU, gamepads (`--device=input`, or all devices where flatpak is older than
+  1.18), and multiarch for 32-bit code. Installing the bundle is enough; flatpak brings the runtime from
+  Flathub:
 
   ```bash
   flatpak install --user gta2_re-<version>-x86_64.flatpak
-  flatpak install --user flathub org.freedesktop.Platform.Compat.i386//26.08 org.freedesktop.Platform.GL32.default//26.08
   ```
 
-  With NVIDIA's driver, also `org.freedesktop.Platform.GL32.nvidia-<version>`, the version of the
-  host's driver with dashes (`flatpak list` shows the 64-bit one, `org.freedesktop.Platform.GL.nvidia-...`).
+  The GPU driver is the bundled Mesa, unless a `GL32` extension of the 26.08 runtime is installed (other
+  32-bit apps on that runtime bring them, or by hand): the wrapper then puts it first. With NVIDIA's
+  driver, the bundled Mesa draws with llvmpipe, on the CPU; `org.freedesktop.Platform.GL32.nvidia-<version>//1.4`,
+  the version of the host's driver with dashes (as in the 64-bit `org.freedesktop.Platform.GL.nvidia-...`
+  that `flatpak list` shows), gives it the GPU. `flatpak_smoke_test.sh` runs its tests on the bundled Mesa, then with `GL32.default`.
 
 ## Layout
 

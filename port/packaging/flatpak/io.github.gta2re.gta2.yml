@@ -1,5 +1,5 @@
-# The native port in a Flatpak: an x86_64 app whose game is i686, run on the runtime's Compat.i386
-# extension, with the host's GPU driver from the GL32 extensions (as Steam and Wine do on Flathub).
+# The native port in a Flatpak: an x86_64 app whose game is i686. The app brings its 32-bit loader, glibc,
+# libraries and Mesa (lib32.sh), and takes the host's GPU driver from a GL32 extension when one is installed.
 # The archives' URLs and SHA-256 must match packaging/versions.sh (flatpak.sh checks it).
 id: io.github.gta2re.gta2
 runtime: org.freedesktop.Platform
@@ -23,12 +23,10 @@ finish-args:
   - --device=input
   - --device-if=all:!has-input-device
   - --allow=multiarch
+  # add-build-extensions would otherwise stay in the app's metadata.
+  - --remove-extension=org.freedesktop.Platform.GL32.default
 
 add-extensions:
-  org.freedesktop.Platform.Compat.i386:
-    directory: lib/i386-linux-gnu
-    version: *runtime-version
-
   org.freedesktop.Platform.GL32:
     directory: lib/i386-linux-gnu/GL
     version: '1.4'
@@ -42,6 +40,12 @@ add-extensions:
     enable-if: active-gl-driver
     autoprune-unless: active-gl-driver
 
+# Mesa i386, copied into the app by lib32.sh.
+add-build-extensions:
+  org.freedesktop.Platform.GL32.default:
+    directory: lib/mesa32
+    version: *runtime-version
+
 x-compat-i386-opts: &compat-i386-opts
   prepend-pkg-config-path: /app/lib32/pkgconfig:/usr/lib/i386-linux-gnu/pkgconfig
   ldflags: -L/app/lib32
@@ -52,9 +56,10 @@ x-compat-i386-opts: &compat-i386-opts
   libdir: /app/lib32
 
 # /app/deps holds what the game's module builds with: libarchive and unshield (linked statically) and
-# OpenAL Soft (copied next to the game).
+# OpenAL Soft (copied into /app/lib32).
 cleanup:
   - /deps
+  - /lib/mesa32
   - /include
   - /lib32/*.a
   - /lib32/*.so
@@ -215,15 +220,15 @@ modules:
               -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld $GCC" -DCMAKE_BUILD_RPATH=/app/lib32 \
               -DSDL3_DIR=/app/lib32/cmake/SDL3 -DGTA2_SETUP_DEPS_DIR=/app/deps -DGTA2_OPENAL_DIR=/app/deps
         ninja -C build -j${FLATPAK_BUILDER_N_JOBS}
-      # The game and OpenAL Soft in one folder: the game loads the library from its own.
-      - install -Dm755 -t /app/lib32/gta2_re build/gta2 build/libopenal.so.1
+      - install -Dm755 -t /app/lib32/gta2_re build/gta2
+      - install -Dm755 -t /app/lib32 build/libopenal.so.1
+      - sh port/packaging/flatpak/lib32.sh /app/lib/mesa32 /app/lib32
       - install -Dm755 port/packaging/flatpak/gta2.sh /app/bin/gta2
       - install -Dm644 port/packaging/gta2_re.desktop /app/share/applications/gta2_re.desktop
       - install -Dm644 port/resources/gta2.png /app/share/icons/hicolor/32x32/apps/gta2_re.png
       - install -Dm644 port/resources/gta2_256.png /app/share/icons/hicolor/256x256/apps/gta2_re.png
       - install -Dm644 -t /app/share/metainfo port/packaging/flatpak/io.github.gta2re.gta2.metainfo.xml
-      - install -Dm644 -t /app/etc port/packaging/flatpak/ld.so.conf
-      # Mount points of the extensions.
+      # The GL32 extensions' mount point.
       - install -d /app/lib/i386-linux-gnu/GL
     sources:
       - type: dir
