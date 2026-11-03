@@ -167,6 +167,22 @@ stations come from zone names, an educated guess.
 
 ![Minimap A with the block-kind map and points of interest](demo/minimap_pois.png)
 
+## Prior art
+
+Existing radar mods for the original game, all from the same base: GTA3's radar code backported
+through re3, drawing prebuilt radar tile images per district.
+
+| Project | Notes |
+|---|---|
+| [gennariarmando/gta2-radar](https://github.com/gennariarmando/gta2-radar) | The original mod by _AG: rectangular radar, gang, church and garage blips, objectives with height markers, tiles addable for custom levels |
+| [r3538987/gta2-radar-11.44](https://github.com/r3538987/gta2-radar-11.44) | Built for v11.44, adds pickup blips (after Sektor's gta2-radar), a larger radar on the pause stats screen, edge clamping (`EnableRadarEdgeClamp`) |
+| [Traeskie/gta2-radar](https://github.com/Traeskie/gta2-radar) | A fork of _AG's mod |
+
+Differences with this study: the map here is built from the level's `.gmp` and `.sty` at load
+time instead of prebuilt tiles, so custom levels work without extra files, and the frame follows
+GTA2's HUD rather than GTA3's. Their code derives from re3, so it is a reference for features
+and blip rules, not code to copy.
+
 ## Tools
 
 `tools/` holds the generators and readers. They run with `python3 -I`, need Pillow and numpy,
