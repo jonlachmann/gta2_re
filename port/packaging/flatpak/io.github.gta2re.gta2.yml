@@ -1,0 +1,237 @@
+# The native port in a Flatpak: an x86_64 app whose game is i686, run on the runtime's Compat.i386
+# extension, with the host's GPU driver from the GL32 extensions (as Steam and Wine do on Flathub).
+# The archives' URLs and SHA-256 must match packaging/versions.sh (flatpak.sh checks it).
+id: io.github.gta2re.gta2
+runtime: org.freedesktop.Platform
+runtime-version: &runtime-version '26.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Compat.i386
+  - org.freedesktop.Sdk.Extension.toolchain-i386
+  - org.freedesktop.Sdk.Extension.llvm22
+command: gta2
+rename-desktop-file: gta2_re.desktop
+rename-icon: gta2_re
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # Gamepads; flatpak before 1.18 reads the condition as --device=all.
+  - --device=input
+  - --device-if=all:!has-input-device
+  - --allow=multiarch
+
+add-extensions:
+  org.freedesktop.Platform.Compat.i386:
+    directory: lib/i386-linux-gnu
+    version: *runtime-version
+
+  org.freedesktop.Platform.GL32:
+    directory: lib/i386-linux-gnu/GL
+    version: '1.4'
+    versions: 26.08;26.08-extra;1.4
+    subdirectories: true
+    no-autodownload: true
+    autodelete: false
+    add-ld-path: lib
+    merge-dirs: vulkan/icd.d;glvnd/egl_vendor.d;egl/egl_external_platform.d;OpenCL/vendors;lib/dri;lib/d3d;lib/gbm;vulkan/explicit_layer.d;vulkan/implicit_layer.d;vdpau
+    download-if: active-gl-driver
+    enable-if: active-gl-driver
+    autoprune-unless: active-gl-driver
+
+x-compat-i386-opts: &compat-i386-opts
+  prepend-pkg-config-path: /app/lib32/pkgconfig:/usr/lib/i386-linux-gnu/pkgconfig
+  ldflags: -L/app/lib32
+  prepend-path: /usr/lib/sdk/toolchain-i386/bin
+  env:
+    CC: i686-unknown-linux-gnu-gcc
+    CXX: i686-unknown-linux-gnu-g++
+  libdir: /app/lib32
+
+# /app/deps holds what the game's module builds with: libarchive and unshield (linked statically) and
+# OpenAL Soft (copied next to the game).
+cleanup:
+  - /deps
+  - /include
+  - /lib32/*.a
+  - /lib32/*.so
+  - /lib32/cmake
+  - /lib32/pkgconfig
+  - /share/doc
+  - /share/licenses/SDL3
+
+modules:
+  - name: sdl3
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      arch:
+        x86_64: *compat-i386-opts
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DSDL_SHARED=ON
+      - -DSDL_STATIC=OFF
+      - -DSDL_TESTS=OFF
+      - -DSDL_EXAMPLES=OFF
+      - -DSDL_INSTALL_DOCS=OFF
+      - -DSDL_JACK=OFF
+      - -DSDL_SNDIO=OFF
+    sources:
+      - type: archive
+        url: https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz
+        sha256: 9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
+
+  # No audio backend: it renders into SDL's mix through its loopback device. GCC, as in deps.sh: OpenAL Soft
+  # 1.25.2 does not build with clang 19.
+  - name: openal-soft
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      arch:
+        x86_64: *compat-i386-opts
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/app/deps
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DALSOFT_UTILS=OFF
+      - -DALSOFT_EXAMPLES=OFF
+      - -DALSOFT_TESTS=OFF
+      - -DALSOFT_NO_CONFIG_UTIL=ON
+      - -DALSOFT_UPDATE_BUILD_VERSION=OFF
+      - -DALSOFT_INSTALL=ON
+      - -DALSOFT_INSTALL_CONFIG=OFF
+      - -DALSOFT_INSTALL_HRTF_DATA=OFF
+      - -DALSOFT_INSTALL_AMBDEC_PRESETS=OFF
+      - -DALSOFT_INSTALL_EXAMPLES=OFF
+      - -DALSOFT_INSTALL_UTILS=OFF
+      - -DALSOFT_BACKEND_PIPEWIRE=OFF
+      - -DALSOFT_BACKEND_PULSEAUDIO=OFF
+      - -DALSOFT_BACKEND_ALSA=OFF
+      - -DALSOFT_BACKEND_OSS=OFF
+      - -DALSOFT_BACKEND_SNDIO=OFF
+      - -DALSOFT_BACKEND_JACK=OFF
+      - -DALSOFT_BACKEND_PORTAUDIO=OFF
+      - -DALSOFT_BACKEND_SDL2=OFF
+      - -DALSOFT_BACKEND_SDL3=OFF
+      - -DALSOFT_BACKEND_WAVE=OFF
+      - -DALSOFT_ENABLE_MODULES=OFF
+      - -DHAVE_WFUNCTION_EFFECTS=OFF
+    sources:
+      - type: archive
+        url: https://github.com/kcat/openal-soft/archive/refs/tags/1.25.2.tar.gz
+        sha256: fb27e5839aa11f0e5b9d33756965291fad5d6909ab928ea1f796f4a1a6877894
+
+  - name: unshield
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      # Its MD5 code declares K&R prototypes, which C23 (GCC 15's default) reads as taking no argument.
+      cflags: -std=gnu17
+      arch:
+        x86_64: *compat-i386-opts
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/app/deps
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DBUILD_STATIC=ON
+      - -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+    post-install:
+      # The static library leaves out unshield's MD5 objects.
+      - ar rs /app/deps/lib/libunshield.a lib/md5/CMakeFiles/md5.dir/md5c.c.o
+    sources:
+      - type: archive
+        url: https://github.com/twogood/unshield/archive/refs/tags/1.6.2.tar.gz
+        sha256: a937ef596ad94d16e7ed2c8553ad7be305798dcdcfd65ae60210b1e54ab51a2f
+
+  # zlib and liblzma come from the runtime.
+  - name: libarchive
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      arch:
+        x86_64: *compat-i386-opts
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/app/deps
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DBUILD_SHARED_LIBS=OFF
+      - -DENABLE_OPENSSL=OFF
+      - -DENABLE_MBEDTLS=OFF
+      - -DENABLE_NETTLE=OFF
+      - -DENABLE_MD=OFF
+      - -DENABLE_LIBB2=OFF
+      - -DENABLE_LZ4=OFF
+      - -DENABLE_ZSTD=OFF
+      - -DENABLE_BZip2=OFF
+      - -DENABLE_LIBXML2=OFF
+      - -DENABLE_BSDXML=OFF
+      - -DENABLE_EXPAT=OFF
+      - -DENABLE_WIN32_XMLLITE=OFF
+      - -DENABLE_PCREPOSIX=OFF
+      - -DENABLE_PCRE2POSIX=OFF
+      - -DENABLE_LIBGCC=OFF
+      - -DENABLE_CNG=OFF
+      - -DENABLE_TAR=OFF
+      - -DENABLE_CPIO=OFF
+      - -DENABLE_CAT=OFF
+      - -DENABLE_UNZIP=OFF
+      - -DENABLE_XATTR=OFF
+      - -DENABLE_ACL=OFF
+      - -DENABLE_ICONV=OFF
+      - -DENABLE_TEST=OFF
+      - -DPOSIX_REGEX_LIB=NONE
+    sources:
+      - type: archive
+        url: https://github.com/libarchive/libarchive/releases/download/v3.8.11/libarchive-3.8.11.tar.xz
+        sha256: a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2
+
+  # clang (the port needs -fasm-blocks) with the i386 toolchain's libstdc++ and the runtime's glibc. No
+  # flags from the SDK: the port is built as in the other packages.
+  - name: gta2
+    buildsystem: simple
+    build-options:
+      prepend-path: /usr/lib/sdk/llvm22/bin:/usr/lib/sdk/toolchain-i386/bin
+      prepend-ld-library-path: /usr/lib/sdk/llvm22/lib
+      cflags: ''
+      cflags-override: true
+      cxxflags: ''
+      cxxflags-override: true
+      ldflags: ''
+      ldflags-override: true
+    build-commands:
+      - |
+        set -e
+        T=i686-unknown-linux-gnu
+        GCC="--gcc-install-dir=$(dirname "$($T-gcc -print-libgcc-file-name)")"
+        INC=/usr/lib/sdk/toolchain-i386/$T/include/c++/$($T-gcc -dumpversion)
+        CXX_INC="-nostdinc++ -isystem $INC -isystem $INC/$T"
+        cmake -S port -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux32-clang.cmake \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_FLAGS="$GCC" -DCMAKE_CXX_FLAGS="$GCC $CXX_INC" \
+              -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld $GCC" -DCMAKE_BUILD_RPATH=/app/lib32 \
+              -DSDL3_DIR=/app/lib32/cmake/SDL3 -DGTA2_SETUP_DEPS_DIR=/app/deps -DGTA2_OPENAL_DIR=/app/deps
+        ninja -C build -j${FLATPAK_BUILDER_N_JOBS}
+      # The game and OpenAL Soft in one folder: the game loads the library from its own.
+      - install -Dm755 -t /app/lib32/gta2_re build/gta2 build/libopenal.so.1
+      - install -Dm755 port/packaging/flatpak/gta2.sh /app/bin/gta2
+      - install -Dm644 port/packaging/gta2_re.desktop /app/share/applications/gta2_re.desktop
+      - install -Dm644 port/resources/gta2.png /app/share/icons/hicolor/32x32/apps/gta2_re.png
+      - install -Dm644 port/resources/gta2_256.png /app/share/icons/hicolor/256x256/apps/gta2_re.png
+      - install -Dm644 -t /app/share/metainfo port/packaging/flatpak/io.github.gta2re.gta2.metainfo.xml
+      - install -Dm644 -t /app/etc port/packaging/flatpak/ld.so.conf
+      # Mount points of the extensions.
+      - install -d /app/lib/i386-linux-gnu/GL
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - 3rdParty
+          - Scripts
+          - docs
+          - reccmp
+          - build_vc6
