@@ -1,6 +1,6 @@
 name: Port
 
-# The native port (port/), 32-bit: a Windows zip, a Linux AppImage and a Flatpak bundle. Each job runs
+# The native port (port/), 32-bit: a Windows zip, and for Linux a portable tarball and a .deb. Each job runs
 # a script of port/packaging in a container, the same command as a local run (port/README.md, Packages).
 on:
   push:
@@ -25,13 +25,11 @@ jobs:
             image: debian:trixie
             setarch: ''
             artifact: gta2_re-windows-i686
-            files: '*.zip'
-          # i386 userland: the libraries the AppImage bundles come from it.
+          # i386 userland: GCC and the system root's wayland-scanner run natively.
           - target: linux32
             image: i386/debian:trixie
             setarch: linux32
-            artifact: gta2_re-linux-appimage
-            files: '*.AppImage'
+            artifact: gta2_re-linux-i686
     name: ${{ matrix.target }}
     runs-on: ubuntu-24.04
     steps:
@@ -49,7 +47,7 @@ jobs:
           path: |
             ${{ runner.temp }}/work/dl
             ${{ runner.temp }}/work/deps-${{ matrix.target }}
-          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh') }}
+          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh', 'port/packaging/sysroot.sh', 'port/packaging/linux32-sysroot.cmake', 'port/packaging/glibc_compat.c') }}
 
       - name: Build and package
         run: |
@@ -58,70 +56,28 @@ jobs:
               ${{ matrix.setarch }} sh port/packaging/ci.sh ${{ matrix.target }} /work
           docker run --rm -v "$WORK:/work" ${{ matrix.image }} chown -R "$(id -u):$(id -g)" /work
 
-      - name: Smoke test on a host without 32-bit libraries
+      - name: Smoke tests in clean containers
         if: matrix.target == 'linux32'
         run: |
-          docker run --rm -v "$WORK/out:/app:ro" -v "$PWD/port/packaging:/p:ro" debian:trixie \
-              sh -c 'sh /p/smoke_test.sh /app/*.AppImage'
+          set -f
+          for pkg in "debian:bookworm *.tar.gz" "ubuntu:24.04 *.tar.gz" "archlinux:latest *.tar.gz" \
+                     "debian:trixie *.deb" "ubuntu:24.04 *.deb"; do
+              set -- $pkg
+              echo "::group::$1 $2"
+              docker run --rm -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" "$1" sh -c "sh /p/smoke_test.sh /out/$2"
+              echo "::endgroup::"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ runner.temp }}/work/out/${{ matrix.files }}
-          if-no-files-found: error
-          retention-days: 14
-
-  flatpak:
-    runs-on: ubuntu-24.04
-    env:
-      IMAGE: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08@sha256:6ed6921bb5a9e1a916989971844f159b854b7b225880c381fa34f7a158863039
-      # What bwrap needs in a container, short of --privileged.
-      BWRAP: --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Version and work folder
-        run: |
-          echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=$(git rev-parse --short HEAD); fi
-          echo "GTA2_VERSION=$v" >> "$GITHUB_ENV"
-
-      # Ubuntu 24.04 keeps unprivileged processes from creating the user namespaces bwrap needs.
-      - name: Allow user namespaces
-        run: |
-          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
-              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-
-      # flatpak-builder's downloads and the libraries' build stages; the game's module always builds.
-      - name: Restore flatpak-builder's cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/work/state
-          key: port-flatpak-${{ hashFiles('port/packaging/flatpak/*', 'port/packaging/versions.sh') }}
-
-      - name: Build
-        run: |
-          mkdir -p "$WORK"
-          docker run --rm $BWRAP -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -w /src $IMAGE \
-              sh port/packaging/flatpak.sh /work
-          docker run --rm -v "$WORK:/work" debian:trixie chown -R "$(id -u):$(id -g)" /work
-
-      - name: Smoke test on Debian 13 with Flatpak
-        run: |
-          docker run --rm $BWRAP -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" debian:trixie \
-              sh -c 'sh /p/flatpak_smoke_test.sh /out/*.flatpak'
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gta2_re-linux-flatpak
-          path: ${{ runner.temp }}/work/out/*.flatpak
+          path: ${{ runner.temp }}/work/out/*
           if-no-files-found: error
           retention-days: 14
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [package, flatpak]
+    needs: [package]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

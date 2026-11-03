@@ -2,7 +2,8 @@
 Type=Application
 Name=GTA2
 Comment=Native port of the GTA2 decompilation, played with your own copy of the game
-Exec=gta2
-Icon=gta2_re
+Exec=gta2_re
+Icon=io.github.gta2re.gta2
 Categories=Game;ActionGame;
+Keywords=GTA;Grand Theft Auto;
 Terminal=false

@@ -53,7 +53,7 @@ else()
 
     # First-start setup (setup/): finds the game folder, or copies the game's data into the per-user
     # one. libarchive reads disc images and archives, unshield InstallShield cabinets: from the system,
-    # or from GTA2_SETUP_DEPS_DIR (an install prefix with both, built static, and for MinGW zlib and xz).
+    # or from GTA2_SETUP_DEPS_DIR (an install prefix with both built static, and zlib and xz, needed for MinGW).
     set(GTA2_SETUP_DEPS_DIR "" CACHE PATH "Install prefix of libarchive and unshield")
     file(GLOB setup_src ${CMAKE_CURRENT_LIST_DIR}/setup/*.cpp)
     add_library(gta2setup STATIC ${setup_src})
@@ -65,6 +65,8 @@ else()
         target_link_libraries(gta2setup PRIVATE ${deps}/libarchive.a ${deps}/libunshield.a)
         if(WIN32)
             target_link_libraries(gta2setup PRIVATE ${deps}/liblzma.a ${deps}/libzs.a bcrypt)
+        elseif(EXISTS ${deps}/libz.a AND EXISTS ${deps}/liblzma.a)
+            target_link_libraries(gta2setup PRIVATE ${deps}/liblzma.a ${deps}/libz.a)
         else()
             target_link_libraries(gta2setup PRIVATE lzma z)
         endif()
