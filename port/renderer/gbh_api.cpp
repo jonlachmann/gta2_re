@@ -1159,9 +1159,9 @@ void port_DrawReticle(f32 x, f32 y, f32 size, f32 alpha)
             const f32 dx = i % n + 0.5f - n / 2, dy = i / n + 0.5f - n / 2;
             const f32 r = sqrtf(dx * dx + dy * dy) + 1e-4f;
             const bool lamp = r < 6.0f;
-            // Half round profiles: the lamp's radius 3.5, the ring's 2.5 about radius 10.5; t the normal's tilt.
-            const f32 t = lamp ? r / 3.5f : (r - 10.5f) / 2.5f;
-            const f32 a = fminf(fmaxf((lamp ? 3.5f - r : 2.5f - fabsf(r - 10.5f)) + 0.5f, 0.0f), 1.0f);
+            // Half round profiles: the lamp's radius 2.2, the ring's 1.4 about radius 11; t the normal's tilt.
+            const f32 t = lamp ? r / 2.2f : (r - 11.0f) / 1.4f;
+            const f32 a = 0.85f * fminf(fmaxf((lamp ? 2.2f - r : 1.4f - fabsf(r - 11.0f)) + 0.5f, 0.0f), 1.0f);
             const f32 tc = fminf(fabsf(t), 1.0f) * (t < 0 ? -1.0f : 1.0f);
             const f32 nx = dx / r * tc, ny = dy / r * tc, nz = sqrtf(1.0f - tc * tc);
             const f32 diffuse = fmaxf(nx * lx + ny * ly + nz * lz, 0.0f);

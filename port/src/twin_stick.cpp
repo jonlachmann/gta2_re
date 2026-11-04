@@ -166,7 +166,7 @@ void DrawReticle()
         x = px + (x - px) * k;
         y = py + (y - py) * k;
     }
-    port_DrawReticle(x, y, 22.0f * ToF(gViewCamera->mUiScale), sMouse ? 1.0f : static_cast<f32>(sAimSteps) / kAimSteps);
+    port_DrawReticle(x, y, 18.0f * ToF(gViewCamera->mUiScale), sMouse ? 1.0f : static_cast<f32>(sAimSteps) / kAimSteps);
 #endif
 }
 } // namespace PortTwinStick
