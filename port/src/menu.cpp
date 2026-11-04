@@ -662,15 +662,23 @@ void GetLayout(Layout* pLayout)
             }
         }
     }
-    const f32 kGap = controls ? 16.0f : 24.0f;
     const f32 x = controls ? 80.0f : 140.0f;
     f32 columnX[kNumColumns];
-    columnX[0] = Max(controls ? 260.0f : 360.0f, x + nameWidth + kGap);
-    for (s32 c = 1; c < columns; c++)
+    f32 right;
+    // Narrower gaps for a page wider than the screen even moved left.
+    for (f32 gap = controls ? 16.0f : 24.0f; gap >= 8; gap -= 4)
     {
-        columnX[c] = columnX[c - 1] + widths[c - 1] + kGap;
+        columnX[0] = Max(controls ? 260.0f : 360.0f, x + nameWidth + gap);
+        for (s32 c = 1; c < columns; c++)
+        {
+            columnX[c] = columnX[c - 1] + widths[c - 1] + gap;
+        }
+        right = columnX[columns - 1] + widths[columns - 1];
+        if (right - (x - 20) <= 630)
+        {
+            break;
+        }
     }
-    const f32 right = columnX[columns - 1] + widths[columns - 1];
     // Inside the frontend's screen: the page moves left, down to x 20.
     f32 shift = right - 630;
     shift = shift < 0 ? 0 : (shift > x - 20 ? x - 20 : shift);
