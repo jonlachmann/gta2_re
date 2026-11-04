@@ -1,4 +1,7 @@
 #include "Player.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/twin_stick.hpp"
+#endif
 #include "car_shop_type.hpp"
 #include "hud_message_priority.hpp"
 #include "hud_brief_priority.hpp"
@@ -1612,6 +1615,9 @@ void Player::DoPedControlInputs(Ped* pPed)
             pPed->SetVoiceEventIfNotOnFire(20);
         }
     }
+#if defined(GTA2_PORT)
+    PortTwinStick::PedControls(this, pPed);
+#endif
 }
 
 MATCH_FUNC(0x566EE0)

@@ -49,6 +49,9 @@ int port_CapturedPad();
 void port_AddPadMenuKeys(BYTE* pKeys);
 void port_PadEvent(const SDL_Event& e);
 void port_UpdatePad();
+// TWIN STICK on foot: the left stick, d-pad and WASD keys (by position) as a move, the right stick as an aim,
+// both screen-relative, y down, 0 within the dead zones. True if the mouse aims (it was used after the pad).
+bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY);
 
 // The mouse for the menus (mouse.cpp): the position in the game's frame and the clicks and wheel
 // notches since the last call, true if it moved; what the frame leaves is dropped at its end.
@@ -58,6 +61,8 @@ void port_MouseEndFrame();
 void port_SetGameCursor(); // cursor.cpp
 // The left button is held, for dragging.
 bool port_MouseLeftDown();
+// The position in the game's frame.
+void port_MousePos(float* pX, float* pY);
 
 // The size of the frame the game draws (video_port.cpp).
 void port_FrameSize(int* pW, int* pH);
@@ -71,6 +76,7 @@ bool port_GameRunning();
 bool port_QuitMessageShown(); // or the pause menu
 bool port_FrontendActive();
 bool port_MenuUsesMouse(); // the frontend or the pause menu
+bool port_TwinStickOnFoot(); // TWIN STICK, the local player on foot with the controls on
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

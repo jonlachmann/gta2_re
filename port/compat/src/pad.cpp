@@ -2,7 +2,8 @@
 // the registry's Control key, next to the keyboard's <n>) presses that control's keyboard key, so
 // both work at once with the game's keyboard code; Start opens the pause menu (Escape), which the
 // d-pad, A and B drive, as they answer the quit message. In the frontend it drives the menus as the
-// arrows, Enter and Escape.
+// arrows, Enter and Escape. With TWIN STICK on foot, the sticks move and aim (port_TwinStickInput) and RT,
+// or the mouse's left button, attacks; the wheel changes weapons.
 #define DIRECTINPUT_VERSION 0x0700
 #include <windows.h>
 #include <dinput.h>
@@ -36,6 +37,10 @@ int sCapturedKey = -1;
 int sCapturedPad = -1;
 bool sMigrated;
 bool sMenuBlocked; // back from a game with a button still down: the menus wait for its release
+bool sMouseAims; // the mouse was used in game after the pad
+bool sWasd[4];
+int sWheelControl; // a wheel notch holds a weapon control down for two steps
+unsigned sWheelUntil;
 
 const SDL_GamepadButton kButtons[] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST,
                                       SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
@@ -153,7 +158,27 @@ void Tap(DWORD dik)
     port_PushKey(dik, true);
     port_PushKey(dik, false);
 }
+
+// A stick within its dead zone (a quarter of its range) is centred.
+void Stick(SDL_GamepadAxis x, SDL_GamepadAxis y, float* pX, float* pY)
+{
+    *pX = Axis(x) / 32768.0f;
+    *pY = Axis(y) / 32768.0f;
+    if (*pX * *pX + *pY * *pY < 0.25f * 0.25f)
+    {
+        *pX = *pY = 0.0f;
+    }
+}
 } // namespace
+
+bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY)
+{
+    Stick(SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, pMoveX, pMoveY);
+    Stick(SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, pAimX, pAimY);
+    *pMoveX += (Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || sWasd[3]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || sWasd[1]);
+    *pMoveY += (Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || sWasd[2]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_UP) || sWasd[0]);
+    return sMouseAims;
+}
 
 // The first gamepad, or the first whose name contains $GTA2_GAMEPAD.
 void port_OpenGamepad()
@@ -271,11 +296,22 @@ void port_PadEvent(const SDL_Event& e)
     switch (e.type)
     {
         case SDL_EVENT_KEY_DOWN:
-            if (!e.key.repeat)
+        case SDL_EVENT_KEY_UP:
+        {
+            const SDL_Scancode kWasd[4] = {SDL_SCANCODE_W, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D};
+            for (int i = 0; i < 4; i++)
+            {
+                sWasd[i] = e.key.scancode == kWasd[i] ? e.key.down : sWasd[i];
+            }
+            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
             {
                 sMode = kKeyboardMode;
                 sCapturedKey = static_cast<int>(port_DikFromScancode(e.key.scancode));
             }
+            break;
+        }
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            sWasd[0] = sWasd[1] = sWasd[2] = sWasd[3] = false;
             break;
         case SDL_EVENT_GAMEPAD_ADDED:
             port_OpenGamepad();
@@ -292,23 +328,35 @@ void port_PadEvent(const SDL_Event& e)
             if (sGamepad && e.gbutton.which == SDL_GetGamepadID(sGamepad))
             {
                 sMode = kPadMode;
+                sMouseAims = false;
             }
             break;
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
             if (sGamepad && e.gaxis.which == SDL_GetGamepadID(sGamepad) && (e.gaxis.value > kThreshold || e.gaxis.value < -kThreshold))
             {
                 sMode = kPadMode;
+                sMouseAims = false;
             }
             break;
         case SDL_EVENT_MOUSE_MOTION:
             if (e.motion.xrel != 0 || e.motion.yrel != 0)
             {
                 sMode = kMouseMode;
+                sMouseAims = sMouseAims || port_GameRunning();
             }
             break;
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_WHEEL:
+            if (port_GameRunning() && port_FrameCount() > sWheelUntil && e.wheel.y != 0.0f)
+            {
+                sWheelControl = (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -e.wheel.y : e.wheel.y) > 0 ? 7 : 8;
+                sWheelUntil = port_FrameCount() + 2;
+            }
             sMode = kMouseMode;
+            sMouseAims = sMouseAims || port_GameRunning();
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            sMode = kMouseMode;
+            sMouseAims = sMouseAims || port_GameRunning();
             break;
         default:
             break;
@@ -363,9 +411,20 @@ void port_UpdatePad()
         sMenuBlocked = anyDown;
     }
     const bool quitShown = inGame && port_QuitMessageShown();
+    const bool twin = inGame && !quitShown && port_TwinStickOnFoot();
     for (int i = 0; i < kNumControls; i++)
     {
-        Press(i, inGame && !quitShown && CodeDown(port_GetPadBinding(i)));
+        const int code = port_GetPadBinding(i);
+        bool down = CodeDown(code) && !(twin && (i < 4 || code == 11));
+        if (twin && i == 4)
+        {
+            down = down || CodeDown(11) || (sMouseAims && port_MouseLeftDown());
+        }
+        if (twin && i == sWheelControl)
+        {
+            down = down || port_FrameCount() < sWheelUntil;
+        }
+        Press(i, inGame && !quitShown && down);
     }
     if (inGame)
     {

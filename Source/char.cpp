@@ -7,6 +7,9 @@
 #include "explosion_type.hpp"
 #include "voice_line.hpp"
 #include "char.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/twin_stick.hpp"
+#endif
 #include "CarAI.hpp"
 #include "CarPhysics.hpp"
 #include "Car.hpp"
@@ -3351,6 +3354,12 @@ void Char::UpdateWalking()
     u8 bNoNewRotation = 1;
     Ang16 side_angle(0);
     Ang16 new_rotation(0);
+#if defined(GTA2_PORT)
+    if (PortTwinStick::Walk(this, &new_rotation))
+    {
+        bNoNewRotation = 0;
+    }
+#endif
 
 
     u8 block_type;
