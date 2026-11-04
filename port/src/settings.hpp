@@ -39,6 +39,7 @@ enum Id
     kDayLength,
     kStartTime,
     kClock,
+    kControls,
     kCount,
 };
 
@@ -90,6 +91,9 @@ s32 CameraTilt();
 s32 CameraTurnSpeed();
 // ROTATION: STREETS turns the CHINATOWN camera to the street the vehicle has taken, FOLLOW after its heading.
 bool CameraFollows();
+
+// CONTROLS: TWIN STICK moves and aims apart on foot (twin_stick.hpp).
+bool TwinStick();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();

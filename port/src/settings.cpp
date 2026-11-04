@@ -61,7 +61,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS"};
 
 struct Language
 {
@@ -161,6 +161,7 @@ const Translation kTranslations[] = {
     {L"VIEW", NULL, {L"VUE", L"ANSICHT", L"VISTA", L"VISTA"}},
     {L"NEEDS", NULL, {L"NECESSITE", L"BENÖTIGT", L"RICHIEDE", L"REQUIERE"}},
     {L"CONTROLS", NULL, {L"COMMANDES", L"STEUERUNG", L"COMANDI", L"CONTROLES"}},
+    {L"TWIN STICK", NULL, {L"DOUBLE STICK", L"TWIN-STICK", L"DOPPIO STICK", L"DOBLE STICK"}},
     {L"MORE", NULL, {L"SUITE", L"MEHR", L"ALTRI", L"MÁS"}},
     {L"DEFAULT KEYS", NULL, {L"CONTROLES PAR DEFAUT", L"STANDARDSTEUERUNG", L"COMANDI PREDEFINITI", L"CONTROLES PREDETERMINADOS"}},
     {L"KEYBOARD", NULL, {L"CLAVIER", L"TASTATUR", L"TASTIERA", L"TECLADO"}},
@@ -287,6 +288,8 @@ const char* ScreenName(Id id)
             return "day_start";
         case kClock:
             return "day_clock";
+        case kControls:
+            return "port_controls";
         default:
             return "car_headlights";
     }
@@ -368,6 +371,7 @@ s32 sCameraTilt = -1;
 const s32 kMaxCameraTilt = 15;
 s32 sCameraTurnSpeed = -1;
 s32 sCameraFollows = -1;
+s32 sTwinStick = -1;
 const s32 kMaxCameraTurnSpeed = 10;
 const s32 kMinDayLength = 3;
 const s32 kMaxDayLength = 60;
@@ -644,6 +648,18 @@ bool CameraFollows()
     return sCameraFollows != 0;
 }
 
+bool TwinStick()
+{
+#if defined(GTA2_PORT_SDL)
+    if (sTwinStick < 0)
+    {
+        sTwinStick = Screen(kControls) != 0;
+    }
+    return sTwinStick != 0;
+#else
+    return false;
+#endif
+}
 bool Headlights()
 {
     return Enabled(kHeadlights) && Screen(kHeadlights) != 0;
@@ -789,6 +805,9 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kCameraRotation:
             wcscpy(pOut, Translate(CameraFollows() ? L"FOLLOW" : L"STREETS"));
+            break;
+        case kControls:
+            wcscpy(pOut, Translate(TwinStick() ? L"TWIN STICK" : L"CLASSIC"));
             break;
         case kBloom:
             if (Screen(id))
@@ -1027,6 +1046,10 @@ void Change(Id id, s32 delta)
         case kCameraRotation:
             sCameraFollows = !CameraFollows();
             gRegistry.Set_Screen_Setting(ScreenName(id), sCameraFollows);
+            break;
+        case kControls:
+            sTwinStick = !TwinStick();
+            gRegistry.Set_Screen_Setting(ScreenName(id), sTwinStick);
             break;
         case kLighting:
             gRegistry.Set_Screen_Setting(ScreenName(id), Wrap(Clamp(Screen(id), 0, kNumLightings - 1) + delta, kNumLightings));

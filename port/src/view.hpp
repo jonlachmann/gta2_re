@@ -30,6 +30,10 @@ void SetTurn(Turn turn);
 // A screen point of height z turned and tilted with the view (upright text anchored in the world).
 void TurnPoint(Fix16& x, Fix16& y, Fix16 z);
 
+// The last frame's projection between the ground at height z and the screen, in the game's screen pixels.
+void GroundToScreen(f32 x, f32 y, f32 z, f32* pX, f32* pY);
+void ScreenToGround(f32 x, f32 y, f32 z, f32* pX, f32* pY);
+
 // The turn drawn at alpha between the last two steps, in Ang16 units, for the trace.
 f32 Yaw(f32 alpha);
 // The same for the tilt, in degrees.

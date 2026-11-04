@@ -1139,6 +1139,62 @@ void port_SetAmbient(f32 r, f32 g, f32 b, f32 lights)
     gLightsDirty = true;
 }
 
+// TWIN STICK's reticle (port/src/twin_stick.cpp): a bronze ring round a red lamp, shaded as the HUD's sprites
+// (lit from the top left), size pixels wide at (x, y).
+void port_DrawReticle(f32 x, f32 y, f32 size, f32 alpha)
+{
+    static RTexture* spTex;
+    static IRenderer* spOwner;
+    if (!gRenderer)
+    {
+        return;
+    }
+    const s32 n = 32;
+    if (spOwner != gRenderer)
+    {
+        u32 pixels[n * n];
+        const f32 lx = -0.55f, ly = -0.55f, lz = 0.63f; // the light
+        for (s32 i = 0; i < n * n; i++)
+        {
+            const f32 dx = i % n + 0.5f - n / 2, dy = i / n + 0.5f - n / 2;
+            const f32 r = sqrtf(dx * dx + dy * dy) + 1e-4f;
+            const bool lamp = r < 6.0f;
+            // Half round profiles: the lamp's radius 3.5, the ring's 2.5 about radius 10.5; t the normal's tilt.
+            const f32 t = lamp ? r / 3.5f : (r - 10.5f) / 2.5f;
+            const f32 a = fminf(fmaxf((lamp ? 3.5f - r : 2.5f - fabsf(r - 10.5f)) + 0.5f, 0.0f), 1.0f);
+            const f32 tc = fminf(fabsf(t), 1.0f) * (t < 0 ? -1.0f : 1.0f);
+            const f32 nx = dx / r * tc, ny = dy / r * tc, nz = sqrtf(1.0f - tc * tc);
+            const f32 diffuse = fmaxf(nx * lx + ny * ly + nz * lz, 0.0f);
+            const f32 spec = powf(fmaxf((nx * lx + ny * ly + nz * (lz + 1.0f)) / sqrtf(lx * lx + ly * ly + (lz + 1) * (lz + 1)), 0.0f), 24.0f);
+            const f32 base[3] = {lamp ? 230.0f : 165.0f, lamp ? 40.0f : 145.0f, lamp ? 25.0f : 105.0f};
+            u32 c = static_cast<u32>(a * 255.0f) << 24;
+            for (s32 k = 0; k < 3; k++)
+            {
+                c |= static_cast<u32>(fminf(base[k] * (0.25f + 0.85f * diffuse) + 200.0f * spec, 255.0f)) << (8 * k);
+            }
+            pixels[i] = c;
+        }
+        spTex = gRenderer->CreateTexture();
+        gRenderer->UploadTexture(spTex, n, n, pixels, RMIP_ALPHA);
+        spOwner = gRenderer;
+    }
+    const u32 rgba = 0xFFFFFFu | (static_cast<u32>(fminf(fmaxf(alpha, 0.0f), 1.0f) * 255.0f) << 24);
+    const f32 h = size / 2;
+    const f32 corners[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+    RVertex v[4] = {};
+    for (s32 i = 0; i < 4; i++)
+    {
+        v[i].x = x + h * corners[i][0];
+        v[i].y = y + h * corners[i][1];
+        v[i].rhw = 1.0f;
+        v[i].rgba = rgba;
+        v[i].u = corners[i][0] > 0 ? 1.0f : 0.0f;
+        v[i].v = corners[i][1] > 0 ? 1.0f : 0.0f;
+    }
+    const RVertex tris[6] = {v[0], v[1], v[2], v[0], v[2], v[3]};
+    gRenderer->DrawTriangles(tris, 6, spTex, RS_BLEND_ALPHA | RS_FILTER_LINEAR);
+}
+
 GBH_EXPORT void GTA2_CC gbh_DrawQuad(s32 flags, STexture* pTexture, Vert* pVerts, s32 baseColour)
 {
     LogCall("DrawQuad", flags, pTexture, baseColour);

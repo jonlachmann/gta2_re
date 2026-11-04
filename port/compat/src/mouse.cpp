@@ -1,5 +1,5 @@
-// The mouse, for the menus only: its position in the game's frame and the frame's clicks and wheel
-// turns; the cursor shows while the mouse is used over a menu.
+// The mouse, for the menus and TWIN STICK's aim: its position in the game's frame and the frame's clicks
+// and wheel turns; the cursor shows while the mouse is used over a menu.
 #include "port_platform.hpp"
 
 namespace
@@ -53,7 +53,7 @@ void port_MouseEvent(const SDL_Event& e)
     }
 }
 
-bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel)
+void port_MousePos(float* pX, float* pY)
 {
     // The frame is drawn at its aspect ratio, centred in the window (GLRenderer::Present).
     int windowW = 0;
@@ -74,6 +74,11 @@ bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel)
     }
     *pX = (sX - (windowW - frameW * scale) / 2) / scale;
     *pY = (sY - (windowH - frameH * scale) / 2) / scale;
+}
+
+bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel)
+{
+    port_MousePos(pX, pY);
     *pLeft = sLeft;
     *pRight = sRight;
     *pWheel = static_cast<int>(sWheel);
@@ -102,6 +107,15 @@ void port_MouseEndFrame()
     {
         sCursorSet = true;
         port_SetGameCursor();
+    }
+    // TWIN STICK aims with the mouse: kept in the window, the HUD's reticle in place of the cursor.
+    static bool sGrabbed;
+    const bool grab = port_GameRunning() && !port_MenuUsesMouse() && port_TwinStickOnFoot();
+    SDL_Window* pWindow = port_MainSDLWindow();
+    if (grab != sGrabbed && pWindow)
+    {
+        sGrabbed = grab;
+        SDL_SetWindowMouseGrab(pWindow, grab);
     }
     const bool show = port_MouseMode() && port_MenuUsesMouse();
     if (show != sCursorShown)
