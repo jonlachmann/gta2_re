@@ -3,8 +3,7 @@
 // both work at once with the game's keyboard code; Start opens the pause menu (Escape), which the
 // d-pad, A and B drive, as they answer the quit message. In the frontend it drives the menus as the
 // arrows, Enter and Escape. With TWIN STICK on foot, the sticks move and aim (port_TwinStickInput) and RT
-// attacks; on foot or in a vehicle, the mouse's left button attacks, the wheel changes weapons, F enters or
-// exits, and in a vehicle WASD drive.
+// attacks. Each control's second key (alt_<n>), a key, mouse button or wheel notch, presses it the same way.
 #define DIRECTINPUT_VERSION 0x0700
 #include <windows.h>
 #include <dinput.h>
@@ -22,6 +21,9 @@ const DWORD kDefaultKeys[kNumControls] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGHT,
 // Forward, backward, left, right, attack, enter/exit, jump/handbrake, previous and next weapon,
 // special 1 to 3.
 const int kDefaultPad[kNumControls] = {kPadUp, kPadDown, kPadLeft, kPadRight, 0, 3, 1, 4, 5, 2, 10, 11};
+// W, S, A, D and F by position.
+const int kDefaultAlt[kNumControls] = {DIK_W, DIK_S, DIK_A, DIK_D, kMouseCode + SDL_BUTTON_LEFT, DIK_F, 0,
+                                       kWheelUpCode, kWheelDownCode, 0, 0, 0};
 const Sint16 kThreshold = 24000;
 
 SDL_Gamepad* sGamepad;
@@ -40,8 +42,11 @@ int sCapturedPad = -1;
 bool sMigrated;
 bool sMenuBlocked; // back from a game with a button still down: the menus wait for its release
 bool sMouseAims; // the mouse was used in game after the pad
-bool sKeys[5]; // W, S, A, D and F by position: forward, backward, left, right, enter or exit
-int sWheelControl; // a wheel notch holds a weapon control down for two steps
+bool sKeyDown[256]; // by DIK code
+unsigned sButtonsDown; // bit n: SDL mouse button n
+int sAlt[kNumControls];
+bool sAltRead;
+int sWheelCode; // a wheel notch holds its control down for two steps
 unsigned sWheelUntil;
 
 const SDL_GamepadButton kButtons[] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST,
@@ -127,18 +132,49 @@ void MigrateBindings()
     RegCloseKey(hKey);
 }
 
-DWORD KeyFor(int control)
+// format: the value's name, with %d for the control.
+DWORD ReadControl(const char* format, int control, DWORD value)
 {
     HKEY hKey;
-    DWORD value = kDefaultKeys[control];
     if (OpenControlKey(&hKey))
     {
-        char name[8];
-        sprintf(name, "%d", control);
+        char name[16];
+        sprintf(name, format, control);
         ReadValue(hKey, name, &value);
         RegCloseKey(hKey);
     }
-    return value & 0xFF;
+    return value;
+}
+
+void WriteControl(const char* format, int control, DWORD value)
+{
+    HKEY hKey;
+    if (OpenControlKey(&hKey))
+    {
+        char name[16];
+        sprintf(name, format, control);
+        WriteValue(hKey, name, value);
+        RegCloseKey(hKey);
+    }
+}
+
+DWORD KeyFor(int control)
+{
+    return ReadControl("%d", control, kDefaultKeys[control]) & 0xFF;
+}
+
+bool AltDown(int control)
+{
+    const int code = port_GetAltBinding(control);
+    if (code > 0 && code < 256)
+    {
+        return sKeyDown[code];
+    }
+    if (code > kMouseCode && code < kWheelUpCode)
+    {
+        return (sButtonsDown >> (code - kMouseCode)) & 1;
+    }
+    return code >= kWheelUpCode && code == sWheelCode && port_FrameCount() < sWheelUntil;
 }
 
 void Press(int control, bool down)
@@ -177,8 +213,8 @@ bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAim
 {
     Stick(SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, pMoveX, pMoveY);
     Stick(SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, pAimX, pAimY);
-    *pMoveX += (Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || sKeys[3]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || sKeys[2]);
-    *pMoveY += (Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || sKeys[1]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_UP) || sKeys[0]);
+    *pMoveX += (Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || AltDown(3)) - (Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || AltDown(2));
+    *pMoveY += (Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || AltDown(1)) - (Button(SDL_GAMEPAD_BUTTON_DPAD_UP) || AltDown(0));
     return sMouseAims;
 }
 
@@ -220,33 +256,60 @@ int port_GetPadBinding(int control)
     {
         MigrateBindings();
     }
-    HKEY hKey;
-    DWORD value = static_cast<DWORD>(kDefaultPad[control]);
-    if (OpenControlKey(&hKey))
-    {
-        char name[8];
-        sprintf(name, "pad_%d", control);
-        ReadValue(hKey, name, &value);
-        RegCloseKey(hKey);
-    }
-    return static_cast<int>(value);
+    return static_cast<int>(ReadControl("pad_%d", control, static_cast<DWORD>(kDefaultPad[control])));
 }
 
 void port_SetPadBinding(int control, int code)
 {
-    HKEY hKey;
-    if (OpenControlKey(&hKey))
-    {
-        char name[8];
-        sprintf(name, "pad_%d", control);
-        WriteValue(hKey, name, static_cast<DWORD>(code));
-        RegCloseKey(hKey);
-    }
+    WriteControl("pad_%d", control, static_cast<DWORD>(code));
 }
 
 int port_DefaultPadBinding(int control)
 {
     return kDefaultPad[control];
+}
+
+int port_GetAltBinding(int control)
+{
+    if (!sAltRead)
+    {
+        sAltRead = true;
+        for (int i = 0; i < kNumControls; i++)
+        {
+            sAlt[i] = static_cast<int>(ReadControl("alt_%d", i, static_cast<DWORD>(kDefaultAlt[i])));
+        }
+    }
+    return sAlt[control];
+}
+
+void port_SetAltBinding(int control, int code)
+{
+    port_GetAltBinding(control);
+    sAlt[control] = code;
+    WriteControl("alt_%d", control, static_cast<DWORD>(code));
+}
+
+int port_DefaultAltBinding(int control)
+{
+    return kDefaultAlt[control];
+}
+
+bool port_AltKeyInGame(DWORD dik)
+{
+    if (!port_GameRunning() || port_QuitMessageShown())
+    {
+        return false;
+    }
+    bool alt = false;
+    for (int i = 0; i < kNumControls; i++)
+    {
+        if (KeyFor(i) == dik)
+        {
+            return false;
+        }
+        alt = alt || port_GetAltBinding(i) == static_cast<int>(dik);
+    }
+    return alt;
 }
 
 void port_CaptureStart()
@@ -300,20 +363,18 @@ void port_PadEvent(const SDL_Event& e)
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
         {
-            const SDL_Scancode kKeys[5] = {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D, SDL_SCANCODE_F};
-            for (int i = 0; i < 5; i++)
-            {
-                sKeys[i] = e.key.scancode == kKeys[i] ? e.key.down : sKeys[i];
-            }
+            const DWORD dik = port_DikFromScancode(e.key.scancode);
+            sKeyDown[dik] = dik && e.key.down;
             if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
             {
                 sMode = kKeyboardMode;
-                sCapturedKey = static_cast<int>(port_DikFromScancode(e.key.scancode));
+                sCapturedKey = static_cast<int>(dik);
             }
             break;
         }
         case SDL_EVENT_WINDOW_FOCUS_LOST:
-            memset(sKeys, 0, sizeof(sKeys));
+            memset(sKeyDown, 0, sizeof(sKeyDown));
+            sButtonsDown = 0;
             break;
         case SDL_EVENT_GAMEPAD_ADDED:
             port_OpenGamepad();
@@ -348,17 +409,27 @@ void port_PadEvent(const SDL_Event& e)
             }
             break;
         case SDL_EVENT_MOUSE_WHEEL:
-            if (port_GameRunning() && port_FrameCount() > sWheelUntil && e.wheel.y != 0.0f)
+            if (e.wheel.y != 0.0f)
             {
-                sWheelControl = (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -e.wheel.y : e.wheel.y) > 0 ? 7 : 8;
-                sWheelUntil = port_FrameCount() + 2;
+                const int code = (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -e.wheel.y : e.wheel.y) > 0 ? kWheelUpCode : kWheelDownCode;
+                sCapturedKey = code;
+                if (port_GameRunning() && port_FrameCount() > sWheelUntil)
+                {
+                    sWheelCode = code;
+                    sWheelUntil = port_FrameCount() + 2;
+                }
             }
             sMode = kMouseMode;
             sMouseAims = sMouseAims || port_GameRunning();
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            sButtonsDown |= 1u << (e.button.button & 31);
+            sCapturedKey = kMouseCode + e.button.button;
             sMode = kMouseMode;
             sMouseAims = sMouseAims || port_GameRunning();
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            sButtonsDown &= ~(1u << (e.button.button & 31));
             break;
         default:
             break;
@@ -416,20 +487,11 @@ void port_UpdatePad()
     const int twin = inGame && !quitShown ? port_TwinStick() : 0;
     for (int i = 0; i < kNumControls; i++)
     {
+        // TWIN STICK on foot: the stick, d-pad and movement second keys move (port_TwinStickInput), RT attacks.
         const int code = port_GetPadBinding(i);
-        bool down = CodeDown(code) && !(twin == 1 && (i < 4 || code == 11));
-        if (twin && i == 4)
-        {
-            down = down || (twin == 1 && CodeDown(11)) || port_MouseLeftDown();
-        }
-        if ((twin == 2 && i < 4) || (twin && i == 5))
-        {
-            down = down || sKeys[i < 4 ? i : 4];
-        }
-        if (twin && i == sWheelControl)
-        {
-            down = down || port_FrameCount() < sWheelUntil;
-        }
+        const bool move = twin == 1 && i < 4;
+        const bool pad = CodeDown(code) && !(twin == 1 && code == 11);
+        const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11)));
         Press(i, inGame && !quitShown && down);
     }
     if (inGame)

@@ -1,6 +1,6 @@
-// CONTROLS TWIN STICK, on foot: the left stick or WASD walks and the right stick or the mouse aims, both
-// relative to the screen. The game's controls do the rest: mTurnSpeed turns the ped to the aim and
-// mMoveDirection walks it, in a direction of its own (Walk).
+// CONTROLS TWIN STICK, on foot: the left stick or the movement keys walk and the right stick or the mouse
+// aims, both relative to the screen. The game's controls do the rest: mTurnSpeed turns the ped to the aim
+// and mMoveDirection walks it, in a direction of its own (Walk).
 #pragma once
 
 #include "ang16.hpp"

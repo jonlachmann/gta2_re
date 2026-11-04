@@ -459,12 +459,16 @@ void port_OnInputEvent(const SDL_Event& e)
     {
         return;
     }
+    const bool buffered = !port_AltKeyInGame(dik);
     for (Device* pDev : sDevices)
     {
         if ((pDev->mKeys[dik] != 0) != down)
         {
             pDev->mKeys[dik] = down ? 0x80 : 0;
-            pDev->Push(dik, down ? 0x80 : 0);
+            if (buffered)
+            {
+                pDev->Push(dik, down ? 0x80 : 0);
+            }
         }
     }
 }

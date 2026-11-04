@@ -42,17 +42,17 @@ between window and full screen. The first gamepad is used, or the first whose na
 `GTA2_GAMEPAD`; bind it in the game's control options (stick and d-pad are the two axes).
 The menus also take the mouse: pointing selects, a click enters or changes a value, the right
 button goes back, the wheel changes a value; the cursor shows while the mouse is in use over a menu.
+Each control has a key, a second key (ALTERNATE: a key, a mouse button or a wheel notch, by default
+WASD by their position (ZQSD on AZERTY) to move, F to enter or exit, the left button to attack and the
+wheel to change weapons; Delete clears it) and a gamepad input.
 CONTROLS on the controls page chooses how the player walks on foot: CLASSIC, the original's tank
 controls, or TWIN STICK, which moves and aims apart, both relative to the screen (the CHINATOWN camera's
-turn included). The left stick, the d-pad, WASD (by their position, ZQSD on AZERTY) or the movement keys
-walk; the right stick aims (its aim holds a moment once released, its reticle shows three blocks
-ahead), or the mouse does (confined to the window, a reticle in place of the cursor). RT or the left button
-attacks, the wheel changes weapons, F (by position) enters or leaves a vehicle as Enter, the other
-controls stay as bound. Without an aim the player faces the
+turn included). The left stick, the d-pad or the movement keys walk; the right stick aims (its aim holds
+a moment once released, its reticle shows three blocks ahead), or the mouse does (confined to the window,
+a reticle in place of the cursor). RT attacks, the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
 animation, as the original's back key).
-In vehicles the controls stay classic, WASD driving as the movement keys and the left button attacking;
-the stick and mouse are not recorded in replays.
+In vehicles the controls stay classic; the stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
 

@@ -37,21 +37,34 @@ enum
     kPadUp = 226,
     kPadDown = 227,
 };
+// Second key binding codes: a DIK code, or kMouseCode plus an SDL mouse button, or a wheel notch; 0 none.
+enum
+{
+    kMouseCode = 0x100,
+    kWheelUpCode = 0x110,
+    kWheelDownCode = 0x111,
+};
 void port_OpenGamepad();
 bool port_PadMode(); // the gamepad gave the last input
 bool port_MouseMode(); // the mouse gave the last input
 int port_GetPadBinding(int control);
 void port_SetPadBinding(int control, int code);
 int port_DefaultPadBinding(int control);
+int port_GetAltBinding(int control);
+void port_SetAltBinding(int control, int code);
+int port_DefaultAltBinding(int control);
+// In game, a second key (and no control's key) reaches the game only as its control's key: the game reads
+// one key event per step.
+bool port_AltKeyInGame(DWORD dik);
 // The layout's letter on the key at that DIK code's position (dinput.cpp), 0 if not a letter.
 int port_KeyLetter(int dik);
-void port_CaptureStart(); // then the next key (DIK code) or pad code pressed, -1 until then
+void port_CaptureStart(); // then the next key (DIK or mouse code) or pad code pressed, -1 until then
 int port_CapturedKey();
 int port_CapturedPad();
 void port_AddPadMenuKeys(BYTE* pKeys);
 void port_PadEvent(const SDL_Event& e);
 void port_UpdatePad();
-// TWIN STICK on foot: the left stick, d-pad and WASD keys (by position) as a move, the right stick as an aim,
+// TWIN STICK on foot: the left stick, d-pad and movement second keys as a move, the right stick as an aim,
 // both screen-relative, y down, 0 within the dead zones. True if the mouse aims (it was used after the pad).
 bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY);
 
