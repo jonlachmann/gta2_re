@@ -67,6 +67,8 @@ void port_UpdatePad();
 // TWIN STICK on foot: the left stick, d-pad and movement second keys as a move, the right stick as an aim,
 // both screen-relative, y down, 0 within the dead zones. True if the mouse aims (it was used after the pad).
 bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY);
+// AIM CAMERA looks further: left Shift, or R3 unless a control is bound to it.
+bool port_LookFurther();
 
 // The mouse for the menus (mouse.cpp): the position in the game's frame and the clicks and wheel
 // notches since the last call, true if it moved; what the frame leaves is dropped at its end.

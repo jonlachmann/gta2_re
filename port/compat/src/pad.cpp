@@ -218,6 +218,16 @@ bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAim
     return sMouseAims;
 }
 
+bool port_LookFurther()
+{
+    bool r3 = CodeDown(9);
+    for (int i = 0; i < kNumControls; i++)
+    {
+        r3 = r3 && port_GetPadBinding(i) != 9;
+    }
+    return sKeyDown[DIK_LSHIFT] || r3;
+}
+
 // The first gamepad, or the first whose name contains $GTA2_GAMEPAD.
 void port_OpenGamepad()
 {
