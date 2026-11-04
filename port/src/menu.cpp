@@ -617,6 +617,7 @@ struct Layout
     s32 mColumns;
     f32 mX;
     f32 mColumnX[kNumColumns]; // the first, a setting's value
+    f32 mLineStep;
     f32 mPanelLeft;
     f32 mPanelRight;
 };
@@ -684,12 +685,14 @@ void GetLayout(Layout* pLayout)
     }
     pLayout->mPanelLeft = pLayout->mX < 60 ? pLayout->mX - 20 : 40;
     pLayout->mPanelRight = Max(600, right - shift + (controls ? 20 : kArrowGap + 16));
+    // The controls page closer, its last line above the frontend's left logo.
+    pLayout->mLineStep = controls ? kLineStep - 1 : kLineStep;
     f32 y = 160;
     for (s32 i = 0; i < count; i++)
     {
         if (i)
         {
-            y += pItems[i].mGap ? kGapStep : kLineStep;
+            y += pItems[i].mGap ? (controls ? kGapStep - 4 : kGapStep) : pLayout->mLineStep;
         }
         pLayout->mY[i] = y;
     }
@@ -704,7 +707,7 @@ s32 LineAt(const Layout& layout, f32 x, f32 y)
     }
     for (s32 i = 0; i < layout.mCount; i++)
     {
-        if (y >= layout.mY[i] - 3 && y < layout.mY[i] + kLineStep - 3)
+        if (y >= layout.mY[i] - 3 && y < layout.mY[i] + layout.mLineStep - 3)
         {
             return i;
         }
