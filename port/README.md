@@ -50,7 +50,8 @@ ahead), or the mouse does (confined to the window, a reticle in place of the cur
 attacks, the wheel changes weapons, the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
 animation, as the original's back key).
-Vehicles keep the original controls, and the stick and mouse are not recorded in replays.
+In vehicles the controls stay classic, WASD driving as the movement keys and the left button attacking;
+the stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
 

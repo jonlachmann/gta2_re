@@ -57,10 +57,15 @@ s32 Diff(s32 a, s32 b)
     return ((a - b) % 1440 + 2160) % 1440 - 720;
 }
 
-Ped* OnFootPed()
+Ped* PlayerPed()
 {
     Player* pPlayer = gGame_0x40 && !gFrontend && gGame_0x40->mNumPlayers == 1 ? gGame_0x40->mLocalPlayer : NULL;
-    Ped* pPed = pPlayer && PortSettings::TwinStick() && !pPlayer->mDisableAllControls && pPlayer->mCameraMode == 0 ? pPlayer->mPlayerPed : NULL;
+    return pPlayer && PortSettings::TwinStick() && !pPlayer->mDisableAllControls && pPlayer->mCameraMode == 0 ? pPlayer->mPlayerPed : NULL;
+}
+
+Ped* OnFootPed()
+{
+    Ped* pPed = PlayerPed();
     return pPed && pPed->mGameObject && !pPed->get_car() ? pPed : NULL;
 }
 } // namespace
@@ -166,7 +171,8 @@ void DrawReticle()
 }
 } // namespace PortTwinStick
 
-bool port_TwinStickOnFoot()
+int port_TwinStick()
 {
-    return PortTwinStick::OnFootPed() != NULL;
+    Ped* pPed = PortTwinStick::PlayerPed();
+    return !pPed ? 0 : (pPed->get_car() ? 2 : (pPed->mGameObject ? 1 : 0));
 }

@@ -76,7 +76,8 @@ bool port_GameRunning();
 bool port_QuitMessageShown(); // or the pause menu
 bool port_FrontendActive();
 bool port_MenuUsesMouse(); // the frontend or the pause menu
-bool port_TwinStickOnFoot(); // TWIN STICK, the local player on foot with the controls on
+// TWIN STICK and the local player with the controls on: 1 on foot, 2 in a vehicle, else 0.
+int port_TwinStick();
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

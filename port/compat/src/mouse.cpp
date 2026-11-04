@@ -110,7 +110,7 @@ void port_MouseEndFrame()
     }
     // TWIN STICK aims with the mouse: kept in the window, the HUD's reticle in place of the cursor.
     static bool sGrabbed;
-    const bool grab = port_GameRunning() && !port_MenuUsesMouse() && port_TwinStickOnFoot();
+    const bool grab = port_GameRunning() && !port_MenuUsesMouse() && port_TwinStick() == 1;
     SDL_Window* pWindow = port_MainSDLWindow();
     if (grab != sGrabbed && pWindow)
     {
