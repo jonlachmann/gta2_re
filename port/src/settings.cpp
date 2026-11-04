@@ -233,7 +233,7 @@ s32 LanguageIndex()
     gRegistry.Get_Option("language", reinterpret_cast<BYTE*>(code), sizeof(code));
     for (s32 i = 0; i < kNumLanguages; i++)
     {
-        if (kLanguages[i].mCode == code[0])
+        if (kLanguages[i].mCode == code[0] && LanguageInstalled(code[0]))
         {
             return i;
         }
@@ -671,6 +671,17 @@ bool AimCamera()
 {
     return TwinStick() && Screen(kAimCamera) != 0;
 }
+bool LanguageInstalled(char code)
+{
+    char path[] = "data\\?.gxt";
+    path[5] = code;
+    FILE* pFile = fopen(path, "rb");
+    if (pFile)
+    {
+        fclose(pFile);
+    }
+    return pFile != NULL;
+}
 bool Headlights()
 {
     return Enabled(kHeadlights) && Screen(kHeadlights) != 0;
@@ -934,7 +945,12 @@ void Change(Id id, s32 delta)
         }
         case kLanguage:
         {
-            const char code[2] = {kLanguages[Wrap(LanguageIndex() + delta, kNumLanguages)].mCode, 0};
+            s32 index = LanguageIndex();
+            do
+            {
+                index = Wrap(index + delta, kNumLanguages);
+            } while (!LanguageInstalled(kLanguages[index].mCode));
+            const char code[2] = {kLanguages[index].mCode, 0};
             SetOption("language", REG_SZ, code, sizeof(code));
             delete gText_0x14;
             gText_0x14 = new TextTable();

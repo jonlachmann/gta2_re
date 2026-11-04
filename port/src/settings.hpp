@@ -57,6 +57,9 @@ extern const s32 kNumView;
 // The port's menu texts in the language of the loaded text table, from their English text.
 const wchar_t* Translate(const wchar_t* pEnglish);
 
+// data\<code>.gxt is there: the 2004 freeware has only English and Spanish.
+bool LanguageInstalled(char code);
+
 // In English, as the key to Translate.
 const wchar_t* Name(Id id);
 void Value(Id id, wchar_t* pOut);

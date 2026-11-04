@@ -7,6 +7,9 @@
 #include "Globals.hpp"
 #include "gtx_0x106C.hpp"
 #include "enums.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/settings.hpp"
+#endif
 
 DEFINE_GLOBAL(TextTable*, gText_0x14, 0x704DFC);
 DEFINE_GLOBAL(TextTable*, gtext_0x14, 0x6F87F0);
@@ -405,6 +408,12 @@ TextTable::TextTable()
     {
         mLangCode = 'e';
     }
+#if defined(GTA2_PORT)
+    if (!PortSettings::LanguageInstalled(mLangCode))
+    {
+        mLangCode = 'e';
+    }
+#endif
 }
 
 // Only gets its EH frame when <new> isn't included, see Globals.hpp
