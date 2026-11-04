@@ -443,11 +443,11 @@ s32 TextColour(bool selected, bool dim)
     return dim ? (selected ? 0x5C1212 : 0x707070) : (selected ? 0xB72323 : 0xFFFFFF);
 }
 
-// The pages' text: the frontend's score font, smaller than its menus'. It has no red version (a remap
-// reddens it) and no '-', drawn as a bar.
+// The pages' text: the frontend's plain white score font, smaller than its menus'; a selected line in its
+// red-rimmed one, reddened by a remap. Neither has a '-', drawn as a bar.
 s16 MenuFont()
 {
-    return gFrontendPlayMenuScoreFont;
+    return gFrontendScoreFont;
 }
 
 const u16 kRedRemap = 4;
@@ -458,6 +458,7 @@ const f32 kDashY = 8;
 f32 TextAt(const wchar_t* pText, f32 x, f32 y, s16 font, bool selected, bool dim, bool draw)
 {
     const bool bars = GetCharWidthFromFontType(font, L'-') < 3;
+    font = selected && font == MenuFont() ? gFrontendPlayMenuScoreFont : font;
     f32 width = 0;
     while (*pText)
     {
