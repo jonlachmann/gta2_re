@@ -47,7 +47,8 @@ controls, or TWIN STICK, which moves and aims apart, both relative to the screen
 turn included). The left stick, the d-pad, WASD (by their position, ZQSD on AZERTY) or the movement keys
 walk; the right stick aims (its aim holds a moment once released, its reticle shows three blocks
 ahead), or the mouse does (confined to the window, a reticle in place of the cursor). RT or the left button
-attacks, the wheel changes weapons, the other controls stay as bound. Without an aim the player faces the
+attacks, the wheel changes weapons, F (by position) enters or leaves a vehicle as Enter, the other
+controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
 animation, as the original's back key).
 In vehicles the controls stay classic, WASD driving as the movement keys and the left button attacking;

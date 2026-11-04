@@ -3,13 +3,15 @@
 // both work at once with the game's keyboard code; Start opens the pause menu (Escape), which the
 // d-pad, A and B drive, as they answer the quit message. In the frontend it drives the menus as the
 // arrows, Enter and Escape. With TWIN STICK on foot, the sticks move and aim (port_TwinStickInput) and RT
-// attacks; on foot or in a vehicle, the mouse's left button attacks, the wheel changes weapons and WASD drive.
+// attacks; on foot or in a vehicle, the mouse's left button attacks, the wheel changes weapons, F enters or
+// exits, and in a vehicle WASD drive.
 #define DIRECTINPUT_VERSION 0x0700
 #include <windows.h>
 #include <dinput.h>
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "port_platform.hpp"
 
 namespace
@@ -38,7 +40,7 @@ int sCapturedPad = -1;
 bool sMigrated;
 bool sMenuBlocked; // back from a game with a button still down: the menus wait for its release
 bool sMouseAims; // the mouse was used in game after the pad
-bool sWasd[4]; // W, S, A and D by position: forward, backward, left, right
+bool sKeys[5]; // W, S, A, D and F by position: forward, backward, left, right, enter or exit
 int sWheelControl; // a wheel notch holds a weapon control down for two steps
 unsigned sWheelUntil;
 
@@ -175,8 +177,8 @@ bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAim
 {
     Stick(SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, pMoveX, pMoveY);
     Stick(SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, pAimX, pAimY);
-    *pMoveX += (Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || sWasd[3]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || sWasd[2]);
-    *pMoveY += (Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || sWasd[1]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_UP) || sWasd[0]);
+    *pMoveX += (Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || sKeys[3]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || sKeys[2]);
+    *pMoveY += (Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || sKeys[1]) - (Button(SDL_GAMEPAD_BUTTON_DPAD_UP) || sKeys[0]);
     return sMouseAims;
 }
 
@@ -298,10 +300,10 @@ void port_PadEvent(const SDL_Event& e)
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
         {
-            const SDL_Scancode kWasd[4] = {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D};
-            for (int i = 0; i < 4; i++)
+            const SDL_Scancode kKeys[5] = {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D, SDL_SCANCODE_F};
+            for (int i = 0; i < 5; i++)
             {
-                sWasd[i] = e.key.scancode == kWasd[i] ? e.key.down : sWasd[i];
+                sKeys[i] = e.key.scancode == kKeys[i] ? e.key.down : sKeys[i];
             }
             if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
             {
@@ -311,7 +313,7 @@ void port_PadEvent(const SDL_Event& e)
             break;
         }
         case SDL_EVENT_WINDOW_FOCUS_LOST:
-            sWasd[0] = sWasd[1] = sWasd[2] = sWasd[3] = false;
+            memset(sKeys, 0, sizeof(sKeys));
             break;
         case SDL_EVENT_GAMEPAD_ADDED:
             port_OpenGamepad();
@@ -420,9 +422,9 @@ void port_UpdatePad()
         {
             down = down || (twin == 1 && CodeDown(11)) || port_MouseLeftDown();
         }
-        if (twin == 2 && i < 4)
+        if ((twin == 2 && i < 4) || (twin && i == 5))
         {
-            down = down || sWasd[i];
+            down = down || sKeys[i < 4 ? i : 4];
         }
         if (twin && i == sWheelControl)
         {
