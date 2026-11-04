@@ -1,4 +1,5 @@
-// The gamepad. The game never sees it as a device: in game, each control's pad binding (pad_<n> in
+// The gamepads, all of them at once: a button counts if held on any, the sticks and triggers are the ones
+// of the pad that gave the last input. The game never sees them as devices: in game, each control's pad binding (pad_<n> in
 // the registry's Control key, next to the keyboard's <n>) presses that control's keyboard key, so
 // both work at once with the game's keyboard code; Start opens the pause menu (Escape), which the
 // d-pad, A and B drive, as they answer the quit message. In the frontend it drives the menus as the
@@ -26,7 +27,10 @@ const int kDefaultAlt[kNumControls] = {DIK_W, DIK_S, DIK_A, DIK_D, kMouseCode + 
                                        kWheelUpCode, kWheelDownCode, 0, 0, 0};
 const Sint16 kThreshold = 24000;
 
-SDL_Gamepad* sGamepad;
+const int kMaxGamepads = 8;
+SDL_Gamepad* sGamepads[kMaxGamepads];
+int sNumGamepads;
+SDL_Gamepad* sActivePad; // the last to give an input
 enum Mode
 {
     kKeyboardMode,
@@ -57,12 +61,34 @@ const SDL_GamepadButton kButtons[] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTT
 
 bool Button(SDL_GamepadButton b)
 {
-    return sGamepad && SDL_GetGamepadButton(sGamepad, b);
+    for (int i = 0; i < sNumGamepads; i++)
+    {
+        if (SDL_GetGamepadButton(sGamepads[i], b))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 Sint16 Axis(SDL_GamepadAxis a)
 {
-    return sGamepad ? SDL_GetGamepadAxis(sGamepad, a) : 0;
+    return sActivePad ? SDL_GetGamepadAxis(sActivePad, a) : 0;
+}
+
+// The pad's input makes it the active one, if it is one of ours.
+bool PadInput(SDL_JoystickID id)
+{
+    SDL_Gamepad* pPad = SDL_GetGamepadFromID(id);
+    for (int i = 0; i < sNumGamepads; i++)
+    {
+        if (sGamepads[i] == pPad)
+        {
+            sActivePad = pPad;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool CodeDown(int code)
@@ -228,23 +254,22 @@ bool port_LookFurther()
     return sKeyDown[DIK_LSHIFT] || r3;
 }
 
-// The first gamepad, or the first whose name contains $GTA2_GAMEPAD.
+// The gamepads not open yet, or only those whose name contains $GTA2_GAMEPAD.
 void port_OpenGamepad()
 {
-    if (sGamepad)
-    {
-        return;
-    }
     const char* wanted = getenv("GTA2_GAMEPAD");
     int count = 0;
     SDL_JoystickID* pIds = SDL_GetGamepads(&count);
-    for (int i = 0; pIds && i < count; i++)
+    for (int i = 0; pIds && i < count && sNumGamepads < kMaxGamepads; i++)
     {
         const char* name = SDL_GetGamepadNameForID(pIds[i]);
-        if (!wanted || (name && SDL_strcasestr(name, wanted)))
+        if (!SDL_GetGamepadFromID(pIds[i]) && (!wanted || (name && SDL_strcasestr(name, wanted))))
         {
-            sGamepad = SDL_OpenGamepad(pIds[i]);
-            break;
+            if (SDL_Gamepad* pPad = SDL_OpenGamepad(pIds[i]))
+            {
+                sGamepads[sNumGamepads++] = pPad;
+                sActivePad = sActivePad ? sActivePad : pPad;
+            }
         }
     }
     SDL_free(pIds);
@@ -390,22 +415,27 @@ void port_PadEvent(const SDL_Event& e)
             port_OpenGamepad();
             break;
         case SDL_EVENT_GAMEPAD_REMOVED:
-            if (sGamepad && SDL_GetGamepadID(sGamepad) == e.gdevice.which)
+            for (int i = 0; i < sNumGamepads; i++)
             {
-                SDL_CloseGamepad(sGamepad);
-                sGamepad = NULL;
-                port_OpenGamepad();
+                if (SDL_GetGamepadID(sGamepads[i]) == e.gdevice.which)
+                {
+                    SDL_Gamepad* pPad = sGamepads[i];
+                    sGamepads[i] = sGamepads[--sNumGamepads];
+                    sActivePad = sActivePad == pPad ? (sNumGamepads ? sGamepads[0] : NULL) : sActivePad;
+                    SDL_CloseGamepad(pPad);
+                    break;
+                }
             }
             break;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-            if (sGamepad && e.gbutton.which == SDL_GetGamepadID(sGamepad))
+            if (PadInput(e.gbutton.which))
             {
                 sMode = kPadMode;
                 sMouseAims = false;
             }
             break;
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-            if (sGamepad && e.gaxis.which == SDL_GetGamepadID(sGamepad) && (e.gaxis.value > kThreshold || e.gaxis.value < -kThreshold))
+            if ((e.gaxis.value > kThreshold || e.gaxis.value < -kThreshold) && PadInput(e.gaxis.which))
             {
                 sMode = kPadMode;
                 sMouseAims = false;

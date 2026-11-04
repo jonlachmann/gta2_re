@@ -38,8 +38,9 @@ GTA2_DIR=~/games/gta2 ./build_linux/gta2
 ```
 
 Settings live in `gta2_registry.ini` (the registry keys of the Windows game). Alt+Enter switches
-between window and full screen. The first gamepad is used, or the first whose name contains
-`GTA2_GAMEPAD`; bind it in the game's control options (stick and d-pad are the two axes).
+between window and full screen. Every gamepad drives the player (only those whose name contains
+`GTA2_GAMEPAD` if set): a button counts on any of them, the sticks are those of the pad used last.
+Bind them in the game's control options (stick and d-pad are the two axes).
 The menus also take the mouse: pointing selects, a click enters or changes a value, the right
 button goes back, the wheel changes a value; the cursor shows while the mouse is in use over a menu.
 Each control has a key, a second key (ALTERNATE: a key, a mouse button or a wheel notch, by default
