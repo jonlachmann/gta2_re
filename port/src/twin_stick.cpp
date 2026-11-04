@@ -9,7 +9,6 @@
 #include "sprite.hpp"
 #include "view.hpp"
 #include <math.h>
-#include <stdlib.h>
 
 #if defined(GTA2_PORT_SDL)
 bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY);
@@ -28,9 +27,8 @@ const s32 kAimSteps = 10;
 // The pad's reticle, in blocks from the ped.
 const f32 kReticleDistance = 3.0f;
 
-Char* spWalker; // the ped walking this step, along sMove at sSpeed times its speed
+Char* spWalker; // the ped walking this step, along sMove
 s32 sMove;
-f32 sSpeed;
 bool sMouse;
 s32 sAim;
 s32 sAimSteps;
@@ -118,9 +116,6 @@ void PedControls(Player* pPlayer, Ped* pPed)
         pPed->CancelEnterCarObjective();
         spWalker = pChar;
         sMove = move;
-        // Forward within 45 degrees of the aim, sideways slower, backward at walking speed past 100.
-        const s32 off = abs(Diff(move, rotation + turn));
-        sSpeed = !aiming || off < 180 ? 1.0f : (off < 400 ? 0.85f : 0.5f);
     }
 #endif
 }
@@ -136,12 +131,6 @@ bool Walk(Char* pChar, Ang16* pFacing)
     const s32 turn = pChar->mpPed->GetTurnSpeed().rValue;
     *pFacing = Ang16(static_cast<s16>(pChar->mRotation.rValue + turn), 0);
     pChar->mRotation = Ang16(static_cast<s16>(sMove - turn), 0);
-    // It then speeds up by 1/256 per step, up to mRunOrJumpSpeed.
-    const s32 cap = static_cast<s32>(pChar->mRunOrJumpSpeed.mValue * sSpeed);
-    if (sSpeed < 1.0f && pChar->mVelocity.mValue >= cap)
-    {
-        pChar->mVelocity = Fix16(cap - 64, 0);
-    }
     return true;
 }
 

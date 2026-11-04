@@ -48,7 +48,8 @@ turn included). The left stick, the d-pad, WASD (by their position, ZQSD on AZER
 walk; the right stick aims (its aim holds a moment once released, its reticle shows three blocks
 ahead), or the mouse does (confined to the window, a reticle in place of the cursor). RT or the left button
 attacks, the wheel changes weapons, the other controls stay as bound. Without an aim the player faces the
-way he walks; with one he turns to it and walks sideways a little slower, backward at walking speed.
+way he walks; with one he turns to it and walks any way at the same speed (backward with the run
+animation, as the original's back key).
 Vehicles keep the original controls, and the stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
