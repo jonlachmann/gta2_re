@@ -81,7 +81,8 @@ Without the data there, a message box offers three choices:
   `data` folder is copied, with `gta2_registry.ini`, `gta2gl.ini` and `player/` if the port ran there.
 - **Install from a file:** the game's installer or a disc image, read by the port (nothing is run).
 - **I don't have the game:** a short text (`kNoGameText` in `setup/setup.cpp`) and a link to the
-  Internet Archive's copy of Rockstar's former download page.
+  Internet Archive item [rockstar-classics](https://archive.org/details/rockstar-classics), which
+  holds the 2004 Rockstar Classics `GTA2.exe`.
 
 The files are copied into a temporary folder, checked (the essential files are listed in
 `setup/install.cpp`), then moved into place. Without the music (the 22 tracks of `GTAudio` on the

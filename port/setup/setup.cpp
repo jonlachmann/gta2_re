@@ -18,11 +18,11 @@ const char kTitle[] = "GTA2 setup";
 // Shown for "I don't have the game".
 const char kNoGameText[] =
     "This port does not include GTA2's game files. To play, you need your own copy of GTA2 for "
-    "Windows: the original CD, or the version Rockstar Games gave away for free in 2004 in its "
-    "\"Rockstar Classics\" series.\n\n"
-    "Rockstar's download page is no longer online. The Internet Archive keeps a copy of it:\n"
-    "https://web.archive.org/web/20071024135959/http://www.rockstargames.com/classics/";
-const char kNoGameUrl[] = "https://web.archive.org/web/20071024135959/http://www.rockstargames.com/classics/";
+    "Windows: the original CD, a Steam copy (no longer sold since 2013), or the installer Rockstar Games "
+    "gave away for free in 2004 in its \"Rockstar Classics\" series.\n\n"
+    "Rockstar no longer offers it, but the Internet Archive keeps a copy of the Rockstar Classics "
+    "installers. Download GTA2.exe from there, then choose \"Install from a file\" and pick it.";
+const char kNoGameUrl[] = "https://archive.org/details/rockstar-classics";
 
 const SDL_DialogFileFilter kFileFilters[] = {
     {"GTA2 installer or disc image", "exe;iso;zip;7z"},
@@ -348,7 +348,7 @@ bool SetupLoop(const std::string& gameDir)
             }
             if (choice == 2)
             {
-                if (Ask(SDL_MESSAGEBOX_INFORMATION, kNoGameText, {"Open the archived page", "Back"}, 1, 1) == 0)
+                if (Ask(SDL_MESSAGEBOX_INFORMATION, kNoGameText, {"Download the GTA2 freeware from archive.org", "Back"}, 1, 1) == 0)
                 {
                     SDL_OpenURL(kNoGameUrl);
                 }
