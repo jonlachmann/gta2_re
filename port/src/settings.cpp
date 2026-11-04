@@ -61,7 +61,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS", L"AIM CAMERA"};
 
 struct Language
 {
@@ -161,6 +161,7 @@ const Translation kTranslations[] = {
     {L"VIEW", NULL, {L"VUE", L"ANSICHT", L"VISTA", L"VISTA"}},
     {L"NEEDS", NULL, {L"NECESSITE", L"BENÖTIGT", L"RICHIEDE", L"REQUIERE"}},
     {L"CONTROLS", NULL, {L"COMMANDES", L"STEUERUNG", L"COMANDI", L"CONTROLES"}},
+    {L"AIM CAMERA", NULL, {L"CAMERA DE VISEE", L"ZIELKAMERA", L"CAMERA DI MIRA", L"CÁMARA DE MIRA"}},
     {L"TWIN STICK", NULL, {L"DOUBLE STICK", L"TWIN-STICK", L"DOPPIO STICK", L"DOBLE STICK"}},
     {L"DEFAULT KEYS", NULL, {L"CONTROLES PAR DEFAUT", L"STANDARDSTEUERUNG", L"COMANDI PREDEFINITI", L"CONTROLES PREDETERMINADOS"}},
     {L"KEYBOARD", NULL, {L"CLAVIER", L"TASTATUR", L"TASTIERA", L"TECLADO"}},
@@ -294,6 +295,8 @@ const char* ScreenName(Id id)
             return "day_clock";
         case kControls:
             return "port_controls";
+        case kAimCamera:
+            return "port_aim_camera";
         default:
             return "car_headlights";
     }
@@ -330,7 +333,7 @@ s32 ScreenDefault(Id id)
     {
         return 12;
     }
-    return id == kLighting || id == kExplodingScores || id == kVsync || id == kClock ? 1 : 0;
+    return id == kLighting || id == kExplodingScores || id == kVsync || id == kClock || id == kAimCamera ? 1 : 0;
 }
 
 s32 Screen(Id id)
@@ -583,7 +586,7 @@ Id Requirement(Id id)
     {
         return kLighting;
     }
-    return kCount;
+    return id == kAimCamera ? kControls : kCount;
 }
 
 bool Enabled(Id id)
@@ -663,6 +666,10 @@ bool TwinStick()
 #else
     return false;
 #endif
+}
+bool AimCamera()
+{
+    return TwinStick() && Screen(kAimCamera) != 0;
 }
 bool Headlights()
 {
@@ -966,6 +973,7 @@ void Change(Id id, s32 delta)
         case kHeadlights:
         case kLightEffects:
         case kClock:
+        case kAimCamera:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
         case kCamera:

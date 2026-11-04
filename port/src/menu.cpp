@@ -66,7 +66,7 @@ struct Item
     bool mGap; // set apart from the item above
 };
 
-const s32 kMaxItems = 15;
+const s32 kMaxItems = 16;
 const wchar_t* const kTitles[kNumPages] = {L"OPTIONS", L"SCREEN", L"VIEW", L"GRAPHICS", L"CONTROLS"};
 
 const s32 kNumControls = 12;
@@ -168,8 +168,9 @@ s32 Items(Page page, Item* pItems)
             }
 #if defined(GTA2_PORT_SDL)
             pItems[n++] = Item{kSetting, PortSettings::kControls, true};
+            pItems[n++] = Item{kSetting, PortSettings::kAimCamera, false};
 #endif
-            // Under CONTROLS, or set apart from the bindings.
+            // Under the TWIN STICK settings, or set apart from the bindings.
             const bool gap = n == kNumControls;
             pItems[n++] = Item{kDefaultKeys, 0, gap};
             pItems[n++] = Item{kBack, 0, false};

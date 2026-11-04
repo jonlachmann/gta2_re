@@ -40,6 +40,7 @@ enum Id
     kStartTime,
     kClock,
     kControls,
+    kAimCamera,
     kCount,
 };
 
@@ -94,6 +95,8 @@ bool CameraFollows();
 
 // CONTROLS: TWIN STICK moves and aims apart on foot (twin_stick.hpp).
 bool TwinStick();
+// AIM CAMERA: with TWIN STICK, the view looks ahead toward the aim.
+bool AimCamera();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();
