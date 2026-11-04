@@ -372,16 +372,77 @@ Fix16 Fx(f32 v)
     return Fix16(static_cast<s32>(v * 16384.0f), 0);
 }
 
-s32 Width(const wchar_t* pText, s16 font)
+// colour: 0xRRGGBB.
+void Rect(f32 left, f32 top, f32 right, f32 bottom, s32 colour)
 {
-    return Frontend::GetMaxTextWidth(const_cast<wchar_t*>(pText), font);
+    Vert verts[4] = {};
+    verts[0].x = verts[3].x = sLeft + left * sScale;
+    verts[1].x = verts[2].x = sLeft + right * sScale;
+    verts[0].y = verts[1].y = sTop + top * sScale;
+    verts[2].y = verts[3].y = sTop + bottom * sScale;
+    pgbh_DrawFlatRect(verts, colour);
 }
 
-// Dim: half transparent, grey on the panel or the frontend's black.
-void Text(const wchar_t* pText, f32 x, f32 y, s16 font, bool dim = false)
+// The text colours (white, the red remap); dim, darker.
+s32 TextColour(bool selected, bool dim)
 {
-    DrawString(pText, Fx(sLeft + x * sScale), Fx(sTop + y * sScale), font, Fx(sScale), palette_types_enum::sprites_2, 0,
-               dim ? 1 : 0, dim ? 12 : 0);
+    return dim ? (selected ? 0x5C1212 : 0x707070) : (selected ? 0xB72323 : 0xFFFFFF);
+}
+
+// The pages' text: the frontend's score font, smaller than its menus'. It has no red version (a remap
+// reddens it) and no '-', drawn as a bar.
+s16 MenuFont()
+{
+    return gFrontendPlayMenuScoreFont;
+}
+
+const u16 kRedRemap = 4;
+const f32 kDashWidth = 7;
+const f32 kDashY = 8;
+
+// Draws the text if asked; its width. Dim: half transparent, grey on the panel or the frontend's black.
+f32 TextAt(const wchar_t* pText, f32 x, f32 y, s16 font, bool selected, bool dim, bool draw)
+{
+    const bool bars = GetCharWidthFromFontType(font, L'-') < 3;
+    f32 width = 0;
+    while (*pText)
+    {
+        wchar_t run[64];
+        size_t n = 0;
+        for (; pText[n] && n < 63 && !(bars && pText[n] == L'-'); n++)
+        {
+            run[n] = pText[n];
+        }
+        run[n] = 0;
+        pText += n;
+        if (n && draw)
+        {
+            DrawString(run, Fx(sLeft + (x + width) * sScale), Fx(sTop + y * sScale), font, Fx(sScale),
+                       selected ? palette_types_enum::font_remaps_8 : palette_types_enum::sprites_2, selected ? kRedRemap : 0,
+                       dim ? 1 : 0, dim ? 12 : 0);
+        }
+        width += n ? Frontend::GetMaxTextWidth(run, font) : 0;
+        if (bars && *pText == L'-')
+        {
+            if (draw)
+            {
+                Rect(x + width + 1, y + kDashY, x + width + kDashWidth - 1, y + kDashY + 2, TextColour(selected, dim));
+            }
+            width += kDashWidth;
+            pText++;
+        }
+    }
+    return width;
+}
+
+f32 Width(const wchar_t* pText, s16 font)
+{
+    return TextAt(pText, 0, 0, font, false, false, false);
+}
+
+void Text(const wchar_t* pText, f32 x, f32 y, s16 font, bool selected = false, bool dim = false)
+{
+    TextAt(pText, x, y, font, selected, dim, true);
 }
 
 void Sprite(s16 sprite, f32 x, f32 y)
@@ -393,17 +454,6 @@ void Sprite(s16 sprite, f32 x, f32 y)
 f32 Max(f32 a, f32 b)
 {
     return a > b ? a : b;
-}
-
-// colour: 0xRRGGBB.
-void Rect(f32 left, f32 top, f32 right, f32 bottom, s32 colour)
-{
-    Vert verts[4] = {};
-    verts[0].x = verts[3].x = sLeft + left * sScale;
-    verts[1].x = verts[2].x = sLeft + right * sScale;
-    verts[0].y = verts[1].y = sTop + top * sScale;
-    verts[2].y = verts[3].y = sTop + bottom * sScale;
-    pgbh_DrawFlatRect(verts, colour);
 }
 
 // The numeric settings' sliders: a track, then the value's text.
@@ -430,10 +480,10 @@ f32 TextOffset(const Item& item)
     return GetSlider(item, &slider) ? kSliderWidth + kSliderGap : 0;
 }
 
-// The frontend's text colours, a darker grey for the empty part of the track.
+// The text's colours, a darker grey for the empty part of the track.
 void DrawSlider(const Slider& slider, f32 x, f32 y, bool selected, bool dim)
 {
-    const s32 colour = dim ? (selected ? 0x701000 : 0x707070) : (selected ? 0xFF1000 : 0xFFFFFF);
+    const s32 colour = TextColour(selected, dim);
     const f32 middle = y + 7;
     const f32 knob = x + kSliderWidth * (slider.mValue - slider.mMin) / (slider.mMax - slider.mMin);
     Rect(x, middle - 1.5f, kSliderWidth + x, middle + 1.5f, 0x606060);
@@ -453,7 +503,7 @@ void DrawRequirement(const Item& item, f32 x, f32 y)
     wchar_t text[64];
     const wchar_t* pName = requirement == PortSettings::kLighting ? L"DAY-NIGHT CYCLE" : PortSettings::Name(requirement);
     swprintf(text, L"%ls %ls", Translate(L"NEEDS"), Translate(pName));
-    Text(text, x, y, gFrontendNormalFont);
+    Text(text, x, y, MenuFont());
 }
 
 // The value under the mouse on a slider's track, or nearest to it.
@@ -511,8 +561,8 @@ struct Layout
 };
 
 // From a line's top to the next, or to one set apart.
-const f32 kLineStep = 20;
-const f32 kGapStep = 30;
+const f32 kLineStep = 16;
+const f32 kGapStep = 24;
 
 // From a setting's value to the centre of the arrows the mouse changes it with.
 const f32 kArrowGap = 14;
@@ -533,7 +583,7 @@ void GetLayout(Layout* pLayout)
 #endif
 
     // The columns at their places, or further right for longer texts, a gap after the longest.
-    const s16 normal = gFrontendNormalFont;
+    const s16 normal = MenuFont();
     f32 nameWidth = 0;
     f32 valueWidth = controls ? Width(Translate(L"KEYBOARD"), normal) : 0;
     f32 padWidth = padColumn ? Width(Translate(L"GAMEPAD"), normal) : 0;
@@ -550,8 +600,8 @@ void GetLayout(Layout* pLayout)
         }
     }
     const f32 kGap = 24;
-    f32 x = controls ? 60.0f : 120.0f;
-    f32 valueX = Max(controls ? 300.0f : 380.0f, x + nameWidth + kGap);
+    f32 x = controls ? 60.0f : 140.0f;
+    f32 valueX = Max(controls ? 300.0f : 360.0f, x + nameWidth + kGap);
     f32 padX = Max(470, valueX + valueWidth + kGap);
     f32 right = padColumn ? padX + padWidth : valueX + valueWidth;
     // Inside the frontend's screen: the page moves left, down to x 20.
@@ -619,7 +669,7 @@ void DrawHints()
     const bool capturing = sCapturing >= 0;
     const Hint* pHints = capturing ? kCapture : kNavigate;
     const s32 count = capturing ? 1 : 2;
-    const s16 font = gFrontendNormalFont;
+    const s16 font = MenuFont();
     const s16 buttonFont = gFrontendHeadingFont;
     // Between the frontend's two logos (x 70 to 550): longer translations start further left, then
     // come closer together.
@@ -887,7 +937,7 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
     sTop = top;
     Layout layout;
     GetLayout(&layout);
-    const s16 normal = gFrontendNormalFont;
+    const s16 normal = MenuFont();
     if (panel)
     {
         Rect(layout.mPanelLeft, 130, layout.mPanelRight, 470, 0);
@@ -907,24 +957,23 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
         const Item& item = layout.mItems[i];
         const f32 y = layout.mY[i];
         const bool selected = i == sSelected[sPage];
-        const s16 font = selected ? gFrontendSelectedFont : normal;
         const bool dim = !IsEnabled(item);
         ItemValues(item, value, pad);
-        Text(ItemName(item), layout.mX, y, font, dim);
+        Text(ItemName(item), layout.mX, y, normal, selected, dim);
         Slider slider;
         if (GetSlider(item, &slider))
         {
             DrawSlider(slider, layout.mValueX, y, selected, dim);
         }
         const f32 valueX = layout.mValueX + TextOffset(item);
-        Text(value, valueX, y, font, dim);
+        Text(value, valueX, y, normal, selected, dim);
         if (selected && dim)
         {
             DrawRequirement(item, layout.mX, layout.mY[layout.mCount - 1] + kGapStep + 4);
         }
         if (layout.mPadColumn && item.mKind == kBinding)
         {
-            Text(pad, layout.mPadX, y, font);
+            Text(pad, layout.mPadX, y, normal, selected);
             if (selected)
             {
                 Sprite(kArrowSprite, (sColumn ? layout.mPadX : layout.mValueX) - 12, y + 6);
@@ -933,7 +982,7 @@ void Draw(f32 scale, f32 left, f32 top, bool panel)
         if (selected && item.mKind == kSetting && !dim && MouseMode())
         {
             Sprite(kLeftArrowSprite, layout.mValueX - kArrowGap, y + 6);
-            Sprite(kArrowSprite, valueX + Width(value, font) + kArrowGap, y + 6);
+            Sprite(kArrowSprite, valueX + Width(value, normal) + kArrowGap, y + 6);
         }
     }
     DrawHints();
