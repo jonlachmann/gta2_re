@@ -88,6 +88,12 @@ f32 sMarkerDepth = 1.0f;
 Camera* spCamera;
 u8 sCameraBytes[sizeof(Camera)];
 
+// The drawn camera and turn, for GroundToScreen.
+struct Projection
+{
+    f32 mX, mY, mZ, mScale, mCx, mCy, mCos, mSin, mCosP, mSinP;
+} sProj = {0, 0, 0, 1, 320, 240, 1, 0, 1, 0};
+
 s32 Wrap(s32 v)
 {
     return ((v % kTurn) + kTurn + kHalfTurn) % kTurn - kHalfTurn;
@@ -371,6 +377,31 @@ void Step()
     sStepSin = sinf(Radians(static_cast<f32>(sYaw)));
 }
 
+// As the map is drawn: Camera::ProjectWorldToScreen_4B90E0, then turned and tilted as TurnPoint in gbh_api.cpp.
+void GroundToScreen(f32 x, f32 y, f32 z, f32* pX, f32* pY)
+{
+    const Projection& p = sProj;
+    const f32 d = p.mZ - z + 8.0f;
+    const f32 dx = (x - p.mX) * p.mScale / d;
+    const f32 dy = (y - p.mY) * p.mScale / d;
+    const f32 rx = p.mCos * dx - p.mSin * dy;
+    const f32 ry = p.mSin * dx + p.mCos * dy;
+    const f32 k = 1.0f / (p.mCosP - ry * p.mSinP / p.mScale);
+    *pX = p.mCx + rx * k;
+    *pY = p.mCy + (ry * p.mCosP + p.mScale * p.mSinP) * k;
+}
+
+void ScreenToGround(f32 x, f32 y, f32 z, f32* pX, f32* pY)
+{
+    const Projection& p = sProj;
+    const f32 v = y - p.mCy;
+    const f32 ry = (v * p.mCosP - p.mScale * p.mSinP) / (p.mCosP + v * p.mSinP / p.mScale);
+    const f32 rx = (x - p.mCx) * (p.mCosP - ry * p.mSinP / p.mScale);
+    const f32 d = p.mZ - z + 8.0f;
+    *pX = p.mX + (p.mCos * rx + p.mSin * ry) * d / p.mScale;
+    *pY = p.mY + (p.mCos * ry - p.mSin * rx) * d / p.mScale;
+}
+
 f32 Yaw(f32 alpha)
 {
     // ROTATION SPEED 0 cuts: no frame drawn half way.
@@ -390,6 +421,11 @@ void BeginDraw(f32 alpha)
     Camera* pCamera = ViewCamera();
     if (!sValid || !pCamera || !PortSettings::ChinatownCamera())
     {
+        if (pCamera)
+        {
+            sProj = {ToF(pCamera->mCurPos.mX), ToF(pCamera->mCurPos.mY), ToF(pCamera->mCurPos.mZ), ToF(pCamera->mScreenScale.x),
+                     static_cast<f32>(pCamera->mScreenPxCenterX), static_cast<f32>(pCamera->mScreenPxCenterY), 1, 0, 1, 0};
+        }
         return;
     }
     const f32 yaw = Radians(Yaw(alpha) * kSub);
@@ -411,6 +447,7 @@ void BeginDraw(f32 alpha)
     sCx = static_cast<f32>(pCamera->mScreenPxCenterX);
     sCy = static_cast<f32>(pCamera->mScreenPxCenterY);
     sDrawn = true;
+    sProj = {ToF(pCamera->mCurPos.mX), ToF(pCamera->mCurPos.mY), ToF(pCamera->mCurPos.mZ), sScale, sCx, sCy, sCos, sSin, sCosP, sSinP};
 }
 
 void EndDraw()
