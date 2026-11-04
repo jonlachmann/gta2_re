@@ -52,6 +52,9 @@ a moment once released, its reticle shows three blocks ahead), or the mouse does
 a reticle in place of the cursor). RT attacks, the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
 animation, as the original's back key).
+AIM CAMERA (on by default) moves the view toward the aim on foot, about a third of the way to the
+cursor or as far as the right stick is pushed; held, left Shift or R3 (unless a control is bound to it)
+looks further, as far as keeps the player on screen.
 In vehicles the controls stay classic; the stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
