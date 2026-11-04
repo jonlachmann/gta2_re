@@ -340,9 +340,10 @@ bool SetupLoop(const std::string& gameDir)
                                    "GTA2's game files were not found.\n\nThis port does not include them: they come "
                                    "from your own copy of GTA2, an installed game folder, the game's CD or its "
                                    "installer. They will be copied to:\n" + gameDir,
-                                   {"Use an existing install...", "Install from a file...", "I don't have the game"}, 0,
-                                   -1);
-            if (choice < 0)
+                                   {"Use an existing install...", "Install from a file...", "I don't have the game",
+                                    "Quit"},
+                                   0, 3);
+            if (choice < 0 || choice == 3)
             {
                 return false;
             }
