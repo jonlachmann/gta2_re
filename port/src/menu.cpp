@@ -20,6 +20,7 @@ bool port_PadMode();
 int port_GetPadBinding(int control);
 void port_SetPadBinding(int control, int code);
 int port_DefaultPadBinding(int control);
+int port_KeyLetter(int dik);
 void port_CaptureStart();
 int port_CapturedKey();
 int port_CapturedPad();
@@ -214,6 +215,15 @@ void LoadKeyNames()
 void KeyName(s32 dik, wchar_t* pOut)
 {
     dik &= 0xFF;
+#if defined(GTA2_PORT_SDL)
+    // A letter as the keyboard's layout has it, whatever the language.
+    if (const int letter = port_KeyLetter(dik))
+    {
+        pOut[0] = static_cast<wchar_t>(letter);
+        pOut[1] = 0;
+        return;
+    }
+#endif
     if (dik < static_cast<s32>(sKeyNames.size()) && sKeyNames[dik].mName[0])
     {
         wcscpy(pOut, sKeyNames[dik].mName);

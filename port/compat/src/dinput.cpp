@@ -408,6 +408,19 @@ DWORD port_DikFromScancode(SDL_Scancode sc)
     return Dik(sc);
 }
 
+int port_KeyLetter(int dik)
+{
+    for (int sc = 0; sc < SDL_SCANCODE_COUNT; sc++)
+    {
+        if (dik && Dik(static_cast<SDL_Scancode>(sc)) == static_cast<DWORD>(dik))
+        {
+            const SDL_Keycode key = SDL_GetKeyFromScancode(static_cast<SDL_Scancode>(sc), SDL_KMOD_NONE, false);
+            return key >= 'a' && key <= 'z' ? static_cast<int>(key - 'a' + 'A') : 0;
+        }
+    }
+    return 0;
+}
+
 void port_PushKey(DWORD dik, bool down)
 {
     for (Device* pDev : sDevices)

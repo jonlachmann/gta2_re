@@ -43,6 +43,8 @@ bool port_MouseMode(); // the mouse gave the last input
 int port_GetPadBinding(int control);
 void port_SetPadBinding(int control, int code);
 int port_DefaultPadBinding(int control);
+// The layout's letter on the key at that DIK code's position (dinput.cpp), 0 if not a letter.
+int port_KeyLetter(int dik);
 void port_CaptureStart(); // then the next key (DIK code) or pad code pressed, -1 until then
 int port_CapturedKey();
 int port_CapturedPad();
