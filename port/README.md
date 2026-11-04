@@ -42,6 +42,14 @@ between window and full screen. The first gamepad is used, or the first whose na
 `GTA2_GAMEPAD`; bind it in the game's control options (stick and d-pad are the two axes).
 The menus also take the mouse: pointing selects, a click enters or changes a value, the right
 button goes back, the wheel changes a value; the cursor shows while the mouse is in use over a menu.
+CONTROLS on the controls page chooses how the player walks on foot: CLASSIC, the original's tank
+controls, or TWIN STICK, which moves and aims apart, both relative to the screen (the CHINATOWN camera's
+turn included). The left stick, the d-pad, WASD (by their position, ZQSD on AZERTY) or the movement keys
+walk; the right stick aims (its aim holds a moment once released, its reticle shows three blocks
+ahead), or the mouse does (confined to the window, a reticle in place of the cursor). RT or the left button
+attacks, the wheel changes weapons, the other controls stay as bound. Without an aim the player faces the
+way he walks; with one he turns to it and walks sideways a little slower, backward at walking speed.
+Vehicles keep the original controls, and the stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
 
@@ -224,7 +232,7 @@ clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
 
 | Variable | Effect |
 |---|---|
-| `GTA2_INPUT=<frame>:<key>[:<frames held>],...` | key presses at given frames (SDL key names: `Return`, `Up`, `Left Ctrl`, `Alt+Return`), a virtual gamepad (`pad.a`, `pad.dpup`, `pad.lefty-`), or the mouse (`mouse.<x>x<y>` moves it to that window position, `mouse.left`, `mouse.right`, `mouse.wheelup`, `mouse.wheeldown`) |
+| `GTA2_INPUT=<frame>:<key>[:<frames held>],...` | key presses at given frames (SDL key names: `Return`, `Up`, `Left Ctrl`, `Alt+Return`), a virtual gamepad (`pad.a`, `pad.dpup`, `pad.lefty-`, `pad.rightx=0.5` for part of an axis), or the mouse (`mouse.<x>x<y>` moves it to that window position, `mouse.left`, `mouse.right`, `mouse.wheelup`, `mouse.wheeldown`) |
 | `GTA2_EXIT_AT=<frame>` | quit at that frame |
 | `GTA2_CURSOR_BMP=<file>` | the mouse cursor's image written to that BMP |
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP (the first frame drawn at each); `GTA2GL_CAPTURE_FLIPS=1` counts presented frames instead |
