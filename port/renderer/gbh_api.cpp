@@ -1139,7 +1139,7 @@ void port_SetAmbient(f32 r, f32 g, f32 b, f32 lights)
     gLightsDirty = true;
 }
 
-// TWIN STICK's reticle (port/src/twin_stick.cpp): a bronze ring round a red lamp, shaded as the HUD's sprites
+// TWIN STICK's reticle (port/src/twin_stick.cpp): an aged bronze ring round a red lamp, shaded as the HUD's sprites
 // (lit from the top left), size pixels wide at (x, y).
 void port_DrawReticle(f32 x, f32 y, f32 size, f32 alpha)
 {
@@ -1166,7 +1166,7 @@ void port_DrawReticle(f32 x, f32 y, f32 size, f32 alpha)
             const f32 nx = dx / r * tc, ny = dy / r * tc, nz = sqrtf(1.0f - tc * tc);
             const f32 diffuse = fmaxf(nx * lx + ny * ly + nz * lz, 0.0f);
             const f32 spec = powf(fmaxf((nx * lx + ny * ly + nz * (lz + 1.0f)) / sqrtf(lx * lx + ly * ly + (lz + 1) * (lz + 1)), 0.0f), 24.0f);
-            const f32 base[3] = {lamp ? 230.0f : 165.0f, lamp ? 40.0f : 145.0f, lamp ? 25.0f : 105.0f};
+            const f32 base[3] = {lamp ? 230.0f : 105.0f, lamp ? 40.0f : 78.0f, lamp ? 25.0f : 45.0f};
             u32 c = static_cast<u32>(a * 255.0f) << 24;
             for (s32 k = 0; k < 3; k++)
             {
