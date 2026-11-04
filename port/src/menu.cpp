@@ -41,7 +41,6 @@ enum Page
     kViewPage,
     kGraphicsPage,
     kControlsPage,
-    kControls2Page,
     kNumPages,
 };
 
@@ -63,8 +62,8 @@ struct Item
     bool mGap; // set apart from the item above
 };
 
-const s32 kMaxItems = 12;
-const wchar_t* const kTitles[kNumPages] = {L"OPTIONS", L"SCREEN", L"VIEW", L"GRAPHICS", L"CONTROLS", L"CONTROLS"};
+const s32 kMaxItems = 15;
+const wchar_t* const kTitles[kNumPages] = {L"OPTIONS", L"SCREEN", L"VIEW", L"GRAPHICS", L"CONTROLS"};
 
 const s32 kNumControls = 12;
 const s32 kDefaultControls[kNumControls] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGHT, DIK_LCONTROL, DIK_RETURN,
@@ -72,7 +71,6 @@ const s32 kDefaultControls[kNumControls] = {DIK_UP, DIK_DOWN, DIK_LEFT, DIK_RIGH
 const wchar_t* const kControlNames[kNumControls] = {L"FORWARD", L"BACKWARD", L"LEFT", L"RIGHT", L"ATTACK",
                                                     L"ENTER OR EXIT", L"JUMP OR BRAKE", L"PREVIOUS WEAPON",
                                                     L"NEXT WEAPON", L"SPECIAL 1", L"SPECIAL 2", L"SPECIAL 3"};
-const s32 kOnFirstPage = 8;
 // Pad binding codes (compat/src/pad.cpp): buttons 0 to 11, then the stick and d-pad directions.
 const wchar_t* const kPadButtonNames[12] = {L"A", L"B", L"X", L"Y", L"LB", L"RB", L"BACK", L"START", L"L3", L"R3", L"LT", L"RT"};
 const s32 kPadB = 1;
@@ -111,15 +109,6 @@ s32 AddSettings(Item* pItems, s32 n, const PortSettings::Id* pIds, s32 count, bo
     return n;
 }
 
-s32 AddBindings(Item* pItems, s32 n, s32 first, s32 last)
-{
-    for (s32 i = first; i < last; i++)
-    {
-        pItems[n++] = Item{kBinding, i, false};
-    }
-    return n;
-}
-
 s32 Items(Page page, Item* pItems)
 {
     const bool inGame = port_GameRunning();
@@ -150,16 +139,14 @@ s32 Items(Page page, Item* pItems)
             n = AddSettings(pItems, n, PortSettings::kGraphics, PortSettings::kNumGraphics, false);
             pItems[n++] = Item{kBack, 0, true};
             break;
-        case kControlsPage:
-            n = AddBindings(pItems, n, 0, kOnFirstPage);
+        default:
+            for (s32 i = 0; i < kNumControls; i++)
+            {
+                pItems[n++] = Item{kBinding, i, false};
+            }
 #if defined(GTA2_PORT_SDL)
             pItems[n++] = Item{kSetting, PortSettings::kControls, true};
 #endif
-            pItems[n++] = Item{kGoTo, kControls2Page, true};
-            pItems[n++] = Item{kBack, 0, false};
-            break;
-        default:
-            n = AddBindings(pItems, n, kOnFirstPage, kNumControls);
             pItems[n++] = Item{kDefaultKeys, 0, true};
             pItems[n++] = Item{kBack, 0, false};
             break;
@@ -172,7 +159,7 @@ const wchar_t* EnglishName(const Item& item)
     switch (item.mKind)
     {
         case kGoTo:
-            return item.mArg == kControls2Page ? L"MORE" : kTitles[item.mArg];
+            return kTitles[item.mArg];
         case kSetting:
             return PortSettings::Name(static_cast<PortSettings::Id>(item.mArg));
         case kBinding:
@@ -344,7 +331,7 @@ s32 FrontendKeyPressed()
 
 void GoTo(Page page)
 {
-    if (page == kControlsPage && sPage == kMainPage)
+    if (page == kControlsPage)
     {
         sColumn = PadMode() ? 1 : 0;
     }
@@ -358,7 +345,7 @@ Result Back()
     {
         return kClosed;
     }
-    sPage = sPage == kControls2Page ? kControlsPage : kMainPage;
+    sPage = kMainPage;
     return kWentBack;
 }
 
@@ -575,7 +562,7 @@ void GetLayout(Layout* pLayout)
     }
     Item* pItems = pLayout->mItems;
     const s32 count = Items(sPage, pItems);
-    const bool controls = sPage == kControlsPage || sPage == kControls2Page;
+    const bool controls = sPage == kControlsPage;
 #if defined(GTA2_PORT_SDL)
     const bool padColumn = controls;
 #else
