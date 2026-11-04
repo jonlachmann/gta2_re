@@ -2,7 +2,8 @@
 //   GTA2_INPUT=<frame>:<key>[:<frames held>],...   SDL key names ("Return", "Down", "Escape", "A"),
 //                                                   "Alt+" for the Alt modifier ("Alt+Return"),
 //                                                   "pad.<button>" or "pad.<axis>+/-" for a virtual
-//                                                   gamepad ("pad.a", "pad.dpup", "pad.leftx-"),
+//                                                   gamepad ("pad.a", "pad.dpup", "pad.leftx-", or
+//                                                   "pad.rightx=0.5" for part of an axis' range),
 //                                                   or the mouse: "mouse.<x>x<y>" moves it to that
 //                                                   window position, "mouse.left" and "mouse.right"
 //                                                   click, "mouse.wheelup" and "mouse.wheeldown" turn
@@ -142,7 +143,14 @@ void Load()
             int axis = -1;
             Sint16 value = 0;
             int button = -1;
-            if (!name.empty() && (name.back() == '+' || name.back() == '-'))
+            const size_t equals = name.find('=');
+            if (equals != std::string::npos)
+            {
+                value = static_cast<Sint16>(atof(name.c_str() + equals + 1) * 32767.0);
+                name.resize(equals);
+                axis = SDL_GetGamepadAxisFromString(name.c_str());
+            }
+            else if (!name.empty() && (name.back() == '+' || name.back() == '-'))
             {
                 value = name.back() == '+' ? 32767 : -32768;
                 name.pop_back();
