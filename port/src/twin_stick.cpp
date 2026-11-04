@@ -70,10 +70,15 @@ s32 Diff(s32 a, s32 b)
     return ((a - b) % 1440 + 2160) % 1440 - 720;
 }
 
-Ped* PlayerPed()
+Ped* ControlledPed()
 {
     Player* pPlayer = gGame_0x40 && !gFrontend && gGame_0x40->mNumPlayers == 1 ? gGame_0x40->mLocalPlayer : NULL;
-    return pPlayer && PortSettings::TwinStick() && !pPlayer->mDisableAllControls && pPlayer->mCameraMode == 0 ? pPlayer->mPlayerPed : NULL;
+    return pPlayer && !pPlayer->mDisableAllControls && pPlayer->mCameraMode == 0 ? pPlayer->mPlayerPed : NULL;
+}
+
+Ped* PlayerPed()
+{
+    return PortSettings::TwinStick() ? ControlledPed() : NULL;
 }
 
 Ped* OnFootPed()
@@ -237,6 +242,12 @@ bool Looking()
     return sLookX || sLookY;
 }
 } // namespace PortTwinStick
+
+bool port_Driving()
+{
+    Ped* pPed = PortTwinStick::ControlledPed();
+    return pPed && pPed->get_car();
+}
 
 int port_TwinStick()
 {

@@ -41,6 +41,9 @@ Settings live in `gta2_registry.ini` (the registry keys of the Windows game). Al
 between window and full screen. Every gamepad drives the player (only those whose name contains
 `GTA2_GAMEPAD` if set): a button counts on any of them, the sticks are those of the pad used last.
 Bind them in the game's control options (stick and d-pad are the two axes).
+In a vehicle, with FORWARD and BACKWARD on the pad's up and down (the default), RT accelerates, LT brakes
+or reverses, the left stick only steers and the d-pad works as on foot; SPECIAL 2 (the camera pan, LT
+by default) is then on L3, unless a control uses it.
 The menus also take the mouse: pointing selects, a click enters or changes a value, the right
 button goes back, the wheel changes a value; the cursor shows while the mouse is in use over a menu.
 Each control has a key, a second key (ALTERNATE: a key, a mouse button or a wheel notch, by default

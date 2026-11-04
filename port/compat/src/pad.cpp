@@ -223,6 +223,21 @@ void Tap(DWORD dik)
     port_PushKey(dik, false);
 }
 
+// In a vehicle: RT accelerates and LT brakes or reverses, as do the d-pad's up and down, and the stick only
+// steers. The triggers' own controls give them up, SPECIAL 2 (the camera pan) to L3 if no control uses it.
+bool CarPadDown(int control, int code, bool l3Free)
+{
+    if (control < 2)
+    {
+        return Button(control ? SDL_GAMEPAD_BUTTON_DPAD_DOWN : SDL_GAMEPAD_BUTTON_DPAD_UP) || CodeDown(control ? 10 : 11);
+    }
+    if (code == 10 || code == 11)
+    {
+        return control == 10 && l3Free && CodeDown(8);
+    }
+    return CodeDown(code);
+}
+
 // A stick within its dead zone (a quarter of its range) is centred.
 void Stick(SDL_GamepadAxis x, SDL_GamepadAxis y, float* pX, float* pY)
 {
@@ -525,12 +540,19 @@ void port_UpdatePad()
     }
     const bool quitShown = inGame && port_QuitMessageShown();
     const int twin = inGame && !quitShown ? port_TwinStick() : 0;
+    // The vehicle's triggers, unless FORWARD or BACKWARD has a pad input of the player's choice.
+    const bool car = inGame && !quitShown && port_Driving() && port_GetPadBinding(0) == kPadUp && port_GetPadBinding(1) == kPadDown;
+    bool l3Free = true;
+    for (int i = 0; i < kNumControls; i++)
+    {
+        l3Free = l3Free && port_GetPadBinding(i) != 8;
+    }
     for (int i = 0; i < kNumControls; i++)
     {
         // TWIN STICK on foot: the stick, d-pad and movement second keys move (port_TwinStickInput), RT attacks.
         const int code = port_GetPadBinding(i);
         const bool move = twin == 1 && i < 4;
-        const bool pad = CodeDown(code) && !(twin == 1 && code == 11);
+        const bool pad = car ? CarPadDown(i, code, l3Free) : CodeDown(code) && !(twin == 1 && code == 11);
         const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11)));
         Press(i, inGame && !quitShown && down);
     }
