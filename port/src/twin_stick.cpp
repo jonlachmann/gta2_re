@@ -25,10 +25,13 @@ namespace
 const s32 kTurnStep = 96;
 // A released stick's aim holds for these steps, as its reticle fades.
 const s32 kAimSteps = 10;
-// The pad's reticle, in blocks from the ped.
-const f32 kReticleDistance = 3.0f;
+// The pad's reticle: from this part of the half screen height away from the ped at the dead zone's edge, out to
+// as far as the screen's centre is from its edge (the mouse's reach) with the stick pushed fully, by the deflection
+// to the power 1.5; it follows the stick by this part per step. The camera's look-ahead never changes the reach.
+const f32 kMinReach = 0.2f;
+const f32 kPadFollow = 0.5f;
 // AIM CAMERA: the look-ahead is this times the aim's offset on screen from the centre (the stick's
-// deflection as a part of the half height), further while Shift or R3 is held, at most this many half
+// reticle's offset from the ped), further while Shift, LT or R3 is held, at most this many half
 // heights (the player stays on screen); it follows by this part per step.
 const f32 kLook = 0.45f;
 const f32 kLookFurther = 2.5f;
@@ -41,8 +44,8 @@ s32 sMove;
 bool sMouse;
 s32 sAim;
 s32 sAimSteps;
-f32 sStickX; // the right stick, screen-relative
-f32 sStickY;
+f32 sPadX; // the pad's reticle on screen from the ped, in pixels
+f32 sPadY;
 f32 sLookX; // in blocks
 f32 sLookY;
 
@@ -62,6 +65,19 @@ s32 WorldAngle(f32 x, f32 y)
 {
     const f32 yaw = PortView::Yaw(1.0f) * (3.14159265f / 720.0f);
     return Angle(cosf(yaw) * x + sinf(yaw) * y, cosf(yaw) * y - sinf(yaw) * x);
+}
+
+// From the screen's centre along (dx, dy) to its edge, less a margin.
+f32 EdgeReach(f32 dx, f32 dy)
+{
+    const f32 x = static_cast<f32>(gViewCamera->mScreenPxCenterX);
+    const f32 y = static_cast<f32>(gViewCamera->mScreenPxCenterY);
+    const f32 margin = 0.05f * gViewCamera->mScreenPxHeight;
+    const f32 w = static_cast<f32>(gViewCamera->mScreenPxWidth) - margin;
+    const f32 h = static_cast<f32>(gViewCamera->mScreenPxHeight) - margin;
+    const f32 tx = dx > 0 ? (w - x) / dx : (dx < 0 ? (margin - x) / dx : 1e9f);
+    const f32 ty = dy > 0 ? (h - y) / dy : (dy < 0 ? (margin - y) / dy : 1e9f);
+    return fmaxf(fminf(tx, ty), 0.0f);
 }
 
 // From b to a, -720 to 719.
@@ -100,8 +116,6 @@ void PedControls(Player* pPlayer, Ped* pPed)
     const Sprite* pSprite = pPed->GetSprite();
     f32 mx, my, ax, ay;
     sMouse = port_TwinStickInput(&mx, &my, &ax, &ay);
-    sStickX = ax;
-    sStickY = ay;
     // The movement keys too: forward is up the screen.
     mx += pPlayer->mNowRightPressed - pPlayer->mNowLeftPressed;
     my += pPlayer->mNowDownPressed - pPlayer->mNowForwardPressed;
@@ -115,9 +129,19 @@ void PedControls(Player* pPlayer, Ped* pPed)
         sAim = Angle(x - ToF(pSprite->mXy.x), y - ToF(pSprite->mXy.y));
         sAimSteps = kAimSteps;
     }
-    else if (ax || ay)
+    else if ((ax || ay) && gViewCamera)
     {
-        sAim = WorldAngle(ax, ay);
+        f32 x, y;
+        PortView::GroundToScreen(ToF(pSprite->mXy.x), ToF(pSprite->mXy.y), ToF(pSprite->mZpos), &x, &y);
+        const f32 m = sqrtf(ax * ax + ay * ay);
+        const f32 t = fminf((m - 0.25f) / 0.75f, 1.0f);
+        const f32 min = kMinReach * gViewCamera->mScreenPxCenterY;
+        const f32 reach = fmaxf(EdgeReach(ax / m, ay / m), min);
+        const f32 r = min + (reach - min) * t * sqrtf(t);
+        sPadX += (ax / m * r - sPadX) * kPadFollow;
+        sPadY += (ay / m * r - sPadY) * kPadFollow;
+        PortView::ScreenToGround(x + sPadX, y + sPadY, ToF(pSprite->mZpos), &x, &y);
+        sAim = Angle(x - ToF(pSprite->mXy.x), y - ToF(pSprite->mXy.y));
         sAimSteps = kAimSteps;
     }
     else if (sAimSteps > 0)
@@ -175,16 +199,9 @@ void DrawReticle()
     else
     {
         const Sprite* pSprite = pPed->GetSprite();
-        const Ang16 aim(sAim);
-        f32 px, py;
-        PortView::GroundToScreen(ToF(pSprite->mXy.x), ToF(pSprite->mXy.y), ToF(pSprite->mZpos), &px, &py);
-        PortView::GroundToScreen(ToF(pSprite->mXy.x) + kReticleDistance * ToF(Ang16::sine(aim)),
-                                 ToF(pSprite->mXy.y) + kReticleDistance * ToF(Ang16::cosine(aim)), ToF(pSprite->mZpos), &x, &y);
-        // Closer in when zoomed in: within 3/4 of the half height from the ped.
-        const f32 length = sqrtf((x - px) * (x - px) + (y - py) * (y - py));
-        const f32 k = length > 0.75f * gViewCamera->mScreenPxCenterY ? 0.75f * gViewCamera->mScreenPxCenterY / length : 1.0f;
-        x = px + (x - px) * k;
-        y = py + (y - py) * k;
+        PortView::GroundToScreen(ToF(pSprite->mXy.x), ToF(pSprite->mXy.y), ToF(pSprite->mZpos), &x, &y);
+        x += sPadX;
+        y += sPadY;
     }
     port_DrawReticle(x, y, 18.0f * ToF(gViewCamera->mUiScale), sMouse ? 1.0f : static_cast<f32>(sAimSteps) / kAimSteps);
 #endif
@@ -205,8 +222,8 @@ void AimCamera(Camera* pCamera, Ped* pPed, Fix16& x, Fix16& y)
         const f32 z = ToF(pPed->GetSprite()->mZpos);
         const f32 cx = static_cast<f32>(gViewCamera->mScreenPxCenterX);
         const f32 cy = static_cast<f32>(gViewCamera->mScreenPxCenterY);
-        f32 sx = cx + sStickX * cy;
-        f32 sy = cy + sStickY * cy;
+        f32 sx = sAimSteps ? cx + sPadX : cx;
+        f32 sy = sAimSteps ? cy + sPadY : cy;
         if (sMouse)
         {
             port_MousePos(&sx, &sy);
