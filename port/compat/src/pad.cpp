@@ -293,6 +293,12 @@ void port_PadVehicleInput(float* pForward, float* pBackward, float* pSteer)
     *pSteer = sCarSteer;
 }
 
+// TWIN STICK on foot, with SPECIAL 2 on its default LT: LT looks further instead.
+static bool LtLooks()
+{
+    return port_TwinStick() == 1 && port_GetPadBinding(10) == 10;
+}
+
 bool port_LookFurther()
 {
     bool r3 = CodeDown(9);
@@ -300,7 +306,7 @@ bool port_LookFurther()
     {
         r3 = r3 && port_GetPadBinding(i) != 9;
     }
-    return sKeyDown[DIK_LSHIFT] || r3;
+    return sKeyDown[DIK_LSHIFT] || r3 || (LtLooks() && CodeDown(10));
 }
 
 // The gamepads not open yet, or only those whose name contains $GTA2_GAMEPAD.
@@ -581,6 +587,7 @@ void port_UpdatePad()
     {
         l3Free = l3Free && port_GetPadBinding(i) != 8;
     }
+    const bool lt = LtLooks();
     const auto key = [](int control) { return sKeyDown[KeyFor(control)] || AltDown(control); };
     const Sint16 x = Axis(SDL_GAMEPAD_AXIS_LEFTX);
     const bool steerFull = key(2) || key(3) || Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
@@ -594,7 +601,7 @@ void port_UpdatePad()
         // TWIN STICK on foot: the stick, d-pad and movement second keys move (port_TwinStickInput), RT attacks.
         const int code = port_GetPadBinding(i);
         const bool move = twin == 1 && i < 4;
-        const bool pad = car ? CarPadDown(i, code, l3Free) : CodeDown(code) && !(twin == 1 && code == 11);
+        const bool pad = car ? CarPadDown(i, code, l3Free) : CodeDown(code) && !(twin == 1 && (code == 11 || (code == 10 && lt)));
         const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11)));
         Press(i, inGame && !quitShown && down);
     }
