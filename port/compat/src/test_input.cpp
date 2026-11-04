@@ -3,7 +3,8 @@
 //                                                   "Alt+" for the Alt modifier ("Alt+Return"),
 //                                                   "pad.<button>" or "pad.<axis>+/-" for a virtual
 //                                                   gamepad ("pad.a", "pad.dpup", "pad.leftx-", or
-//                                                   "pad.rightx=0.5" for part of an axis' range),
+//                                                   "pad.rightx=0.5" for part of an axis' range;
+//                                                   "pad2." for a second one, the first then idle),
 //                                                   or the mouse: "mouse.<x>x<y>" moves it to that
 //                                                   window position, "mouse.left" and "mouse.right"
 //                                                   click, "mouse.wheelup" and "mouse.wheeldown" turn
@@ -33,23 +34,24 @@ struct KeyEvent
     Uint32 mMouseEvent; // the mouse or focus event, 0 for a key or the pad
     float mX;           // motion: the position; button: which; wheel: the notches
     float mY;
+    int mPad = 0;
 };
 
-SDL_Joystick* sPad;
+SDL_Joystick* sPads[2];
 
-// The virtual gamepad exists before the game enumerates its DirectInput devices.
-void AttachPad()
+// The virtual gamepads exist before the game enumerates its DirectInput devices.
+void AttachPad(int pad)
 {
     SDL_VirtualJoystickDesc desc;
     SDL_INIT_INTERFACE(&desc);
     desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
     desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
     desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
-    desc.name = "GTA2 test pad";
-    SDL_setenv_unsafe("GTA2_GAMEPAD", desc.name, 1);
+    desc.name = pad ? "GTA2 test pad 2" : "GTA2 test pad";
+    SDL_setenv_unsafe("GTA2_GAMEPAD", "GTA2 test pad", 1);
     const SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
-    sPad = id ? SDL_OpenJoystick(id) : NULL;
-    if (!sPad)
+    sPads[pad] = id ? SDL_OpenJoystick(id) : NULL;
+    if (!sPads[pad])
     {
         SDL_Log("GTA2_INPUT: no virtual gamepad: %s", SDL_GetError());
     }
@@ -137,9 +139,10 @@ void Load()
             Events().push_back(e);
             continue;
         }
-        if (key.compare(0, 4, "pad.") == 0)
+        const int pad = key.compare(0, 5, "pad2.") == 0 ? 1 : 0;
+        if (key.compare(0, 4, "pad.") == 0 || pad)
         {
-            std::string name = key.substr(4);
+            std::string name = key.substr(pad ? 5 : 4);
             int axis = -1;
             Sint16 value = 0;
             int button = -1;
@@ -165,12 +168,15 @@ void Load()
                 SDL_Log("GTA2_INPUT: unknown pad input %s", key.c_str());
                 continue;
             }
-            if (!sPad)
+            for (int i = 0; i <= pad; i++)
             {
-                AttachPad();
+                if (!sPads[i])
+                {
+                    AttachPad(i);
+                }
             }
-            Events().push_back(KeyEvent{frame, SDL_SCANCODE_UNKNOWN, mod, true, button, axis, value, 0, 0, 0});
-            Events().push_back(KeyEvent{frame + held, SDL_SCANCODE_UNKNOWN, mod, false, button, axis, 0, 0, 0, 0});
+            Events().push_back(KeyEvent{frame, SDL_SCANCODE_UNKNOWN, mod, true, button, axis, value, 0, 0, 0, pad});
+            Events().push_back(KeyEvent{frame + held, SDL_SCANCODE_UNKNOWN, mod, false, button, axis, 0, 0, 0, 0, pad});
             continue;
         }
         const SDL_Scancode sc = SDL_GetScancodeFromName(key.c_str());
@@ -259,13 +265,14 @@ void port_InjectTestInput(unsigned frame)
         {
             if (it->mPadAxis >= 0)
             {
-                SDL_SetJoystickVirtualAxis(sPad, it->mPadAxis, it->mAxisValue);
+                SDL_SetJoystickVirtualAxis(sPads[it->mPad], it->mPadAxis, it->mAxisValue);
             }
             else
             {
-                SDL_SetJoystickVirtualButton(sPad, it->mPadButton, it->mDown);
+                SDL_SetJoystickVirtualButton(sPads[it->mPad], it->mPadButton, it->mDown);
             }
-            SDL_Log("test input: frame %u pad %d/%d %s", frame, it->mPadButton, it->mPadAxis, it->mDown ? "down" : "up");
+            SDL_Log("test input: frame %u pad%d %d/%d %s", frame, it->mPad + 1, it->mPadButton, it->mPadAxis,
+                    it->mDown ? "down" : "up");
             it = Events().erase(it);
             continue;
         }
