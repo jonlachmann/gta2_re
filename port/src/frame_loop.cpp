@@ -137,6 +137,8 @@ void ApplySettings()
         const char* pTrace = getenv("GTA2_LOOP_TRACE");
         spTrace = pTrace && *pTrace ? fopen(pTrace, "w") : NULL;
         sStats = getenv("GTA2_LOOP_STATS") != NULL;
+        // Otherwise only the frontend's options menu hands them to the renderer, and skip_frontend never builds it.
+        PortSettings::ApplyRenderOptions();
     }
 }
 
