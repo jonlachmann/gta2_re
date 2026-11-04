@@ -145,6 +145,7 @@ void Load()
             std::string name = key.substr(pad ? 5 : 4);
             int axis = -1;
             Sint16 value = 0;
+            Sint16 rest = 0;
             int button = -1;
             const size_t equals = name.find('=');
             if (equals != std::string::npos)
@@ -168,6 +169,12 @@ void Load()
                 SDL_Log("GTA2_INPUT: unknown pad input %s", key.c_str());
                 continue;
             }
+            // SDL reads a virtual trigger's whole range, -32768 to 32767, as 0 to 32767.
+            if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
+            {
+                value = static_cast<Sint16>(value * 2 - 32767 > -32768 ? value * 2 - 32767 : -32768);
+                rest = -32768;
+            }
             for (int i = 0; i <= pad; i++)
             {
                 if (!sPads[i])
@@ -176,7 +183,7 @@ void Load()
                 }
             }
             Events().push_back(KeyEvent{frame, SDL_SCANCODE_UNKNOWN, mod, true, button, axis, value, 0, 0, 0, pad});
-            Events().push_back(KeyEvent{frame + held, SDL_SCANCODE_UNKNOWN, mod, false, button, axis, 0, 0, 0, 0, pad});
+            Events().push_back(KeyEvent{frame + held, SDL_SCANCODE_UNKNOWN, mod, false, button, axis, rest, 0, 0, 0, pad});
             continue;
         }
         const SDL_Scancode sc = SDL_GetScancodeFromName(key.c_str());
