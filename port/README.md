@@ -52,14 +52,14 @@ WASD by their position (ZQSD on AZERTY) to move, F to enter or exit, the left bu
 wheel to change weapons; Delete clears it) and a gamepad input.
 CONTROLS on the controls page chooses how the player walks on foot: CLASSIC, the original's tank
 controls, or TWIN STICK, which moves and aims apart, both relative to the screen (the CHINATOWN camera's
-turn included). The left stick, the d-pad or the movement keys walk; the right stick aims (its aim holds
-a moment once released, its reticle shows three blocks ahead), or the mouse does (confined to the window,
+turn included). The left stick, the d-pad or the movement keys walk; the right stick aims (its reticle
+further out the more it is pushed, up to the screen's edge, and held a moment once released), or the mouse does (confined to the window,
 a reticle in place of the cursor). RT attacks, the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
 animation, as the original's back key).
 AIM CAMERA (on by default) moves the view toward the aim on foot, about a third of the way to the
-cursor or as far as the right stick is pushed; held, left Shift or R3 (unless a control is bound to it)
-looks further, as far as keeps the player on screen.
+cursor or the pad's reticle; held, left Shift, LT (instead of SPECIAL 2, while that keeps its default LT)
+or R3 (unless a control is bound to it) looks further, as far as keeps the player on screen.
 In vehicles the controls stay classic; the stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
