@@ -97,6 +97,9 @@ bool port_MenuUsesMouse(); // the frontend or the pause menu
 int port_TwinStick();
 // The local player with the controls on, in a vehicle, in either CONTROLS style.
 bool port_Driving();
+// The player's vehicle: how far RT, LT and the stick press FORWARD, BACKWARD and the steering, 0 to 1, 1 for
+// a key or the d-pad (pad.cpp).
+void port_PadVehicleInput(float* pForward, float* pBackward, float* pSteer);
 
 // Every SDL event, as the message loop pumps them.
 void port_OnInputEvent(const SDL_Event& e);

@@ -22,6 +22,10 @@
 #include "block_face.hpp"
 #include "car_surface_type_more.hpp"
 
+#if defined(GTA2_PORT_SDL)
+void port_PadVehicleInput(float* pForward, float* pBackward, float* pSteer);
+#endif
+
 // Forward declarations: the functions below are in address order
 EXPORT s32 __stdcall get_skid_obj_type(s32 surface, Fix16 skid_len);
 static inline Fix16 __stdcall DotProductOOL_49E500(const Fix16_Point& Vector1, const Fix16_Point& Vector2);
@@ -3325,6 +3329,17 @@ void CarPhysics::ApplyThrottleInput()
             this->mGasPedal = kFpZero;
         }
     }
+#if defined(GTA2_PORT_SDL)
+    // A trigger pressed part way stops the player's pedal at that part of its travel once the car rolls: from a
+    // standstill it goes all the way, as a car only starts past about two thirds of it.
+    float forward, backward, steer;
+    port_PadVehicleInput(&forward, &backward, &steer);
+    const Fix16 cap = kFpFive * Fix16(mIsForwardGasOn ? forward : backward);
+    if (mpCar->mPedType == ped_type::player_2 && (mIsForwardGasOn || mIsBackwardGasOn) && !mLinvel1.IsNull() && mGasPedal > cap)
+    {
+        mGasPedal = cap;
+    }
+#endif
 }
 
 MATCH_FUNC(0x5624f0)
@@ -3342,6 +3357,16 @@ void CarPhysics::ApplyBrakePhysics()
         {
             mBrakePressure = kBrakePressureMax; // 0x4000 fp16
         }
+#if defined(GTA2_PORT_SDL)
+        // A trigger pressed part way brakes the player's car that much.
+        float forward, backward, steer;
+        port_PadVehicleInput(&forward, &backward, &steer);
+        const Fix16 cap = kBrakePressureMax * Fix16(forward < backward ? forward : backward);
+        if (mpCar->mPedType == ped_type::player_2 && mBrakePressure > cap)
+        {
+            mBrakePressure = cap;
+        }
+#endif
         sBrakeForce = mBrakePressure * gCarInfo_48->mBrakeFriction;
     }
 }
@@ -3378,6 +3403,12 @@ void CarPhysics::UpdateSteeringAngle()
             speed_factor = kFpQuarter_6FE374;
         }
         mPointingAngRad = GetScaledTurnRatio(speed_factor / (kFpPoint6 * kFpPoint8), mTurnDirection);
+#if defined(GTA2_PORT_SDL)
+        // The stick pushed part way steers that much.
+        float forward, backward, steer;
+        port_PadVehicleInput(&forward, &backward, &steer);
+        mPointingAngRad = mPointingAngRad * Fix16(steer);
+#endif
     }
 }
 

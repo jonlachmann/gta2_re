@@ -223,19 +223,46 @@ void Tap(DWORD dik)
     port_PushKey(dik, false);
 }
 
+// In a vehicle the triggers and the stick's X count past these, and give the physics how far past.
+const Sint16 kTriggerDeadZone = 2600;
+const Sint16 kStickDeadZone = 8192;
+float sCarForward = 1.0f;
+float sCarBackward = 1.0f;
+float sCarSteer = 1.0f;
+
+// 0 at the dead zone, 1 at the end of the travel.
+float Beyond(Sint16 value, Sint16 deadZone)
+{
+    const float t = ((value < 0 ? -value : value) - deadZone) / static_cast<float>(32767 - deadZone);
+    return t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+}
+
 // In a vehicle: RT accelerates and LT brakes or reverses, as do the d-pad's up and down, and the stick only
 // steers. The triggers' own controls give them up, SPECIAL 2 (the camera pan) to L3 if no control uses it.
 bool CarPadDown(int control, int code, bool l3Free)
 {
     if (control < 2)
     {
-        return Button(control ? SDL_GAMEPAD_BUTTON_DPAD_DOWN : SDL_GAMEPAD_BUTTON_DPAD_UP) || CodeDown(control ? 10 : 11);
+        return Button(control ? SDL_GAMEPAD_BUTTON_DPAD_DOWN : SDL_GAMEPAD_BUTTON_DPAD_UP) ||
+            Axis(control ? SDL_GAMEPAD_AXIS_LEFT_TRIGGER : SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerDeadZone;
+    }
+    if (code == kPadLeft || code == kPadRight)
+    {
+        const Sint16 x = Axis(SDL_GAMEPAD_AXIS_LEFTX);
+        return Button(code == kPadLeft ? SDL_GAMEPAD_BUTTON_DPAD_LEFT : SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
+            (code == kPadLeft ? x < -kStickDeadZone : x > kStickDeadZone);
     }
     if (code == 10 || code == 11)
     {
         return control == 10 && l3Free && CodeDown(8);
     }
     return CodeDown(code);
+}
+
+// A trigger's or the stick's part of the way, 1 while a key or the d-pad presses the control too.
+float CarAnalog(bool full, Sint16 value, Sint16 deadZone)
+{
+    return full || value <= deadZone ? 1.0f : Beyond(value, deadZone);
 }
 
 // A stick within its dead zone (a quarter of its range) is centred.
@@ -257,6 +284,13 @@ bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAim
     *pMoveX += (Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || AltDown(3)) - (Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || AltDown(2));
     *pMoveY += (Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || AltDown(1)) - (Button(SDL_GAMEPAD_BUTTON_DPAD_UP) || AltDown(0));
     return sMouseAims;
+}
+
+void port_PadVehicleInput(float* pForward, float* pBackward, float* pSteer)
+{
+    *pForward = sCarForward;
+    *pBackward = sCarBackward;
+    *pSteer = sCarSteer;
 }
 
 bool port_LookFurther()
@@ -547,6 +581,14 @@ void port_UpdatePad()
     {
         l3Free = l3Free && port_GetPadBinding(i) != 8;
     }
+    const auto key = [](int control) { return sKeyDown[KeyFor(control)] || AltDown(control); };
+    const Sint16 x = Axis(SDL_GAMEPAD_AXIS_LEFTX);
+    const bool steerFull = key(2) || key(3) || Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+    const float steer = CarAnalog(steerFull, x < 0 ? static_cast<Sint16>(-(x + 1)) : x, kStickDeadZone);
+    sCarForward = CarAnalog(!car || key(0) || Button(SDL_GAMEPAD_BUTTON_DPAD_UP), Axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER), kTriggerDeadZone);
+    sCarBackward = CarAnalog(!car || key(1) || Button(SDL_GAMEPAD_BUTTON_DPAD_DOWN), Axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), kTriggerDeadZone);
+    // From three fifths of the wheels' turn: less, a car at town speeds slides sideways without turning.
+    sCarSteer = car && steer < 1.0f ? 0.6f + 0.4f * steer : 1.0f;
     for (int i = 0; i < kNumControls; i++)
     {
         // TWIN STICK on foot: the stick, d-pad and movement second keys move (port_TwinStickInput), RT attacks.
