@@ -152,6 +152,9 @@ s32 Items(Page page, Item* pItems)
             break;
         case kControlsPage:
             n = AddBindings(pItems, n, 0, kOnFirstPage);
+#if defined(GTA2_PORT_SDL)
+            pItems[n++] = Item{kSetting, PortSettings::kControls, true};
+#endif
             pItems[n++] = Item{kGoTo, kControls2Page, true};
             pItems[n++] = Item{kBack, 0, false};
             break;
