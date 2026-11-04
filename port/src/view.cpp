@@ -8,6 +8,7 @@
 #include "Player.hpp"
 #include "ang16.hpp"
 #include "settings.hpp"
+#include "twin_stick.hpp"
 #include "sprite.hpp"
 #include <math.h>
 #include <string.h>
@@ -182,12 +183,14 @@ void Lead(Camera* pCamera)
     const f32 py = ToF(pCamera->mPanY) * scale / ToF(pCamera->mScreenScale.y);
     const f32 limit = kMaxLead * pCamera->mScreenPxHeight / 2;
     // The look-ahead's length straight down the screen (up when backing): the car stays put as the world turns.
-    const f32 lx = 0.0f;
+    // On foot, the aim camera's look-ahead stays as the game camera has it, only tilted.
+    const bool look = !pPed->get_car() && PortTwinStick::Looking();
+    const f32 lx = look ? sCos * ox - sSin * oy + px : 0.0f;
     const f32 length = sqrtf((ox + px) * (ox + px) + (oy + py) * (oy + py));
     const f32 facing = (ox + px) * Ang16::sine(pSprite->mRotation).ToFloat() + (oy + py) * Ang16::cosine(pSprite->mRotation).ToFloat();
     f32 side = length > 1.0f ? -3.0f * facing / length : 1.0f;
     side = side < -1.0f ? -1.0f : (side > 1.0f ? 1.0f : side);
-    const f32 ly = (length < limit ? length : limit) * side;
+    const f32 ly = look ? sSin * ox + sCos * oy + py : (length < limit ? length : limit) * side;
     const f32 dx = sCos * ox - sSin * oy - (lx - px);
     sMarkerDepth = depth;
     // Tilted, the subject seen as far below the centre as unturned: the eye goes back by depth * tan(pitch).

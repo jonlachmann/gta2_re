@@ -14,6 +14,7 @@
 bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY);
 void port_MousePos(float* pX, float* pY);
 void port_DrawReticle(f32 x, f32 y, f32 size, f32 alpha);
+bool port_LookFurther();
 #endif
 
 namespace PortTwinStick
@@ -26,12 +27,24 @@ const s32 kTurnStep = 96;
 const s32 kAimSteps = 10;
 // The pad's reticle, in blocks from the ped.
 const f32 kReticleDistance = 3.0f;
+// AIM CAMERA: the look-ahead is this times the aim's offset on screen from the centre (the stick's
+// deflection as a part of the half height), further while Shift or R3 is held, at most this many half
+// heights (the player stays on screen); it follows by this part per step.
+const f32 kLook = 0.45f;
+const f32 kLookFurther = 2.5f;
+const f32 kMaxLook = 0.6f;
+const f32 kMaxLookFurther = 0.9f;
+const f32 kLookFollow = 0.12f;
 
 Char* spWalker; // the ped walking this step, along sMove
 s32 sMove;
 bool sMouse;
 s32 sAim;
 s32 sAimSteps;
+f32 sStickX; // the right stick, screen-relative
+f32 sStickY;
+f32 sLookX; // in blocks
+f32 sLookY;
 
 f32 ToF(Fix16 v)
 {
@@ -82,6 +95,8 @@ void PedControls(Player* pPlayer, Ped* pPed)
     const Sprite* pSprite = pPed->GetSprite();
     f32 mx, my, ax, ay;
     sMouse = port_TwinStickInput(&mx, &my, &ax, &ay);
+    sStickX = ax;
+    sStickY = ay;
     // The movement keys too: forward is up the screen.
     mx += pPlayer->mNowRightPressed - pPlayer->mNowLeftPressed;
     my += pPlayer->mNowDownPressed - pPlayer->mNowForwardPressed;
@@ -168,6 +183,58 @@ void DrawReticle()
     }
     port_DrawReticle(x, y, 18.0f * ToF(gViewCamera->mUiScale), sMouse ? 1.0f : static_cast<f32>(sAimSteps) / kAimSteps);
 #endif
+}
+void AimCamera(Camera* pCamera, Ped* pPed, Fix16& x, Fix16& y)
+{
+#if defined(GTA2_PORT_SDL)
+    Player* pPlayer = gGame_0x40 ? gGame_0x40->mLocalPlayer : NULL;
+    if (!pPlayer || pCamera != &pPlayer->mGameCamera || !gViewCamera)
+    {
+        return;
+    }
+    f32 wantX = 0.0f;
+    f32 wantY = 0.0f;
+    if (PortSettings::AimCamera() && pPed == OnFootPed())
+    {
+        // Measured on the screen, not from the aim's world point, which moves with the camera.
+        const f32 z = ToF(pPed->GetSprite()->mZpos);
+        const f32 cx = static_cast<f32>(gViewCamera->mScreenPxCenterX);
+        const f32 cy = static_cast<f32>(gViewCamera->mScreenPxCenterY);
+        f32 sx = cx + sStickX * cy;
+        f32 sy = cy + sStickY * cy;
+        if (sMouse)
+        {
+            port_MousePos(&sx, &sy);
+        }
+        f32 x0, y0, x1, y1, tx, ty;
+        PortView::ScreenToGround(cx, cy, z, &x0, &y0);
+        PortView::ScreenToGround(sx, sy, z, &x1, &y1);
+        PortView::ScreenToGround(cx, 0.0f, z, &tx, &ty);
+        const bool further = port_LookFurther();
+        wantX = (x1 - x0) * (further ? kLookFurther : kLook);
+        wantY = (y1 - y0) * (further ? kLookFurther : kLook);
+        const f32 length = sqrtf(wantX * wantX + wantY * wantY);
+        const f32 max = sqrtf((tx - x0) * (tx - x0) + (ty - y0) * (ty - y0)) * (further ? kMaxLookFurther : kMaxLook);
+        wantX = length > max ? wantX * max / length : wantX;
+        wantY = length > max ? wantY * max / length : wantY;
+    }
+    sLookX += (wantX - sLookX) * kLookFollow;
+    sLookY += (wantY - sLookY) * kLookFollow;
+    if (!wantX && !wantY && sLookX * sLookX + sLookY * sLookY < 1e-4f)
+    {
+        sLookX = sLookY = 0.0f;
+    }
+    if (Looking())
+    {
+        x += Fix16(sLookX);
+        y += Fix16(sLookY);
+    }
+#endif
+}
+
+bool Looking()
+{
+    return sLookX || sLookY;
 }
 } // namespace PortTwinStick
 

@@ -5,6 +5,7 @@
 
 #include "ang16.hpp"
 
+class Camera;
 class Char;
 class Ped;
 class Player;
@@ -17,4 +18,8 @@ void PedControls(Player* pPlayer, Ped* pPed);
 bool Walk(Char* pChar, Ang16* pFacing);
 // With the HUD.
 void DrawReticle();
+// AIM CAMERA: after Camera::ApplyPanOffset in Camera::UpdateFollowPedCamera, the target moved toward the aim.
+void AimCamera(Camera* pCamera, Ped* pPed, Fix16& x, Fix16& y);
+// The aim camera's look-ahead is on the view (gone back to 0 once it is off).
+bool Looking();
 } // namespace PortTwinStick

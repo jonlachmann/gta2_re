@@ -9,6 +9,9 @@
 #include "Ped.hpp"
 #include "Police.hpp"
 #include "sprite.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/twin_stick.hpp"
+#endif
 
 // Forward declarations: the functions below are in address order
 EXPORT void __stdcall SmoothApproach(Fix16& Coord_1, Fix16& Velocity_1, Fix16& Coord_2, Fix16& Velocity_2, Fix16& Velocity_3);
@@ -676,6 +679,9 @@ void Camera::UpdateFollowPedCamera(Ped* pPed)
             zoom = kDefaultZoom;
         }
         Camera::ApplyPanOffset(pPed, xpos, ypos, zposToUse);
+#if defined(GTA2_PORT)
+        PortTwinStick::AimCamera(this, pPed, xpos, ypos);
+#endif
         SetPendingTarget(xpos, ypos, zposToUse, zoom);
     }
 }
