@@ -20,6 +20,9 @@ bool Walk(Char* pChar, Ang16* pFacing);
 // In Car::HandleUserInput, unless SPECIAL turns the roof gun: the player's fire truck, tank or gun jeep
 // turns its roof gun toward the aim.
 void AimTurret(Car* pCar);
+// In Ped::ComputeAimAngle: true if the player's machine guns fire where he faces, without the original's
+// lock on a ped near the line of fire.
+bool FreeAim(const Ped* pPed);
 // With the HUD.
 void DrawReticle();
 // AIM CAMERA: after Camera::ApplyPanOffset in Camera::UpdateFollowPedCamera, the target moved toward the aim.

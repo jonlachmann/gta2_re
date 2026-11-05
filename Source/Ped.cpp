@@ -1,4 +1,7 @@
 #include "Ped.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/twin_stick.hpp"
+#endif
 #include "ped_move_target_type.hpp"
 #include "ped_attack_target_type.hpp"
 #include "ped_class.hpp"
@@ -1535,6 +1538,13 @@ Ang16 Ped::ComputeAimAngle()
 {
     if (PedTypeIs(ped_type::player_2))
     {
+#if defined(GTA2_PORT)
+        if (PortTwinStick::FreeAim(this))
+        {
+            mTargetFacingAngle = mFacingAngle;
+            return mTargetFacingAngle;
+        }
+#endif
         Ped* best = gThreateningPedsList.FindClosestPedInViewCone(this->mCam.x,
                                                                   this->mCam.y,
                                                                   this->mFacingAngle,

@@ -231,6 +231,11 @@ void AimTurret(Car* pCar)
 #endif
 }
 
+bool FreeAim(const Ped* pPed)
+{
+    return pPed == OnFootPed();
+}
+
 void DrawReticle()
 {
 #if defined(GTA2_PORT_SDL)
