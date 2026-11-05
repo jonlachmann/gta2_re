@@ -61,8 +61,9 @@ AIM CAMERA (on by default) moves the view toward the aim on foot, about a third 
 cursor or the pad's reticle; held, left Shift, LT (instead of SPECIAL 2, while that keeps its default LT)
 or R3 (unless a control is bound to it) looks further, as far as keeps the player on screen.
 In vehicles the controls stay classic, but the fire truck's, the tank's and the gun jeep's roof gun turns
-toward the mouse or the right stick's reticle at the original's turret speed; ATTACK fires it as before, and
-SPECIAL with left or right still turns it while held. The stick and mouse are not recorded in replays.
+toward the mouse or the right stick's reticle at the original's turret speed; ATTACK fires it as before, RB
+too (instead of NEXT WEAPON, while that keeps its default RB), and SPECIAL with left or right still turns it
+while held. The stick and mouse are not recorded in replays.
 Movies are skipped. Renderer options are in `gta2gl.ini` (`renderer/gta2gl.ini.example`);
 Scroll Lock toggles them.
 

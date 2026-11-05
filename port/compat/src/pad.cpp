@@ -588,6 +588,8 @@ void port_UpdatePad()
         l3Free = l3Free && port_GetPadBinding(i) != 8;
     }
     const bool lt = LtLooks();
+    // TWIN STICK in a vehicle with a roof gun: RB fires, so the thumb stays on the aiming stick.
+    const bool rbFires = twin == 2 && port_TwinStickAims() && port_GetPadBinding(8) == 5;
     const auto key = [](int control) { return sKeyDown[KeyFor(control)] || AltDown(control); };
     const Sint16 x = Axis(SDL_GAMEPAD_AXIS_LEFTX);
     const bool steerFull = key(2) || key(3) || Button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || Button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
@@ -601,8 +603,9 @@ void port_UpdatePad()
         // TWIN STICK on foot: the stick, d-pad and movement second keys move (port_TwinStickInput), RT attacks.
         const int code = port_GetPadBinding(i);
         const bool move = twin == 1 && i < 4;
-        const bool pad = car ? CarPadDown(i, code, l3Free) : CodeDown(code) && !(twin == 1 && (code == 11 || (code == 10 && lt)));
-        const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11)));
+        const bool pad = (car ? CarPadDown(i, code, l3Free) : CodeDown(code) && !(twin == 1 && (code == 11 || (code == 10 && lt)))) &&
+            !(rbFires && code == 5);
+        const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11)) || (rbFires && i == 4 && CodeDown(5)));
         Press(i, inGame && !quitShown && down);
     }
     if (inGame)
