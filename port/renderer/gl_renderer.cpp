@@ -118,7 +118,7 @@ const char* kSceneFS =
     "layout(std140) uniform Lights\n"
     "{\n"
     "    vec4 uLightPos[256];\n" // xyz, radius
-    "    vec4 uLightCol[256];\n" // rgb * brightness, 1 / radius
+    "    vec4 uLightCol[256];\n" // rgb * brightness, the height it fades out above
     "    vec4 uLightDir[256];\n" // beam direction xy, width, 1 for a beam
     "};\n"
     "in vec4 vCol;\n"
@@ -143,7 +143,9 @@ const char* kSceneFS =
     "        if (d2 <= r * r)\n"
     "        {\n"
     "            float dist = sqrt(d2);\n"
-    "            float att = (r - dist) * uLightCol[i].w;\n"
+    "            float att = (r - dist) / max(r, 1e-6);\n"
+    // As BelowCeiling in gbh_api.cpp.
+    "            float below = 1.0 - smoothstep(uLightCol[i].w, uLightCol[i].w + 0.4, vWorld.z);\n"
     "            vec4 s = uLightDir[i];\n"
     // As Beam in gbh_api.cpp.
     "            float along = dot(d.xy, s.xy);\n"
@@ -151,10 +153,10 @@ const char* kSceneFS =
     "            float sigma = s.z + 0.58 * ahead;\n"
     "            float cone = exp(-ahead / (0.33 * r)) * exp(-max(dot(d.xy, d.xy) - along * along, 0.0) / (2.0 * sigma * sigma));\n"
     "            float glow = exp(-dot(d.xy, d.xy) / 0.0288);\n"
-    "            float beam = smoothstep(-0.02, 0.08, along) * (1.0 - smoothstep(0.7 * r, r, along)) * (cone + glow);\n"
+    "            float beam = smoothstep(-0.02, 0.08, along) * (1.0 - smoothstep(0.7 * r, r, along)) * (cone + glow) * below;\n"
     // A little of a beam's light is added as haze, on top of lighting the texture.
     "            if (s.w > 0.0) { spots += uLightCol[i].rgb * beam; gHaze += uLightCol[i].rgb * beam * 0.12; }\n"
-    "            else if (att > 0.0) acc += uLightCol[i].rgb * att;\n"
+    "            else if (att > 0.0) acc += uLightCol[i].rgb * att * below;\n"
     "        }\n"
     "    }\n"
     "    return acc + min(spots, vec3(0.6));\n" // kSpotCap in gbh_api.cpp
@@ -990,7 +992,7 @@ void GLRenderer::SetLights(const RLight* pLights, s32 count, const f32* pAmbient
         f32* pos = &data[i * 4];
         f32* col = &data[kMaxLights * 4 + i * 4];
         pos[0] = l.x, pos[1] = l.y, pos[2] = l.z, pos[3] = l.radius;
-        col[0] = l.r, col[1] = l.g, col[2] = l.b, col[3] = l.invRadius;
+        col[0] = l.r, col[1] = l.g, col[2] = l.b, col[3] = l.ceiling;
         f32* dir = &data[kMaxLights * 8 + i * 4];
         dir[0] = l.dx, dir[1] = l.dy, dir[2] = l.width, dir[3] = l.beam;
     }

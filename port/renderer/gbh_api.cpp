@@ -70,6 +70,7 @@ struct LightInternal
     f32 mX, mY, mZ;
     f32 mR, mG, mB;
     f32 mDx, mDy, mWidth, mBeam;
+    f32 mCeiling; // the height its light fades out above (port_LampLight)
 };
 
 IRenderer* gRenderer;
@@ -78,6 +79,8 @@ PalEntry* gPals[16384];
 std::vector<ImageEntry> gImages;
 LightInternal gLights[256];
 u32 gNumLights;
+// Whether the last gbh_AddLight found room, for port_LampLight.
+bool gLightAdded;
 // Red, green and blue; tinted only by port_SetAmbient.
 f32 gAmbient[3] = {255.0f, 255.0f, 255.0f};
 // The game's and the port's lights scaled by it (the DAY-NIGHT CYCLE's fade).
@@ -339,7 +342,7 @@ void UploadLights()
         RLight& o = sLights[n++];
         o.x = l.mX, o.y = l.mY, o.z = l.mZ;
         o.radius = l.mRadius;
-        o.invRadius = l.mInvRadius;
+        o.ceiling = l.mCeiling;
         o.r = l.mR * l.mBrightness, o.g = l.mG * l.mBrightness, o.b = l.mB * l.mBrightness;
         o.dx = l.mDx, o.dy = l.mDy, o.width = l.mWidth, o.beam = l.mBeam;
     }
@@ -412,6 +415,14 @@ f32 Cap(f32 v)
     return v > kSpotCap ? kSpotCap : v;
 }
 
+// A light is gone this far above its ceiling (also in the shader's LightSum).
+const f32 kCeilingFade = 0.4f;
+
+f32 BelowCeiling(const LightInternal& light, f32 z)
+{
+    return 1.0f - SmoothStep((z - light.mCeiling) / kCeilingFade);
+}
+
 // The ambient light on a colour channel. As the lights fade out (the DAY-NIGHT CYCLE's day) it takes on the
 // unlit colour, so that at full ambient it draws as unlit.
 f32 Ambient(s32 i, u32 channel)
@@ -443,7 +454,7 @@ u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
         if (att > 0.0f)
         {
             const bool spot = light.mBeam > 0.0f;
-            const f32 k = light.mBrightness * (spot ? Beam(light, dx, dy) : att);
+            const f32 k = light.mBrightness * (spot ? Beam(light, dx, dy) : att) * BelowCeiling(light, vert.z);
             (spot ? sr : lr) += light.mR * k;
             (spot ? sg : lg) += light.mG * k;
             (spot ? sb : lb) += light.mB * k;
@@ -1074,7 +1085,8 @@ GBH_EXPORT void GTA2_CC gbh_ResetLights()
 
 GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
 {
-    if (gNumLights >= 256)
+    gLightAdded = gNumLights < 256;
+    if (!gLightAdded)
     {
         return 0;
     }
@@ -1094,16 +1106,22 @@ GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
     l.mRadiusSquared = l.mRadius * l.mRadius;
     l.mInvRadius = l.mRadius > 0.0f ? 1.0f / l.mRadius : 0.0f;
     l.mDx = l.mDy = l.mWidth = l.mBeam = 0.0f;
+    l.mCeiling = 1e6f;
     return idx * 0x2C;
 }
 
-// The port's headlights: the last light added becomes a beam along (dx, dy), its range the light's radius.
-void port_BeamLight(f32 dx, f32 dy, f32 width)
+// The port's lamps, near the ground: the last light added lights little more than half a block above it (not
+// a bridge over a car), and becomes a beam along (dx, dy) when width > 0, its range the light's radius.
+void port_LampLight(f32 dx, f32 dy, f32 width)
 {
-    if (gNumLights)
+    if (gLightAdded)
     {
         LightInternal& l = gLights[gNumLights - 1];
-        l.mDx = dx, l.mDy = dy, l.mWidth = width, l.mBeam = 1.0f;
+        l.mCeiling = l.mZ + 0.5f;
+        if (width > 0.0f)
+        {
+            l.mDx = dx, l.mDy = dy, l.mWidth = width, l.mBeam = 1.0f;
+        }
     }
 }
 

@@ -34,7 +34,7 @@ struct RLight
 {
     f32 x, y, z;
     f32 radius;
-    f32 invRadius;
+    f32 ceiling; // the height its light fades out above
     f32 r, g, b; // colour times brightness
     f32 dx, dy;              // a beam's direction on the ground
     f32 width, beam;         // a beam's gaussian sigma at the lamp, and 1 for a beam, 0 for a point light

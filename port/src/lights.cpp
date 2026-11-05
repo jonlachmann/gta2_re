@@ -22,7 +22,7 @@
 #include <string.h>
 
 #if defined(GTA2_PORT_SDL)
-void port_BeamLight(f32 dx, f32 dy, f32 width);
+void port_LampLight(f32 dx, f32 dy, f32 width);
 #endif
 
 namespace PortLights
@@ -108,7 +108,7 @@ bool LampPosition(Sprite* pSprite, u8 delta, bool mirrored, f32& x, f32& y)
     return true;
 }
 // One light as Light.cpp submits the game's: bit 16 on, radius in blocks * 32, intensity. A beam along
-// (dx, dy) of that length when width > 0 (port_BeamLight).
+// (dx, dy) of that length when width > 0 (port_LampLight).
 void AddLight(f32 x, f32 y, f32 z, f32 radius, s32 intensity, u32 colour, f32 dx = 0.0f, f32 dy = 0.0f, f32 width = 0.0f)
 {
     if (intensity <= 0 || x < sMinX || x > sMaxX || y < sMinY || y > sMaxY)
@@ -123,10 +123,7 @@ void AddLight(f32 x, f32 y, f32 z, f32 radius, s32 intensity, u32 colour, f32 dx
     light.field_10_colour = colour;
 #if defined(GTA2_PORT_SDL)
     pgbh_AddLight(&light);
-    if (width > 0.0f)
-    {
-        port_BeamLight(dx, dy, width);
-    }
+    port_LampLight(dx, dy, width);
 #else
     // The original renderer has no beams: a point light a third of the range ahead.
     light.field_4_x += dx * radius / 3;
