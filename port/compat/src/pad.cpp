@@ -50,6 +50,8 @@ bool sKeyDown[256]; // by DIK code
 unsigned sButtonsDown; // bit n: SDL mouse button n
 int sAlt[kNumControls];
 bool sAltRead;
+int sPad[kNumControls]; // pad_<n>, read once: port_UpdatePad wants them several times a frame
+bool sPadRead;
 int sWheelCode; // a wheel notch holds its control down for two steps
 unsigned sWheelUntil;
 
@@ -373,15 +375,25 @@ bool port_MouseMode()
 
 int port_GetPadBinding(int control)
 {
-    if (!sMigrated)
+    if (!sPadRead)
     {
-        MigrateBindings();
+        if (!sMigrated)
+        {
+            MigrateBindings();
+        }
+        sPadRead = true;
+        for (int i = 0; i < kNumControls; i++)
+        {
+            sPad[i] = static_cast<int>(ReadControl("pad_%d", i, static_cast<DWORD>(kDefaultPad[i])));
+        }
     }
-    return static_cast<int>(ReadControl("pad_%d", control, static_cast<DWORD>(kDefaultPad[control])));
+    return sPad[control];
 }
 
 void port_SetPadBinding(int control, int code)
 {
+    port_GetPadBinding(control);
+    sPad[control] = code;
     WriteControl("pad_%d", control, static_cast<DWORD>(code));
 }
 
