@@ -6,6 +6,7 @@
 #include "ang16.hpp"
 
 class Camera;
+class Car;
 class Char;
 class Ped;
 class Player;
@@ -16,6 +17,9 @@ namespace PortTwinStick
 void PedControls(Player* pPlayer, Ped* pPed);
 // At the start of Char::UpdateWalking: true if this step walks along the move, the facing to end with in *pFacing.
 bool Walk(Char* pChar, Ang16* pFacing);
+// In Car::HandleUserInput, unless SPECIAL turns the roof gun: the player's fire truck, tank or gun jeep
+// turns its roof gun toward the aim.
+void AimTurret(Car* pCar);
 // With the HUD.
 void DrawReticle();
 // AIM CAMERA: after Camera::ApplyPanOffset in Camera::UpdateFollowPedCamera, the target moved toward the aim.

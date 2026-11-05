@@ -1,5 +1,6 @@
 #include "twin_stick.hpp"
 #include "Camera.hpp"
+#include "Car.hpp"
 #include "Frontend.hpp"
 #include "Game.hpp"
 #include "Ped.hpp"
@@ -23,6 +24,8 @@ namespace
 {
 // The most the stick turns the ped per step, in Ang16 units (24 degrees); the mouse turns it at once.
 const s32 kTurnStep = 96;
+// A roof gun's turn per step, as SPECIAL with left or right (Car::HandleRoofTurretRotation).
+const s32 kTurretStep = 0x14;
 // A released stick's aim holds for these steps, as its reticle fades.
 const s32 kAimSteps = 10;
 // The pad's reticle: from this part of the half screen height away from the ped at the dead zone's edge, out to
@@ -136,6 +139,22 @@ void Aim(const Sprite* pSprite, f32 ax, f32 ay)
     }
 #endif
 }
+
+// The roof gun of the player's fire truck, tank or gun jeep.
+AttachedSprite* Turret(Car* pCar)
+{
+    const s32 model = pCar->IsFireTruck() ? objects::water_cannon_114
+        : (pCar->IsTank() ? objects::tank_cannon_148 : (pCar->IsGunJeep() ? 248 : 0));
+    return model ? pCar->mAttachments.GetSpriteForModel(model) : NULL;
+}
+
+// The sprite the aim starts from: the player on foot, or his vehicle with a roof gun.
+const Sprite* AimFrom()
+{
+    Ped* pPed = PlayerPed();
+    Car* pCar = pPed ? pPed->get_car() : NULL;
+    return pCar ? (Turret(pCar) ? pCar->mCarSprite : NULL) : (pPed && pPed->mGameObject ? pPed->GetSprite() : NULL);
+}
 } // namespace
 
 void PedControls(Player* pPlayer, Ped* pPed)
@@ -190,11 +209,33 @@ bool Walk(Char* pChar, Ang16* pFacing)
     return true;
 }
 
+void AimTurret(Car* pCar)
+{
+#if defined(GTA2_PORT_SDL)
+    AttachedSprite* pTurret = AimFrom() == pCar->mCarSprite ? Turret(pCar) : NULL;
+    if (!pTurret)
+    {
+        return;
+    }
+    f32 mx, my, ax, ay;
+    sMouse = port_TwinStickInput(&mx, &my, &ax, &ay);
+    Aim(pCar->mCarSprite, ax, ay);
+    if (sAimSteps > 0)
+    {
+        // At the original's turn speed. The fire truck's cannon fires backward from its sprite (Weapon.cpp).
+        const s32 back = pCar->IsFireTruck() ? 720 : 0;
+        const s32 turn = Diff(sAim - pCar->mCarSprite->mRotation.rValue - back, pTurret->mOffsetRot.rValue);
+        pTurret->mOffsetRot += Ang16(turn > kTurretStep ? kTurretStep : (turn < -kTurretStep ? -kTurretStep : turn));
+        pCar->mTurretRotated = turn != 0;
+    }
+#endif
+}
+
 void DrawReticle()
 {
 #if defined(GTA2_PORT_SDL)
-    Ped* pPed = OnFootPed();
-    if (!pPed || !gViewCamera || (!sMouse && !sAimSteps))
+    const Sprite* pSprite = AimFrom();
+    if (!pSprite || !gViewCamera || (!sMouse && !sAimSteps))
     {
         return;
     }
@@ -205,7 +246,6 @@ void DrawReticle()
     }
     else
     {
-        const Sprite* pSprite = pPed->GetSprite();
         PortView::GroundToScreen(ToF(pSprite->mXy.x), ToF(pSprite->mXy.y), ToF(pSprite->mZpos), &x, &y);
         x += sPadX;
         y += sPadY;
@@ -271,6 +311,11 @@ bool port_Driving()
 {
     Ped* pPed = PortTwinStick::ControlledPed();
     return pPed && pPed->get_car();
+}
+
+bool port_TwinStickAims()
+{
+    return PortTwinStick::AimFrom() != NULL;
 }
 
 int port_TwinStick()

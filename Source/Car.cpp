@@ -1,4 +1,7 @@
 #include "Car.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/twin_stick.hpp"
+#endif
 #include "car_shop_event.hpp"
 #include "car_thread_trigger.hpp"
 #include "car_impact_mode.hpp"
@@ -4935,6 +4938,12 @@ void Car::HandleUserInput(char_type forward_gas_on,
         // NB: If left is off then right is on
         bRotated = Car::HandleRoofTurretRotation(left_on);
     }
+#if defined(GTA2_PORT)
+    else
+    {
+        PortTwinStick::AimTurret(this);
+    }
+#endif
 
     if (bRotated)
     {
