@@ -42,38 +42,64 @@ const u32 kExhaust = 0xFFFFD8A0;
 u8 sPixels[256 * 256];
 f32 sMinX, sMinY, sMaxX, sMaxY;
 
+// Lamp centres in sprite pixels by delta, as LampPosition finds them; the delta's data identifies it.
+struct LampCentre
+{
+    const void* mpData;
+    u16 mLen;
+    bool mMirrored;
+    bool mFound;
+    s8 mX;
+    s8 mY;
+};
+LampCentre sLampCentres[512];
+
+bool FindLampCentre(const sprite_delta* pDelta, const sprite_index* pIndex, bool mirrored, s8& px, s8& py)
+{
+    LampCentre& c = sLampCentres[((uintptr_t)pDelta->mpData / 4 * 2 + mirrored) % 512];
+    if (c.mpData != pDelta->mpData || c.mLen != pDelta->mLen || c.mMirrored != mirrored)
+    {
+        const s32 size = 256 * pIndex->mHeight;
+        memset(sPixels, 0, size);
+        sprite_delta* pApply = const_cast<sprite_delta*>(pDelta);
+        mirrored ? pApply->ApplyMirroredToPixels(sPixels, pIndex->mWidth) : pApply->ApplyToPixels(sPixels);
+        s32 sumX = 0;
+        s32 sumY = 0;
+        s32 count = 0;
+        for (s32 i = 0; i < size; i++)
+        {
+            if (sPixels[i])
+            {
+                sumX += i & 0xFF;
+                sumY += i >> 8;
+                count++;
+            }
+        }
+        c.mpData = pDelta->mpData;
+        c.mLen = pDelta->mLen;
+        c.mMirrored = mirrored;
+        c.mFound = count != 0;
+        c.mX = count ? static_cast<s8>(sumX / count - pIndex->mWidth / 2) : 0;
+        c.mY = count ? static_cast<s8>(sumY / count - pIndex->mHeight / 2) : 0;
+    }
+    px = c.mX;
+    py = c.mY;
+    return c.mFound;
+}
+
 // A lit lamp's centre on the ground in world units, from the pixels the game's delta draws on the sprite.
 bool LampPosition(Sprite* pSprite, u8 delta, bool mirrored, f32& x, f32& y)
 {
     const u16 spriteIdx = gGtx_0x106C->GetSpriteTrueIndex(pSprite->mSpriteTypeEnum, pSprite->mTypeSpriteIdx);
     sprite_delta* pDelta = gGtx_0x106C->get_delta(spriteIdx, delta);
     const sprite_index* pIndex = gGtx_0x106C->get_sprite_index(spriteIdx);
-    if (!pDelta)
-    {
-        return false;
-    }
-    const s32 size = 256 * pIndex->mHeight;
-    memset(sPixels, 0, size);
-    mirrored ? pDelta->ApplyMirroredToPixels(sPixels, pIndex->mWidth) : pDelta->ApplyToPixels(sPixels);
-    s32 sumX = 0;
-    s32 sumY = 0;
-    s32 count = 0;
-    for (s32 i = 0; i < size; i++)
-    {
-        if (sPixels[i])
-        {
-            sumX += i & 0xFF;
-            sumY += i >> 8;
-            count++;
-        }
-    }
-    if (!count)
+    s8 px;
+    s8 py;
+    if (!pDelta || !FindLampCentre(pDelta, pIndex, mirrored, px, py))
     {
         return false;
     }
     // From the sprite's centre to the world, as Car::GetDoorWorldPos places a door.
-    const s8 px = static_cast<s8>(sumX / count - pIndex->mWidth / 2);
-    const s8 py = static_cast<s8>(sumY / count - pIndex->mHeight / 2);
     Fix16_Point_POD offset;
     offset.SetXY(gPixelsToFix16.SignedPixelsToFix16(px), gPixelsToFix16.SignedPixelsToFix16(py));
     offset.RotateByAngle(pSprite->mRotation);
@@ -113,6 +139,13 @@ void CarLights(Car* pCar, bool headlights, bool effects)
 {
     Sprite* pSprite = pCar->mCarSprite;
     if (!pSprite || pSprite->mZoom)
+    {
+        return;
+    }
+    // Lamps are on the car's sprite, well within two blocks of its centre.
+    const f32 cx = pSprite->mXy.x.ToFloat();
+    const f32 cy = pSprite->mXy.y.ToFloat();
+    if (cx < sMinX - 2.0f || cx > sMaxX + 2.0f || cy < sMinY - 2.0f || cy > sMaxY + 2.0f)
     {
         return;
     }
