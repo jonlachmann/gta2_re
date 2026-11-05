@@ -31,6 +31,7 @@
 #if defined(GTA2_PORT)
 #include "../port/src/shadows.hpp"
 #include "../port/src/day_night.hpp"
+#include "../port/src/twin_stick.hpp"
 #endif
 
 // Forward declarations: the functions below are in address order
@@ -1241,9 +1242,15 @@ void Sprite::Draw()
         pShadowVerts[2].y += shadow_offset;
         pShadowVerts[3].y += shadow_offset;
 
+#if defined(GTA2_PORT)
+        if (!PortTwinStick::DrawLegs(this, pTexture, 8576, pShadowVerts, 4))
+#endif
         pgbh_DrawQuad(8576, pTexture, pShadowVerts, 255);
     }
 
+#if defined(GTA2_PORT)
+    if (!PortTwinStick::DrawLegs(this, pTexture, Sprite::ComputeDrawFlags(), gSpriteVerts, 8))
+#endif
     pgbh_DrawQuad(Sprite::ComputeDrawFlags(), pTexture, gSpriteVerts, 255);
 
 #if defined(GTA2_PORT)

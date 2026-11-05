@@ -5,6 +5,7 @@
 #include "gbh_graphics.hpp"
 #include "map_0x370.hpp"
 #include "sprite.hpp"
+#include "twin_stick.hpp"
 
 #if defined(GTA2_PORT_SDL)
 bool port_SoftShadows();
@@ -63,7 +64,10 @@ bool Draw(Sprite* pSprite, STexture* pTexture)
         v.y = scale * (world.y - pCam->mCurPos.mY.ToFloat()) * v.z + static_cast<u32>(pCam->mScreenPxCenterY);
         v.diff = 0xA0000000 | (blur << 16);
     }
-    pgbh_DrawQuad(kShadowFlags | kSoftShadowFlag, pTexture, verts, 255);
+    if (!PortTwinStick::DrawLegs(pSprite, pTexture, kShadowFlags | kSoftShadowFlag, verts, 8))
+    {
+        pgbh_DrawQuad(kShadowFlags | kSoftShadowFlag, pTexture, verts, 255);
+    }
     return true;
 #else
     return false;

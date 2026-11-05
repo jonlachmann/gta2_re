@@ -10,6 +10,9 @@ class Car;
 class Char;
 class Ped;
 class Player;
+class Sprite;
+struct STexture;
+struct Vert;
 
 namespace PortTwinStick
 {
@@ -17,6 +20,9 @@ namespace PortTwinStick
 void PedControls(Player* pPlayer, Ped* pPed);
 // At the start of Char::UpdateWalking: true if this step walks along the move, the facing to end with in *pFacing.
 bool Walk(Char* pChar, Ang16* pFacing);
+// In Sprite::Draw, for a quad of the sprite (its world corners after it if count is 8): draws the player's walk with the
+// legs turned toward the move and the torso at the facing. False if the quad is drawn as usual.
+bool DrawLegs(const Sprite* pSprite, STexture* pTexture, u32 flags, const Vert* pVerts, s32 count);
 // In Car::HandleUserInput, unless SPECIAL turns the roof gun: the player's fire truck, tank or gun jeep
 // turns its roof gun toward the aim.
 void AimTurret(Car* pCar);
