@@ -389,6 +389,10 @@ void UpdateGameScreenSize()
 {
     if (gGame_0x40)
     {
+#if defined(GTA2_PORT)
+        // The cache keeps one dimension only, which the port's sizes can share (the frontend's 640x480, then 800x480).
+        gCachedScreenDimension = 0;
+#endif
         if (gVidSys->field_40_full_screen == -2)
         {
             if (gCachedScreenDimension != window_width)
