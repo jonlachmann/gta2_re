@@ -425,7 +425,8 @@ VID_EXPORT void GTA2_CC Vid_FlipBuffers(SVideo* pVideo)
         pSys->SetTestFrame(sTestFrame);
         pSys->Renderer().SetSmoothMagnify(port_FrontendActive());
         PollToggleKey(pSys);
-        pSys->Flip();
+        // In game nothing writes the CPU surface (movies play outside games); scanning it is costly on the 3DS.
+        pSys->Flip(!port_GameRunning());
     }
     port_MouseEndFrame();
 }

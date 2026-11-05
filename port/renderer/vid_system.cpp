@@ -262,6 +262,7 @@ void VidSystem::GetSurface()
         if (!mSurfaceClean)
         {
             std::fill(mSurface.begin(), mSurface.end(), kSurfaceKey);
+            mSurfaceClean = true;
         }
         mSurfaceGrabbed = true;
     }
@@ -275,14 +276,14 @@ void VidSystem::FreeSurface()
     mHeader.mVideo.field_4_flags &= ~2u;
 }
 
-void VidSystem::Flip()
+void VidSystem::Flip(bool scanSurface)
 {
     if (!mContext)
     {
         return;
     }
     mFrame++;
-    if (mSurfaceGrabbed)
+    if (mSurfaceGrabbed && scanSurface)
     {
         const u32 key2 = kSurfaceKey | (kSurfaceKey << 16);
         const u32* p = (const u32*)&mSurface[0];
@@ -303,8 +304,8 @@ void VidSystem::Flip()
         {
             mRenderer.CompositeSurface(&mSurface[0], mSurfaceW * 2, mSurfaceW, mSurfaceH, kSurfaceKey);
         }
-        mSurfaceGrabbed = false;
     }
+    mSurfaceGrabbed = false;
 
     const double t0 = mStatsInterval ? Now() : 0.0;
     mRenderer.FinishFrame();
