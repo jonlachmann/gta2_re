@@ -102,25 +102,11 @@ Ped* OnFootPed()
     Ped* pPed = PlayerPed();
     return pPed && pPed->mGameObject && !pPed->get_car() ? pPed : NULL;
 }
-} // namespace
 
-void PedControls(Player* pPlayer, Ped* pPed)
+// The aim from pSprite this step, into sAim and sAimSteps: the mouse, the right stick, or the stick's last aim.
+void Aim(const Sprite* pSprite, f32 ax, f32 ay)
 {
-    spWalker = NULL;
 #if defined(GTA2_PORT_SDL)
-    if (!pPed || pPed != OnFootPed())
-    {
-        return;
-    }
-    Char* pChar = pPed->mGameObject;
-    const Sprite* pSprite = pPed->GetSprite();
-    f32 mx, my, ax, ay;
-    sMouse = port_TwinStickInput(&mx, &my, &ax, &ay);
-    // The movement keys too: forward is up the screen.
-    mx += pPlayer->mNowRightPressed - pPlayer->mNowLeftPressed;
-    my += pPlayer->mNowDownPressed - pPlayer->mNowForwardPressed;
-    const bool moving = mx * mx + my * my > 0.01f;
-    const s32 move = moving ? WorldAngle(mx, my) : 0;
     if (sMouse)
     {
         f32 x, y;
@@ -148,6 +134,27 @@ void PedControls(Player* pPlayer, Ped* pPed)
     {
         sAimSteps--;
     }
+#endif
+}
+} // namespace
+
+void PedControls(Player* pPlayer, Ped* pPed)
+{
+    spWalker = NULL;
+#if defined(GTA2_PORT_SDL)
+    if (!pPed || pPed != OnFootPed())
+    {
+        return;
+    }
+    Char* pChar = pPed->mGameObject;
+    f32 mx, my, ax, ay;
+    sMouse = port_TwinStickInput(&mx, &my, &ax, &ay);
+    // The movement keys too: forward is up the screen.
+    mx += pPlayer->mNowRightPressed - pPlayer->mNowLeftPressed;
+    my += pPlayer->mNowDownPressed - pPlayer->mNowForwardPressed;
+    const bool moving = mx * mx + my * my > 0.01f;
+    const s32 move = moving ? WorldAngle(mx, my) : 0;
+    Aim(pPed->GetSprite(), ax, ay);
     const bool aiming = sAimSteps > 0;
     const s32 rotation = pChar->mRotation.rValue;
     s32 turn = aiming || moving ? Diff(aiming ? sAim : move, rotation) : 0;
