@@ -319,23 +319,91 @@ bool StreamFrame(Stream* s, u32 f, float* pL, float* pR)
     return true;
 }
 
-float SampleValue(const Sample* s, u32 frame, int channel)
+// The value at a data index: 16-bit signed, or 8-bit with flip8 0x80 for unsigned data.
+template <bool k16>
+float SampleValue(const u8* pData, u32 idx, u8 flip8)
 {
-    const bool stereo = (s->mFormat & DIG_F_STEREO_MASK) != 0;
-    const bool b16 = (s->mFormat & DIG_F_16BITS_MASK) != 0;
-    const u32 idx = frame * (stereo ? 2 : 1) + (stereo ? channel : 0);
-    if (b16)
+    if (k16)
     {
-        return (s16)Rd16(s->mData + idx * 2) / 32768.0f;
+        Uint16 v;
+        SDL_memcpy(&v, pData + idx * 2, 2);
+        return (s16)SDL_Swap16LE(v) / 32768.0f;
     }
-    const u8 v = s->mData[idx];
-    return s->mSigned8 ? (s8)v / 128.0f : (v - 128) / 128.0f;
+    return (s8)(pData[idx] ^ flip8) / 128.0f;
 }
 
 u32 SampleFrames(const Sample* s)
 {
     const int frameBytes = ((s->mFormat & DIG_F_STEREO_MASK) ? 2 : 1) * ((s->mFormat & DIG_F_16BITS_MASK) ? 2 : 1);
     return s->mLen / frameBytes;
+}
+
+// The mixing loop for one data format, on local copies of the sample's state. kSteady: neither fading out
+// nor ramping, the gains already at their targets.
+template <bool kStereo, bool k16, bool kSteady>
+void MixSampleAs(Sample* s, float* out, int frames, u32 loopStart, u32 loopEnd, float left, float right)
+{
+    const double step = (double)s->mRate / kOutRate;
+    const u8* pData = s->mData;
+    const u8 flip8 = s->mSigned8 ? 0 : 0x80;
+    double pos = s->mPos;
+    float gainL = s->mGain[0];
+    float gainR = s->mGain[1];
+    int fadeLeft = s->mFade;
+    for (int i = 0; i < frames; i++)
+    {
+        float fade = 1.0f;
+        if (!kSteady)
+        {
+            if (!FadeStep(&fadeLeft, &fade))
+            {
+                s->mStatus = SMP_DONE;
+                break;
+            }
+            gainL = Ramp(gainL, left);
+            gainR = Ramp(gainR, right);
+        }
+        u32 f = (u32)pos;
+        if (f >= loopEnd)
+        {
+            if (s->mLoopCount == 1)
+            {
+                s->mStatus = SMP_DONE;
+                break;
+            }
+            if (s->mLoopCount > 1)
+            {
+                s->mLoopCount--;
+            }
+            pos = loopStart + (pos - loopEnd);
+            f = (u32)pos;
+            if (f >= loopEnd)
+            {
+                s->mStatus = SMP_DONE;
+                break;
+            }
+        }
+        const float t = (float)(pos - f);
+        const u32 f2 = f + 1 < loopEnd ? f + 1 : f;
+        float l;
+        float r;
+        if (kStereo)
+        {
+            l = SampleValue<k16>(pData, f * 2, flip8) * (1 - t) + SampleValue<k16>(pData, f2 * 2, flip8) * t;
+            r = SampleValue<k16>(pData, f * 2 + 1, flip8) * (1 - t) + SampleValue<k16>(pData, f2 * 2 + 1, flip8) * t;
+        }
+        else
+        {
+            l = r = SampleValue<k16>(pData, f, flip8) * (1 - t) + SampleValue<k16>(pData, f2, flip8) * t;
+        }
+        out[i * 2] += l * gainL * fade;
+        out[i * 2 + 1] += r * gainR * fade;
+        pos += step;
+    }
+    s->mPos = pos;
+    s->mGain[0] = gainL;
+    s->mGain[1] = gainR;
+    s->mFade = fadeLeft;
 }
 
 void MixSample(Sample* s, float* out, int frames)
@@ -346,51 +414,26 @@ void MixSample(Sample* s, float* out, int frames)
         s->mStatus = SMP_DONE;
         return;
     }
-    const int frameBytes = ((s->mFormat & DIG_F_STEREO_MASK) ? 2 : 1) * ((s->mFormat & DIG_F_16BITS_MASK) ? 2 : 1);
+    const bool stereo = (s->mFormat & DIG_F_STEREO_MASK) != 0;
+    const bool b16 = (s->mFormat & DIG_F_16BITS_MASK) != 0;
+    const int frameBytes = (stereo ? 2 : 1) * (b16 ? 2 : 1);
     const u32 loopStart = SDL_min((u32)SDL_max(s->mLoopStart, 0) / frameBytes, total);
     const u32 loopEnd = s->mLoopEnd < 0 ? total : SDL_min((u32)s->mLoopEnd / frameBytes, total);
-    const double step = (double)s->mRate / kOutRate;
     const float vol = s->mVolume / 127.0f * sDriver->mMasterVolume / 127.0f;
     const float left = vol * SDL_min(1.0f, (127 - s->mPan) / 63.5f);
     const float right = vol * SDL_min(1.0f, s->mPan / 63.5f);
-    for (int i = 0; i < frames; i++)
+    void (*mix)(Sample*, float*, int, u32, u32, float, float);
+    if (s->mFade < 0 && s->mGain[0] == left && s->mGain[1] == right)
     {
-        float fade;
-        if (!FadeStep(&s->mFade, &fade))
-        {
-            s->mStatus = SMP_DONE;
-            return;
-        }
-        s->mGain[0] = Ramp(s->mGain[0], left);
-        s->mGain[1] = Ramp(s->mGain[1], right);
-        u32 f = (u32)s->mPos;
-        if (f >= loopEnd)
-        {
-            if (s->mLoopCount == 1)
-            {
-                s->mStatus = SMP_DONE;
-                return;
-            }
-            if (s->mLoopCount > 1)
-            {
-                s->mLoopCount--;
-            }
-            s->mPos = loopStart + (s->mPos - loopEnd);
-            f = (u32)s->mPos;
-            if (f >= loopEnd)
-            {
-                s->mStatus = SMP_DONE;
-                return;
-            }
-        }
-        const float t = (float)(s->mPos - f);
-        const u32 f2 = f + 1 < loopEnd ? f + 1 : f;
-        const float l = SampleValue(s, f, 0) * (1 - t) + SampleValue(s, f2, 0) * t;
-        const float r = SampleValue(s, f, 1) * (1 - t) + SampleValue(s, f2, 1) * t;
-        out[i * 2] += l * s->mGain[0] * fade;
-        out[i * 2 + 1] += r * s->mGain[1] * fade;
-        s->mPos += step;
+        mix = stereo ? (b16 ? MixSampleAs<true, true, true> : MixSampleAs<true, false, true>)
+                     : (b16 ? MixSampleAs<false, true, true> : MixSampleAs<false, false, true>);
     }
+    else
+    {
+        mix = stereo ? (b16 ? MixSampleAs<true, true, false> : MixSampleAs<true, false, false>)
+                     : (b16 ? MixSampleAs<false, true, false> : MixSampleAs<false, false, false>);
+    }
+    mix(s, out, frames, loopStart, loopEnd, left, right);
 }
 
 void MixStream(Stream* s, float* out, int frames)
