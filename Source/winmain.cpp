@@ -441,6 +441,10 @@ EXPORT void __stdcall Init_FrameRateLightingAndExplodingScores()
     }
 
     bExplodingScoresOff = gRegistry.Get_Screen_Setting("exploding_on", 1) != 1;
+#if defined(GTA2_PORT)
+    // The port's BLOOD option: the pool under the dead, the original's GOREFEST cheat.
+    bDo_blood = gRegistry.Get_Screen_Setting("blood", 1) != 0;
+#endif
 }
 
 MATCH_FUNC(0x5D7C60)

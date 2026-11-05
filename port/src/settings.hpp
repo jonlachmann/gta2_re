@@ -41,6 +41,7 @@ enum Id
     kClock,
     kControls,
     kAimCamera,
+    kBlood,
     kCount,
 };
 
