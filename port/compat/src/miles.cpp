@@ -450,11 +450,13 @@ class Limiter
             const int in = mPos;
             mDelay[in * 2] = p[0];
             mDelay[in * 2 + 1] = p[1];
+            mLoud -= mNeeded[in] < 1.0f;
             mNeeded[in] = peak > kCeiling ? kCeiling / peak : 1.0f;
+            mLoud += mNeeded[in] < 1.0f;
             mPos = (mPos + 1) % kLookahead;
             // A linear ramp down to each gain needed in the lookahead, the oldest frame needing its own.
             float gain = mGain + (1.0f - mGain) * release;
-            for (int k = 0; k < kLookahead; k++)
+            for (int k = 0; mLoud && k < kLookahead; k++)
             {
                 const float needed = mNeeded[(mPos + k) % kLookahead];
                 gain = SDL_min(gain, needed + (1.0f - needed) * k / kLookahead);
@@ -470,6 +472,7 @@ class Limiter
     float mDelay[kLookahead * 2] = {};
     float mNeeded[kLookahead] = {};
     int mPos = 0;
+    int mLoud = kLookahead; // entries of mNeeded below 1: without any, the gain only rises
     float mGain = 1.0f;
 };
 
