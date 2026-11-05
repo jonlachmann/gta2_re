@@ -59,7 +59,14 @@ const SDL_GamepadButton kButtons[] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTT
                                       SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_LEFT_STICK,
                                       SDL_GAMEPAD_BUTTON_RIGHT_STICK};
 
-bool Button(SDL_GamepadButton b)
+// While set (port_UpdatePad, where the pads cannot change), each button and axis is read from SDL once:
+// every read takes SDL's locks, system calls on the 3DS.
+bool sPadCache;
+Uint32 sButtonRead, sButtonDown, sAxisRead;
+Sint16 sAxisValue[SDL_GAMEPAD_AXIS_COUNT];
+static_assert(SDL_GAMEPAD_BUTTON_COUNT <= 32, "one bit per button");
+
+bool ReadButton(SDL_GamepadButton b)
 {
     for (int i = 0; i < sNumGamepads; i++)
     {
@@ -71,9 +78,33 @@ bool Button(SDL_GamepadButton b)
     return false;
 }
 
+bool Button(SDL_GamepadButton b)
+{
+    if (!sPadCache || b < 0 || b >= SDL_GAMEPAD_BUTTON_COUNT)
+    {
+        return ReadButton(b);
+    }
+    const Uint32 bit = 1u << b;
+    if (!(sButtonRead & bit))
+    {
+        sButtonRead |= bit;
+        sButtonDown = ReadButton(b) ? sButtonDown | bit : sButtonDown & ~bit;
+    }
+    return (sButtonDown & bit) != 0;
+}
+
 Sint16 Axis(SDL_GamepadAxis a)
 {
-    return sActivePad ? SDL_GetGamepadAxis(sActivePad, a) : 0;
+    if (!sPadCache || a < 0 || a >= SDL_GAMEPAD_AXIS_COUNT)
+    {
+        return sActivePad ? SDL_GetGamepadAxis(sActivePad, a) : 0;
+    }
+    if (!(sAxisRead & (1u << a)))
+    {
+        sAxisRead |= 1u << a;
+        sAxisValue[a] = sActivePad ? SDL_GetGamepadAxis(sActivePad, a) : 0;
+    }
+    return sAxisValue[a];
 }
 
 // The pad's input makes it the active one, if it is one of ours.
@@ -533,6 +564,16 @@ void port_PadEvent(const SDL_Event& e)
 
 void port_UpdatePad()
 {
+    struct PadCache
+    {
+        PadCache()
+        {
+            sPadCache = true;
+            sButtonRead = 0;
+            sAxisRead = 0;
+        }
+        ~PadCache() { sPadCache = false; }
+    } cache;
     // New presses, for binding capture (Start stays the pause button).
     int codes[kNumControls + 4];
     int n = 0;
