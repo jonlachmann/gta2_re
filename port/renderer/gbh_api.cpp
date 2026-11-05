@@ -430,13 +430,50 @@ f32 Ambient(s32 i, u32 channel)
     return gAmbient[i] - (1.0f - gLightScale) * (255 - channel) * (gAmbient[i] / 255.0f);
 }
 
-u32 LightVertex(const Vert& vert, u8 shade, u32 colour)
+// The lights that can reach a primitive, in their order: those LightVertex skips at every corner are left out.
+u16 gNearLights[256];
+
+u32 NearLights(const Vert* pWorld, s32 count)
 {
-    f32 lr = 0.0f, lg = 0.0f, lb = 0.0f;
-    f32 sr = 0.0f, sg = 0.0f, sb = 0.0f;
+    f32 x0 = pWorld[0].x, x1 = x0, y0 = pWorld[0].y, y1 = y0, z0 = pWorld[0].z, z1 = z0;
+    for (s32 i = 1; i < count; i++)
+    {
+        x0 = pWorld[i].x < x0 ? pWorld[i].x : x0;
+        x1 = pWorld[i].x > x1 ? pWorld[i].x : x1;
+        y0 = pWorld[i].y < y0 ? pWorld[i].y : y0;
+        y1 = pWorld[i].y > y1 ? pWorld[i].y : y1;
+        z0 = pWorld[i].z < z0 ? pWorld[i].z : z0;
+        z1 = pWorld[i].z > z1 ? pWorld[i].z : z1;
+    }
+    u32 n = 0;
     for (u32 j = 0; j < gNumLights; j++)
     {
         const LightInternal& light = gLights[j];
+        if ((light.mFlags & 0x30000) != 0x10000)
+        {
+            continue;
+        }
+        // No corner is nearer on any axis; the margin covers rounding against LightVertex's own distance.
+        const f32 dx = light.mX < x0 ? x0 - light.mX : (light.mX > x1 ? light.mX - x1 : 0.0f);
+        const f32 dy = light.mY < y0 ? y0 - light.mY : (light.mY > y1 ? light.mY - y1 : 0.0f);
+        const f32 dz = light.mZ < z0 ? z0 - light.mZ : (light.mZ > z1 ? light.mZ - z1 : 0.0f);
+        if (dx * dx + dy * dy + dz * dz > light.mRadiusSquared * 1.001f)
+        {
+            continue;
+        }
+        gNearLights[n++] = (u16)j;
+    }
+    return n;
+}
+
+// numNear: the primitive's NearLights.
+u32 LightVertex(const Vert& vert, u8 shade, u32 colour, u32 numNear)
+{
+    f32 lr = 0.0f, lg = 0.0f, lb = 0.0f;
+    f32 sr = 0.0f, sg = 0.0f, sb = 0.0f;
+    for (u32 k = 0; k < numNear; k++)
+    {
+        const LightInternal& light = gLights[gNearLights[k]];
         if ((light.mFlags & 0x30000) != 0x10000)
         {
             continue;
@@ -611,12 +648,13 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
     const bool shadowLit = softShadow && !fullAmbient;
     const bool perPixel = (lit || shadowLit) && gRenderer->Options().mPerPixelLighting;
     u32 unlit[4];
+    const u32 numNear = lit || (shadowLit && !perPixel) ? NearLights(pVerts + 4, count) : 0;
     if (lit)
     {
         for (s32 i = 0; i < count; i++)
         {
             unlit[i] = pVerts[i].diff;
-            pVerts[i].diff = LightVertex(pVerts[i + 4], shade, pVerts[i].diff);
+            pVerts[i].diff = LightVertex(pVerts[i + 4], shade, pVerts[i].diff, numNear);
         }
     }
     else if (shadowLit)
@@ -628,7 +666,7 @@ void RenderVertsUnturned(u32 flags, STexture* pTexture, Vert* pVerts, s32 count,
             unlit[i] = 0xFFFFFFFFu;
             if (!perPixel)
             {
-                const u32 l = LightVertex(pVerts[i + 4], 255, 0xFFFFFFu);
+                const u32 l = LightVertex(pVerts[i + 4], 255, 0xFFFFFFu, numNear);
                 const f32 sum = (f32)(((l >> 16) & 0xFF) + ((l >> 8) & 0xFF) + (l & 0xFF));
                 const f32 ratio = (gAmbient[0] + gAmbient[1] + gAmbient[2]) / (sum > 1.0f ? sum : 1.0f);
                 const u32 a = (u32)((pVerts[i].diff >> 24) * (0.5f + 0.5f * (ratio < 1.0f ? ratio : 1.0f)));
