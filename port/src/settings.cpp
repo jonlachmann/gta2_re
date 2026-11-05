@@ -674,16 +674,23 @@ bool AimCamera()
 {
     return TwinStick() && Screen(kAimCamera) != 0;
 }
+// The menus ask every frame, and an open costs milliseconds on the 3DS's SD card: looked up once per code.
 bool LanguageInstalled(char code)
 {
-    char path[] = "data\\?.gxt";
-    path[5] = code;
-    FILE* pFile = fopen(path, "rb");
-    if (pFile)
+    static char sInstalled[128];
+    char& installed = sInstalled[code & 127];
+    if (!installed)
     {
-        fclose(pFile);
+        char path[] = "data\\?.gxt";
+        path[5] = code;
+        FILE* pFile = fopen(path, "rb");
+        if (pFile)
+        {
+            fclose(pFile);
+        }
+        installed = pFile ? 'y' : 'n';
     }
-    return pFile != NULL;
+    return installed == 'y';
 }
 bool Headlights()
 {
