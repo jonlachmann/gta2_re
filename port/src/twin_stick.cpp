@@ -24,6 +24,10 @@ namespace
 {
 // The most the stick turns the ped per step, in Ang16 units (24 degrees); the mouse turns it at once.
 const s32 kTurnStep = 96;
+// In a jump, the original's turn keys turn the ped by this much more per step, up to the most
+// (kJumpTurnAccel and kMaxJumpTurnSpeed in Player::DoPedControlInputs).
+const s32 kJumpTurnAccel = 4;
+const s32 kMaxJumpTurn = 24;
 // A roof gun's turn per step, as SPECIAL with left or right (Car::HandleRoofTurretRotation).
 const s32 kTurretStep = 0x14;
 // A released stick's aim holds for these steps, as its reticle fades.
@@ -44,6 +48,7 @@ const f32 kLookFollow = 0.12f;
 
 Char* spWalker; // the ped walking this step, along sMove
 s32 sMove;
+s32 sJumpTurn;
 bool sMouse;
 s32 sAim;
 s32 sAimSteps;
@@ -183,8 +188,18 @@ void PedControls(Player* pPlayer, Ped* pPed)
     {
         pChar->mRotation = Ang16(static_cast<s16>(move), 0);
     }
-    // As the original's turn keys: none in a jump, and standing, none that calls off getting in a car.
-    pPlayer->mTurnSpeed = Ang16(jumping || (!moving && pPed->IsPedGoingToEnterCar()) ? 0 : turn);
+    // In a jump the move steers as the original's turn keys do there, without turning past it.
+    s32 jumpTurn = 0;
+    if (jumping && moving)
+    {
+        const s32 diff = Diff(move, pChar->mRotation.rValue);
+        jumpTurn = sJumpTurn + (diff > 0 ? kJumpTurnAccel : -kJumpTurnAccel);
+        jumpTurn = jumpTurn > kMaxJumpTurn ? kMaxJumpTurn : (jumpTurn < -kMaxJumpTurn ? -kMaxJumpTurn : jumpTurn);
+        jumpTurn = (diff >= 0 && jumpTurn > diff) || (diff <= 0 && jumpTurn < diff) ? diff : jumpTurn;
+    }
+    sJumpTurn = jumpTurn;
+    // Standing, no turn that calls off getting in a car.
+    pPlayer->mTurnSpeed = Ang16(jumping ? jumpTurn : (!moving && pPed->IsPedGoingToEnterCar() ? 0 : turn));
     pPlayer->mMoveDirection = Fix16(moving ? 1 : 0);
     if (moving)
     {

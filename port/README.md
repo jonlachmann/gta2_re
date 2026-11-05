@@ -56,7 +56,8 @@ turn included). The left stick, the d-pad or the movement keys walk; the right s
 further out the more it is pushed, up to the screen's edge, and held a moment once released), or the mouse does (confined to the window,
 a reticle in place of the cursor). RT attacks, the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
-animation, as the original's back key). The machine guns fire straight along the aim: the original bends
+animation, as the original's back key). In a jump the move steers him toward its way, as fast as the
+original's left and right turn him in the air. The machine guns fire straight along the aim: the original bends
 their shots toward a ped up to 16 degrees off the line of fire. The electro weapons keep their lock on a target.
 AIM CAMERA (on by default) moves the view toward the aim on foot, about a third of the way to the
 cursor or the pad's reticle; held, left Shift, LT (instead of SPECIAL 2, while that keeps its default LT)
