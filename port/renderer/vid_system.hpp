@@ -65,6 +65,7 @@ class VidSystem
     s32 mSurfaceW;
     s32 mSurfaceH;
     bool mSurfaceGrabbed;
+    bool mSurfaceClean; // holds only kSurfaceKey
     u32 mFrame;
     FrameCapture mCapture;
     bool mCaptureFlips;

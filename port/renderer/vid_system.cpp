@@ -26,7 +26,7 @@ void* LoadGL(const char* name)
 } // namespace
 
 VidSystem::VidSystem()
-    : mContext(0), mEnumIdx(0), mEnumBpp(0), mSurfaceW(0), mSurfaceH(0), mSurfaceGrabbed(false), mFrame(0), mCaptureFlips(false), mTestFrame(0), mCapturedFrame(~0u), mStatsInterval(0), mStatsStart(0), mPresentSeconds(0), mWaitSeconds(0),
+    : mContext(0), mEnumIdx(0), mEnumBpp(0), mSurfaceW(0), mSurfaceH(0), mSurfaceGrabbed(false), mSurfaceClean(false), mFrame(0), mCaptureFlips(false), mTestFrame(0), mCapturedFrame(~0u), mStatsInterval(0), mStatsStart(0), mPresentSeconds(0), mWaitSeconds(0),
       mStatsDraws(0), mStatsUploads(0), mStatsVerts(0)
 {
     memset(&mHeader, 0, sizeof(mHeader));
@@ -247,6 +247,7 @@ void VidSystem::ResizeSurface(s32 width, s32 height)
     mSurfaceW = width;
     mSurfaceH = height;
     mSurface.assign((size_t)width * height, kSurfaceKey);
+    mSurfaceClean = true;
 }
 
 void VidSystem::GetSurface()
@@ -258,7 +259,10 @@ void VidSystem::GetSurface()
     }
     if (!mSurfaceGrabbed)
     {
-        std::fill(mSurface.begin(), mSurface.end(), kSurfaceKey);
+        if (!mSurfaceClean)
+        {
+            std::fill(mSurface.begin(), mSurface.end(), kSurfaceKey);
+        }
         mSurfaceGrabbed = true;
     }
     v.field_50_surface_pixels_ptr = &mSurface[0];
@@ -280,18 +284,21 @@ void VidSystem::Flip()
     mFrame++;
     if (mSurfaceGrabbed)
     {
-        bool dirty = false;
         const u32 key2 = kSurfaceKey | (kSurfaceKey << 16);
         const u32* p = (const u32*)&mSurface[0];
         const size_t n = mSurface.size() / 2;
-        for (size_t i = 0; i < n; i++)
+        size_t i = 0;
+        while (i + 8 <= n && !((p[i] ^ key2) | (p[i + 1] ^ key2) | (p[i + 2] ^ key2) | (p[i + 3] ^ key2) | (p[i + 4] ^ key2) |
+                               (p[i + 5] ^ key2) | (p[i + 6] ^ key2) | (p[i + 7] ^ key2)))
         {
-            if (p[i] != key2)
-            {
-                dirty = true;
-                break;
-            }
+            i += 8;
         }
+        while (i < n && p[i] == key2)
+        {
+            i++;
+        }
+        const bool dirty = i < n;
+        mSurfaceClean = !dirty;
         if (dirty)
         {
             mRenderer.CompositeSurface(&mSurface[0], mSurfaceW * 2, mSurfaceW, mSurfaceH, kSurfaceKey);
