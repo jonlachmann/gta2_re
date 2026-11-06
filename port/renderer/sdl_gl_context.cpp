@@ -8,7 +8,8 @@ namespace
 class SDLGLContext : public IGLContext
 {
   public:
-    SDLGLContext(SDL_Window* pWindow, SDL_GLContext ctx) : mWindow(pWindow), mContext(ctx)
+    SDLGLContext(SDL_Window* pWindow, SDL_GLContext ctx)
+        : mWindow(pWindow), mContext(ctx), mFlush(reinterpret_cast<void (*)()>(SDL_GL_GetProcAddress("glFlush")))
     {
     }
 
@@ -29,6 +30,8 @@ class SDLGLContext : public IGLContext
     void SwapBuffers() override
     {
         PresentLog::BeforeSwap();
+        // SDL's Wayland swap waits for the frame callback before the commands go out: send them first, so the GPU draws during the wait.
+        mFlush();
         SDL_GL_SwapWindow(mWindow);
         PresentLog::AfterSwap();
     }
@@ -40,6 +43,7 @@ class SDLGLContext : public IGLContext
   private:
     SDL_Window* mWindow;
     SDL_GLContext mContext;
+    void (*mFlush)();
 };
 } // namespace
 
