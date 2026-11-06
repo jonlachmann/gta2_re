@@ -26,7 +26,10 @@ struct Entry
     unsigned long long mMsc;
     unsigned mRefreshNs;
     unsigned mFlags; // wp_presentation_feedback.kind: 1 vsync, 2 hw clock, 4 hw completion, 8 zero copy
-    bool mDone;
+    unsigned long long mGpuBeginNs; // when the GPU reached the frame's first and last commands, on our clock; 0 unknown
+    unsigned long long mGpuEndNs;
+    int mGpuSlot; // its timer queries, -1 none
+    bool mDone;   // presentation known
 };
 
 // Totals over the game frames shown since the last summary.
@@ -40,6 +43,8 @@ struct Summary
     unsigned mVsync;
     unsigned mZeroCopy;
     unsigned mRefreshNs;
+    std::vector<double> mGpuMs;          // GPU time of each game frame
+    std::vector<double> mGpuDoneToShown; // from the GPU finishing a game frame to its presentation
     unsigned long long mStartNs;
 };
 
@@ -65,6 +70,103 @@ unsigned long long NowNs()
 #else
     return SDL_GetTicksNS();
 #endif
+}
+
+// GPU timestamps around each frame (GL_EXT_disjoint_timer_query, or timer queries on desktop GL).
+const int kGpuSlots = 512; // more than the swaps that can wait in sPending
+struct
+{
+    void (*GenQueries)(int, unsigned*);
+    void (*QueryCounter)(unsigned, unsigned);
+    void (*GetQueryObjectuiv)(unsigned, unsigned, unsigned*);
+    void (*GetQueryObjectui64v)(unsigned, unsigned, unsigned long long*);
+    void (*GetInteger64v)(unsigned, long long*);
+} gpu;
+const unsigned GL_TIMESTAMP = 0x8E28, GL_QUERY_RESULT = 0x8866, GL_QUERY_RESULT_AVAILABLE = 0x8867;
+bool sGpu;
+unsigned sGpuQueries[kGpuSlots * 2];
+int sGpuBeginSlot = -1; // issued after the last swap, for the next frame
+long long sGpuOffsetNs; // GPU clock minus ours
+unsigned long long sGpuCalibratedNs;
+
+bool HasGlExtension(const char* pName)
+{
+    typedef const unsigned char* (*GetStringi)(unsigned, unsigned);
+    typedef void (*GetIntegerv)(unsigned, int*);
+    GetStringi getStringi = reinterpret_cast<GetStringi>(SDL_GL_GetProcAddress("glGetStringi"));
+    GetIntegerv getIntegerv = reinterpret_cast<GetIntegerv>(SDL_GL_GetProcAddress("glGetIntegerv"));
+    int n = 0;
+    if (getStringi && getIntegerv)
+    {
+        getIntegerv(0x821D /* GL_NUM_EXTENSIONS */, &n);
+    }
+    for (int i = 0; i < n; i++)
+    {
+        const char* pExt = reinterpret_cast<const char*>(getStringi(0x1F03 /* GL_EXTENSIONS */, i));
+        if (pExt && strcmp(pExt, pName) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename T> bool LoadGl(T* pOut, const char* pName, const char* pSuffix)
+{
+    char name[64];
+    SDL_snprintf(name, sizeof(name), "%s%s", pName, pSuffix);
+    *pOut = reinterpret_cast<T>(SDL_GL_GetProcAddress(name));
+    return *pOut != NULL;
+}
+
+void AttachGpu()
+{
+    int profile = 0;
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &profile);
+    const bool es = profile == SDL_GL_CONTEXT_PROFILE_ES;
+    const char* pSuffix = es ? "EXT" : "";
+    sGpu = (!es || HasGlExtension("GL_EXT_disjoint_timer_query")) && LoadGl(&gpu.GenQueries, "glGenQueries", pSuffix) &&
+           LoadGl(&gpu.QueryCounter, "glQueryCounter", pSuffix) && LoadGl(&gpu.GetQueryObjectuiv, "glGetQueryObjectuiv", pSuffix) &&
+           LoadGl(&gpu.GetQueryObjectui64v, "glGetQueryObjectui64v", pSuffix) && LoadGl(&gpu.GetInteger64v, "glGetInteger64v", pSuffix);
+    if (sGpu)
+    {
+        gpu.GenQueries(kGpuSlots * 2, sGpuQueries);
+    }
+}
+
+void CalibrateGpu(unsigned long long now)
+{
+    if (now - sGpuCalibratedNs < 1000000000ull)
+    {
+        return;
+    }
+    sGpuCalibratedNs = now;
+    long long gpuNow = 0;
+    gpu.GetInteger64v(GL_TIMESTAMP, &gpuNow);
+    sGpuOffsetNs = gpuNow - static_cast<long long>(NowNs());
+}
+
+// Reads the entry's GPU times once both queries are done; true when nothing is left to wait for.
+bool ReadGpu(Entry& e, bool wait)
+{
+    if (e.mGpuSlot < 0)
+    {
+        return true;
+    }
+    unsigned available = 0;
+    gpu.GetQueryObjectuiv(sGpuQueries[e.mGpuSlot * 2 + 1], GL_QUERY_RESULT_AVAILABLE, &available);
+    if (!available && !wait)
+    {
+        return false;
+    }
+    unsigned long long begin = 0;
+    unsigned long long end = 0;
+    gpu.GetQueryObjectui64v(sGpuQueries[e.mGpuSlot * 2], GL_QUERY_RESULT, &begin);
+    gpu.GetQueryObjectui64v(sGpuQueries[e.mGpuSlot * 2 + 1], GL_QUERY_RESULT, &end);
+    e.mGpuBeginNs = begin - sGpuOffsetNs;
+    e.mGpuEndNs = end - sGpuOffsetNs;
+    e.mGpuSlot = -1;
+    return true;
 }
 
 unsigned DisplayModeRefreshNs()
@@ -98,6 +200,14 @@ void WriteSummary(Summary& s, const char* pWhat)
             Percentile(iv, 50), Percentile(iv, 95), Percentile(iv, 99), Percentile(iv, 100));
     fprintf(spFile, "#   shown minus game time ms: p50 %.2f p95 %.2f p99 %.2f max %.2f\n", Percentile(err, 50), Percentile(err, 95),
             Percentile(err, 99), Percentile(err, 100));
+    if (!s.mGpuMs.empty())
+    {
+        std::vector<double>& g = s.mGpuMs;
+        std::vector<double>& d = s.mGpuDoneToShown;
+        fprintf(spFile, "#   GPU ms per game frame: p50 %.2f p95 %.2f p99 %.2f max %.2f; GPU done to shown ms: p5 %.2f p50 %.2f p95 %.2f\n",
+                Percentile(g, 50), Percentile(g, 95), Percentile(g, 99), Percentile(g, 100), Percentile(d, 5), Percentile(d, 50),
+                Percentile(d, 95));
+    }
     if (s.mRefreshNs)
     {
         unsigned counts[8] = {};
@@ -140,12 +250,17 @@ void Add(Summary& s, const Entry& e)
         s.mErrorMs.push_back(fabs(shownMs - gameMs));
         s.mRefreshNs = e.mRefreshNs;
     }
+    if (e.mKind == 'G' && e.mGpuEndNs)
+    {
+        s.mGpuMs.push_back((e.mGpuEndNs - e.mGpuBeginNs) / 1e6);
+        s.mGpuDoneToShown.push_back((static_cast<long long>(e.mPresentedNs) - static_cast<long long>(e.mGpuEndNs)) / 1e6);
+    }
 }
 
 void Write(const Entry& e)
 {
-    fprintf(spFile, "%c %llu %llu %llu %llu %u %llu %u\n", e.mKind, e.mSwapCallNs, e.mSwapReturnNs, e.mPresentedNs, e.mMsc, e.mRefreshNs,
-            e.mGameNs, e.mFlags);
+    fprintf(spFile, "%c %llu %llu %llu %llu %u %llu %u %llu %llu\n", e.mKind, e.mSwapCallNs, e.mSwapReturnNs, e.mPresentedNs, e.mMsc,
+            e.mRefreshNs, e.mGameNs, e.mFlags, e.mGpuBeginNs, e.mGpuEndNs);
     Add(sLast10s, e);
     Add(sWholeRun, e);
     // Intervals run between game frames only: other frames in between break the chain.
@@ -165,12 +280,18 @@ void Write(const Entry& e)
     }
 }
 
-// Writes the swaps whose presentation is known, in order, and the oldest beyond `keep` in any case.
+// Writes the swaps whose presentation and GPU times are known, in order, and the oldest beyond `keep` in any case.
 void Flush(size_t keep)
 {
-    while (!sPending.empty() && (sPending.front().mDone || sPending.size() > keep))
+    while (!sPending.empty())
     {
-        Write(sPending.front());
+        Entry& e = sPending.front();
+        const bool force = sPending.size() > keep;
+        if (!ReadGpu(e, force) || (!e.mDone && !force))
+        {
+            return;
+        }
+        Write(e);
         sPending.pop_front();
     }
 }
@@ -401,7 +522,9 @@ void Attach(SDL_Window* pWindow)
     sFromCompositor = AttachWayland();
     fprintf(spFile, "# video driver %s, display mode refresh %.3f ms, times from %s\n", SDL_GetCurrentVideoDriver(),
             DisplayModeRefreshNs() / 1e6, sFromCompositor ? "the compositor (wp_presentation)" : "the swap");
-    fprintf(spFile, "# kind swap_call_ns swap_return_ns presented_ns msc refresh_ns game_ns flags\n");
+    AttachGpu();
+    fprintf(spFile, "# GPU timer queries: %s\n", sGpu ? "yes" : "unavailable");
+    fprintf(spFile, "# kind swap_call_ns swap_return_ns presented_ns msc refresh_ns game_ns flags gpu_begin_ns gpu_end_ns\n");
     sLast10s.mStartNs = NowNs();
     atexit(AtExit);
 }
@@ -421,7 +544,13 @@ void BeforeSwap()
     e.mKind = sNextKind;
     e.mGameNs = sNextGameNs;
     e.mSwapCallNs = NowNs();
+    e.mGpuSlot = -1;
     sNextKind = 'O';
+    if (sGpu && sGpuBeginSlot >= 0)
+    {
+        gpu.QueryCounter(sGpuQueries[sGpuBeginSlot * 2 + 1], GL_TIMESTAMP);
+        e.mGpuSlot = sGpuBeginSlot;
+    }
     if (sFromCompositor)
     {
         RequestFeedback();
@@ -438,16 +567,23 @@ void AfterSwap()
     }
     Entry& e = sPending.back();
     e.mSwapReturnNs = NowNs();
+    if (sGpu)
+    {
+        CalibrateGpu(e.mSwapReturnNs);
+        sGpuBeginSlot = static_cast<int>(sNextSeq % kGpuSlots);
+        gpu.QueryCounter(sGpuQueries[sGpuBeginSlot * 2], GL_TIMESTAMP);
+    }
     if (sFromCompositor)
     {
         PumpWayland();
-        // A compositor that stops answering (hidden window) must not hold the log back forever.
-        Flush(256);
-        return;
     }
-    e.mPresentedNs = e.mSwapReturnNs;
-    e.mRefreshNs = DisplayModeRefreshNs();
-    e.mDone = true;
-    Flush(0);
+    else
+    {
+        e.mPresentedNs = e.mSwapReturnNs;
+        e.mRefreshNs = DisplayModeRefreshNs();
+        e.mDone = true;
+    }
+    // A compositor that stops answering (hidden window) must not hold the log back forever.
+    Flush(256);
 }
 } // namespace PresentLog
