@@ -256,6 +256,7 @@ clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
 | `GTA2GL_CAPTURE=<dir>,<frame>,<a>-<b>,...` | write those frames as BMP (the first frame drawn at each); `GTA2GL_CAPTURE_FLIPS=1` counts presented frames instead |
 | `GTA2_LOOP_STATS=1` | logic steps and frames per second on stderr, every 5 seconds |
 | `GTA2_LOOP_TRACE=<file>` | the player's and the camera's position after each step (`S`) and as drawn (`D`) |
+| `GTA2_PRESENT_LOG=<file>` | every presented frame with the time it reached the screen (Wayland's presentation-time protocol; elsewhere when the swap returned), and every 10 seconds and at exit a summary: frame to frame times, how many refreshes each frame was shown, the shown time against the game time it depicts, and on Wayland how many frames the compositor showed on vblank and scanned out directly |
 | `GTA2_NO_SOUND=1` | no audio device |
 | `GTA2_NO_OPENAL=1`, `GTA2_HRTF=1` | no 3D sound; binaural 3D sound |
 | `GTA2_LOG_FILE=<file>` | SDL's log, debug strings and message boxes written to that file |

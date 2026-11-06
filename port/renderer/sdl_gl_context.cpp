@@ -1,5 +1,6 @@
 #include "gl_context.hpp"
 #include "gl_funcs.hpp"
+#include "present_log.hpp"
 #include <SDL3/SDL.h>
 
 namespace
@@ -27,7 +28,9 @@ class SDLGLContext : public IGLContext
     }
     void SwapBuffers() override
     {
+        PresentLog::BeforeSwap();
         SDL_GL_SwapWindow(mWindow);
+        PresentLog::AfterSwap();
     }
     void MakeCurrent() override
     {
@@ -70,5 +73,6 @@ IGLContext* CreateGLContext(SDL_Window* pWindow, const char** ppError)
     PFNGLGETSTRINGPROC getString = reinterpret_cast<PFNGLGETSTRINGPROC>(SDL_GL_GetProcAddress("glGetString"));
     SDL_Log("OpenGL: %s", getString ? reinterpret_cast<const char*>(getString(GL_VERSION)) : "?");
     SDL_GL_SetSwapInterval(1);
+    PresentLog::Attach(pWindow);
     return new SDLGLContext(pWindow, ctx);
 }

@@ -14,6 +14,7 @@ unsigned long long port_NowNs();
 void port_DelayNs(unsigned long long ns);
 void port_CountGameStep();
 void port_SetGameFlip(bool gameFlip);
+void port_PresentContent(unsigned long long gameNs);
 #else
 namespace
 {
@@ -39,6 +40,10 @@ void port_CountGameStep()
 }
 
 void port_SetGameFlip(bool)
+{
+}
+
+void port_PresentContent(unsigned long long)
 {
 }
 } // namespace
@@ -236,6 +241,7 @@ void BeginDraw()
         PortInterp::Apply(sAlpha);
     }
     Trace('D');
+    port_PresentContent(static_cast<unsigned long long>((sStepCount + static_cast<f64>(sAlpha)) * sStepNs));
     PortView::BeginDraw(sAlpha);
     port_SetGameFlip(true);
 }
