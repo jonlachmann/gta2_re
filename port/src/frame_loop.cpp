@@ -15,6 +15,8 @@ void port_DelayNs(unsigned long long ns);
 void port_CountGameStep();
 void port_SetGameFlip(bool gameFlip);
 void port_PresentContent(unsigned long long gameNs);
+unsigned long long port_SwapRefreshNs();
+void port_PresentAgain();
 #else
 namespace
 {
@@ -46,6 +48,15 @@ void port_SetGameFlip(bool)
 void port_PresentContent(unsigned long long)
 {
 }
+
+unsigned long long port_SwapRefreshNs()
+{
+    return 0;
+}
+
+void port_PresentAgain()
+{
+}
 } // namespace
 #endif
 
@@ -63,7 +74,10 @@ unsigned long long sLast;
 unsigned long long sAccumulated;
 unsigned long long sStepNs = 33000000;
 u32 sStepsSinceDraw;
-unsigned long long sNextDraw;
+unsigned long long sNextDraw; // timer pacing
+unsigned long long sLastPresent; // vsync pacing
+u32 sRepeatsLeft;
+u32 sRefreshesPerFrame;
 f32 sAlpha;
 bool sInDraw;
 u32 sDrawSteps;
@@ -81,6 +95,13 @@ unsigned long long sStatsStart;
 bool Original()
 {
     return sMaxFps == 30;
+}
+
+// The frame limit as a whole number of refreshes: the nearest one, at least 1.
+u32 RefreshesPerFrame(unsigned long long refreshNs)
+{
+    const u32 n = sMaxFps ? static_cast<u32>(1e9 / sMaxFps / refreshNs + 0.5) : 1;
+    return n ? n : 1;
 }
 
 Sprite* PlayerSprite()
@@ -122,8 +143,8 @@ void Stats(unsigned long long now)
         u32 jumped;
         u32 snapped;
         PortInterp::TakeCounts(&moved, &jumped, &snapped);
-        fprintf(stderr, "loop: %.2f steps/s, %.1f frames/s (frame limit %u), sprites per frame: %.1f in between, %.2f jumped, %.2f snapped round\n",
-                sStatsSteps / seconds, sStatsDraws / seconds, sMaxFps, moved / (f64)(sStatsDraws ? sStatsDraws : 1),
+        fprintf(stderr, "loop: %.2f steps/s, %.1f frames/s (frame limit %u, %u refreshes per frame), sprites per frame: %.1f in between, %.2f jumped, %.2f snapped round\n",
+                sStatsSteps / seconds, sStatsDraws / seconds, sMaxFps, sRefreshesPerFrame, moved / (f64)(sStatsDraws ? sStatsDraws : 1),
                 jumped / (f64)(sStatsDraws ? sStatsDraws : 1), snapped / (f64)(sStatsDraws ? sStatsDraws : 1));
         sStatsStart = now;
         sStatsSteps = 0;
@@ -152,6 +173,7 @@ void Reset()
     sStarted = false;
     sAccumulated = 0;
     sStepsSinceDraw = 0;
+    sRepeatsLeft = 0;
     PortInterp::Clear();
     PortView::Clear();
     ApplySettings();
@@ -187,6 +209,8 @@ Action Next(s32 stepMs, bool forceStep, bool noDraw)
     }
 
     unsigned long long wake = now + (sStepNs - sAccumulated);
+    const unsigned long long refreshNs = Original() ? 0 : port_SwapRefreshNs();
+    sRefreshesPerFrame = refreshNs ? RefreshesPerFrame(refreshNs) : 0;
     if (Original())
     {
         if (sStepsSinceDraw)
@@ -195,8 +219,32 @@ Action Next(s32 stepMs, bool forceStep, bool noDraw)
             return kDraw;
         }
     }
+    else if (refreshNs)
+    {
+        // Vsync: present on every refresh, since the swap waits for it, so frames follow the screen's clock.
+        // A new frame every sRefreshesPerFrame, the last one again in between.
+        const unsigned long long due = sLastPresent + refreshNs / 2; // only binds when the swap does not wait (hidden window)
+        if (now >= due)
+        {
+            sLastPresent = now;
+            if (sRepeatsLeft)
+            {
+                sRepeatsLeft--;
+                port_PresentAgain();
+                return kIdle;
+            }
+            sRepeatsLeft = sRefreshesPerFrame - 1;
+            sAlpha = static_cast<f32>(static_cast<f64>(sAccumulated) / sStepNs);
+            return kDraw;
+        }
+        if (due < wake)
+        {
+            wake = due;
+        }
+    }
     else
     {
+        // No vsync, or no known refresh rate: a timer at the frame limit.
         if (now >= sNextDraw)
         {
             const unsigned long long interval = sMaxFps ? 1000000000ull / sMaxFps : 0;

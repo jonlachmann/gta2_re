@@ -95,6 +95,27 @@ void port_DelayNs(unsigned long long ns)
     SDL_DelayPrecise(ns);
 }
 
+// The refresh period the swap waits for; 0 without vsync or when the screen does not say.
+unsigned long long port_SwapRefreshNs()
+{
+    SDL_Window* pWindow = port_MainSDLWindow();
+    int interval = 0;
+    if (!sVidSystem || !pWindow || !SDL_GL_GetSwapInterval(&interval) || !interval)
+    {
+        return 0;
+    }
+    const SDL_DisplayMode* pMode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(pWindow));
+    return pMode && pMode->refresh_rate > 0.0f ? static_cast<unsigned long long>(1e9 / pMode->refresh_rate + 0.5) : 0;
+}
+
+void port_PresentAgain()
+{
+    if (sVidSystem)
+    {
+        sVidSystem->Represent();
+    }
+}
+
 void port_FrameSize(int* pW, int* pH)
 {
     if (sVidSystem)

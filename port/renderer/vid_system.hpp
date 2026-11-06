@@ -44,6 +44,8 @@ class VidSystem
     void FreeSurface();
     // scanSurface false: nothing wrote the CPU surface since GetSurface, so it is not composited.
     void Flip(bool scanSurface = true);
+    // Shows the last flipped frame again, for one more refresh.
+    void Represent();
     void Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 bottom);
     s32 SetGamma(f32 r, f32 g, f32 b);
 

@@ -1,4 +1,5 @@
 #include "vid_system.hpp"
+#include "present_log.hpp"
 #include "gl_context.hpp"
 #include <algorithm>
 #include <chrono>
@@ -357,6 +358,20 @@ void VidSystem::Flip(bool scanSurface)
             mStatsVerts = mRenderer.GetVertexCount();
         }
     }
+}
+
+void VidSystem::Represent()
+{
+    if (!mContext)
+    {
+        return;
+    }
+    int w = 0, h = 0;
+    mContext->GetDrawableSize(&w, &h);
+    PresentLog::Repeat();
+    mRenderer.Present(w, h);
+    mContext->SwapBuffers();
+    mRenderer.ThrottleFrames();
 }
 
 void VidSystem::Clear(u8 r, u8 g, u8 b, s32 left, s32 top, s32 right, s32 bottom)

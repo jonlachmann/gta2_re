@@ -127,7 +127,11 @@ machine) is not read. The SCREEN settings page chooses how often frames are draw
 - FRAME LIMIT (`port_max_fps`): 30 ORIGINAL draws once after each step, as the original; 60, 120,
   144, 240 or UNLIMITED draw in between, with every sprite and the camera interpolated between the
   last two steps (`src/interpolation.cpp`). That shows the game one step (33 ms) late.
-- VSYNC (`port_vsync`): adaptive where the driver has it.
+- VSYNC (`port_vsync`): adaptive where the driver has it. With it, above 30 ORIGINAL, the screen's
+  refresh paces the frames: the port presents on every refresh, a new frame every whole number of
+  refreshes nearest the frame limit (60 on a 144 Hz screen: every 2, 72 per second) and the last one
+  again in between, so each frame stays on the screen equally long. Without it, or when the screen
+  does not give its refresh rate, a timer paces them.
 - DISPLAY MODE (`port_fullscreen_width`, `_height`, `_centihz`): full screen at the desktop's
   mode (borderless) or one of the screen's own modes (resolution and refresh rate).
 
