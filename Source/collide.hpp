@@ -23,7 +23,7 @@ class GridSpriteLink
 };
 GTA2_ASSERT_SIZEOF_ALWAYS(GridSpriteLink, 0x8);
 
-class GridSpriteLink_Pool : public PoolBasic<GridSpriteLink, 4096>
+class GridSpriteLink_Pool : public PoolBasic<GridSpriteLink, GTA2_POOL(4096)>
 {
   public:
     GridSpriteLink_Pool()
@@ -37,7 +37,7 @@ class GridSpriteLink_Pool : public PoolBasic<GridSpriteLink, 4096>
     }
 };
 
-class GridCell_Pool : public PoolBasic<GridCell, 6000>
+class GridCell_Pool : public PoolBasic<GridCell, GTA2_POOL(6000)>
 {
   public:
     GridCell_Pool()
