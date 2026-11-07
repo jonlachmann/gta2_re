@@ -85,7 +85,7 @@ void TextTable::RemapExtendedChars_5B5930(wchar_t* pStr)
 MATCH_FUNC(0x5B5960)
 void TextTable::TKEY_Load_5B5960(u32 chunk_size)
 {
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     // Port, 64-bit: the file's records are 12 bytes (a 4-byte offset and an 8-character key), the entries hold a
     // pointer, so they are copied over one by one
     field_0_tKey.field_4_tKey_count = chunk_size / 12;
@@ -102,8 +102,7 @@ void TextTable::TKEY_Load_5B5960(u32 chunk_size)
         memcpy(&e.field_4_key, pRaw + i * 12 + 4, 8);
     }
     delete[] pRaw;
-    return;
-#endif
+#else
     // TODO: probably an inline
     field_0_tKey.field_4_tKey_count = chunk_size / sizeof(TextKeyEntry);
     field_0_tKey.field_0_tKey = new TextKeyEntry[field_0_tKey.field_4_tKey_count];
@@ -113,6 +112,7 @@ void TextTable::TKEY_Load_5B5960(u32 chunk_size)
     }
 
     File::Global_Read_4A71C0(field_0_tKey.field_0_tKey, chunk_size);
+#endif
 }
 
 MATCH_FUNC(0x5B59B0)
