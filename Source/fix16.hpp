@@ -109,6 +109,15 @@ class Fix16
     // 10.5 non inline addr is 0x539F90
     Fix16& operator/=(const Fix16& rhs)
     {
+#if defined(GTA2_PORT)
+        // A division by zero gives 0, as arm64 does, not x86's trap: NormalizeSafe_442AD0 divides by the length of a
+        // collision normal that can be zero (a car's corner exactly on a wall), and every platform has to agree
+        if (rhs.mValue == 0)
+        {
+            mValue = 0;
+            return *this;
+        }
+#endif
         mValue = static_cast<s32>((static_cast<__int64>(mValue) << 14) / rhs.mValue);
         return *this;
     }
@@ -392,6 +401,12 @@ class Fix16
     //MATCH_FUNC(0x436A20)
     Fix16 operator/(const Fix16& in) const
     {
+#if defined(GTA2_PORT)
+        if (in.mValue == 0) // as in operator/=
+        {
+            return Fix16(0, 0);
+        }
+#endif
         s32 value = static_cast<s32>((static_cast<__int64>(mValue) << 14) / in.mValue);
         return Fix16(value, 0);
     }
