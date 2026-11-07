@@ -15,8 +15,8 @@ The port is meant to be redone from a later, more complete decomp; "Redoing it o
 | Windows, 32-bit MinGW-w64 (tested under wine) | plays; the frontend is bit-identical to `10.5.exe`'s, and the first attract demo matches it field by field (see Validation) |
 
 Not done: movies (Bink is stubbed), the 3D sound provider (the game uses its 2D path), the mouse. The original's
-DirectPlay network game is left out of every build (on Windows too: `NetPlay.cpp` static_casts `void*` to
-function pointers, which clang refuses).
+DirectPlay network game is left out of every build (on Windows too: `NetPlay.cpp` static_casts `void*` to function
+pointers, which clang refuses); the port has its own, `Port/net` (docs/netcode.md).
 
 ## Building
 
@@ -31,6 +31,7 @@ cmake --preset mac -S Port && cmake --build build_port/mac && ctest --test-dir b
 |---|---|---|
 | `mac` | `build_port/mac/gta2_port` | Xcode's clang, `brew install sdl3 ninja` |
 | `mac-asan` | `build_port/mac_asan/gta2_port`, with AddressSanitizer | as `mac` |
+| `net-tests` | the netcode's unit tests only, with UBSan, in `build_port/net_tests` | a host clang (no SDL3) |
 | `linux64` | `build_port/linux64/gta2_port` (ELF x86-64) | `brew install lld llvm` (`linux.cmake` archives with `llvm-ar`: macOS's `ar` leaves ELF objects out), a Debian sysroot in `build_port/linux64_sysroot` |
 | `linux32` | `build_port/linux/gta2_port` (ELF i386, x87 floats) | a Debian i386 sysroot in `build_port/linux_sysroot` |
 | `windows` | `build_port/windows/gta2_port.exe`, and in `gl/` the renderer DLLs and `nullvideo.dll` for `10.5.exe` | `brew install mingw-w64` (or `g++-mingw-w64-i686`), SDL3's MinGW package in `build_port/sdl3` (its `i686-w64-mingw32` folder), the install's `binkw32.dll` in `build_port/dlls` |
@@ -41,12 +42,13 @@ Other places: `-DGTA2_LINUX_SYSROOT=`, `-DGTA2_SDL3_DIR=`, `-DGTA2_DLL_DIR=`. A 
 What it builds (`Port/CMakeLists.txt`):
 
 - **The game**: the root `CMakeLists.txt`'s `gta2_lib_src` (the VC6 build's list) without the ImGui overlay and
-  DirectPlay, plus `StdAfx.cpp`, the platform layer and `Port/validation`. `Port/main.cpp` replaces `test.cpp`.
+  DirectPlay, plus `StdAfx.cpp`, the platform layer, `Port/validation` and the network game (`Port/net`, with ENet).
+  `Port/main.cpp` replaces `test.cpp`.
 - **The renderer**, linked in (`Renderers/OpenGL/sources.cmake`): the game's loaders take the program itself
   instead of `d3ddll.dll` and `dmavideo.dll` (`gbh_graphics.cpp`, `dma_video.cpp`), and find the `gbh_*` and `Vid_*`
   functions in it (exported with `--kill-at` on Windows, `-rdynamic` elsewhere).
 - **The tests** (ctest): `Port/tests` (the ini parser, the mixer, the POSIX file and wide string layers), the
-  renderer's (`Renderers/OpenGL/tests`). The Windows build's run under wine.
+  netcode's (`Port/net/tests`) and the renderer's (`Renderers/OpenGL/tests`). The Windows build's run under wine.
 
 Toolchains are in `Port/cmake/`: `mingw-clang.cmake` (clang compiles against the MinGW-w64 headers, the MinGW g++
 links), `linux.cmake` (clang and lld against a sysroot), and `mingw-gcc.cmake` (the renderer DLLs on their own,
@@ -89,6 +91,7 @@ behave like VC6 rather than the code being changed:
 | `-fsjlj-exceptions` (Windows) | Homebrew's i686 MinGW uses SJLJ exceptions |
 | `-fms-extensions` (not Windows) | `__declspec`, `__forceinline`, `__int64` |
 | `-include Port/compat/posix_prefix.h` (not Windows) | the Windows names, before anything else |
+| `-fno-builtin` (`posix_wchar.cpp`, not Windows) | clang otherwise turns its 2-byte `wchar_t` loops into calls to the C library's own functions, which count 4-byte characters |
 
 ## Running
 
@@ -123,13 +126,13 @@ To look at a running game: `touch capture_now` in its folder writes the next fra
 | `sdl_dinput.cpp` | DirectInput: an `IDirectInputA` whose keyboard gives SDL key events as DIK events, buffered (`GetDeviceData`, the game) and as a state array (`GetDeviceState`, the frontend); the first SDL gamepad as the joystick |
 | `sdl_miles.cpp` | Miles (`mss32.dll`): the 52 `AIL_*` functions `cSampleManager.cpp` calls, as a software mixer in an SDL3 audio callback, WAV streams via `SDL_LoadWAV` |
 | `registry_ini.{hpp,cpp}` | the registry, on `gta2.ini` |
-| `netplay_offline.cpp` | DirectPlay (`NetPlay.cpp`, `NetUi.cpp`): a single-player `NetPlay` that answers the rest of the game (no players, no messages) |
-| `port_rand.{hpp,cpp}` | `rand`/`srand`: VC6's generator, so replays play the same everywhere |
+| `rand/` | `rand`/`srand`: VC6's generator, so replays play the same everywhere (`rand.cpp`); the network game's owned draws and the sound's and particles' own streams (`owner.hpp`, `sound.hpp`, `particle.cpp`) |
 | `port_globals.{hpp,cpp}` | the registry of the game's globals with their `10.5.exe` addresses (`DEFINE_GLOBAL` registers each), for the state log |
 | `ptr_table.cpp` | 64-bit builds: the 32-bit handles of `PTR32` (`Source/ptr32.hpp`) |
 | `stubs.cpp` | game functions the port leaves out: the ImGui overlay; on non-Windows builds the DirectX and version checks of `winmain.cpp` |
 | `port_hooks.{hpp,cpp}` | what `Source/` calls or reads in the port (see "`Source/` changes") |
 | `posix_*.cpp`, `compat/` | non-Windows builds, see below |
+| `net/` | DirectPlay (`NetPlay.cpp`, `NetUi.cpp`): the port's network game, docs/netcode.md. Without one, `net/engine/netplay.cpp` answers the rest of the game as a single player |
 
 `Port/compat/` has headers under the Windows names (`windows.h`, `objbase.h`, `mmsystem.h`, `dinput.h`, `ddraw.h`,
 `dplay.h`, `io.h`, ...) with types, constants and declarations only; COM interfaces are C++ classes with virtual
@@ -153,8 +156,9 @@ through `validation.hpp` only):
 | `nullvideo.cpp` | `nullvideo.dll`: a video DLL for `10.5.exe` that draws nothing and runs the state log |
 | `scripted_input.cpp` | `GTA2_PORT_KEYS`, `GTA2_PORT_PAD`: input for tests without a person |
 
-`Port/tests/`: the tests (ctest). `Port/cmake/`: the toolchains. `Scripts/port/`: `run/` (the run scripts),
-`statecheck/` (the state check and its tools), `clang_check.sh` (the compile check of a decomp snapshot). The
+`Port/tests/`: the tests (ctest). `Port/cmake/`: the toolchains. `Port/net/`: the network game (docs/netcode.md,
+"Code layout"). `Scripts/port/`: `run/` (the run scripts), `statecheck/` (the state check and its tools), `net/` (the
+network check and its tools), `bots/` (the bots' trainer), `clang_check.sh` (the compile check of a decomp snapshot). The
 renderer has its own layout (`Renderers/OpenGL/README.md`): `core/` the renderer, `platform/` the GL contexts,
 `dll/` the Windows DLLs, `dev/` its development aids, `tools/` the reference tools, `tests/`.
 
@@ -170,13 +174,17 @@ All under `GTA2_PORT`, VC6-neutral:
 | `winmain.cpp` | the window on SDL3 (`Port/sdl_win32.hpp`); its Windows-only functions are `Port/stubs.cpp`'s elsewhere |
 | `registry.cpp`, `Frontend.cpp`, `NetUi.cpp`, `cSampleManager.cpp`, `winmain.cpp` | the registry on `gta2.ini` (`Port/registry_ini.hpp`) |
 | `Frontend.cpp` | the attract idle time from `gPortAttractIdleMs` (`GTA2_PORT_ATTRACT_MS`) |
-| `rng.cpp`, `sound_obj.cpp` | VC6's `rand` (`Port/port_rand.hpp`) |
+| `rng.cpp`, `sound_obj.cpp` | VC6's `rand` (`Port/rand/rand.hpp`) |
 | `3rdParty/mss.h` | Miles' declarations for the port's mixer |
 | `error.cpp` | the logs through C stdio (they only wrote through VC6's iostreams), and `gFile_67C530` is `gErrorLog_67C530`, as in `10.5.exe` |
 | `crt_stubs.cpp` | `malloc` zeroes, like `10.5.exe`'s fresh heap pages, so the state log can compare pools |
 | `char.cpp` | `CanReachTile_550090`'s `bRes_1`, read before it is set: VC6 keeps it where `bRes_2` was just set true |
 | `fix16.cpp` | tan(90°) and tan(270°) take `10.5.exe`'s values (out of `s32` range, where VC6 keeps the low bits of an x87 value) |
 | `types.hpp`, `ptr32.hpp`, `file.hpp`, `Light.cpp`, `TextTable.cpp`, `gtx_0x106C.*`, `map_0x370.*`, `Function.hpp` | 64-bit builds, see below |
+| `Hud.cpp` | the chat line types the character the system's keyboard layout gives (`Port_TypedChar`) |
+| `Game.cpp`, `winmain.cpp`, `Frontend.cpp`, `Car.cpp`, `Char_Pool.*`, `Ped.cpp`, `map_0x370.cpp`, `Pool.hpp`, `sound_obj.*` | the network game's hooks, docs/netcode.md "The game's code" |
+| `sprite.cpp` | `gPortSpriteMovedHook` after a sprite moved, for the netcode's grid check |
+| `fix16.hpp` | a `Fix16` division by zero gives 0, as arm64 does, not x86's trap: `NormalizeSafe_442AD0` divides by the length of a collision normal that can be zero (a car's corner exactly on a wall), and every platform has to compute alike |
 
 ## 64-bit builds
 
@@ -270,8 +278,7 @@ can't see (wrong case labels in jump tables, swapped constants; `Scripts/bin_com
 the globals, callees and switch targets of every `MATCH_FUNC` against `10.5.exe`). The others are port fixes:
 `CanReachTile_550090`'s unset `bRes_1`, the x87 and `rand` differences, the missing returns and asserts above.
 
-Other tools in `statecheck/`: `replay_check.py` (frames), `snapshot.py` (memory at a frame), `trig_check.py` (the
-trig tables). winedbg: attaching to a running 32-bit process faults under macOS wine's wow64 mode, so start the exe
+winedbg: attaching to a running 32-bit process faults under macOS wine's wow64 mode, so start the exe
 under the debugger (`WINE_LAUNCHER=winedbg Scripts/port/run/run_wine.sh`); break on `RunGameFrame_4DA850` with a
 condition on the frame counter (`*(int*)(*(int*)0x67ab34)`) rather than `cont N`.
 
