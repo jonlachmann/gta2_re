@@ -1,5 +1,16 @@
 #pragma once
 #include "types.hpp"
+#if defined(GTA2_PORT)
+#include "Port/rand/owner.hpp" // PortRandScope
+#endif
+
+// A pool's capacity. Port builds with -DGTA2_POOL_SCALE=<k> multiply the entity, sprite and grid pools by k
+// (docs/netcode.md, "Open": whole-map simulation); everywhere else it is the original size.
+#if defined(GTA2_PORT) && defined(GTA2_POOL_SCALE)
+    #define GTA2_POOL(n) ((n) * GTA2_POOL_SCALE)
+#else
+    #define GTA2_POOL(n) n
+#endif
 
 // TODO: name these better, this "basic" pool has O(1) allocate
 // and deallocate.
@@ -167,6 +178,9 @@ class Pool
             ++field_X_count;
 
             PoolType* pNext = pCurrItem->mpNext;
+#if defined(GTA2_PORT)
+            PortRandScope portRandScope(pCurrItem); // a car's draws are its own (a network game)
+#endif
 
             if (pCurrItem->PoolUpdate())
             {
@@ -222,6 +236,9 @@ class Pool
             ++field_X_count;
 
             PoolType* pNext = pCurrItem->mpNext;
+#if defined(GTA2_PORT)
+            PortRandScope portRandScope(pCurrItem); // a car's draws are its own (a network game)
+#endif
 
             if (pCurrItem->PoolUpdate())
             {
