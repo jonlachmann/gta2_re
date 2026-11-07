@@ -1,0 +1,104 @@
+name: Release
+
+# A tag (v*) builds the port for Linux, macOS and Windows and publishes the zips (Scripts/port/package.sh) as the tag's
+# release. Run by hand, it builds the zips as artifacts only.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  SDL_VERSION: 3.4.18
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install clang, lld and SDL3's build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang lld ninja-build zip libgl-dev libegl-dev libx11-dev libxext-dev libxrandr-dev \
+          libxcursor-dev libxi-dev libxss-dev libxfixes-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+          libdecor-0-dev libpulse-dev libasound2-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev
+
+    # Ubuntu 24.04 has no SDL3 package; the zip takes this one along (libSDL3.so.0 next to the game)
+    - name: Build SDL3
+      run: |
+        git -c advice.detachedHead=false clone --depth 1 -b release-$SDL_VERSION https://github.com/libsdl-org/SDL /tmp/SDL
+        cmake -S /tmp/SDL -B /tmp/SDL/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+        cmake --build /tmp/SDL/build
+        sudo cmake --install /tmp/SDL/build
+        sudo ldconfig
+
+    - name: Build
+      run: |
+        cmake -S Port -B build_port/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+        cmake --build build_port/release --target gta2_port
+        Scripts/port/package.sh linux build_port/release gta2-linux.zip
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: gta2-linux
+        path: gta2-linux.zip
+
+  mac:
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Build
+      run: |
+        brew install sdl3 ninja
+        cmake --preset mac -S Port
+        cmake --build build_port/mac --target gta2_port
+        Scripts/port/package.sh mac build_port/mac gta2-mac.zip
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: gta2-mac
+        path: gta2-mac.zip
+
+  # Cross-built on macOS, as docs/port.md describes: clang compiles, Homebrew's MinGW-w64 links. No binkw32.dll here:
+  # Bink's stubs stand in (no movies)
+  windows:
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Build
+      run: |
+        brew install mingw-w64 ninja
+        curl -sSL https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL3-devel-$SDL_VERSION-mingw.tar.gz | tar xz -C /tmp
+        mkdir -p build_port && mv /tmp/SDL3-$SDL_VERSION/i686-w64-mingw32 build_port/sdl3
+        cmake --preset windows -S Port
+        cmake --build build_port/windows --target gta2_port
+        Scripts/port/package.sh windows build_port/windows gta2-windows.zip
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: gta2-windows
+        path: gta2-windows.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, mac, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
+
+    - name: Publish
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release create "$GITHUB_REF_NAME" gta2-*.zip --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
