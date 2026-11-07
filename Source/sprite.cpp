@@ -1,4 +1,7 @@
 #include "sprite.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_hooks.hpp"
+#endif
 #include "explosion_type.hpp"
 #include "car_despawn_status.hpp"
 #include "CarInfoTable.hpp" // TODO: only because of gPixelsToFix16_6F6850
@@ -741,6 +744,12 @@ void Sprite::InvalidateZColAndBBoxes_59E7B0()
     {
         field_4_pVisualShape->field_48_bbox_up_to_date = false;
     }
+#if defined(GTA2_PORT)
+    if (gPortSpriteMovedHook)
+    {
+        gPortSpriteMovedHook(this);
+    }
+#endif
 }
 
 static inline void __stdcall DrawTextScaled_4BA2C0(const wchar_t* pStr, Fix16 x, Fix16 y, u16 font)
