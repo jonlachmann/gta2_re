@@ -34,7 +34,7 @@ cmake --preset mac -S Port && cmake --build build_port/mac && ctest --test-dir b
 | `net-tests` | the netcode's unit tests only, with UBSan, in `build_port/net_tests` | a host clang (no SDL3) |
 | `linux64` | `build_port/linux64/gta2_port` (ELF x86-64) | `brew install lld llvm` (`linux.cmake` archives with `llvm-ar`: macOS's `ar` leaves ELF objects out), a Debian sysroot in `build_port/linux64_sysroot` |
 | `linux32` | `build_port/linux/gta2_port` (ELF i386, x87 floats) | a Debian i386 sysroot in `build_port/linux_sysroot` |
-| `windows` | `build_port/windows/gta2_port.exe`, and in `gl/` the renderer DLLs and `nullvideo.dll` for `10.5.exe` | `brew install mingw-w64` (or `g++-mingw-w64-i686`), SDL3's MinGW package in `build_port/sdl3` (its `i686-w64-mingw32` folder), the install's `binkw32.dll` in `build_port/dlls` |
+| `windows` | `build_port/windows/gta2_port.exe`, and in `gl/` the renderer DLLs and `nullvideo.dll` for `10.5.exe` | `brew install mingw-w64` (or `g++-mingw-w64-i686`), SDL3's MinGW package in `build_port/sdl3` (its `i686-w64-mingw32` folder); the install's `binkw32.dll` in `build_port/dlls` for movies (without it, Bink's stubs, as on the other platforms) |
 
 Other places: `-DGTA2_LINUX_SYSROOT=`, `-DGTA2_SDL3_DIR=`, `-DGTA2_DLL_DIR=`. A second macOS build with other flags:
 `cmake -S Port -B build_port/mac_x4 -G Ninja -DCMAKE_CXX_FLAGS=-DGTA2_POOL_SCALE=4`.
@@ -49,6 +49,11 @@ What it builds (`Port/CMakeLists.txt`):
   functions in it (exported with `--kill-at` on Windows, `-rdynamic` elsewhere).
 - **The tests** (ctest): `Port/tests` (the ini parser, the mixer, the POSIX file and wide string layers), the
   netcode's (`Port/net/tests`) and the renderer's (`Renderers/OpenGL/tests`). The Windows build's run under wine.
+
+**Releases**: a tag `v*` on the netcode branch runs `.github/workflows/release.yml`, which builds Linux (Ubuntu 24.04,
+SDL3 from source), macOS and Windows (both on macOS) and publishes `gta2-linux.zip`, `gta2-mac.zip` and
+`gta2-windows.zip` as the tag's release. `Scripts/port/package.sh` makes them (also locally): the game, its SDL3, the
+start scripts, `gta2.ini` and the README of `Port/dist/`, without game data.
 
 Toolchains are in `Port/cmake/`: `mingw-clang.cmake` (clang compiles against the MinGW-w64 headers, the MinGW g++
 links), `linux.cmake` (clang and lld against a sysroot), and `mingw-gcc.cmake` (the renderer DLLs on their own,

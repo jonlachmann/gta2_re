@@ -140,26 +140,35 @@ endif()
 add_executable(gta2_port ${LIB_SRC} ${PORT_SRC} ${VALIDATION_SRC} ${NET_SRC})
 target_link_libraries(gta2_port PRIVATE game_flags renderer enet)
 set_target_properties(gta2_port PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-if(NOT WIN32)
-  add_library(bink OBJECT ${ROOT}/Source/3rdParty/bink.cpp) # stubs, no movies yet
+# The game's own binkw32.dll (from the GTA2 install) on Windows when there is one; else Bink's stubs (no movies yet)
+set(GTA2_DLL_DIR ${ROOT}/build_port/dlls CACHE PATH "the GTA2 install's binkw32.dll")
+if(NOT WIN32 OR NOT EXISTS ${GTA2_DLL_DIR}/binkw32.dll)
+  add_library(bink OBJECT ${ROOT}/Source/3rdParty/bink.cpp)
   target_link_libraries(bink PRIVATE game_flags)
   target_compile_definitions(bink PRIVATE BUILD_BINK)
   target_link_libraries(gta2_port PRIVATE bink)
+  if(WIN32)
+    target_compile_definitions(gta2_port PRIVATE BUILD_BINK) # bink.h's functions from the stubs, not imported
+  endif()
+endif()
+if(NOT WIN32)
   target_link_options(gta2_port PRIVATE -rdynamic) # the game finds the renderer's gbh_*/Vid_* with dlsym
 endif()
 if(APPLE)
   target_link_libraries(gta2_port PRIVATE "-framework OpenGL")
 elseif(WIN32)
-  # The game's own binkw32.dll (from the GTA2 install); Miles is Port/sdl_miles.cpp
-  set(GTA2_DLL_DIR ${ROOT}/build_port/dlls CACHE PATH "the GTA2 install's binkw32.dll")
-  add_custom_command(OUTPUT libbinkw32.a COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/cmake/import_lib.sh ${GTA2_DLL_DIR}/binkw32.dll
-                     libbinkw32.a DEPENDS ${GTA2_DLL_DIR}/binkw32.dll)
-  add_custom_target(binkw32_lib DEPENDS libbinkw32.a)
-  add_dependencies(gta2_port binkw32_lib)
+  # Miles is Port/sdl_miles.cpp
+  if(EXISTS ${GTA2_DLL_DIR}/binkw32.dll)
+    add_custom_command(OUTPUT libbinkw32.a COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/cmake/import_lib.sh ${GTA2_DLL_DIR}/binkw32.dll
+                       libbinkw32.a DEPENDS ${GTA2_DLL_DIR}/binkw32.dll)
+    add_custom_target(binkw32_lib DEPENDS libbinkw32.a)
+    add_dependencies(gta2_port binkw32_lib)
+    target_link_libraries(gta2_port PRIVATE ${CMAKE_BINARY_DIR}/libbinkw32.a)
+  endif()
   target_sources(gta2_port PRIVATE ${ROOT}/resources.rc)
   # --kill-at: undecorated stdcall export names, as the game resolves the renderer's with GetProcAddress
   target_link_options(gta2_port PRIVATE -mwindows -static -Wl,--kill-at)
-  target_link_libraries(gta2_port PRIVATE ${CMAKE_BINARY_DIR}/libbinkw32.a version dinput dxguid ddraw ws2_32 winmm ole32
+  target_link_libraries(gta2_port PRIVATE version dinput dxguid ddraw ws2_32 winmm ole32
                         uuid gdi32 comctl32 opengl32)
   add_custom_command(TARGET gta2_port POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
                      ${GTA2_SDL3_DIR}/bin/SDL3.dll ${CMAKE_BINARY_DIR}/)
