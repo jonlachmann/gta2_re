@@ -4,7 +4,7 @@
 #include "Pool.hpp"
 
 
-class Object_3C_Pool : public PoolBasic<Object_3C, 385>
+class Object_3C_Pool : public PoolBasic<Object_3C, GTA2_POOL(385)>
 {
   public:
     __forceinline Object_3C_Pool()
