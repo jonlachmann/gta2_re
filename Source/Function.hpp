@@ -210,7 +210,7 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
     #define EXTERN_GLOBAL_ARRAY(type, name, size) extern type name[size]
 #endif
 
-#if defined(GTA2_PORT) && (defined(__LP64__) || defined(_WIN64)) && !defined(GTA2_SIZE_SCAN) // scan: see docs/port.md
+#if defined(GTA2_PORT_64) && !defined(GTA2_SIZE_SCAN) // scan: see docs/port.md
     // Port, 64-bit (docs/port.md, macOS): pointers are 8 bytes, so the structures that hold them grow; the sizes
     // are the 32-bit original's
     #define GTA2_ASSERT_SIZEOF_ALWAYS(structureName, expectedSize)
