@@ -1,9 +1,9 @@
 // Port (docs/port.md): the user32 subset of sdl_win32.hpp on SDL3, for the game's one window.
 #include "sdl_win32.hpp"
+#include "sdl_dinput.hpp"
+#include "port_hooks.hpp"
 #include <SDL3/SDL.h>
 #include <deque>
-
-void Port_DInputOnEvent(const SDL_Event& e); // sdl_dinput.cpp
 
 namespace
 {
@@ -76,9 +76,14 @@ ATOM Port_RegisterClassA(const WNDCLASSA* pClass)
     return 1;
 }
 
+bool Port_IsHeadless()
+{
+    return SDL_getenv("GTA2_HEADLESS") != NULL;
+}
+
 HWND Port_CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD, int, int, int w, int h, HWND, HMENU, HINSTANCE, LPVOID)
 {
-    const bool headless = SDL_getenv("GTA2_HEADLESS") != NULL; // no window content, no sound (docs/port.md, "Validation")
+    const bool headless = Port_IsHeadless(); // no window content, no sound
     if (headless)
     {
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
@@ -282,12 +287,17 @@ BOOL Port_PeekMessageA(LPMSG pMsg, HWND, UINT, UINT, UINT)
     // Nothing to do until the next frame: the game's loop would spin on PeekMessageA and RunGameFrame_4DA850 and
     // keep a core busy (as the original does). A millisecond's sleep while a frame is more than 1 ms away; never
     // when one is due (lockstep runs, replays, the frontend's own timing), so nothing runs slower.
+    if (gPortIdleHook)
+    {
+        gPortIdleHook();
+    }
     if ((int)(gMatchStartTime_6F5A28 - timeGetTime()) > 1)
     {
         SDL_Delay(1);
     }
     return FALSE;
 }
+
 
 BOOL Port_TranslateMessage(const MSG*)
 {

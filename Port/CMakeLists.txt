@@ -1,4 +1,5 @@
-# The port (docs/port.md): gta2_port, the game on SDL3 and OpenGL for macOS, Linux and Windows, and its tests. The
+# The port (docs/port.md): gta2_port, the game on SDL3 and OpenGL for macOS, Linux and Windows, with its network game
+# (docs/netcode.md), and the tests. The
 # targets are presets (CMakePresets.json), from the repository root:
 #   cmake --preset mac -S Port && cmake --build build_port/mac && ctest --test-dir build_port/mac
 # The root CMakeLists.txt is the VC6 build; its gta2_lib_src is the game's source list, read from it here.
@@ -16,8 +17,8 @@ enable_testing()
 
 # ---- Sources
 
-# The game: gta2_lib_src without the ImGui overlay and DirectPlay (NetPlay, NetUi; netplay_offline.cpp answers for
-# it). On Windows too: NetPlay.cpp static_casts void* to function pointers, which clang refuses
+# The game: gta2_lib_src without the ImGui overlay and DirectPlay (NetPlay, NetUi; Port/net/engine/netplay.cpp
+# stands in). On Windows too: NetPlay.cpp static_casts void* to function pointers, which clang refuses
 file(READ ${ROOT}/CMakeLists.txt ROOT_LISTS)
 string(REGEX MATCH "set *\\(gta2_lib_src[^)]*\\)" LIB_SRC "${ROOT_LISTS}")
 string(REGEX MATCHALL "Source/[^ \n\t)]*\\.cpp" LIB_SRC "${LIB_SRC}")
@@ -26,20 +27,67 @@ list(TRANSFORM LIB_SRC PREPEND ${ROOT}/)
 list(APPEND LIB_SRC ${ROOT}/StdAfx.cpp)
 
 # The platform layer: what the game uses of Windows and DirectX, on SDL3 and POSIX (docs/port.md, "Code layout")
-set(PORT_SRC main.cpp netplay_offline.cpp port_globals.cpp port_hooks.cpp port_rand.cpp ptr_table.cpp registry_ini.cpp
+set(PORT_SRC main.cpp port_globals.cpp port_hooks.cpp rand/rand.cpp rand/particle.cpp ptr_table.cpp registry_ini.cpp
     sdl_dinput.cpp sdl_miles.cpp sdl_video.cpp sdl_win32.cpp stubs.cpp)
 if(NOT WIN32)
   list(APPEND PORT_SRC posix_files.cpp posix_wchar.cpp posix_win32.cpp)
+  # The game's 2-byte wchar_t functions: clang otherwise turns their loops into calls to the C library's own, which
+  # count 4-byte characters (Linux: port_wcslen became glibc's wcslen, and a %s ran past the string, over the globals)
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/posix_wchar.cpp PROPERTIES COMPILE_OPTIONS -fno-builtin)
 endif()
 # Validation against 10.5.exe and test aids, linked in, off unless their environment variables are set
 set(VALIDATION_SRC validation/validation.cpp validation/state_log.cpp validation/fast_clock.cpp validation/scripted_input.cpp)
 list(TRANSFORM PORT_SRC PREPEND ${ROOT}/Port/)
 list(TRANSFORM VALIDATION_SRC PREPEND ${ROOT}/Port/)
 
+# The network game (docs/netcode.md, "Code layout"), and ENet, vendored, plain C
+file(GLOB_RECURSE NET_SRC ${ROOT}/Port/net/*.cpp)
+list(FILTER NET_SRC EXCLUDE REGEX "/tests/")
+file(GLOB ENET_SRC ${ROOT}/Port/net/enet/*.c)
+
 # The OpenGL renderer, linked in: the game finds its gbh_* and Vid_* functions in the program itself
 include(${ROOT}/Renderers/OpenGL/sources.cmake)
 set(REN_SRC ${GL_VIDEO_SRC} ${GL_RENDER_SRC} ${GL_ROOT}/platform/sdl_context.cpp)
 list(REMOVE_DUPLICATES REN_SRC)
+
+# ---- The netcode's tests, without the game (ctest -L net; the net-tests preset builds only them, with UBSan)
+
+# ENet keeps its own: what its configure would find on Linux and macOS
+add_library(enet STATIC ${ENET_SRC})
+target_include_directories(enet PUBLIC ${ROOT}/Port/net/enet/include)
+target_compile_options(enet PRIVATE -w)
+if(WIN32)
+  target_link_libraries(enet PUBLIC ws2_32 winmm)
+else()
+  target_compile_definitions(enet PRIVATE HAS_SOCKLEN_T=1 HAS_POLL=1 HAS_FCNTL=1 HAS_MSGHDR_FLAGS=1 HAS_GETADDRINFO=1
+                             HAS_GETNAMEINFO=1 HAS_INET_PTON=1 HAS_INET_NTOP=1)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_options(enet PRIVATE -fPIC)
+  endif()
+endif()
+
+set(NET ${ROOT}/Port/net)
+file(GLOB CORE_SRC ${NET}/core/*.cpp)
+file(GLOB TRANSPORT_SRC ${NET}/transport/*.cpp)
+add_executable(test_core ${NET}/tests/test_core.cpp ${CORE_SRC})
+add_executable(test_transport ${NET}/tests/test_transport.cpp ${TRANSPORT_SRC} ${CORE_SRC})
+target_link_libraries(test_transport PRIVATE enet)
+add_executable(test_bot ${NET}/tests/test_bot.cpp ${NET}/session/bot_nav.cpp)
+add_executable(test_rounds ${NET}/tests/test_rounds.cpp ${NET}/session/round_flow.cpp)
+foreach(t test_core test_transport test_bot test_rounds)
+  set_target_properties(${t} PROPERTIES CXX_STANDARD 17)
+  add_test(NAME ${t} COMMAND ${t})
+  set_tests_properties(${t} PROPERTIES LABELS net)
+  if(WIN32)
+    target_link_options(${t} PRIVATE -static)
+  endif()
+endforeach()
+add_custom_target(net_tests DEPENDS test_core test_transport test_bot test_rounds)
+
+option(GTA2_GAME "the game and its tests (needs SDL3); OFF: the netcode's tests only" ON)
+if(NOT GTA2_GAME)
+  return()
+endif()
 
 # ---- Flags
 
@@ -54,9 +102,8 @@ find_package(SDL3 REQUIRED CONFIG)
 add_library(game_flags INTERFACE)
 target_compile_options(game_flags INTERFACE -std=c++17 -w -Wno-address-of-temporary -fshort-wchar -fno-strict-aliasing -fwrapv
                        -fno-delete-null-pointer-checks -ftrivial-auto-var-init=zero -fno-strict-return)
-target_compile_definitions(game_flags INTERFACE _CRT_SECURE_NO_WARNINGS _USE_32BIT_TIME_T GTA2_PORT NDEBUG BUILD_MSS
-                           STATELOG_IN_PORT)
-target_include_directories(game_flags INTERFACE ${ROOT}/Source ${ROOT})
+target_compile_definitions(game_flags INTERFACE _CRT_SECURE_NO_WARNINGS _USE_32BIT_TIME_T GTA2_PORT NDEBUG BUILD_MSS)
+target_include_directories(game_flags INTERFACE ${ROOT}/Source ${ROOT} ${ROOT}/Port/net/enet/include)
 if(WIN32)
   # -fno-optimize-sibling-calls: no tail calls, so the state check's call trace sees every return
   target_compile_options(game_flags INTERFACE -fno-optimize-sibling-calls)
@@ -65,8 +112,10 @@ else()
   target_compile_options(game_flags INTERFACE -fms-extensions -include ${ROOT}/Port/compat/posix_prefix.h)
   target_include_directories(game_flags BEFORE INTERFACE ${ROOT}/Port/compat)
 endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "i686|x86$")
-  target_compile_options(game_flags INTERFACE -mno-sse -mfpmath=387) # x87 floats, as 10.5.exe
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  # x87 floats, as 10.5.exe; the state log compares the globals with 10.5.exe's (32-bit builds only)
+  target_compile_options(game_flags INTERFACE -mno-sse -mfpmath=387)
+  target_compile_definitions(game_flags INTERFACE STATELOG_IN_PORT)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_options(game_flags INTERFACE -fPIC)
@@ -88,8 +137,8 @@ endif()
 
 # ---- gta2_port
 
-add_executable(gta2_port ${LIB_SRC} ${PORT_SRC} ${VALIDATION_SRC})
-target_link_libraries(gta2_port PRIVATE game_flags renderer)
+add_executable(gta2_port ${LIB_SRC} ${PORT_SRC} ${VALIDATION_SRC} ${NET_SRC})
+target_link_libraries(gta2_port PRIVATE game_flags renderer enet)
 set_target_properties(gta2_port PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 if(NOT WIN32)
   add_library(bink OBJECT ${ROOT}/Source/3rdParty/bink.cpp) # stubs, no movies yet
@@ -110,7 +159,7 @@ elseif(WIN32)
   target_sources(gta2_port PRIVATE ${ROOT}/resources.rc)
   # --kill-at: undecorated stdcall export names, as the game resolves the renderer's with GetProcAddress
   target_link_options(gta2_port PRIVATE -mwindows -static -Wl,--kill-at)
-  target_link_libraries(gta2_port PRIVATE ${CMAKE_BINARY_DIR}/libbinkw32.a version dinput dxguid ddraw winmm ole32
+  target_link_libraries(gta2_port PRIVATE ${CMAKE_BINARY_DIR}/libbinkw32.a version dinput dxguid ddraw ws2_32 winmm ole32
                         uuid gdi32 comctl32 opengl32)
   add_custom_command(TARGET gta2_port POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
                      ${GTA2_SDL3_DIR}/bin/SDL3.dll ${CMAKE_BINARY_DIR}/)

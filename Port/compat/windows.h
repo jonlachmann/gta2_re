@@ -1,6 +1,7 @@
 // Port (docs/port.md): the Windows names the game uses, for non-Windows builds (only those look in
 // Port/compat). Types, constants and declarations only; the few functions the game still calls are in
-// Port/posix_win32.cpp. LONG and DWORD are 32 bits, as on Windows, in 32-bit and 64-bit builds alike.
+// Port/posix_win32.cpp. LONG and DWORD are 32 bits on every target, as on Windows; the *_PTR types and handles
+// are pointer-sized (4 bytes on Linux i386, 8 in the 64-bit macOS build).
 #pragma once
 
 #include <stdarg.h> // windows.h brings these in, and the game relies on it

@@ -6,13 +6,12 @@
 // d-pad drive the axes. Bindings to the pad are set in the game's Controls menu, as in the original.
 // No mouse data (the game doesn't use the mouse for play); one pad.
 #define DIRECTINPUT_VERSION 0x0700
-#include <SDL3/SDL.h>
+#include "sdl_dinput.hpp"
+#include "sdl_win32.hpp"
+#include "port_hooks.hpp"
 #include <deque>
 #include <dinput.h>
-#include "port_hooks.hpp"
 #include "validation/scripted_input.hpp"
-
-void Port_DInputOnEvent(const SDL_Event& e);
 
 namespace
 {
@@ -30,6 +29,7 @@ int gStickX, gStickY, gDpadX, gDpadY; // -1000..1000
 int gLastX, gLastY; // what the game was last told
 const GUID kPadGuid = {0x47544132, 0x5044, 0x0001, {'S', 'D', 'L', '3', 'P', 'A', 'D', 0}};
 unsigned char gKeyState[256]; // immediate state (GetDeviceState, the frontend)
+u16 gTypedChar[256]; // the character each key last typed, in the keyboard's layout with its shift (Port_TypedChar)
 DWORD gSequence;
 
 void AddKeyEvent(DWORD dik, bool down, DWORD time)
@@ -169,11 +169,18 @@ DWORD ToDik(SDL_Scancode sc)
     }
 }
 
-// One device class for the keyboard, the joystick and the mouse (which has no data).
+enum DeviceKind
+{
+    kKeyboard,
+    kPad,
+    kMouse, // no data
+};
+
+// One device class for the keyboard, the joystick and the mouse.
 class Device : public IDirectInputDevice2A
 {
   public:
-    Device(bool keyboard, bool pad) : mRefs(1), mKeyboard(keyboard), mPad(pad)
+    explicit Device(DeviceKind kind) : mRefs(1), mKind(kind)
     {
     }
 
@@ -223,7 +230,7 @@ class Device : public IDirectInputDevice2A
     STDMETHOD(GetDeviceState)(DWORD cb, LPVOID pData)
     {
         memset(pData, 0, cb);
-        if (mKeyboard)
+        if (mKind == kKeyboard)
         {
             ScriptedInput_Keys(AddKeyEvent);
             memcpy(pData, gKeyState, cb < sizeof(gKeyState) ? cb : sizeof(gKeyState));
@@ -233,13 +240,13 @@ class Device : public IDirectInputDevice2A
     // Buffered events: rgdod NULL with *pdwInOut = INFINITE flushes; DIGDD_PEEK leaves them queued.
     STDMETHOD(GetDeviceData)(DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD flags)
     {
-        if (!mKeyboard && !mPad)
+        if (mKind == kMouse)
         {
             *pdwInOut = 0;
             return DI_OK;
         }
-        mKeyboard ? ScriptedInput_Keys(AddKeyEvent) : ScriptedInput_Pad(AddPadEvent);
-        std::deque<KeyEvent>& events = mKeyboard ? gKeyEvents : gPadEvents;
+        mKind == kKeyboard ? ScriptedInput_Keys(AddKeyEvent) : ScriptedInput_Pad(AddPadEvent);
+        std::deque<KeyEvent>& events = mKind == kKeyboard ? gKeyEvents : gPadEvents;
         DWORD n = events.size() < *pdwInOut ? (DWORD)events.size() : *pdwInOut;
         for (DWORD i = 0; rgdod && i < n; i++)
         {
@@ -323,8 +330,7 @@ class Device : public IDirectInputDevice2A
 
   private:
     ULONG mRefs;
-    bool mKeyboard;
-    bool mPad;
+    DeviceKind mKind;
 };
 
 class DInput : public IDirectInputA
@@ -345,7 +351,7 @@ class DInput : public IDirectInputA
     }
     STDMETHOD(CreateDevice)(REFGUID guid, LPDIRECTINPUTDEVICEA* ppDevice, LPUNKNOWN)
     {
-        *ppDevice = new Device(IsEqualGUID(guid, GUID_SysKeyboard), IsEqualGUID(guid, kPadGuid));
+        *ppDevice = new Device(IsEqualGUID(guid, GUID_SysKeyboard) ? kKeyboard : IsEqualGUID(guid, kPadGuid) ? kPad : kMouse);
         return DI_OK;
     }
     // Joysticks: the first SDL gamepad, if one is connected at start-up (as DirectInput saw it)
@@ -392,70 +398,101 @@ class DInput : public IDirectInputA
     }
 };
 DInput gDInput;
+
+// The first pad's stick, d-pad and buttons
+void OnPadEvent(const SDL_Event& e)
+{
+    if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
+    {
+        if (e.gaxis.which != SDL_GetGamepadID(gPad))
+        {
+            return;
+        }
+        if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
+        {
+            gStickX = ScaleAxis(e.gaxis.value);
+        }
+        else if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
+        {
+            gStickY = ScaleAxis(e.gaxis.value);
+        }
+    }
+    else
+    {
+        if (e.gbutton.which != SDL_GetGamepadID(gPad))
+        {
+            return;
+        }
+        const bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+        switch (e.gbutton.button)
+        {
+            case SDL_GAMEPAD_BUTTON_DPAD_LEFT: gDpadX = down ? -1000 : 0; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: gDpadX = down ? 1000 : 0; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_UP: gDpadY = down ? -1000 : 0; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_DOWN: gDpadY = down ? 1000 : 0; break;
+            default:
+            {
+                const int n = PadButton(e.gbutton.button);
+                if (n >= 0)
+                {
+                    AddPadEvent(48 + n, down ? 0x80 : 0);
+                }
+                break;
+            }
+        }
+    }
+    UpdateAxis(0, gStickX, gDpadX, gLastX);
+    UpdateAxis(4, gStickY, gDpadY, gLastY);
+}
+
+void OnKeyEvent(const SDL_Event& e)
+{
+    const DWORD dik = e.key.repeat ? 0 : ToDik(e.key.scancode);
+    if (dik)
+    {
+        if (e.type == SDL_EVENT_KEY_DOWN)
+        {
+            // Lower case as typed, where the game's tables give capitals: the chat's font has it, and the commands are
+            // case-insensitive
+            const SDL_Keycode c = SDL_GetKeyFromScancode(e.key.scancode, e.key.mod, false);
+            gTypedChar[dik & 0xFF] = c > ' ' && c < 256 && c != SDLK_DELETE ? (u16)c : 0;
+        }
+        AddKeyEvent(dik, e.type == SDL_EVENT_KEY_DOWN, (DWORD)SDL_GetTicks());
+    }
+}
 } // namespace
+
+u16 Port_TypedChar(s32 dik)
+{
+    return gTypedChar[dik & 0xFF];
+}
 
 // Called with every SDL event the window loop sees (sdl_win32.cpp).
 void Port_DInputOnEvent(const SDL_Event& e)
 {
-    if (gPad && (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION || e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
-                 e.type == SDL_EVENT_GAMEPAD_BUTTON_UP))
+    switch (e.type)
     {
-        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
-        {
-            if (e.gaxis.which != SDL_GetGamepadID(gPad))
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+            if (gPad)
             {
-                return;
+                OnPadEvent(e);
             }
-            if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
-            {
-                gStickX = ScaleAxis(e.gaxis.value);
-            }
-            else if (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
-            {
-                gStickY = ScaleAxis(e.gaxis.value);
-            }
-        }
-        else
-        {
-            if (e.gbutton.which != SDL_GetGamepadID(gPad))
-            {
-                return;
-            }
-            const bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
-            switch (e.gbutton.button)
-            {
-                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: gDpadX = down ? -1000 : 0; break;
-                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: gDpadX = down ? 1000 : 0; break;
-                case SDL_GAMEPAD_BUTTON_DPAD_UP: gDpadY = down ? -1000 : 0; break;
-                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: gDpadY = down ? 1000 : 0; break;
-                default:
-                {
-                    const int n = PadButton(e.gbutton.button);
-                    if (n >= 0)
-                    {
-                        AddPadEvent(48 + n, down ? 0x80 : 0);
-                    }
-                    break;
-                }
-            }
-        }
-        UpdateAxis(0, gStickX, gDpadX, gLastX);
-        UpdateAxis(4, gStickY, gDpadY, gLastY);
-        return;
-    }
-    if ((e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) && !e.key.repeat)
-    {
-        const DWORD dik = ToDik(e.key.scancode);
-        if (dik)
-        {
-            AddKeyEvent(dik, e.type == SDL_EVENT_KEY_DOWN, (DWORD)SDL_GetTicks());
-        }
+            break;
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+            OnKeyEvent(e);
+            break;
     }
 }
 
 HRESULT WINAPI Port_DirectInputCreateA(HINSTANCE, DWORD, LPDIRECTINPUTA* ppDI, LPUNKNOWN)
 {
-    SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    if (!Port_IsHeadless())
+    {
+        SDL_InitSubSystem(SDL_INIT_GAMEPAD); // headless: none, as its every event poll asks the system for new ones
+    }
     gScriptedPad = ScriptedInput_HasPad();
     *ppDI = &gDInput;
     return DI_OK;

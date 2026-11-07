@@ -1,9 +1,7 @@
 // Port/posix_wchar.cpp check (ctest, Port/CMakeLists.txt).
 #include "compat/posix_wchar.h"
 #include <stdio.h>
-
-static int gFailures;
-#define CHECK(x) ((x) ? (void)0 : (void)(printf("FAILED line %d: %s\n", __LINE__, #x), gFailures++))
+#include "check.h"
 
 static bool Eq(const wchar_t* a, const char* b)
 {
@@ -41,6 +39,5 @@ int main()
     CHECK(mbstowcs(a, "hey", 8) == 3 && Eq(a, "hey"));
     CHECK(Eq(_itow(-120, a, 10), "-120") && Eq(_itow(255, a, 16), "ff"));
 
-    printf(gFailures ? "posix_wchar_test: %d failures\n" : "posix_wchar_test: OK\n", gFailures);
-    return gFailures != 0;
+    return CheckReport("posix_wchar_test");
 }

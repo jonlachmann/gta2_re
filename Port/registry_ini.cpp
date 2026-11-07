@@ -25,7 +25,6 @@ std::map<std::string, Section>& Sections()
     static std::map<std::string, Section> sSections;
     return sSections;
 }
-#define gSections Sections()
 bool gLoaded;
 const char* const kFile = "gta2.ini";
 const char* const kGameKey = "software\\dma design ltd\\gta2\\";
@@ -57,7 +56,8 @@ void Save()
     {
         return;
     }
-    for (std::map<std::string, Section>::const_iterator s = gSections.begin(); s != gSections.end(); ++s)
+    const std::map<std::string, Section>& sections = Sections();
+    for (std::map<std::string, Section>::const_iterator s = sections.begin(); s != sections.end(); ++s)
     {
         fprintf(f, "[%s]\n", s->first.c_str());
         for (Section::const_iterator v = s->second.begin(); v != s->second.end(); ++v)
@@ -112,7 +112,7 @@ void Load()
             {
                 *end = 0;
             }
-            pSection = &gSections[Lower(line + 1)];
+            pSection = &Sections()[Lower(line + 1)];
             continue;
         }
         char* eq = strchr(line, '=');
@@ -153,19 +153,25 @@ void Load()
     fclose(f);
 }
 
-Section* Find(LPCSTR subKey, bool create)
+// pExisted: whether the key was there before (a created one wasn't)
+Section* Find(LPCSTR subKey, bool create, bool* pExisted = NULL)
 {
     if (!gLoaded)
     {
         Load();
     }
+    std::map<std::string, Section>& sections = Sections();
     const std::string name = SectionName(subKey);
-    std::map<std::string, Section>::iterator it = gSections.find(name);
-    if (it != gSections.end())
+    std::map<std::string, Section>::iterator it = sections.find(name);
+    if (pExisted)
+    {
+        *pExisted = it != sections.end();
+    }
+    if (it != sections.end())
     {
         return &it->second;
     }
-    return create ? &gSections[name] : NULL;
+    return create ? &sections[name] : NULL;
 }
 } // namespace
 
@@ -184,8 +190,8 @@ LONG WINAPI Port_RegOpenKeyA(HKEY root, LPCSTR subKey, PHKEY phk)
 LONG WINAPI Port_RegCreateKeyExA(HKEY, LPCSTR subKey, DWORD, LPSTR, DWORD, REGSAM, LPSECURITY_ATTRIBUTES, PHKEY phk,
                                  LPDWORD disposition)
 {
-    const bool existed = Find(subKey, false) != NULL;
-    *phk = (HKEY)Find(subKey, true);
+    bool existed;
+    *phk = (HKEY)Find(subKey, true, &existed);
     if (disposition)
     {
         *disposition = existed ? REG_OPENED_EXISTING_KEY : REG_CREATED_NEW_KEY;

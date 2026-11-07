@@ -1,6 +1,7 @@
 // Port (docs/port.md): the handles behind PTR32 (Source/ptr32.hpp) in the 64-bit build. Every pointer the scripts
 // keep gets one, for good: they point to pool slots and a few globals, so the table stays small.
-#if defined(__LP64__)
+#include "Source/types.hpp"
+#if defined(GTA2_PORT_64)
 #include "Source/ptr32.hpp"
 #include <unordered_map>
 #include <vector>

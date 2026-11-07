@@ -4,9 +4,9 @@
 // No 3D provider is offered, so the game stays on its 2D (stereo pan) path; streams are decoded
 // whole on open (a few MB each). Add positional audio or streaming decode if either matters.
 #include "Source/3rdParty/mss.h"
+#include "Port/port_hooks.hpp" // gPortNoAudio
 #include <SDL3/SDL.h>
 #include <math.h>
-#include <string>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -138,21 +138,36 @@ void SDLCALL Mix(void*, SDL_AudioStream* stream, int additional, int)
     const int frames = additional / (int)(2 * sizeof(float));
     if (frames > 0)
     {
-        std::vector<float> buf(frames * 2);
+        static std::vector<float> buf; // only the audio thread calls this: no allocation once it is big enough
+        buf.resize(frames * 2);
         Port_MilesMix(&buf[0], frames);
         SDL_PutAudioStreamData(stream, &buf[0], frames * 2 * sizeof(float));
     }
 }
 
-Voice* NewVoice(bool isStream)
+// Miles' defaults for a new or re-initialised sample: stopped, no data, mono 16-bit at 22 kHz, full volume,
+// centred, played once.
+void ResetVoice(Voice* v)
 {
-    Voice* v = new Voice();
-    v->used = true;
-    v->isStream = isStream;
+    v->playing = false;
+    v->data = NULL;
+    v->len = 0;
+    v->format = DIG_F_MONO_16;
+    v->sign = false;
+    v->rate = 22050;
     v->volume = 127;
     v->pan = 64;
     v->loops = 1;
-    v->rate = 22050;
+    v->loopStart = v->loopEnd = 0;
+    v->pos = 0;
+}
+
+Voice* NewVoice(bool isStream)
+{
+    Voice* v = new Voice();
+    ResetVoice(v);
+    v->used = true;
+    v->isStream = isStream;
     SDL_LockMutex(gLock);
     gVoices.push_back(v);
     SDL_UnlockMutex(gLock);
@@ -231,9 +246,15 @@ DXDEC void AILCALL AIL_mem_free_lock(void FAR* ptr)
     free(ptr);
 }
 
+bool gPortNoAudio; // here, not in port_hooks.cpp: the mixer's test links this file alone
+
 // The game passes the output format it wants; the mixer works in float stereo at 44.1 kHz regardless.
 DXDEC S32 AILCALL AIL_waveOutOpen(HDIGDRIVER FAR* drvr, LPHWAVEOUT FAR*, S32, LPWAVEFORMAT)
 {
+    if (gPortNoAudio)
+    {
+        return -1; // the game goes on without sound, as on a machine without a device (sound_obj::Init_419E10)
+    }
     AIL_startup();
     if (!gOut)
     {
@@ -293,18 +314,7 @@ DXDEC void AILCALL AIL_release_sample_handle(HSAMPLE S)
 DXDEC void AILCALL AIL_init_sample(HSAMPLE S)
 {
     Locked l;
-    Voice* v = V(S);
-    v->playing = false;
-    v->data = NULL;
-    v->len = 0;
-    v->format = DIG_F_MONO_16;
-    v->sign = false;
-    v->rate = 22050;
-    v->volume = 127;
-    v->pan = 64;
-    v->loops = 1;
-    v->loopStart = v->loopEnd = 0;
-    v->pos = 0;
+    ResetVoice(V(S));
 }
 
 DXDEC void AILCALL AIL_set_sample_address(HSAMPLE S, void FAR* start, U32 len)
@@ -376,15 +386,17 @@ DXDEC U32 AILCALL AIL_sample_status(HSAMPLE S)
 
 DXDEC HSTREAM AILCALL AIL_open_stream(HDIGDRIVER, char FAR* filename, S32)
 {
-    std::string path = filename;
-    for (size_t i = 0; i < path.size(); i++)
-    {
-        path[i] = path[i] == '\\' ? '/' : path[i]; // the game's paths use backslashes
-    }
+#if defined(_WIN32)
+    const char* path = filename;
+#else
+    // The game's paths use backslashes and its own letter case ("data\\audio\\vocals"): resolved as its fopen is
+    char resolved[1024];
+    const char* path = port_resolve_path(filename, resolved, sizeof(resolved));
+#endif
     SDL_AudioSpec spec;
     Uint8* buf = NULL;
     Uint32 len = 0;
-    if (!SDL_LoadWAV(path.c_str(), &spec, &buf, &len))
+    if (!SDL_LoadWAV(path, &spec, &buf, &len))
     {
         return NULL;
     }

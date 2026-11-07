@@ -8,38 +8,33 @@
 #   env IGNORE=<regex> on chunk names to leave out (default: render scratch, gTileVerts_*, and sound,
 #       whose state follows the real audio playback, not the game clock)
 import os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import DEMO, IGNORE, demos, table_entries
 
 CHUNK = 64
 
 def chunks(table):
-    out = []
-    for line in open(table):
-        og, size, pointee, name = line.split()
-        for prefix, n in ((name, int(size)), ('*' + name, int(pointee))):
-            if prefix.startswith('*') and not n:
-                continue
-            for off in range(0, n, CHUNK):
-                out.append('%s+0x%x' % (prefix, off))
-    return out
+    return ['%s+0x%x' % (name, off) for name, n in table_entries(table) for off in range(0, n, CHUNK)]
 
-DEMO = int(os.environ.get('DEMO', '1'))  # DEMO=n: compare the nth attract demo of the logs
+
+def frame_line(line):
+    parts = line.split()
+    return int(parts[2]) if parts and parts[0] == 'F' else None
 
 
 def frames(path):
-    """Yields (game frame, live state) at the first record of each frame, for demo DEMO of a log."""
-    state, last, demo = {}, -1, 1
-    for line in open(path):
-        parts = line.split()
-        if not parts or parts[0] != 'F':
+    """Yields (game frame, live state) at the first record of each frame, for demo DEMO of a log. The state is every
+    line's from the start: a line only has the chunks that changed."""
+    state, last = {}, None
+    for demo, line in demos(open(path), frame_line):
+        frame = frame_line(line)
+        if frame is None:
             continue
-        frame = int(parts[2])
-        if frame < last:
-            demo += 1  # the game frame starts again: the next demo
-            if demo > DEMO:
-                return
+        if demo > DEMO:
+            return
         if not line.endswith('\n'):
             return  # cut off by the kill
-        for item in parts[3:]:
+        for item in line.split()[3:]:
             c, h = item.split(':')
             state[int(c, 16)] = h
         if frame != last:
@@ -67,7 +62,7 @@ noise = set()
 if os.environ.get('NOISE'):
     for f, sa, sc in lockstep(sys.argv[1], os.environ['NOISE']):
         noise |= {k for k in set(sa) | set(sc) if sa.get(k) != sc.get(k)}
-ignore = re.compile(os.environ.get('IGNORE', r'gTileVerts_|gSound_obj_66F680|gSampManager_6FFF00'))
+ignore = re.compile(IGNORE)
 noise |= {k for k, n in enumerate(names) if ignore.search(n)}
 equal_once, never, count, first = set(), None, 0, None
 for f, sa, sb in lockstep(sys.argv[1], sys.argv[2]):

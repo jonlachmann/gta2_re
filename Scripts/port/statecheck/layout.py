@@ -7,6 +7,8 @@
 #    field_0_pool.field_4_pool[0].field_23C_...
 # usage: layout.py <exe> <table> <mask out>      (or import it: load(exe, table))
 import bisect, json, os, re, subprocess, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import table_entries
 
 DWARFDUMP = os.environ.get('LLVM_DWARFDUMP', '/opt/homebrew/opt/llvm/bin/llvm-dwarfdump')
 KEEP = ('DW_AT_name', 'DW_AT_type', 'DW_AT_byte_size', 'DW_AT_data_member_location', 'DW_AT_data_bit_offset',
@@ -207,13 +209,10 @@ def load(exe, table):
     if os.path.exists(cache) and os.path.getmtime(cache) > max(os.path.getmtime(exe), os.path.getmtime(table)):
         return {k: [tuple(f) for f in v] for k, v in json.load(open(cache)).items()}
     lay, out = Layout(exe), {}
-    for line in open(table):
-        og, size, pointee, name = line.split()
-        for e, n in ((name, int(size)), ('*' + name, int(pointee))):
-            if n:
-                f = lay.entry(e)
-                if f:
-                    out[e] = f
+    for e, n in table_entries(table):
+        f = lay.entry(e) if n else None
+        if f:
+            out[e] = f
     json.dump(out, open(cache, 'w'))
     return out
 
@@ -226,10 +225,7 @@ def name(layout, entry, offset):
 
 def write_mask(exe, table, path):
     lay = load(exe, table)
-    sizes = {}
-    for line in open(table):
-        og, size, pointee, n = line.split()
-        sizes[n], sizes['*' + n] = int(size), int(pointee)
+    sizes = dict(table_entries(table))
     with open(path, 'w') as f:
         for e, fields in lay.items():
             for off, n in padding(fields, sizes[e]):

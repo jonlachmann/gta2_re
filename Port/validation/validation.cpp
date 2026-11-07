@@ -2,6 +2,7 @@
 #include "Port/port_hooks.hpp"
 #include "fast_clock.hpp"
 #include "state_log.hpp"
+#include "Port/net/eval/sim_bench.hpp"
 #include <stdlib.h>
 
 void Validation_Start()
@@ -12,7 +13,7 @@ void Validation_Start()
     // A shorter idle time before attract mode (see Scripts/port/statecheck/patch_attract.py)
     if (const char* ms = getenv("GTA2_PORT_ATTRACT_MS"))
     {
-        gPortAttractIdleMs = (unsigned)atoi(ms);
+        gPortAttractIdleMs = (u32)atoi(ms);
     }
 }
 
@@ -24,4 +25,5 @@ void Validation_VideoInit()
 void Validation_Frame(unsigned flip)
 {
     StateLog_Frame(flip);
+    SimBench_Frame(flip); // the netcode's simulation bench (GTA2_SIMBENCH)
 }
