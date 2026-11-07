@@ -22,7 +22,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y clang lld ninja-build zip libgl-dev libegl-dev libx11-dev libxext-dev libxrandr-dev \
-          libxcursor-dev libxi-dev libxss-dev libxfixes-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+          libxcursor-dev libxi-dev libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols \
           libdecor-0-dev libpulse-dev libasound2-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev
 
     # Ubuntu 24.04 has no SDL3 package; the zip takes this one along (libSDL3.so.0 next to the game)
@@ -46,7 +46,7 @@ jobs:
         path: gta2-linux.zip
 
   mac:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v4
       with:
@@ -67,7 +67,7 @@ jobs:
   # Cross-built on macOS, as docs/port.md describes: clang compiles, Homebrew's MinGW-w64 links. No binkw32.dll here:
   # Bink's stubs stand in (no movies)
   windows:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v4
       with:
