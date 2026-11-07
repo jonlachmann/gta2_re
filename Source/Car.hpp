@@ -1411,7 +1411,7 @@ struct CarPool
         field_0_pool.UpdateNextPrev(pItem);
     }
 
-    Pool<Car, 306> field_0_pool;
+    Pool<Car, GTA2_POOL(306)> field_0_pool;
 };
 
 class TrailerPool
