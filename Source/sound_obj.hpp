@@ -29,6 +29,12 @@ struct SoundPosEntry
     {
     }
 
+#if defined(GTA2_PORT)
+    // Port (docs/netcode.md, "The rollback set"): from a pool in the netcode's rollback set (Port/net/engine/sound_pool.cpp)
+    static void* operator new(size_t size);
+    static void operator delete(void* p);
+#endif
+
     Fix16 field_0_last_speed;
     u32 field_4_car;
     s16 field_8_unused;
@@ -140,7 +146,11 @@ GTA2_ASSERT_SIZEOF_ALWAYS(Sound_Params, 0x8);
 
 class sound_obj
 {
+#if defined(GTA2_PORT)
+  public: // the netcode saves and restores the sound state (Port/net/engine/rollback.cpp)
+#else
   private:
+#endif
     bool field_0_bSoundInitialized;
     bool field_1_isPaused;
     bool field_2_service_enabled;
