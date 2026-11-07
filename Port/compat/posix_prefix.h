@@ -5,11 +5,13 @@
 #pragma once
 #ifdef __cplusplus
     // These #undef the C library's names (fopen, swprintf, ...), so they come before the redirects below,
-    // and their include guards keep later includes from undoing them.
+    // and their include guards keep later includes from undoing them. <fstream> too: newer libc++ calls
+    // std::fopen in it (Xcode 26), which the redirect would turn into std::port_fopen.
     #include <cstdio>
     #include <cstdlib>
     #include <cstring>
     #include <cwchar>
+    #include <fstream>
     #include <string>
 #endif
 #include "windows.h"
