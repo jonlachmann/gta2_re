@@ -24,6 +24,9 @@
 #include "CollisionSoundQueue.hpp"
 #include "block_face.hpp"
 #include "car_surface_type_more.hpp"
+#if defined(GTA2_PORT)
+    #include "Port/port_hooks.hpp"
+#endif
 
 DEFINE_GLOBAL(Map_0x370*, gMap_0x370_6F6268, 0x6F6268);
 DEFINE_GLOBAL(gmp_block_info*, gBlockInfo0_6F5EB0, 0x6F5EB0);
@@ -268,7 +271,11 @@ s32 Map_0x370::FindZoneIdxByName_4DF050(const char_type* pZoneName, u8 zone_name
 MATCH_FUNC(0x4DF0F0)
 gmp_map_zone* Map_0x370::GetNextZoneOfTypeRoundRobin_4DF0F0(u8 zone_type)
 {
+#if defined(GTA2_PORT)
+    s16& sLastIdx_6F626C = gPortZoneRoundRobin;
+#else
     static s16 sLastIdx_6F626C; // the turn, one for every zone type: a call for one type moves it on for the others too
+#endif
 
     s16 zone_stack[40];
 
@@ -4543,7 +4550,7 @@ void Map_0x370::build_zone_list_4E90E0(u32 chunk_size)
         in_use_size += zone_data_size;
         pZone = reinterpret_cast<gmp_map_zone*>(reinterpret_cast<u8*>(pZone) + zone_data_size);
     }
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     field_32C_pZones = static_cast<gmp_zone_list*>(Memory::malloc_4FE4D0(sizeof(gmp_zone_list) + sizeof(gmp_map_zone*) * num_zones)); // 64-bit pointers
 #else
     field_32C_pZones = static_cast<gmp_zone_list*>(Memory::malloc_4FE4D0(4 * num_zones + 4));
