@@ -43,7 +43,7 @@ class File
 
     EXPORT static char_type __stdcall SkipWhitespace_4A7340(FILE* Stream);
 
-#if defined(GTA2_PORT) && defined(__LP64__)
+#if defined(GTA2_PORT_64)
     // Port, 64-bit: size_t is no longer u32, and callers pass both. These take the other one.
     static void AppendBufferToFile_4A6F50(const char_type* FileName, void* Buffer, u32* pBufferSize)
     {
