@@ -53,6 +53,9 @@
 #include "CarAI.hpp"
 #include "winmain.hpp"
 #include "ped_graphic_type.hpp"
+#if defined(GTA2_PORT)
+#include "Port/port_hooks.hpp" // gPortKeepWantedPoints
+#endif
 
 // Modes of ChangePedStatesByMode_463300: the ped_state_1/ped_state_2 pair each one sets
 namespace ped_states_mode
@@ -4420,7 +4423,11 @@ bool Ped::PoolUpdate()
                 Ped::UpdateAI_462280();
                 gLastProcessedPed_6787C0 = this;
                 Ped::ManageWeapon_46F390();
+#if defined(GTA2_PORT)
+                if (field_20A_wanted_points && !gPortKeepWantedPoints)
+#else
                 if (field_20A_wanted_points)
+#endif
                 {
                     if (bSkip_police_67D4F9 || field_240_occupation == ped_ocupation_enum::empty)
                     {
