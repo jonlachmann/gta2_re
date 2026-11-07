@@ -7,9 +7,12 @@
 [submodule "Source/3rdParty/Detours"]
 	path = Source/3rdParty/Detours
 	url = https://github.com/MrSapps/Detours
+# GTA2Hax: the gta2_re-port branch of a fork holds the port's GTA2Hax commits (include paths, ddraw_vc6.h on
+# non-Windows builds, STATIC_ASSERT off on 64-bit), until CriminalRETeam/GTA2Hax has them
 [submodule "3rdParty/GTA2Hax"]
 	path = 3rdParty/GTA2Hax
-	url = https://github.com/CriminalRETeam/GTA2Hax.git
+	url = https://github.com/jonlachmann/GTA2Hax.git
+	branch = gta2_re-port
 [submodule "3rdParty/cpp_permuter"]
 	path = 3rdParty/cpp_permuter
 	url = https://github.com/CriminalRETeam/cpp_permuter.git

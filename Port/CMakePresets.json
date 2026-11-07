@@ -1,0 +1,60 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+    {
+      "name": "mac",
+      "inherits": "base",
+      "displayName": "macOS, native (arm64, 64-bit)",
+      "binaryDir": "${sourceDir}/../build_port/mac"
+    },
+    {
+      "name": "mac-asan",
+      "inherits": "mac",
+      "displayName": "macOS with AddressSanitizer",
+      "binaryDir": "${sourceDir}/../build_port/mac_asan",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-fsanitize=address",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address"
+      }
+    },
+    {
+      "name": "linux64",
+      "inherits": "base",
+      "displayName": "Linux x86_64, cross-compiled (a Debian sysroot)",
+      "binaryDir": "${sourceDir}/../build_port/linux64",
+      "toolchainFile": "${sourceDir}/cmake/linux.cmake",
+      "cacheVariables": {
+        "GTA2_LINUX_ARCH": "x86_64",
+        "GTA2_LINUX_SYSROOT": "${sourceDir}/../build_port/linux64_sysroot"
+      }
+    },
+    {
+      "name": "linux32",
+      "inherits": "base",
+      "displayName": "Linux i686 with x87 floats, cross-compiled (a Debian sysroot)",
+      "binaryDir": "${sourceDir}/../build_port/linux",
+      "toolchainFile": "${sourceDir}/cmake/linux.cmake",
+      "cacheVariables": {
+        "GTA2_LINUX_ARCH": "i686",
+        "GTA2_LINUX_SYSROOT": "${sourceDir}/../build_port/linux_sysroot"
+      }
+    },
+    {
+      "name": "windows",
+      "inherits": "base",
+      "displayName": "Windows 32-bit (MinGW-w64), runs under wine",
+      "binaryDir": "${sourceDir}/../build_port/windows",
+      "toolchainFile": "${sourceDir}/cmake/mingw-clang.cmake",
+      "cacheVariables": {
+        "GTA2_SDL3_DIR": "${sourceDir}/../build_port/sdl3",
+        "GTA2_DLL_DIR": "${sourceDir}/../build_port/dlls"
+      }
+    }
+  ]
+}
