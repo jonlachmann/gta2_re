@@ -30,6 +30,7 @@ int port_CapturedPad();
 bool port_MouseMode();
 bool port_TakeMouse(float* pX, float* pY, int* pLeft, int* pRight, int* pWheel);
 bool port_MouseLeftDown();
+void port_DeferRegistrySaves(bool defer);
 #endif
 
 namespace PortMenu
@@ -823,6 +824,16 @@ void Open()
     sCapturing = -1;
     sDragging = false;
     DiscardMouse();
+#if defined(GTA2_PORT_SDL)
+    port_DeferRegistrySaves(true);
+#endif
+}
+
+void Close()
+{
+#if defined(GTA2_PORT_SDL)
+    port_DeferRegistrySaves(false);
+#endif
 }
 
 Result HandleInput(Input input)

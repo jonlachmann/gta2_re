@@ -153,6 +153,10 @@ bool Update(Frontend* pFrontend)
 {
     if (pFrontend->mCurrentPageIdx != kMenuPage)
     {
+        if (sShown)
+        {
+            PortMenu::Close();
+        }
         sShown = false;
 #if defined(GTA2_PORT_SDL)
         OriginalPageMouse(pFrontend);

@@ -221,6 +221,7 @@ void PlaySound(PortMenu::Result result)
 void Close()
 {
     sOpen = false;
+    PortMenu::Close();
     if (gGame_0x40->IsPaused())
     {
         gGame_0x40->Unpause();
@@ -261,6 +262,7 @@ void Preload()
 void Release()
 {
     sOpen = false;
+    PortMenu::Close();
     FreeStyle();
 }
 

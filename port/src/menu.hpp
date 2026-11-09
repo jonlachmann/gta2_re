@@ -35,6 +35,8 @@ bool PadMode();
 
 // On the main page; in game it starts with RESUME and ends with QUIT GAME.
 void Open();
+// The menu is gone: the settings changed in it are saved now rather than at each change.
+void Close();
 
 Result HandleInput(Input input);
 

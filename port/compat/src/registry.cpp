@@ -69,8 +69,19 @@ Key* FromHandle(HKEY h)
     return reinterpret_cast<Key*>(h);
 }
 
+// While a menu is open its changes are saved as it closes: a save rewrites the file, tens of
+// milliseconds on the 3DS, for each step of a setting.
+bool sDeferSaves;
+bool sUnsaved;
+
 void Save()
 {
+    if (sDeferSaves)
+    {
+        sUnsaved = true;
+        return;
+    }
+    sUnsaved = false;
     FILE* f = fopen(kFileName, "w");
     if (!f)
     {
@@ -237,7 +248,30 @@ LONG Open(HKEY root, LPCSTR subKey, PHKEY pResult, bool create)
     *pResult = reinterpret_cast<HKEY>(&it->second);
     return ERROR_SUCCESS;
 }
+void SaveUnsaved()
+{
+    sDeferSaves = false;
+    if (sUnsaved)
+    {
+        Save();
+    }
+}
 } // namespace
+
+void port_DeferRegistrySaves(bool defer)
+{
+    static bool sAtExit;
+    if (defer && !sAtExit)
+    {
+        sAtExit = true;
+        atexit(SaveUnsaved);
+    }
+    sDeferSaves = defer;
+    if (!defer)
+    {
+        SaveUnsaved();
+    }
+}
 
 extern "C" {
 
