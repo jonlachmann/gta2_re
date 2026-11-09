@@ -60,6 +60,58 @@ intptr_t port_findfirst(const char* pattern, struct _finddata_t* pData)
 #undef fopen
 #undef remove
 
+// Each lookup is a request to the file system, tens of milliseconds on the 3DS, and the game opens
+// the same files again and again: the components found and the directories listed are kept.
+static std::map<std::string, std::string>& ResolvedPrefixes() // as asked -> as found
+{
+    static std::map<std::string, std::string> sResolved;
+    return sResolved;
+}
+
+static std::map<std::string, std::map<std::string, std::string>>& Listings() // directory -> lower case -> name
+{
+    static std::map<std::string, std::map<std::string, std::string>> sListings;
+    return sListings;
+}
+
+static std::string Lower(const std::string& s)
+{
+    std::string out(s);
+    for (char& c : out)
+    {
+        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    }
+    return out;
+}
+
+// The name in the directory that matches without regard to case; the listing is read again when it lacks it.
+static bool FindInDirectory(const std::string& dir, const std::string& part, std::string* pName)
+{
+    std::map<std::string, std::string>& names = Listings()[dir];
+    const std::string key = Lower(part);
+    std::map<std::string, std::string>::const_iterator it = names.find(key);
+    if (it == names.end())
+    {
+        names.clear();
+        DIR* d = opendir(dir.empty() ? "." : dir.c_str());
+        if (d)
+        {
+            while (dirent* e = readdir(d))
+            {
+                names.insert(std::make_pair(Lower(e->d_name), std::string(e->d_name)));
+            }
+            closedir(d);
+        }
+        it = names.find(key);
+        if (it == names.end())
+        {
+            return false;
+        }
+    }
+    *pName = it->second;
+    return true;
+}
+
 // Each component that does not exist as written is looked up in its directory without regard to case.
 // A missing last component keeps its spelling, so new files are created as the game names them.
 static const char* ResolveHostPath(const char* path, char* out)
@@ -78,6 +130,7 @@ static const char* ResolveHostPath(const char* path, char* out)
     }
 
     std::string done = (!p.empty() && p[0] == '/') ? "/" : "";
+    std::string asked = done;
     size_t pos = done.size();
     while (pos <= p.size())
     {
@@ -93,26 +146,31 @@ static const char* ResolveHostPath(const char* path, char* out)
             continue;
         }
         std::string candidate = done + part;
-        if (part != ".." && access(candidate.c_str(), F_OK) != 0)
+        asked += part;
+        const std::map<std::string, std::string>::const_iterator hit = ResolvedPrefixes().find(asked);
+        if (hit != ResolvedPrefixes().end())
         {
-            DIR* d = opendir(done.empty() ? "." : done.c_str());
-            if (d)
+            candidate = hit->second;
+        }
+        else if (part != "..")
+        {
+            std::string name;
+            bool found = access(candidate.c_str(), F_OK) == 0;
+            if (!found && FindInDirectory(done, part, &name))
             {
-                while (dirent* e = readdir(d))
-                {
-                    if (strcasecmp(e->d_name, part.c_str()) == 0)
-                    {
-                        candidate = done + e->d_name;
-                        break;
-                    }
-                }
-                closedir(d);
+                candidate = done + name;
+                found = true;
+            }
+            if (found)
+            {
+                ResolvedPrefixes()[asked] = candidate;
             }
         }
         done = candidate;
         if (pos <= p.size())
         {
             done += '/';
+            asked += '/';
         }
     }
     snprintf(out, PATH_MAX, "%s", done.empty() ? "." : done.c_str());
