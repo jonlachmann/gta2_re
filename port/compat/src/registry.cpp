@@ -308,6 +308,13 @@ LSTATUS WINAPI RegSetValueExA(HKEY h, LPCSTR name, DWORD, DWORD type, const BYTE
     {
         return ERROR_INVALID_HANDLE;
     }
+    // The game writes some values unchanged at each start, and a save rewrites the file.
+    const std::map<std::string, std::pair<std::string, Value>>::const_iterator it = pKey->mValues.find(Lower(name ? name : ""));
+    if (it != pKey->mValues.end() && it->second.second.mType == type && it->second.second.mData.size() == size &&
+        (!size || memcmp(it->second.second.mData.data(), pData, size) == 0))
+    {
+        return ERROR_SUCCESS;
+    }
     SetValue(*pKey, name ? name : "", type, pData, size);
     Save();
     return ERROR_SUCCESS;
