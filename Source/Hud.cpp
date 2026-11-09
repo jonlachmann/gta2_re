@@ -126,6 +126,9 @@ static inline void ProjectWorldToScreen_Hud_4B90E0(Camera* pCam, Fix16 x, Fix16 
 MATCH_FUNC(0x4bbbb0)
 Hud::~Hud()
 {
+#if defined(GTA2_PORT)
+    PortPauseMenu::Release();
+#endif
 }
 
 MATCH_FUNC(0x4be650)
@@ -3501,6 +3504,9 @@ void Hud::Init()
     mGangRespectBars.InitGangRespectBars();
     mWantedLevel.Init();
     mArrows.CreatePlayerArrows();
+#if defined(GTA2_PORT)
+    PortPauseMenu::Preload();
+#endif
 }
 
 MATCH_FUNC(0x5d6c20)

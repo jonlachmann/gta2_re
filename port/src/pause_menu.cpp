@@ -25,7 +25,7 @@ namespace
 {
 bool sOpen;
 
-// The frontend's style while the menu is open, for its fonts and sprites.
+// The frontend's style, for the menu's fonts and sprites, loaded with the city (Preload).
 gtx_0x106C* sStyle;
 TextureCache* sTextures;
 
@@ -108,6 +108,10 @@ void LoadStyle()
 
 void FreeStyle()
 {
+    if (!sStyle)
+    {
+        return;
+    }
     UseFrontendStyle(true);
     GTA2_DELETE_AND_NULL(sTextures);
     GTA2_DELETE_AND_NULL(sStyle);
@@ -217,7 +221,6 @@ void PlaySound(PortMenu::Result result)
 void Close()
 {
     sOpen = false;
-    FreeStyle();
     if (gGame_0x40->IsPaused())
     {
         gGame_0x40->Unpause();
@@ -243,6 +246,24 @@ bool IsOpen()
     return sOpen;
 }
 
+void Preload()
+{
+    if (!sStyle)
+    {
+        LoadStyle();
+    }
+    if (gSampManager.mhDriver && sSoundData.empty())
+    {
+        LoadSoundData();
+    }
+}
+
+void Release()
+{
+    sOpen = false;
+    FreeStyle();
+}
+
 bool HandleKey(s32 action, Player* pPlayer)
 {
     if (!sOpen)
@@ -252,7 +273,10 @@ bool HandleKey(s32 action, Player* pPlayer)
             return false;
         }
         sOpen = true;
-        LoadStyle();
+        if (!sStyle)
+        {
+            LoadStyle();
+        }
         OpenSounds();
         PortMenu::Open();
         if (!gGame_0x40->IsPaused())

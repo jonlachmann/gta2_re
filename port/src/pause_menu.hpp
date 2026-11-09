@@ -8,6 +8,11 @@ namespace PortPauseMenu
 {
 bool IsOpen();
 
+// Loads what the menu shows and plays as a city starts (fstyle.sty takes a quarter of a second on the
+// 3DS), and frees it as the city ends.
+void Preload();
+void Release();
+
 // A key pressed in game (DIK code); true when the menu took it.
 bool HandleKey(s32 action, Player* pPlayer);
 
