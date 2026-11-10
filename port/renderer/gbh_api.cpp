@@ -79,8 +79,11 @@ PalEntry* gPals[16384];
 std::vector<ImageEntry> gImages;
 LightInternal gLights[256];
 u32 gNumLights;
-// Whether the last gbh_AddLight found room, for port_LampLight.
+// Whether the last gbh_AddLight found room and kept the light, for port_LampLight.
 bool gLightAdded;
+// The blocks MapRenderer walks at layer 0, its widest (gbh_SetCamera): lights that reach none are left out.
+f32 gLightArea[4];
+bool gLightAreaSet;
 // Red, green and blue; tinted only by port_SetAmbient.
 f32 gAmbient[3] = {255.0f, 255.0f, 255.0f};
 // The game's and the port's lights scaled by it (the DAY-NIGHT CYCLE's fade).
@@ -973,8 +976,10 @@ GBH_EXPORT s32 GTA2_CC gbh_SetColourDepth()
     return 1;
 }
 
-GBH_EXPORT s32 GTA2_CC gbh_SetCamera(f32, f32, f32, f32)
+GBH_EXPORT s32 GTA2_CC gbh_SetCamera(f32 minX, f32 minY, f32 maxX, f32 maxY)
 {
+    gLightArea[0] = minX, gLightArea[1] = minY, gLightArea[2] = maxX + 1.0f, gLightArea[3] = maxY + 1.0f;
+    gLightAreaSet = true;
     return 0;
 }
 
@@ -1145,6 +1150,17 @@ GBH_EXPORT s32 GTA2_CC gbh_AddLight(SLight* pLight)
     l.mInvRadius = l.mRadius > 0.0f ? 1.0f / l.mRadius : 0.0f;
     l.mDx = l.mDy = l.mWidth = l.mBeam = 0.0f;
     l.mCeiling = 1e6f;
+    // The game submits the lights of 8 to 12 blocks around the walk; a sprite may stick out of it by a block or two.
+    const f32 kMargin = 2.0f;
+    const f32 dx = l.mX < gLightArea[0] ? gLightArea[0] - l.mX : (l.mX > gLightArea[2] ? l.mX - gLightArea[2] : 0.0f);
+    const f32 dy = l.mY < gLightArea[1] ? gLightArea[1] - l.mY : (l.mY > gLightArea[3] ? l.mY - gLightArea[3] : 0.0f);
+    const f32 reach = l.mRadius + kMargin;
+    if (gLightAreaSet && dx * dx + dy * dy > reach * reach)
+    {
+        gNumLights--;
+        gLightAdded = false;
+        return 0;
+    }
     return idx * 0x2C;
 }
 
