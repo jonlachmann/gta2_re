@@ -1111,6 +1111,7 @@ void sprite_delta::ApplyToPixels(u8* pArray)
 {
     // Inline asm in the original (lodsw, rep movsb). Each entry is a u16 offset from the end
     // of the previous run, a u8 length and that many bytes.
+#if defined(_M_IX86) || defined(__i386__)
     sprite_delta* pThis = this;
     __asm
     {
@@ -1134,6 +1135,18 @@ void sprite_delta::ApplyToPixels(u8* pArray)
         pop esi
         pop edi
     }
+#else
+    const u8* p = reinterpret_cast<const u8*>(mpData);
+    const u8* pEnd = p + mLen;
+    do
+    {
+        pArray += p[0] | (p[1] << 8);
+        const u8 len = p[2];
+        memcpy(pArray, p + 3, len);
+        pArray += len;
+        p += 3 + len;
+    } while (p != pEnd);
+#endif
 }
 
 // https://decomp.me/scratch/Cc0Dx Not fully working
@@ -1142,6 +1155,7 @@ void sprite_delta::ApplyMirroredToPixels(u8* pArray, u32 width)
 {
     // Inline asm in the original (lodsw / loop)
     // Each entry: u16 offset, u8 len, then len bytes written backwards from the end of the row
+#if defined(_M_IX86) || defined(__i386__)
     __asm
     {
         push edi
@@ -1178,6 +1192,23 @@ void sprite_delta::ApplyMirroredToPixels(u8* pArray, u32 width)
         pop esi
         pop edi
     }
+#else
+    const u8* p = reinterpret_cast<const u8*>(mpData);
+    const u8* pEnd = p + mLen;
+    u8* pDst = pArray - 1 + width;
+    do
+    {
+        const u32 offset = p[0] | (p[1] << 8);
+        const u32 col2 = (offset & 0xFF) << 1;
+        u32 len = p[2];
+        pDst += (s32)(offset - col2) + (col2 >= 0x100 ? 0x200 : 0);
+        p += 3;
+        do
+        {
+            *pDst-- = *p++;
+        } while (--len);
+    } while (p != pEnd);
+#endif
 }
 
 MATCH_FUNC(0x5abaa0)
