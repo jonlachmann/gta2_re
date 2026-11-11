@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(gta2_port C CXX)
 
-# Fork build: one executable from the game sources, clang, 32-bit.
+# Fork build: one executable from the game sources, clang, 32 or 64-bit.
 #   Windows (MinGW): cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-mingw32-clang.cmake -DSDL3_DIR=...
 #   Linux:           cmake -S port -B build_linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-linux32-clang.cmake
+#   Linux x86_64:    cmake -S port -B build_linux64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-linux64-clang.cmake
 
 set(ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 
@@ -17,10 +18,13 @@ list(TRANSFORM lib_src PREPEND ${ROOT}/)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(arch_flags -m32)
+endif()
 # The game relies on what VC6 did with undefined behaviour (uninitialised locals returned on unused
 # paths, null checks after use): clang must not optimise on it.
 add_compile_options(
-    -m32 -fms-extensions -fasm-blocks -fshort-wchar -fsigned-char
+    ${arch_flags} -fms-extensions -fasm-blocks -fshort-wchar -fsigned-char
     -fno-strict-aliasing -fwrapv -ftrivial-auto-var-init=zero -fno-delete-null-pointer-checks -fno-autolink -w -Wno-address-of-temporary -Wno-c++11-narrowing)
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS GTA2_PORT)
 
@@ -134,6 +138,6 @@ else()
             -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
         target_include_directories(gta2 PRIVATE
             ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
-        target_link_options(gta2 PRIVATE -m32 -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+        target_link_options(gta2 PRIVATE ${arch_flags} -Wl,--no-dependent-libraries -Wl,--error-limit=0)
     endif()
 endif()
