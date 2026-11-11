@@ -149,7 +149,12 @@ class Door
     {
         Ped* mPed; // 0x10: Active when mOpenType is door_open_type::one_char_on_foot
         Car* mCarBc; // 0x10: Active when mOpenType is door_open_type::one_car
+#if defined(GTA2_PORT_64BIT)
+        // As wide as the pointers, as on 32-bit targets: UpdateAutoClose tests mCarBc whatever the open type.
+        intptr_t mModelId;
+#else
         s32 mModelId; // 0x10: Active when mOpenType is door_open_type::one_model
+#endif
     };
     s32 mTargetId; // 0x14
     s32 mUnused18; // 0x18

@@ -63,7 +63,11 @@ void Police::Init()
         mPursuitTargets[i].mIsActivelyChased = false;
         mPursuitTargets[i].mWantedTimer = 0;
 
+#if defined(GTA2_PORT_64BIT)
+        memset(mPursuitTargets[i].mCrews, 0, sizeof(mPursuitTargets[i].mCrews));
+#else
         memset(mPursuitTargets[i].mCrews, 0, 0x18);
+#endif
     }
     mMaxWantedLevel = cop_level_enum::none_0;
     mPoliceCarCount = 0;

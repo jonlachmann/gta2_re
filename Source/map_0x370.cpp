@@ -4543,7 +4543,11 @@ void Map_0x370::build_zone_list(u32 chunk_size)
         in_use_size += zone_data_size;
         pZone = reinterpret_cast<gmp_map_zone*>(reinterpret_cast<u8*>(pZone) + zone_data_size);
     }
+#if defined(GTA2_PORT_64BIT)
+    mpZones = static_cast<gmp_zone_list*>(Memory::Checked_malloc(offsetof(gmp_zone_list, mZoneArray) + sizeof(gmp_map_zone*) * num_zones));
+#else
     mpZones = static_cast<gmp_zone_list*>(Memory::Checked_malloc(4 * num_zones + 4));
+#endif
 
     in_use_size = 0;
     mpZones->mNumZones = num_zones;

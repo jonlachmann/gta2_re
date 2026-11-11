@@ -45,7 +45,11 @@ class SpriteShape
 
     bool CollisionIdIs(u32 id) const
     {
+#if defined(GTA2_PORT_64BIT)
+        return reinterpret_cast<uintptr_t>(mpNext) == id;
+#else
         return reinterpret_cast<u32>(mpNext) == id;
+#endif
     }
 
     // 9.6f 0x41E390
