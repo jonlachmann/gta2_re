@@ -3,6 +3,20 @@
 #include "Function.hpp"
 #include <windows.h>
 
+#if defined(GTA2_PORT_64BIT)
+struct TextKeyEntry
+{
+    wchar_t* mPwstr;
+    char_type mKey[8];
+};
+
+// The .gxt file's TKEY record: the string's offset into TDAT, then its key.
+struct TextKeyRecord
+{
+    u32 mOffset;
+    char_type mKey[8];
+};
+#else
 struct TextKeyEntry
 {
     wchar_t* mPwstr; // 0x0
@@ -11,6 +25,7 @@ struct TextKeyEntry
     s32 mKeyTail; // 0x8
 };
 GTA2_ASSERT_SIZEOF_ALWAYS(TextKeyEntry, 0xC);
+#endif
 
 class text_tdat
 {
