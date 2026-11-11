@@ -305,7 +305,7 @@ const char* ScreenName(Id id)
     }
 }
 
-// The game's own settings are on by default; the port's graphics additions off, except mipmaps.
+// The game's own settings are on by default; the port's graphics additions off.
 s32 ScreenDefault(Id id)
 {
     if (id == kFrameLimit)
@@ -315,10 +315,6 @@ s32 ScreenDefault(Id id)
     if (id == kHudScale)
     {
         return 100;
-    }
-    if (id == kTextureFilter)
-    {
-        return 2;
     }
     if (id == kCameraTilt)
     {
