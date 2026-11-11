@@ -168,12 +168,12 @@ struct SVideo
 };
 
 #if !defined(_WIN64) && (defined(_WIN32) || defined(__i386__))
-GTA2_STATIC_ASSERT(sizeof(STexture) == 0x20);
-GTA2_STATIC_ASSERT(sizeof(SVideo) == 0x4C4);
-GTA2_STATIC_ASSERT(sizeof(SDevice) == 0x30);
-GTA2_STATIC_ASSERT(sizeof(SDisplayMode) == 0x40);
-GTA2_STATIC_ASSERT(offsetof(SVideo, field_134_SurfacePrimary) == 0x134);
-GTA2_STATIC_ASSERT(offsetof(SVideo, field_4C0_hwnd) == 0x4C0);
+GTA2_STATIC_ASSERT(sizeof(void*) != 4 || sizeof(STexture) == 0x20);
+GTA2_STATIC_ASSERT(sizeof(void*) != 4 || sizeof(SVideo) == 0x4C4);
+GTA2_STATIC_ASSERT(sizeof(void*) != 4 || sizeof(SDevice) == 0x30);
+GTA2_STATIC_ASSERT(sizeof(void*) != 4 || sizeof(SDisplayMode) == 0x40);
+GTA2_STATIC_ASSERT(sizeof(void*) != 4 || offsetof(SVideo, field_134_SurfacePrimary) == 0x134);
+GTA2_STATIC_ASSERT(sizeof(void*) != 4 || offsetof(SVideo, field_4C0_hwnd) == 0x4C0);
 #endif
 GTA2_STATIC_ASSERT(sizeof(Vert) == 0x20);
 GTA2_STATIC_ASSERT(sizeof(SLight) == 0x14);

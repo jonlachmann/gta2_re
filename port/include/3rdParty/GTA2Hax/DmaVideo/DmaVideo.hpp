@@ -62,8 +62,8 @@ struct SVideo
 };
 
 static_assert(sizeof(DDCAPS) == 0x17C, "Wrong sized DDCAPS");
-static_assert(sizeof(DDSURFACEDESC2) == 0x7C, "Wrong sized DDSURFACEDESC2");
-static_assert(sizeof(SVideo) == 0x4C4, "Wrong sized SVideo");
+static_assert(sizeof(void*) != 4 || sizeof(DDSURFACEDESC2) == 0x7C, "Wrong sized DDSURFACEDESC2");
+static_assert(sizeof(void*) != 4 || sizeof(SVideo) == 0x4C4, "Wrong sized SVideo");
 
 struct SDevice
 {
@@ -77,7 +77,7 @@ struct SDevice
     DWORD field_28_dwVidMemTotal;
     DWORD field_2C_end_buffer; // TODO: Actually a word and SDevice is 0x2E ?
 };
-static_assert(sizeof(SDevice) == 0x30, "Wrong sized SDevice");
+static_assert(sizeof(void*) != 4 || sizeof(SDevice) == 0x30, "Wrong sized SDevice");
 
 struct SDisplayMode
 {
@@ -98,7 +98,7 @@ struct SDisplayMode
     struct SDisplayMode* field_38_pnext;
     DWORD field_3C;
 };
-static_assert(sizeof(SDisplayMode) == 0x40, "Wrong sized SDisplayMode");
+static_assert(sizeof(void*) != 4 || sizeof(SDisplayMode) == 0x40, "Wrong sized SDisplayMode");
 
 struct SVidVersion
 {

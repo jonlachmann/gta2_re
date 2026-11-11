@@ -29,23 +29,37 @@
 typedef int BOOL;
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
+// 32 bits on every target, as on 64-bit Windows: the game's files and saves hold them.
+#if defined(__LP64__)
+typedef unsigned int DWORD;
+typedef int LONG;
+typedef unsigned int ULONG;
+#else
 typedef unsigned long DWORD;
+typedef long LONG;
+typedef unsigned long ULONG;
+#endif
 typedef char CHAR;
 typedef short SHORT;
 typedef unsigned short USHORT;
 typedef int INT;
 typedef unsigned int UINT;
-typedef long LONG;
-typedef unsigned long ULONG;
 typedef long long LONGLONG;
 typedef unsigned long long ULONGLONG;
 typedef float FLOAT;
 typedef unsigned char BOOLEAN;
 typedef wchar_t WCHAR;
+#if defined(__LP64__)
+typedef intptr_t INT_PTR;
+typedef uintptr_t UINT_PTR;
+typedef intptr_t LONG_PTR;
+typedef uintptr_t ULONG_PTR;
+#else
 typedef int INT_PTR;
 typedef unsigned int UINT_PTR;
 typedef long LONG_PTR;
 typedef unsigned long ULONG_PTR;
+#endif
 typedef ULONG_PTR DWORD_PTR;
 typedef ULONG_PTR SIZE_T;
 typedef UINT_PTR WPARAM;
@@ -100,7 +114,12 @@ typedef HANDLE HGLOBAL;
 
 typedef INT_PTR(WINAPI* FARPROC)();
 typedef LRESULT(CALLBACK* WNDPROC)(HWND, UINT, WPARAM, LPARAM);
+#if defined(__LP64__)
+// The network lobby's dialog procedure returns an int; the port shows no dialog.
+typedef INT(CALLBACK* DLGPROC)(HWND, UINT, WPARAM, LPARAM);
+#else
 typedef INT_PTR(CALLBACK* DLGPROC)(HWND, UINT, WPARAM, LPARAM);
+#endif
 typedef void(CALLBACK* TIMERPROC)(HWND, UINT, UINT_PTR, DWORD);
 
 // Values and macros
@@ -396,7 +415,7 @@ static_assert(sizeof(WIN32_FIND_DATAA) == 320 && sizeof(OSVERSIONINFOA) == 148, 
 
 typedef struct _GUID
 {
-    unsigned long Data1;
+    DWORD Data1;
     unsigned short Data2;
     unsigned short Data3;
     unsigned char Data4[8];
