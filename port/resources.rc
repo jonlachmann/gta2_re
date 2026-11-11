@@ -22,8 +22,8 @@ FONT 8, "MS Sans Serif"
 
 
 1 VERSIONINFO
-FILEVERSION 10,5,0,0
-PRODUCTVERSION 10,5,0,0
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
 FILEOS 0x40004
 FILETYPE 0x1
 {
@@ -31,15 +31,12 @@ BLOCK "StringFileInfo"
 {
 	BLOCK "000004b0"
 	{
-		VALUE "CompanyName", "DMA Design Ltd"
-		VALUE "FileDescription", "GTA2 main executable"
-		VALUE "FileVersion", "10, 5, 0, 0"
-		VALUE "InternalName", "GTA2"
-		VALUE "LegalCopyright", "Copyright © 1999 DMA Design Ltd"
-		VALUE "LegalTrademarks", "DMA, DMA Design"
+		VALUE "FileDescription", "reG2"
+		VALUE "FileVersion", "0.1"
+		VALUE "InternalName", "reG2"
 		VALUE "OriginalFilename", "gta2.exe"
-		VALUE "ProductName", "GTA2"
-		VALUE "ProductVersion", "10, 5, 0, 0"
+		VALUE "ProductName", "reG2"
+		VALUE "ProductVersion", "0.1"
 	}
 }
 
