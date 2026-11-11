@@ -5,8 +5,6 @@ treatments, where every map layer comes from, and how it would be built.
 
 The goal is a minimap that looks like part of GTA2's own HUD rather than a modern overlay.
 
-![All eight frames in the same corner of the same capture](demo/overview_all.png)
-
 ## What makes the HUD look the way it does
 
 The HUD sprites (`user` sprites in the level `.sty`) are 3D renders reduced to an 8-bit palette:
@@ -36,9 +34,6 @@ Each frame ships as `frame` (screen hole transparent), `glass` and `screen_mask`
 (`assets/frames/`).
 
 ## The eight frames
-
-![Frames A to D: frame alone x4, in game, corner x3](demo/overview_a_d.png)
-![Frames E to H](demo/overview_e_h.png)
 
 | | Frame | Size (1x) | Idea | Map | Build |
 |-|-------|-----------|------|-----|-------|
@@ -79,12 +74,7 @@ the bottom right. Palettes:
 | night | G | Dark buildings, amber roads |
 | grey LCD | H | Block kinds in 4 grey-greens (`#2a3124` to `#b9c3a3`) |
 
-![A and D with the block-kind map](demo/variants_schematic.png)
-
 ## Map layers and their sources
-
-![Downtown, territories and points of interest](demo/map_downtown.png)
-![Legend](demo/legend_downtown.png)
 
 | Layer | File and record | Icon |
 |-------|-----------------|------|
@@ -138,8 +128,6 @@ stations come from zone names, an educated guess.
 
 ## Placement
 
-![HUD zones and the minimap slot](demo/placement.png)
-
 - Everything else sits at the top (respect meters, pagers, wanted heads, zone and car names,
   lives, score, hearts, weapon) or bottom left (brief portrait). The free corner is the **bottom
   right**, 6 HUD px from the edges, scaled like the hearts by HUD SCALE and SAFE AREA.
@@ -165,8 +153,6 @@ stations come from zone names, an educated guess.
 - **Cost:** a fixed-image frame plus the map texture is a day or two; the animated F sweep and a
   rotating map add a little.
 
-![Minimap A with the block-kind map and points of interest](demo/minimap_pois.png)
-
 ## Prior art
 
 Existing radar mods for the original game, all from the same base: GTA3's radar code backported
@@ -190,7 +176,7 @@ and read the game data without writing to it.
 
 ```sh
 tools/capture_all.sh <copy of the game dir>                # headless captures (gamescope, Linux port)
-tools/run_all.sh <game data dir> <game dir copy> <out dir>  # every image above, about 30 s
+tools/run_all.sh <game data dir> <game dir copy> <out dir>  # the study's sheets, about 30 s
 ```
 
 | Script | Role |
@@ -204,4 +190,5 @@ tools/run_all.sh <game data dir> <game dir copy> <out dir>  # every image above,
 | `extract_hud.py`, `zoomref.py` | HUD sprite contact sheet and zooms, for study |
 | `mmrun.sh`, `capture_all.sh` | Headless captures |
 
-`demo/` images contain game graphics (captures and sprites from the user's data).
+The sheets `run_all.sh` writes contain game graphics (captures and sprites from the user's data), so they
+are not in the repository.
