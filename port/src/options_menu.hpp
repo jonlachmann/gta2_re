@@ -6,6 +6,9 @@
 
 namespace PortOptionsMenu
 {
+// The start menu's corner line, in place of the game's version. The frontend fonts have no lower case.
+const wchar_t* const kVersionText = L"REG2 0.1";
+
 // After the original pages are set up.
 void Setup(Frontend* pFrontend);
 
