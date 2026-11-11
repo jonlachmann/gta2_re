@@ -619,6 +619,9 @@ void Char::Update(Fix16 distance_to_target)
         {
             mVelocityVector.SetFromPolar(mVelocity, mRotation);
         }
+#if defined(GTA2_PORT)
+        PortTwinStick::WalkVelocity(this);
+#endif
     }
     gSpriteGrid_1->AddToRegionBuckets(mSpritePtr);
     if (mObj2c.mP18)

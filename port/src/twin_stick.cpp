@@ -70,6 +70,7 @@ const s32 kMaskedSizes = 16;
 
 Char* spWalker; // the ped walking this step, along sMove
 s32 sMove;
+Char* spWalked; // the ped that walked along sMove this step
 bool sMoving;
 s32 sJumpTurn;
 bool sBackward;
@@ -441,11 +442,22 @@ bool Walk(Char* pChar, Ang16* pFacing)
         return false;
     }
     spWalker = NULL;
+    spWalked = pChar;
     // The walk adds the turn to mRotation: it goes along sMove, and turns back to the facing at the end.
     const s32 turn = pChar->mpPed->GetTurnSpeed().rValue;
     *pFacing = Ang16(static_cast<s16>(pChar->mRotation.rValue + turn), 0);
     pChar->mRotation = Ang16(static_cast<s16>(sMove - turn), 0);
     return true;
+}
+
+void WalkVelocity(Char* pChar)
+{
+    if (pChar == spWalked)
+    {
+        spWalked = NULL;
+        Ang16 move(static_cast<s16>(sMove), 0);
+        pChar->mVelocityVector.SetFromPolar(pChar->mVelocity, move);
+    }
 }
 
 bool DrawLegs(const Sprite* pSprite, STexture*, u32 flags, const Vert* pVerts, s32 count)

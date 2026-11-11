@@ -20,6 +20,9 @@ namespace PortTwinStick
 void PedControls(Player* pPlayer, Ped* pPed);
 // At the start of Char::UpdateWalking: true if this step walks along the move, the facing to end with in *pFacing.
 bool Walk(Char* pChar, Ang16* pFacing);
+// In Char::Update, after the velocity along the facing: the walk's velocity is along its own direction, as
+// the original's backward walk gives it (the shots inherit it).
+void WalkVelocity(Char* pChar);
 // In Sprite::Draw, for a quad of the sprite (its world corners after it if count is 8): draws the player's walk with the
 // legs turned toward the move and the torso at the facing. False if the quad is drawn as usual.
 bool DrawLegs(const Sprite* pSprite, STexture* pTexture, u32 flags, const Vert* pVerts, s32 count);
