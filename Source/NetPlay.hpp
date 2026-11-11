@@ -296,8 +296,13 @@ struct NetPlay
     Network_Game_Session mN1; // 0x5E8
     Network_Game_Session mN2; // 0x758
     NetPlayerBuffer_0x800* mNotUsed8C8[MAX_PLAYERS]; // 0x8C8
+#if defined(GTA2_PORT_64BIT)
+    intptr_t mpSendDataBuffer;
+    intptr_t mpReceivedDataBuffer;
+#else
     s32 mpSendDataBuffer; // 0x8E0: 0x1800 of alloc size
     s32 mpReceivedDataBuffer; // 0x8E4: 0x1800 of alloc size
+#endif
     s32 mTime; // 0x8E8
     s32 mUnused8EC; // 0x8EC
     char_type mReceiveDisabled; // 0x8F0: Receive and ReceiveGameMessage always returns false if this var is true

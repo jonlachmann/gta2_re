@@ -50,8 +50,13 @@ NetPlay::NetPlay()
     mTimeDiff = 0;
     mpDPlay3 = NULL;
     mpDPlayLobby2 = NULL;
+#if defined(GTA2_PORT_64BIT)
+    mpReceivedDataBuffer = reinterpret_cast<intptr_t>(operator new(0x1800));
+    mpSendDataBuffer = reinterpret_cast<intptr_t>(operator new(0x1800));
+#else
     mpReceivedDataBuffer = reinterpret_cast<s32>(operator new(0x1800));
     mpSendDataBuffer = reinterpret_cast<s32>(operator new(0x1800));
+#endif
     memset(&mSessions, 0, sizeof(mSessions));
     memset(mFuncPtrsAndParams, 0, sizeof(mFuncPtrsAndParams));
     memset(&mEnumedConnections, 0, sizeof(mEnumedConnections));
