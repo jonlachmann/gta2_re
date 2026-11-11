@@ -132,7 +132,6 @@ void port_SetFullscreen(HWND h, bool fullscreen)
 
 extern "C" {
 
-// GTA2's icon: the game's own (resource 0x65 of gta2.exe, Icon_1.ico in the Windows build).
 static const unsigned char kIconPng[] = {
 #embed "../../resources/gta2.png"
 };
