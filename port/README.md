@@ -1,10 +1,11 @@
 # GTA2 port
 
-Native builds of the decompiled game with clang, 32-bit. Plan: `docs/port_plan.md`.
+Native builds of the decompiled game with clang, 32-bit (and 64-bit on Linux). Plan: `docs/port_plan.md`.
 
 | Build | Platform layer | Toolchain file |
 |---|---|---|
 | Linux (i686) | SDL3, OpenGL ES 3.0, built-in renderer, sound and input | `toolchain-linux32-clang.cmake` |
+| Linux (x86_64) | the same, with the host's 64-bit libraries ([docs/64bit.md](docs/64bit.md)) | `toolchain-linux64-clang.cmake` |
 | Windows (MinGW, i686) | the same as Linux; `-DGTA2_PORT_DIRECTX=ON` for DMA's DirectX, Miles and Bink DLLs | `toolchain-mingw32-clang.cmake` |
 
 ## Windows
