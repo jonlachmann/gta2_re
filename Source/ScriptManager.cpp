@@ -356,7 +356,7 @@ void ScriptManager::SaveGame(const char_type* pFileName)
 
     gGameSave.mObjectData.mSecretTokensCollected = gGameSession.get_secret_tokens_collected();
 
-    u16** pColData;
+    gmp_column_word* pColData;
     u32 colBytes;
     gmp_block_info* pBlockInfo;
     u32 blockInfoBytes;
@@ -405,7 +405,7 @@ void ScriptManager::LoadSave(const char_type* pFileName)
     size_t mapSubLen;
     size_t blockInfoLen;
     size_t colDataLen;
-    u16** pColData;
+    gmp_column_word* pColData;
     gmp_block_info* pBlockInfo;
     DmapInfoList* pMapSub;
 
