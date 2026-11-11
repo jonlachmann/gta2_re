@@ -45,6 +45,7 @@ int sCapturedKey = -1;
 int sCapturedPad = -1;
 bool sMigrated;
 bool sMenuBlocked; // back from a game with a button still down: the menus wait for its release
+bool sAccelHeld; // RT held since the player drove or was getting into a vehicle: it attacks once pressed again
 bool sMouseAims; // the mouse was used in game after the pad
 bool sKeyDown[256]; // by DIK code
 unsigned sButtonsDown; // bit n: SDL mouse button n
@@ -633,6 +634,7 @@ void port_UpdatePad()
     }
     const bool quitShown = inGame && port_QuitMessageShown();
     const int twin = inGame && !quitShown ? port_TwinStick() : 0;
+    sAccelHeld = CodeDown(11) && (sAccelHeld || port_Driving() || port_EnteringCar());
     // The vehicle's triggers, unless FORWARD or BACKWARD has a pad input of the player's choice.
     const bool car = inGame && !quitShown && port_Driving() && port_GetPadBinding(0) == kPadUp && port_GetPadBinding(1) == kPadDown;
     bool l3Free = true;
@@ -658,7 +660,7 @@ void port_UpdatePad()
         const bool move = twin == 1 && i < 4;
         const bool pad = (car ? CarPadDown(i, code, l3Free) : CodeDown(code) && !(twin == 1 && (code == 11 || (code == 10 && lt)))) &&
             !(rbFires && code == 5);
-        const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11)) || (rbFires && i == 4 && CodeDown(5)));
+        const bool down = !move && (pad || AltDown(i) || (twin == 1 && i == 4 && CodeDown(11) && !sAccelHeld) || (rbFires && i == 4 && CodeDown(5)));
         Press(i, inGame && !quitShown && down);
     }
     if (inGame)

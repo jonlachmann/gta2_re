@@ -99,6 +99,8 @@ int port_TwinStick();
 bool port_TwinStickAims();
 // The local player with the controls on, in a vehicle, in either CONTROLS style.
 bool port_Driving();
+// The local player on his way into a vehicle (walking to it or getting in).
+bool port_EnteringCar();
 // The player's vehicle: how far RT, LT and the stick press FORWARD, BACKWARD and the steering, 0 to 1, 1 for
 // a key or the d-pad (pad.cpp).
 void port_PadVehicleInput(float* pForward, float* pBackward, float* pSteer);

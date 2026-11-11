@@ -694,6 +694,12 @@ bool port_Driving()
     return pPed && pPed->get_car();
 }
 
+bool port_EnteringCar()
+{
+    Ped* pPed = PortTwinStick::ControlledPed();
+    return pPed && !pPed->get_car() && pPed->IsPedGoingToEnterCar();
+}
+
 bool port_TwinStickAims()
 {
     return PortTwinStick::AimFrom() != NULL;

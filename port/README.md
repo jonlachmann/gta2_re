@@ -54,7 +54,7 @@ CONTROLS on the controls page chooses how the player walks on foot: CLASSIC, the
 controls, or TWIN STICK, which moves and aims apart, both relative to the screen (the CHINATOWN camera's
 turn included). The left stick, the d-pad or the movement keys walk; the right stick aims (its reticle
 further out the more it is pushed, up to the screen's edge, and held a moment once released), or the mouse does (confined to the window,
-a reticle in place of the cursor). RT attacks, the other controls stay as bound. Without an aim the player faces the
+a reticle in place of the cursor). RT attacks (held from driving or getting in, once pressed again), the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
 animation, as the original's back key; his shots and flames take on his speed along the way he walks, so backing
 off shortens their reach as the original's backward walk does). Walking off the aim, he is drawn as Hotline Miami's peds
