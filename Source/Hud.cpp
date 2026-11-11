@@ -2,7 +2,6 @@
 #include "Hud.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/pause_menu.hpp"
-#include "../port/src/view.hpp"
 #include "../port/src/day_night.hpp"
 #include "../port/src/twin_stick.hpp"
 #endif
@@ -3376,12 +3375,8 @@ void Hud::DrawGui()
 #if defined(GTA2_PORT)
         PortDayNight::DrawClock();
         PortTwinStick::DrawReticle();
-        PortView::SetTurn(PortView::kMarkers);
-        mUnderRoofArrowMarker.Draw();
-        PortView::SetTurn(PortView::kOff);
-#else
-        mUnderRoofArrowMarker.Draw();
 #endif
+        mUnderRoofArrowMarker.Draw();
         mPlayerNames.DrawPlayerNames();
         mWantedLevel.DrawWantedLevel();
         mGangRespectBars.DrawGangRespectBars();
@@ -3392,13 +3387,7 @@ void Hud::DrawGui()
         mBrief.DrawBrief();
         mPagers.DrawPagers();
         mTexts.Service();
-#if defined(GTA2_PORT)
-        PortView::SetTurn(PortView::kMarkers);
         mArrows.DrawArrows();
-        PortView::SetTurn(PortView::kOff);
-#else
-        mArrows.DrawArrows();
-#endif
         mMpMessage.Draw();
         mMessage.DrawMessage();
         mPauseScreen.DrawPause();

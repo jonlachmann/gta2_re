@@ -4344,9 +4344,6 @@ void sound_obj::ProcessActiveQueues()
             }
 
             VecDiff(&sample.mObj, &position);
-#if defined(GTA2_PORT)
-            PortViewTurnSound(position.mX, position.mY);
-#endif
 
             if (mB3dSound)
             {
@@ -4427,9 +4424,6 @@ void sound_obj::ProcessActiveQueues()
             if (!active.mbIs2D)
             {
                 VecDiff(&active.mObj, &position);
-#if defined(GTA2_PORT)
-                PortViewTurnSound(position.mX, position.mY);
-#endif
                 if (!mB3dSound)
                 {
                     active.mPan = ComputePan(active.mSoundIntensity, position.mX);

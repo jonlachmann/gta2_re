@@ -93,13 +93,6 @@ s32 Angle(f32 x, f32 y)
     return Fix16::atan2_fixed(Fix16(y), Fix16(x)).rValue;
 }
 
-// A screen direction (y down) in the world: the CHINATOWN camera's turn undone.
-s32 WorldAngle(f32 x, f32 y)
-{
-    const f32 yaw = PortView::Yaw(1.0f) * (3.14159265f / 720.0f);
-    return Angle(cosf(yaw) * x + sinf(yaw) * y, cosf(yaw) * y - sinf(yaw) * x);
-}
-
 // From the screen's centre along (dx, dy) to its edge, less a margin.
 f32 EdgeReach(f32 dx, f32 dy)
 {
@@ -401,7 +394,7 @@ void PedControls(Player* pPlayer, Ped* pPed)
     mx += pPlayer->mNowRightPressed - pPlayer->mNowLeftPressed;
     my += pPlayer->mNowDownPressed - pPlayer->mNowForwardPressed;
     const bool moving = mx * mx + my * my > 0.01f;
-    const s32 move = moving ? WorldAngle(mx, my) : 0;
+    const s32 move = moving ? Angle(mx, my) : 0;
     Aim(pPed->GetSprite(), ax, ay);
     const bool aiming = sAimSteps > 0;
     const s32 rotation = pChar->mRotation.rValue;
@@ -674,17 +667,12 @@ void AimCamera(Camera* pCamera, Ped* pPed, Fix16& x, Fix16& y)
     {
         sLookX = sLookY = 0.0f;
     }
-    if (Looking())
+    if (sLookX || sLookY)
     {
         x += Fix16(sLookX);
         y += Fix16(sLookY);
     }
 #endif
-}
-
-bool Looking()
-{
-    return sLookX || sLookY;
 }
 } // namespace PortTwinStick
 

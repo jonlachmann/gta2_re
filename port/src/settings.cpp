@@ -49,11 +49,7 @@ const Id kGraphics[] = {kPreset,        kTrueColour, kBloom,      kPerPixelLight
 const Id kGraphics[] = {kHeadlights, kLightEffects};
 #endif
 const s32 kNumGraphics = sizeof(kGraphics) / sizeof(kGraphics[0]);
-#if defined(GTA2_PORT_SDL)
-const Id kView[] = {kZoom, kCamera, kCameraRotation, kCameraTurnSpeed, kCameraTilt, kHudScale, kSafeArea};
-#else
 const Id kView[] = {kZoom, kHudScale, kSafeArea};
-#endif
 const s32 kNumView = sizeof(kView) / sizeof(kView[0]);
 
 namespace
@@ -61,7 +57,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"CAMERA", L"SHADOWS", L"CAMERA TILT", L"ROTATION SPEED", L"ROTATION", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS", L"AIM CAMERA", L"BLOOD"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"SHADOWS", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS", L"AIM CAMERA", L"BLOOD"};
 
 struct Language
 {
@@ -135,14 +131,6 @@ const Translation kTranslations[] = {
     {L"PIXEL LIGHTING", NULL, {L"ECLAIRAGE PIXEL", L"PIXEL-LICHT", L"LUCE PER PIXEL", L"LUZ POR PÍXEL"}},
     {L"CAR HEADLIGHTS", NULL, {L"PHARES", L"SCHEINWERFER", L"FARI", L"FAROS"}},
     {L"CAMERA ZOOM", NULL, {L"ZOOM CAMERA", L"KAMERAZOOM", L"ZOOM CAMERA", L"ZOOM CÁMARA"}},
-    {L"CAMERA", NULL, {L"CAMERA", L"KAMERA", L"TELECAMERA", L"CÁMARA"}},
-    {L"CLASSIC", NULL, {L"CLASSIQUE", L"KLASSISCH", L"CLASSICA", L"CLÁSICA"}},
-    {L"ROTATION", NULL, {L"ROTATION", L"DREHUNG", L"ROTAZIONE", L"ROTACIÓN"}},
-    {L"STREETS", NULL, {L"RUES", L"STRASSEN", L"STRADE", L"CALLES"}},
-    {L"FOLLOW", NULL, {L"SUIVI", L"FOLGEN", L"SEGUI", L"SEGUIR"}},
-    {L"ROTATION SPEED", NULL, {L"VITESSE ROTATION", L"DREHTEMPO", L"VELOCITÀ ROTAZIONE", L"VELOCIDAD GIRO"}},
-    {L"CAMERA TILT", NULL, {L"INCLINAISON", L"NEIGUNG", L"INCLINAZIONE", L"INCLINACIÓN"}},
-    {L"CHINATOWN", NULL, {L"CHINATOWN", L"CHINATOWN", L"CHINATOWN", L"CHINATOWN"}},
     {L"LIGHT EFFECTS", NULL, {L"EFFETS LUMINEUX", L"LICHTEFFEKTE", L"EFFETTI LUCE", L"EFECTOS DE LUZ"}},
     {L"TEXTURE FILTERING", NULL, {L"FILTRAGE TEXTURES", L"TEXTURFILTER", L"FILTRO TEXTURE", L"FILTRADO TEXTURAS"}},
     {L"BILINEAR", NULL, {L"BILINEAIRE", L"BILINEAR", L"BILINEARE", L"BILINEAL"}},
@@ -278,14 +266,6 @@ const char* ScreenName(Id id)
             return "gl_texture_filter";
         case kAntiAliasing:
             return "gl_msaa";
-        case kCamera:
-            return "camera_cw";
-        case kCameraTilt:
-            return "camera_tilt";
-        case kCameraTurnSpeed:
-            return "camera_turn_speed";
-        case kCameraRotation:
-            return "camera_follow";
         case kShadows:
             return "gl_soft_shadows";
         case kDayLength:
@@ -315,14 +295,6 @@ s32 ScreenDefault(Id id)
     if (id == kHudScale)
     {
         return 100;
-    }
-    if (id == kCameraTilt)
-    {
-        return 8;
-    }
-    if (id == kCameraTurnSpeed)
-    {
-        return 7;
     }
     if (id == kDayLength)
     {
@@ -371,14 +343,7 @@ const s32 kMaxHudScale = 150;
 const s32 kMaxSafeArea = 10;
 s32 sHudScale = -1;
 s32 sSafeArea = -1;
-// Cached: the view reads it every step and frame.
-s32 sCamera = -1;
-s32 sCameraTilt = -1;
-const s32 kMaxCameraTilt = 15;
-s32 sCameraTurnSpeed = -1;
-s32 sCameraFollows = -1;
 s32 sTwinStick = -1;
-const s32 kMaxCameraTurnSpeed = 10;
 const s32 kMinDayLength = 3;
 const s32 kMaxDayLength = 60;
 #if defined(GTA2_PORT_SDL)
@@ -571,10 +536,6 @@ f32 SafeArea()
 
 Id Requirement(Id id)
 {
-    if (id == kCameraTilt || id == kCameraTurnSpeed || id == kCameraRotation)
-    {
-        return kCamera;
-    }
 #if defined(GTA2_PORT_SDL)
     if (id == kHeadlights || id == kLightEffects)
     {
@@ -612,46 +573,6 @@ s32 StartTime()
 bool Clock()
 {
     return DayNightCycle() && Screen(kClock) != 0;
-}
-
-bool ChinatownCamera()
-{
-#if defined(GTA2_PORT_SDL)
-    if (sCamera < 0)
-    {
-        sCamera = Screen(kCamera) != 0;
-    }
-    return sCamera != 0;
-#else
-    return false;
-#endif
-}
-
-s32 CameraTilt()
-{
-    if (sCameraTilt < 0)
-    {
-        sCameraTilt = Clamp(Screen(kCameraTilt), 0, kMaxCameraTilt);
-    }
-    return sCameraTilt;
-}
-
-s32 CameraTurnSpeed()
-{
-    if (sCameraTurnSpeed < 0)
-    {
-        sCameraTurnSpeed = Clamp(Screen(kCameraTurnSpeed), 0, kMaxCameraTurnSpeed);
-    }
-    return sCameraTurnSpeed;
-}
-
-bool CameraFollows()
-{
-    if (sCameraFollows < 0)
-    {
-        sCameraFollows = Screen(kCameraRotation) != 0;
-    }
-    return sCameraFollows != 0;
 }
 
 bool TwinStick()
@@ -747,16 +668,6 @@ bool Range(Id id, s32* pMin, s32* pMax, s32* pValue)
             *pMax = kMaxSafeArea;
             *pValue = SafeAreaPercent();
             return true;
-        case kCameraTilt:
-            *pMin = 0;
-            *pMax = kMaxCameraTilt;
-            *pValue = CameraTilt();
-            return true;
-        case kCameraTurnSpeed:
-            *pMin = 0;
-            *pMax = kMaxCameraTurnSpeed;
-            *pValue = CameraTurnSpeed();
-            return true;
         case kDayLength:
             *pMin = kMinDayLength;
             *pMax = kMaxDayLength;
@@ -813,9 +724,6 @@ void Value(Id id, wchar_t* pOut)
         case kStartTime:
             swprintf(pOut, L"%d:00", StartTime());
             break;
-        case kCamera:
-            wcscpy(pOut, Translate(ChinatownCamera() ? L"CHINATOWN" : L"CLASSIC"));
-            break;
         case kZoom:
             swprintf(pOut, L"%d", Zoom());
             break;
@@ -824,15 +732,6 @@ void Value(Id id, wchar_t* pOut)
             break;
         case kSafeArea:
             swprintf(pOut, L"%d", SafeAreaPercent());
-            break;
-        case kCameraTilt:
-            swprintf(pOut, L"%d", CameraTilt());
-            break;
-        case kCameraTurnSpeed:
-            swprintf(pOut, L"%d", CameraTurnSpeed());
-            break;
-        case kCameraRotation:
-            wcscpy(pOut, Translate(CameraFollows() ? L"FOLLOW" : L"STREETS"));
             break;
         case kControls:
             wcscpy(pOut, Translate(TwinStick() ? L"TWIN STICK" : L"CLASSIC"));
@@ -998,10 +897,6 @@ void Change(Id id, s32 delta)
         case kAimCamera:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
-        case kCamera:
-            sCamera = !ChinatownCamera();
-            gRegistry.Set_Screen_Setting(ScreenName(id), sCamera);
-            break;
         case kFrameLimit:
         {
             s32 i = 0;
@@ -1068,18 +963,6 @@ void Change(Id id, s32 delta)
             sSafeArea = Clamp(SafeAreaPercent() + delta, 0, kMaxSafeArea);
             gRegistry.Set_Screen_Setting(ScreenName(id), sSafeArea);
             RefreshHud();
-            break;
-        case kCameraTilt:
-            sCameraTilt = Clamp(CameraTilt() + delta, 0, kMaxCameraTilt);
-            gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTilt);
-            break;
-        case kCameraTurnSpeed:
-            sCameraTurnSpeed = Clamp(CameraTurnSpeed() + delta, 0, kMaxCameraTurnSpeed);
-            gRegistry.Set_Screen_Setting(ScreenName(id), sCameraTurnSpeed);
-            break;
-        case kCameraRotation:
-            sCameraFollows = !CameraFollows();
-            gRegistry.Set_Screen_Setting(ScreenName(id), sCameraFollows);
             break;
         case kControls:
             sTwinStick = !TwinStick();

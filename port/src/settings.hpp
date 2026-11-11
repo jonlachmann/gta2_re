@@ -30,11 +30,7 @@ enum Id
     kLightEffects,
     kTextureFilter,
     kAntiAliasing,
-    kCamera,
     kShadows,
-    kCameraTilt,
-    kCameraTurnSpeed,
-    kCameraRotation,
     kPreset,
     kDayLength,
     kStartTime,
@@ -88,14 +84,6 @@ bool Clock();
 
 // HUD SCALE: 1 for the original's size.
 f32 HudScale();
-// CAMERA: CHINATOWN turns the view with the player's vehicle (view.hpp).
-bool ChinatownCamera();
-// CAMERA TILT: the CHINATOWN camera's pitch on foot, in degrees, 0 to 15.
-s32 CameraTilt();
-// ROTATION SPEED: how fast the CHINATOWN camera turns after the vehicle, 1 to 10; 0 turns it at once.
-s32 CameraTurnSpeed();
-// ROTATION: STREETS turns the CHINATOWN camera to the street the vehicle has taken, FOLLOW after its heading.
-bool CameraFollows();
 
 // CONTROLS: TWIN STICK moves and aims apart on foot (twin_stick.hpp).
 bool TwinStick();

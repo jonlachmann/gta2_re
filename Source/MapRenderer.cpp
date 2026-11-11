@@ -3579,9 +3579,8 @@ void MapRenderer::Draw()
             // narrow the y direction because of assymetric monitor resolution
             Fix16 layer_column_width = layer_row_width * kScreenAspectRatio;
 #if defined(GTA2_PORT)
-            // Wider than 4:3: the view widens (Camera::UpdateBoundaries); turned, it covers its bounding box.
+            // Wider than 4:3: the view widens (Camera::UpdateBoundaries).
             layer_row_width = layer_row_width * PortViewWidthFactor();
-            PortViewTurnedExtent(layer_row_width, layer_column_width);
 #endif
 
             // compute x boundary

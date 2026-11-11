@@ -51,8 +51,8 @@ Each control has a key, a second key (ALTERNATE: a key, a mouse button or a whee
 WASD by their position (ZQSD on AZERTY) to move, F to enter or exit, the left button to attack and the
 wheel to change weapons; Delete clears it) and a gamepad input.
 CONTROLS on the controls page chooses how the player walks on foot: CLASSIC, the original's tank
-controls, or TWIN STICK, which moves and aims apart, both relative to the screen (the CHINATOWN camera's
-turn included). The left stick, the d-pad or the movement keys walk; the right stick aims (its reticle
+controls, or TWIN STICK, which moves and aims apart, both relative to the screen.
+The left stick, the d-pad or the movement keys walk; the right stick aims (its reticle
 further out the more it is pushed, up to the screen's edge, and held a moment once released), or the mouse does (confined to the window,
 a reticle in place of the cursor). RT attacks (held from driving or getting in, once pressed again), the other controls stay as bound. Without an aim the player faces the
 way he walks; with one he turns to it and walks any way at the same speed (backward with the run
