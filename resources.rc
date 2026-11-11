@@ -18,7 +18,7 @@ FONT 8, "MS Sans Serif"
 {
 }
 
-101 ICON "Icon_1.ico"
+101 ICON "port\\resources\\reg2.ico"
 
 
 1 VERSIONINFO
