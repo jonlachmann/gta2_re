@@ -20,6 +20,14 @@ class ScriptThread;
 class Hud_Arrow;
 class AttachedSprite;
 
+#if defined(GTA2_PORT_64BIT)
+#include "../port/src/ptr_slot.hpp"
+// The script file holds the objects its commands declare in 4-byte slots.
+#define SCR_SLOT(type) PtrSlot32<type>
+#else
+#define SCR_SLOT(type) type*
+#endif
+
 struct SCR_CMD_HEADER
 {
     s16 mCmdThis; // 0x0
@@ -38,7 +46,7 @@ struct SCR_ONEVAR_RECT : SCR_CMD_HEADER
 struct SCR_PLAYER_PED
 {
     SCR_CMD_HEADER mHeader; // 0x0
-    Ped* mPed; // 0x8
+    SCR_SLOT(Ped) mPed; // 0x8
     Fix16_Vec mPos; // 0xC
     Ang16 mRot; // 0x18
     s16 mRemap; // 0x1A
@@ -57,7 +65,7 @@ struct SCR_CAR_DATA_DEC : SCR_CMD_HEADER
 
 struct SCR_CHAR_DATA_DEC : SCR_CMD_HEADER
 {
-    Ped* mChar; // 0x8
+    SCR_SLOT(Ped) mChar; // 0x8
     Fix16_Vec mPos; // 0xC
     Ang16 mRot; // 0x18
     s16 mRemap; // 0x1A
@@ -67,7 +75,7 @@ struct SCR_CHAR_DATA_DEC : SCR_CMD_HEADER
 
 struct SCR_OBJ_DATA : SCR_CMD_HEADER
 {
-    Object* mObj; // 0x8
+    SCR_SLOT(Object) mObj; // 0x8
     Fix16_Vec mPos; // 0xC
     u16 mObjId; // 0x18
     Ang16 mRot; // 0x1A
@@ -129,13 +137,13 @@ struct SCR_POINTER : SCR_CMD_HEADER
 {
     union
     {
-        Ped* mChar; // 0x8
-        Car* mCar; // 0x8
-        Object* mObj; // 0x8
-        Crane* mCrane; // 0x8
-        Light* mLight; // 0x8
-        Door* mDoor; // 0x8
-        Crusher* mCrusher; // 0x8
+        SCR_SLOT(Ped) mChar; // 0x8
+        SCR_SLOT(Car) mCar; // 0x8
+        SCR_SLOT(Object) mObj; // 0x8
+        SCR_SLOT(Crane) mCrane; // 0x8
+        SCR_SLOT(Light) mLight; // 0x8
+        SCR_SLOT(Door) mDoor; // 0x8
+        SCR_SLOT(Crusher) mCrusher; // 0x8
         s32 mCounter; // 0x8
         u16 mIndex; // 0x8
         union
@@ -143,9 +151,9 @@ struct SCR_POINTER : SCR_CMD_HEADER
             u16 mUnused8_1; // 0x8
             u16 mUnused8_2; // 0x8
         } words;
-        Generator* mGenerator; // 0x8
-        Hud_Arrow* mArrow; // 0x8
-        AttachedSprite* mSprite; // 0x8
+        SCR_SLOT(Generator) mGenerator; // 0x8
+        SCR_SLOT(Hud_Arrow) mArrow; // 0x8
+        SCR_SLOT(AttachedSprite) mSprite; // 0x8
     };
 };
 
@@ -166,7 +174,7 @@ struct SCR_LOC_SEC_CHAR : SCR_CMD_HEADER
 
 struct SCR_THREAD : SCR_CMD_HEADER
 {
-    ScriptThread* mScriptThread; // 0x8
+    SCR_SLOT(ScriptThread) mScriptThread; // 0x8
     s16 mThreadId; // 0xC
     u16 mThreadStartCmd; // 0xE
     union
@@ -190,7 +198,7 @@ struct SCR_THREAD : SCR_CMD_HEADER
 
 struct SCR_CHAR_AREA_ANY : SCR_CMD_HEADER
 {
-    ScriptThread* mScriptThread; // 0x8
+    SCR_SLOT(ScriptThread) mScriptThread; // 0x8
     s16 mUnusedC; // 0xC
     u16 mUnusedE; // 0xE
     Fix16 mX; // 0x10
@@ -273,7 +281,7 @@ struct SCR_RADIOSTATION_DEC : SCR_CMD_HEADER
 
 struct SCR_CRANE_TARGET_DEC : SCR_CMD_HEADER
 {
-    Crane* mCrane; // 0x8
+    SCR_SLOT(Crane) mCrane; // 0x8
     u32 mHomecrane; // 0xC
     SCR_XY_f mPos; // 0x10
     u16 mHomeRotation; // 0x18
@@ -285,7 +293,7 @@ struct SCR_CRANE_TARGET_DEC : SCR_CMD_HEADER
 
 struct SCR_CRANE_BASIC_DEC : SCR_CMD_HEADER
 {
-    Crane* mCrane; // 0x8
+    SCR_SLOT(Crane) mCrane; // 0x8
     u32 mHomecrane; // 0xC
     SCR_XY_f mPos; // 0x10
     u16 mHomeRotation; // 0x18
@@ -449,7 +457,7 @@ struct SCR_IF_JUMP : SCR_CMD_HEADER
 
 struct SCR_DOOR_DATA_DEC : SCR_CMD_HEADER
 {
-    Door* mDoor; // 0x8
+    SCR_SLOT(Door) mDoor; // 0x8
     SCR_XYZ_uc mBlock; // 0xC
     u8 mFace; // 0xF
     u8 mGrId; // 0x10
@@ -822,9 +830,9 @@ struct SCR_ARROW_ENTITY : SCR_CMD_HEADER
 {
     union
     {
-        Car* mCar; // 0x8
-        Ped* mChar; // 0x8
-        Object* mObj; // 0x8
+        SCR_SLOT(Car) mCar; // 0x8
+        SCR_SLOT(Ped) mChar; // 0x8
+        SCR_SLOT(Object) mObj; // 0x8
     };
 };
 

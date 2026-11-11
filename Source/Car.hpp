@@ -87,7 +87,11 @@ struct car_rng_list
 class CarThreadTrigger
 {
   public:
+#if defined(GTA2_PORT_64BIT)
+    intptr_t mpScriptCmd;
+#else
     s32 mpScriptCmd; // 0x0
+#endif
     Object* mO2C; // 0x4
     s32 mType; // 0x8
     s32 mAction; // 0xC

@@ -255,7 +255,11 @@ char_type ScriptManager::AddCranePowerupTrigger(s16 idx)
     SCR_POINTER* pGenerator = static_cast<SCR_POINTER*>(GetBasePointer(pCmd->mGenerator));
     return gCarThreadTriggers_214->AddThreadTrigger(car_thread_trigger_type::any_car_1,
                                        car_thread_trigger_action::set_generator_car_type_3,
+#if defined(GTA2_PORT_64BIT)
+                                       reinterpret_cast<SCR_THREAD*>(static_cast<Generator*>(pGenerator->mGenerator)),
+#else
                                        reinterpret_cast<SCR_THREAD*>(pGenerator->mGenerator),
+#endif
                                        Fix16(pCmd->mPos.mX) + kFpHalf_6F75F0,
                                        Fix16(pCmd->mPos.mY) + kFpHalf_6F75F0,
                                        Fix16(pCmd->mPos.mZ),
