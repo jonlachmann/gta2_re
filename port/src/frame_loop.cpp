@@ -1,5 +1,8 @@
 #include "frame_loop.hpp"
+#include "Draw.hpp"
+#include "Frontend.hpp"
 #include "Game.hpp"
+#include "Hud.hpp"
 #include "Player.hpp"
 #include "Ped.hpp"
 #include "interpolation.hpp"
@@ -91,6 +94,10 @@ u32 sStepCount;
 u32 sStatsSteps;
 u32 sStatsDraws;
 unsigned long long sStatsStart;
+// SHOW FPS: the draws since sFpsStart, and sFps, their rate over the last half second.
+u32 sFpsDraws;
+unsigned long long sFpsStart;
+u32 sFps;
 
 bool Original()
 {
@@ -171,6 +178,8 @@ void ApplySettings()
 void Reset()
 {
     sStarted = false;
+    sFpsStart = 0;
+    sFps = 0;
     sAccumulated = 0;
     sStepsSinceDraw = 0;
     sRepeatsLeft = 0;
@@ -298,6 +307,26 @@ void EndDraw()
     sStepsSinceDraw = 0;
     sInDraw = false;
     sStatsDraws++;
+    sFpsDraws++;
+    const unsigned long long now = port_NowNs();
+    if (now - sFpsStart >= 500000000ull)
+    {
+        sFps = sFpsStart ? static_cast<u32>(sFpsDraws * 1e9 / (now - sFpsStart) + 0.5) : 0;
+        sFpsStart = now;
+        sFpsDraws = 0;
+    }
+}
+
+void DrawFps()
+{
+    if (!sFps || !PortSettings::ShowFps())
+    {
+        return;
+    }
+    wchar_t text[16];
+    swprintf(text, L"%u FPS", sFps);
+    // Clear of the briefs along the bottom and of the power-ups' icons lower on the right.
+    DrawStringScaled(text, Fix16(636 - Frontend::GetMaxTextWidth(text, gDebugFont)), Fix16(48), gDebugFont);
 }
 
 u32 StepsBeforeDraw()

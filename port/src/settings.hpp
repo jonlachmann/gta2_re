@@ -39,6 +39,7 @@ enum Id
     kAimCamera,
     kBlood,
     kUpdateCheck,
+    kShowFps,
     kCount,
 };
 
@@ -93,6 +94,9 @@ bool AimCamera();
 
 // CHECK FOR UPDATES: the start menu shows a newer release (options_menu.hpp).
 bool UpdateCheck();
+
+// SHOW FPS: the frames drawn per second in a corner of the HUD (frame_loop.hpp).
+bool ShowFps();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();

@@ -56,6 +56,9 @@ class StepLocked
 // After a load or a new screen size: no backlog, nothing to interpolate from.
 void Reset();
 
+// SHOW FPS: the frames drawn per second, at the top right, under the health.
+void DrawFps();
+
 // The FRAME LIMIT setting changed.
 void ApplySettings();
 } // namespace PortFrameLoop

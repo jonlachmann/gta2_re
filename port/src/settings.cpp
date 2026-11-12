@@ -41,9 +41,9 @@ const Id kGeneral[] = {kSfxVolume, kMusicVolume, k3dSound, kTextSpeed, kLanguage
 #endif
 const s32 kNumGeneral = sizeof(kGeneral) / sizeof(kGeneral[0]);
 #if defined(GTA2_PORT_SDL)
-const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kBrightness, kLighting, kDayLength, kStartTime, kClock, kExplodingScores, kBlood};
+const Id kScreen[] = {kDisplay, kDisplayMode, kVsync, kFrameLimit, kShowFps, kBrightness, kLighting, kDayLength, kStartTime, kClock, kExplodingScores, kBlood};
 #else
-const Id kScreen[] = {kDisplay, kFrameLimit, kBrightness, kLighting, kExplodingScores, kBlood};
+const Id kScreen[] = {kDisplay, kFrameLimit, kShowFps, kBrightness, kLighting, kExplodingScores, kBlood};
 #endif
 const s32 kNumScreen = sizeof(kScreen) / sizeof(kScreen[0]);
 #if defined(GTA2_PORT_SDL)
@@ -61,7 +61,7 @@ namespace
 const wchar_t* const kNames[kCount] = {L"SOUND EFFECTS", L"MUSIC", L"3D SOUND", L"TEXT SPEED", L"LANGUAGE",
                                        L"DISPLAY", L"BRIGHTNESS", L"LIGHTING", L"EXPLODING SCORES", L"FRAME LIMIT",
                                        L"TRUE COLOUR", L"BLOOM", L"PIXEL LIGHTING", L"CAR HEADLIGHTS",
-                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"SHADOWS", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS", L"AIM CAMERA", L"BLOOD", L"CHECK FOR UPDATES"};
+                                       L"VSYNC", L"DISPLAY MODE", L"CAMERA ZOOM", L"HUD SCALE", L"SAFE AREA", L"LIGHT EFFECTS", L"TEXTURE FILTERING", L"ANTI-ALIASING", L"SHADOWS", L"PRESET", L"CYCLE LENGTH", L"START TIME", L"CLOCK", L"CONTROLS", L"AIM CAMERA", L"BLOOD", L"CHECK FOR UPDATES", L"SHOW FPS"};
 
 struct Language
 {
@@ -126,6 +126,7 @@ const Translation kTranslations[] = {
     {L"CHECK FOR UPDATES", NULL, {L"MISES A JOUR", L"UPDATES SUCHEN", L"AGGIORNAMENTI", L"ACTUALIZACIONES"}},
     {L"FRAME LIMIT", NULL, {L"LIMITE IMAGES", L"BILDRATENLIMIT", L"LIMITE FOTOGRAMMI", L"LÍMITE IMÁGENES"}},
     {L"VSYNC", NULL, {L"VSYNC", L"VSYNC", L"VSYNC", L"VSYNC"}},
+    {L"SHOW FPS", NULL, {L"AFFICHER FPS", L"FPS ANZEIGEN", L"MOSTRA FPS", L"MOSTRAR FPS"}},
     {L"ORIGINAL", NULL, {L"ORIGINAL", L"ORIGINAL", L"ORIGINALE", L"ORIGINAL"}},
     {L"UNLIMITED", NULL, {L"ILLIMITE", L"UNBEGRENZT", L"ILLIMITATO", L"ILIMITADO"}},
     {L"HUD SCALE", NULL, {L"TAILLE HUD", L"HUD-GRÖSSE", L"SCALA HUD", L"ESCALA HUD"}},
@@ -287,6 +288,8 @@ const char* ScreenName(Id id)
             return "blood";
         case kUpdateCheck:
             return "update_check";
+        case kShowFps:
+            return "port_show_fps";
         default:
             return "car_headlights";
     }
@@ -603,6 +606,11 @@ bool UpdateCheck()
 {
     return Screen(kUpdateCheck) != 0;
 }
+
+bool ShowFps()
+{
+    return Screen(kShowFps) != 0;
+}
 // The menus ask every frame, and an open costs milliseconds on the 3DS's SD card: looked up once per code.
 bool LanguageInstalled(char code)
 {
@@ -907,6 +915,7 @@ void Change(Id id, s32 delta)
         case kLightEffects:
         case kClock:
         case kAimCamera:
+        case kShowFps:
             gRegistry.Set_Screen_Setting(ScreenName(id), Screen(id) ? 0 : 1);
             break;
         case kFrameLimit:

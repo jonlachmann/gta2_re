@@ -3,6 +3,7 @@
 #if defined(GTA2_PORT)
 #include "../port/src/pause_menu.hpp"
 #include "../port/src/day_night.hpp"
+#include "../port/src/frame_loop.hpp"
 #include "../port/src/twin_stick.hpp"
 #endif
 #include "hud_message_priority.hpp"
@@ -3382,6 +3383,7 @@ void Hud::DrawGui()
         mPlayerStats.DrawPlayerStats();
 #if defined(GTA2_PORT)
         PortDayNight::DrawClock();
+        PortFrameLoop::DrawFps();
         PortTwinStick::DrawReticle();
 #endif
         mUnderRoofArrowMarker.Draw();
