@@ -24,4 +24,4 @@ case $T in
 esac
 cmake -S "$PORT" -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo "$@" -DGTA2_SETUP_DEPS_DIR="$P" -DGTA2_OPENAL_DIR="$P" \
     ${GTA2_VERSION:+"-DGTA2_VERSION=${GTA2_VERSION#v}"}
-ninja -k 0 -C "$B" -j"$(getconf _NPROCESSORS_ONLN)"
+ninja -C "$B" -j"$(getconf _NPROCESSORS_ONLN)"
