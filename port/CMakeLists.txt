@@ -104,6 +104,11 @@ else()
     endif()
     list(TRANSFORM compat_src PREPEND ${compat}/src/)
     list(TRANSFORM compat_src APPEND .cpp)
+    if(APPLE)
+        # Mach-O ignores constructor priorities and runs initializers in link order: main.cpp's must come first.
+        list(REMOVE_ITEM compat_src ${compat}/src/main.cpp)
+        list(PREPEND lib_src ${compat}/src/main.cpp)
+    endif()
     # Our Miles and Bink are defined here, not imported from their DLLs.
     set_source_files_properties(${compat}/src/miles.cpp ${compat}/src/miles3d.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_MSS)
     # 3D sound: OpenAL Soft, loaded at run time from next to the exe. Without it the game has 2D sound only.
