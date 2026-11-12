@@ -7,6 +7,9 @@
 #include <string.h>
 #include <string>
 
+// GTA2_LOG_FILE is a host path: not mapped into data like the game's drive paths.
+#undef fopen
+
 void port_RegisterRenderer();
 
 // GTA2_LOG_FILE: SDL's log, the game's debug strings and message boxes go to that file (on Windows
