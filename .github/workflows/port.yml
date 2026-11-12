@@ -47,7 +47,6 @@ jobs:
             artifact: i686-linux
             smoke: debian:bookworm ubuntu:24.04 archlinux:latest
     name: ${{ matrix.target }}
-    if: false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +89,6 @@ jobs:
           retention-days: 3
 
   flatpak:
-    if: false
     runs-on: ubuntu-24.04
     env:
       IMAGE: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
