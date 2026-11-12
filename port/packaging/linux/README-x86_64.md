@@ -1,8 +1,8 @@
 # reG2, portable Linux build (x86_64)
 
 Start the game with `./reg2`. GTA2's files are not included: on the first start, choose your GTA2
-folder, its installer or a disc image, and the game's data is copied to `~/.local/share/gta2_re/`
-(`$XDG_DATA_HOME/gta2_re/`), with the settings and saves. `./reg2 --setup` shows the setup again.
+folder, its installer or a disc image, and the game's data is copied to `~/.local/share/reG2/`
+(`$XDG_DATA_HOME/reG2/`), with the settings and saves. `./reg2 --setup` shows the setup again.
 `README-port.md` describes the port.
 
 The game brings SDL 3 and OpenAL Soft (`bin/`) and takes the rest from the system: glibc 2.29 or

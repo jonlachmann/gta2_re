@@ -30,7 +30,7 @@ flatpak --user install -y --noninteractive --bundle "$B"
 flatpak list --app
 
 T=$(mktemp -d)
-DATA=$HOME/.var/app/$ID/data/gta2_re
+DATA=$HOME/.var/app/$ID/data/reG2
 GTA2_NO_SOUND=1 GTA2_NO_MESSAGEBOX=1 SDL_VIDEODRIVER=dummy GTA2_LOG_FILE=$T/dummy.log \
     flatpak run --filesystem="$T" "$ID"
 cat "$T/dummy.log"

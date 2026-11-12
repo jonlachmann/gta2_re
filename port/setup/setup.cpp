@@ -420,7 +420,7 @@ fs::path GameFolder(bool* pPerUser)
     {
         return PathFromUtf8(base);
     }
-    char* pref = SDL_GetPrefPath("", "gta2_re");
+    char* pref = SDL_GetPrefPath("", "reG2");
     const fs::path dir = PathFromUtf8(pref ? pref : "");
     SDL_free(pref);
     *pPerUser = true;

@@ -58,7 +58,7 @@ else
 fi
 
 export HOME=$T/home XDG_DATA_HOME=$T/data
-DATA=$XDG_DATA_HOME/gta2_re
+DATA=$XDG_DATA_HOME/reG2
 mkdir -p "$HOME"
 
 GTA2_NO_SOUND=1 GTA2_NO_MESSAGEBOX=1 SDL_VIDEODRIVER=dummy GTA2_LOG_FILE=$T/dummy.log "$GTA2" 2> "$T/dummy.err"

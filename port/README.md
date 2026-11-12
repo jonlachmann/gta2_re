@@ -95,9 +95,9 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 
 | Platform | Per-user folder (`SDL_GetPrefPath`) |
 |---|---|
-| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` (Flatpak: `~/.var/app/<app id>/data/gta2_re/`) |
-| Windows | `%APPDATA%\gta2_re\` |
-| macOS | `~/Library/Application Support/gta2_re/` |
+| Linux | `$XDG_DATA_HOME/reG2/`, by default `~/.local/share/reG2/` (Flatpak: `~/.var/app/<app id>/data/reG2/`) |
+| Windows | `%APPDATA%\reG2\` |
+| macOS | `~/Library/Application Support/reG2/` |
 
 It holds `data/` (the game's data, the music in `data/GTAudio/`), `gta2_registry.ini` (settings),
 `gta2gl.ini` (renderer options), `player/` (saves and high scores) and `test/` (replays, logs).
@@ -262,7 +262,7 @@ The releases are 64-bit:
   on the `org.freedesktop.Platform` 26.08 runtime, whose SDL 3, OpenAL Soft and libarchive it uses
   (`flatpak install --user reG2-x86_64.flatpak` fetches the runtime from Flathub). It needs no
   access to the files: the setup's choosers go through the desktop portal, and the game's data goes to
-  `~/.var/app/<app id>/data/gta2_re/`.
+  `~/.var/app/<app id>/data/reG2/`.
 - macOS: `reG2-macos-arm64.dmg` and `reG2-macos-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
   `Contents/Frameworks`) for macOS 11 and later, built on GitHub's macOS runners (`packaging/macos_app.sh`).
   The app is signed ad hoc, not notarized: the first start needs a right click, Open (or
