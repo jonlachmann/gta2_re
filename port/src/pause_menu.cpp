@@ -4,7 +4,10 @@
 #include "Frontend.hpp"
 #include "Function.hpp"
 #include "Game.hpp"
+#include "GameSession.hpp"
 #include "Globals.hpp"
+#include "ObjectDefinitions.hpp"
+#include "ScriptManager.hpp"
 #include "TextTable.hpp"
 #include "TextureCache.hpp"
 #include "cSampleManager.hpp"
@@ -315,6 +318,20 @@ Fix16 Fx(f32 v)
     return Fix16(static_cast<s32>(v * 16384.0f), 0);
 }
 
+// One line of the original's pause screen (Hud_PauseScreen::DrawPause): the object's icon, then the text.
+void DrawStat(wchar_t* pText, s32 object, s32 y, f32 scale, f32 left, f32 top)
+{
+    const s16 font = static_cast<s16>(word_7064D8);
+    const s16 sprite = gObjectDefinitions->GetObjectBaseSpriteIdx(object);
+    const s32 iconWidth =
+        gGtx_0x106C->get_sprite_width(gGtx_0x106C->GetSpriteTrueIndex(sprite_types_enum::code_obj1_4, sprite)) + 10;
+    const s32 x = (640 - iconWidth - Frontend::GetMaxTextWidth(pText, font)) / 2;
+    DrawFigure(sprite_types_enum::code_obj1_4, sprite, Fx(left + (x + iconWidth / 2) * scale), Fx(top + (y + 15) * scale),
+               Ang16(0), Fx(scale), palette_types_enum::sprites_2, 0, 0, 0, false);
+    DrawString(pText, Fx(left + (x + iconWidth) * scale), Fx(top + y * scale), font, Fx(scale),
+               palette_types_enum::font_remaps_8, 6, 0, 0);
+}
+
 void Draw()
 {
     if (!sOpen)
@@ -325,7 +342,7 @@ void Draw()
     PlaySound(PortMenu::UpdateCapture());
 
     // The 640x480 layout centred on the screen, inside the safe area but without the HUD scale, the menu
-    // then the original's banner over its panel, higher to leave room for the menu.
+    // then above its panel the kill frenzies and tokens the original's pause screen showed in turn.
     const f32 scale = PortScreenUiScale().ToFloat() * (1 - 2 * PortSettings::SafeArea());
     const f32 left = (gViewCamera->mScreenPxWidth - 640.0f * scale) / 2;
     const f32 top = (gViewCamera->mScreenPxHeight - 480.0f * scale) / 2;
@@ -340,16 +357,14 @@ void Draw()
     PlaySound(result);
     PortMenu::Draw(scale, left, top, true);
     UseGameStyle();
-    const s16 kBanner[3] = {134, 136, 135};
-    for (s32 i = 0; i < 3; i++)
+    if (!gGameSession.IsBonusStage())
     {
-        DrawFigure(sprite_types_enum::user_6, kBanner[i], Fx(left + (227 + 93 * i) * scale), Fx(top + 100 * scale), Ang16(0),
-                   Fx(scale), palette_types_enum::sprites_2, 0, 0, 0, false);
+        wchar_t text[256];
+        const s32 frenzies = gScriptManager->mSecretsPassed ? *gScriptManager->mSecretsPassed : 0;
+        swprintf(text, gText_0x14->Find("psec"), frenzies, gScriptManager->mTotalSecrets);
+        DrawStat(text, objects::kill_frenzy_icon_286, 62, scale, left, top);
+        swprintf(text, gText_0x14->Find("pbon"), gGameSession.get_secret_tokens_collected(), 50);
+        DrawStat(text, objects::secret_token_266, 94, scale, left, top);
     }
-    wchar_t* pPause = gText_0x14->Find("pause");
-    const s16 font = static_cast<s16>(word_7064D8);
-    const f32 pauseX = (640 - Frontend::GetMaxTextWidth(pPause, font)) / 2;
-    DrawString(pPause, Fx(left + pauseX * scale), Fx(top + 78 * scale), font, Fx(scale), palette_types_enum::sprites_2, 0, 0,
-               0);
 }
 } // namespace PortPauseMenu
