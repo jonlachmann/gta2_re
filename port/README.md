@@ -148,6 +148,10 @@ EAX environment the game picks, as EFX reverb. OpenAL renders into the SDL mix t
 device. Without the library the game keeps its 2D sound. `GTA2_HRTF=1` renders binaurally for
 headphones; `GTA2_NO_OPENAL=1` ignores the library.
 
+On Linux without `GTA2_OPENAL_DIR`, the build uses the system's OpenAL Soft headers when it finds
+them (`AL/efx-presets.h`, for example from the distribution's `openal` package) and the game loads
+the system's `libopenal.so.1`, which must match the build's architecture.
+
 Build it once per target (no audio backend needed), then pass its install prefix to the port:
 
 ```bash
