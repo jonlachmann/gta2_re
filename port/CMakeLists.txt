@@ -153,9 +153,12 @@ else()
             ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
         if(APPLE)
             # reg2.app (reG2.app in the .dmg), with SDL3 and OpenAL Soft in Contents/Frameworks.
+            # The app id, shared with the Linux packages.
+            file(STRINGS ${CMAKE_CURRENT_LIST_DIR}/packaging/app.sh app_id REGEX "^APP_ID=")
+            string(REPLACE "APP_ID=" "" app_id "${app_id}")
             set_target_properties(gta2 PROPERTIES MACOSX_BUNDLE ON
                 MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/packaging/macos/Info.plist.in
-                MACOSX_BUNDLE_GUI_IDENTIFIER io.github.parigi_n.reG2 MACOSX_BUNDLE_BUNDLE_NAME reG2
+                MACOSX_BUNDLE_GUI_IDENTIFIER ${app_id} MACOSX_BUNDLE_BUNDLE_NAME reG2
                 MACOSX_BUNDLE_ICON_FILE reG2.icns
                 BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH @executable_path/../Frameworks)
             add_custom_command(TARGET gta2 POST_BUILD

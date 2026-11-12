@@ -3,6 +3,6 @@ Type=Application
 Name=reG2
 Comment=GTA2 built from source, played with your own copy of the game
 Exec=reg2
-Icon=io.github.parigi_n.reG2
+Icon=@APP_ID@
 Categories=Game;ActionGame;
 Terminal=false

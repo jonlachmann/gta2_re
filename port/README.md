@@ -95,7 +95,7 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 
 | Platform | Per-user folder (`SDL_GetPrefPath`) |
 |---|---|
-| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` (Flatpak: `~/.var/app/io.github.parigi_n.reG2/data/gta2_re/`) |
+| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` (Flatpak: `~/.var/app/<app id>/data/gta2_re/`) |
 | Windows | `%APPDATA%\gta2_re\` |
 | macOS | `~/Library/Application Support/gta2_re/` |
 
@@ -258,11 +258,11 @@ The releases are 64-bit:
   libraries are missing.
 - Linux, AppImage: `reG2-x86_64.AppImage`, the same build and libraries in an AppImage
   (`packaging/appimage.sh`, the type2 runtime), with its desktop file, icon and AppStream metainfo.
-- Linux, Flatpak: `reG2-x86_64.flatpak`, a bundle of `packaging/flatpak/io.github.parigi_n.reG2.yml`
+- Linux, Flatpak: `reG2-x86_64.flatpak`, a bundle of `packaging/flatpak/<app id>.yml`
   on the `org.freedesktop.Platform` 26.08 runtime, whose SDL 3, OpenAL Soft and libarchive it uses
   (`flatpak install --user reG2-x86_64.flatpak` fetches the runtime from Flathub). It needs no
   access to the files: the setup's choosers go through the desktop portal, and the game's data goes to
-  `~/.var/app/io.github.parigi_n.reG2/data/gta2_re/`.
+  `~/.var/app/<app id>/data/gta2_re/`.
 - macOS: `reG2-macos-arm64.dmg` and `reG2-macos-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
   `Contents/Frameworks`) for macOS 11 and later, built on GitHub's macOS runners (`packaging/macos_app.sh`).
   The app is signed ad hoc, not notarized: the first start needs a right click, Open (or
@@ -271,7 +271,9 @@ The releases are 64-bit:
 The file names carry no version, so `releases/latest/download/<name>` always gives the newest. The version
 is the release's tag, and inside the packages the start menu's text (`kVersionText`, `src/options_menu.hpp`),
 the Windows file version (`resources.rc`) and the AppStream release (`packaging/linux/reG2.metainfo.xml`).
-The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`.
+The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`. The app id of
+the desktop file, metainfo, Flatpak and macOS bundle is set once, in `packaging/app.sh`; changing it also
+renames `packaging/flatpak/<id>.yml` and its `id:` line.
 
 The i686 packages (`reG2-windows-i686.zip`, `reG2-linux-i686.tar.gz`) still build and
 are tested in CI, but are not released. The i686 Linux build takes everything but SDL 3 and OpenAL Soft from

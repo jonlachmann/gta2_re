@@ -22,7 +22,8 @@ if [ "$(id -u)" = 0 ]; then
 fi
 B=$(readlink -f "$1")
 GAME=${2:+$(readlink -f "$2")}
-ID=io.github.parigi_n.reG2
+. "$(dirname "$0")/app.sh"
+ID=$APP_ID
 flatpak info org.freedesktop.Platform//26.08 > /dev/null 2>&1 ||
     flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak --user install -y --noninteractive --bundle "$B"

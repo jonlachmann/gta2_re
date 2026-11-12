@@ -1,7 +1,8 @@
 # reG2 as a Flatpak, built from this repository. SDL3, OpenAL Soft and libarchive come from the runtime;
 # clang (the port needs it) from the llvm22 SDK extension, at build time only.
-# The archives' URLs and SHA-256 must match packaging/versions.sh (flatpak.sh checks it).
-id: io.github.parigi_n.reG2
+# The archives' URLs and SHA-256 must match packaging/versions.sh, and the id packaging/app.sh (flatpak.sh
+# checks both).
+id: io.github.reG2_project.reG2
 runtime: org.freedesktop.Platform
 runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
@@ -64,10 +65,7 @@ modules:
         -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=/app
       - ninja -C build -j${FLATPAK_BUILDER_N_JOBS}
       - install -Dm755 build/reg2 /app/bin/reg2
-      - install -Dm644 -t /app/share/applications port/packaging/linux/io.github.parigi_n.reG2.desktop
-      - install -Dm644 -t /app/share/metainfo port/packaging/linux/io.github.parigi_n.reG2.metainfo.xml
-      - install -Dm644 port/resources/gta2_256.png /app/share/icons/hicolor/256x256/apps/io.github.parigi_n.reG2.png
-      - install -Dm644 port/resources/reg2_512.png /app/share/icons/hicolor/512x512/apps/io.github.parigi_n.reG2.png
+      - sh port/packaging/linux/install_desktop.sh /app
       - install -Dm644 -t /app/share/doc/reG2 port/README.md
     sources:
       - type: dir

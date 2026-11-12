@@ -5,8 +5,12 @@
 set -eu
 W=$1
 HERE=$(cd "$(dirname "$0")" && pwd)
-ID=io.github.parigi_n.reG2
-M=$HERE/flatpak/$ID.yml
+. "$HERE/app.sh"
+M=$HERE/flatpak/$APP_ID.yml
+if ! grep -q "^id: $APP_ID\$" "$M"; then
+    echo "flatpak.sh: the id of $M is not $APP_ID (app.sh)" >&2
+    exit 1
+fi
 
 # The manifest's archives are the ones pinned in versions.sh.
 . "$HERE/versions.sh"
@@ -21,6 +25,6 @@ flatpak-builder --disable-rofiles-fuse --force-clean --install-deps-from=flathub
     --repo="$W/repo" "$W/app" "$M"
 mkdir -p "$W/out"
 NAME=$W/out/reG2-x86_64.flatpak
-flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo "$W/repo" "$NAME" "$ID"
+flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo "$W/repo" "$NAME" "$APP_ID"
 rm -rf "$W/app"
 echo "$NAME"

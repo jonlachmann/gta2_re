@@ -6,10 +6,9 @@
 set -eu
 B=$1; P=$2; RUNTIME=$3; OUT=$4
 HERE=$(cd "$(dirname "$0")" && pwd)
-ID=io.github.parigi_n.reG2
+. "$HERE/app.sh"
 A=$(mktemp -d)/AppDir
-mkdir -p "$A/usr/bin" "$A/usr/lib" "$A/usr/share/applications" "$A/usr/share/metainfo" \
-    "$A/usr/share/icons/hicolor/256x256/apps" "$A/usr/share/icons/hicolor/512x512/apps" "$A/usr/share/doc/reG2"
+mkdir -p "$A/usr/bin" "$A/usr/lib" "$A/usr/share/doc/reG2"
 
 # The game finds the libraries through its RPATH, $ORIGIN/../lib (build.sh).
 llvm-strip --strip-all -R .comment -o "$A/usr/bin/reg2" "$B/reg2"
@@ -20,13 +19,10 @@ chmod 644 "$A"/usr/lib/*
 
 printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/usr/bin/reg2" "$@"\n' > "$A/AppRun"
 chmod 755 "$A/AppRun"
-cp "$HERE/linux/$ID.desktop" "$A/usr/share/applications/"
-cp "$HERE/linux/$ID.metainfo.xml" "$A/usr/share/metainfo/"
-cp "$HERE/../resources/gta2_256.png" "$A/usr/share/icons/hicolor/256x256/apps/$ID.png"
-cp "$HERE/../resources/reg2_512.png" "$A/usr/share/icons/hicolor/512x512/apps/$ID.png"
-ln -s "usr/share/applications/$ID.desktop" "$A/$ID.desktop"
-ln -s "usr/share/icons/hicolor/256x256/apps/$ID.png" "$A/$ID.png"
-ln -s "$ID.png" "$A/.DirIcon"
+sh "$HERE/linux/install_desktop.sh" "$A/usr"
+ln -s "usr/share/applications/$APP_ID.desktop" "$A/$APP_ID.desktop"
+ln -s "usr/share/icons/hicolor/256x256/apps/$APP_ID.png" "$A/$APP_ID.png"
+ln -s "$APP_ID.png" "$A/.DirIcon"
 cp "$HERE/../README.md" "$A/usr/share/doc/reG2/README.md"
 cp -r "$P/licenses" "$A/usr/share/doc/reG2/"
 
