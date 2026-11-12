@@ -1,18 +1,26 @@
 #!/bin/sh
-# Starts the game (bin/gta2, 32-bit) after checking that the system has the 32-bit libraries it needs.
+# Starts the game (bin/gta2, 32 or 64-bit) after checking that the system has the libraries it needs.
 HERE=$(dirname "$(readlink -f "$0")")
-if [ ! -e /lib/ld-linux.so.2 ]; then
-    echo "gta2: this system has no 32-bit libraries (/lib/ld-linux.so.2 is missing)." >&2
-    echo "gta2: $HERE/README.md lists the packages to install." >&2
-    exit 1
+# The ELF class of bin/gta2: 1 for 32-bit, 2 for 64-bit.
+if [ "$(od -An -tu1 -j4 -N1 "$HERE/bin/gta2" | tr -d ' ')" = 2 ]; then
+    BITS=64
+    TAG="(libc6,x86-64)"
+else
+    BITS=32
+    TAG="(libc6)"
+    if [ ! -e /lib/ld-linux.so.2 ]; then
+        echo "gta2: this system has no 32-bit libraries (/lib/ld-linux.so.2 is missing)." >&2
+        echo "gta2: $HERE/README.md lists the packages to install." >&2
+        exit 1
+    fi
 fi
 
-# The libraries SDL loads when it starts, from the loader's cache (ldconfig -p lists 32-bit ones as "(libc6)").
+# The libraries SDL loads when it starts, from the loader's cache (ldconfig -p tags each with its ABI).
 LDCONFIG=$(PATH=$PATH:/sbin:/usr/sbin command -v ldconfig)
 if [ -n "$LDCONFIG" ] && CACHE=$("$LDCONFIG" -p 2> /dev/null); then
     has() {
         for lib; do
-            echo "$CACHE" | grep -q "^[[:space:]]*$lib (libc6)" && return 0
+            echo "$CACHE" | grep -q "^[[:space:]]*$lib $TAG" && return 0
         done
         return 1
     }
@@ -21,7 +29,7 @@ if [ -n "$LDCONFIG" ] && CACHE=$("$LDCONFIG" -p 2> /dev/null); then
     has libX11.so.6 libwayland-client.so.0 || missing="$missing X11 or Wayland (libX11.so.6, libwayland-client.so.0),"
     has libpulse.so.0 libpipewire-0.3.so.0 libasound.so.2 || missing="$missing sound (libpulse.so.0, libasound.so.2),"
     if [ -n "$missing" ]; then
-        echo "gta2: 32-bit libraries not found:${missing%,}." >&2
+        echo "gta2: $BITS-bit libraries not found:${missing%,}." >&2
         echo "gta2: $HERE/README.md lists the packages to install." >&2
     fi
 fi

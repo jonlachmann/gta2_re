@@ -1,7 +1,7 @@
 #!/bin/sh
-# deps.sh <linux32|mingw32> <downloads> <prefix> <build dir>: SDL3, OpenAL Soft, unshield, libarchive, zlib and
-# xz from the sources of versions.sh, installed into <prefix>. linux32 builds them against the Debian 11
-# system root of sysroot.sh, made in <prefix>/sysroot.
+# deps.sh <linux32|linux64|mingw32|mingw64> <downloads> <prefix> <build dir>: SDL3, OpenAL Soft, unshield,
+# libarchive, zlib and xz from the sources of versions.sh, installed into <prefix>. linux32 and linux64 build them
+# against the Debian 11 system root of sysroot.sh, made in <prefix>/sysroot.
 set -eu
 T=$1; DL=$2; P=$3; B=$4
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -11,14 +11,22 @@ J=$(nproc)
 
 unpack() { tar -xf "$DL/$1" -C "$B"; }
 
-if [ "$T" = linux32 ]; then
+case $T in
+    linux32) MULTIARCH=i386-linux-gnu; LOADER=lib/ld-linux.so.2 ;;
+    linux64) MULTIARCH=x86_64-linux-gnu; LOADER=lib64/ld-linux-x86-64.so.2 ;;
+    mingw32) MINGW=i686-w64-mingw32 ;;
+    mingw64) MINGW=x86_64-w64-mingw32 ;;
+    *) echo "deps.sh: unknown target $T" >&2; exit 1 ;;
+esac
+
+if [ "${MULTIARCH:-}" ]; then
     export GTA2_SYSROOT="$P/sysroot"
-    sh "$HERE/sysroot.sh" "$GTA2_SYSROOT"
-    C="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$HERE/linux32-sysroot.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P
+    sh "$HERE/sysroot.sh" "$GTA2_SYSROOT" "$([ "$T" = linux64 ] && echo amd64 || echo i386)"
+    C="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$HERE/$T-sysroot.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P
        -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$P -DCMAKE_POSITION_INDEPENDENT_CODE=ON"
     # The system root's wayland-scanner: a newer one writes calls that need libwayland-client 1.20.
-    L="$GTA2_SYSROOT/lib/i386-linux-gnu:$GTA2_SYSROOT/usr/lib/i386-linux-gnu"
-    printf '#!/bin/sh\nexec "%s" --library-path "%s" "%s" "$@"\n' "$GTA2_SYSROOT/lib/ld-linux.so.2" "$L" \
+    L="$GTA2_SYSROOT/lib/$MULTIARCH:$GTA2_SYSROOT/usr/lib/$MULTIARCH"
+    printf '#!/bin/sh\nexec "%s" --library-path "%s" "%s" "$@"\n' "$GTA2_SYSROOT/$LOADER" "$L" \
         "$GTA2_SYSROOT/usr/bin/wayland-scanner" > "$B/wayland-scanner"
     chmod +x "$B/wayland-scanner"
     unpack SDL3-3.4.18.tar.gz
@@ -27,11 +35,11 @@ if [ "$T" = linux32 ]; then
           -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,now
     ninja -C "$B/b_sdl3" -j"$J" install
 else
-    C="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$PORT/toolchain-mingw32-clang.cmake -DCMAKE_BUILD_TYPE=Release
+    C="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$PORT/toolchain-$T-clang.cmake -DCMAKE_BUILD_TYPE=Release
        -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_PREFIX_PATH=$P"
     unpack SDL3-devel-3.4.18-mingw.tar.gz
     mkdir -p "$P/sdl3"
-    cp -r "$B/SDL3-3.4.18/i686-w64-mingw32/." "$P/sdl3/"
+    cp -r "$B/SDL3-3.4.18/$MINGW/." "$P/sdl3/"
     cp "$B/SDL3-3.4.18/LICENSE.txt" "$P/sdl3/"
 fi
 unpack zlib-1.3.2.tar.gz
@@ -59,17 +67,17 @@ unpack openal-soft-1.25.2.tar.gz
 # GCC: OpenAL Soft 1.25.2 builds neither with Debian 13's clang 19 nor with libc++ (llvm-mingw). The library
 # links its C++ runtime statically and exchanges no CRT object with the game.
 AL_C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib"
-if [ "$T" = linux32 ]; then
+if [ "${MULTIARCH:-}" ]; then
     # GCC's own library folders, which hold the build machine's glibc, come after -L.
-    SRL="-L$GTA2_SYSROOT/usr/lib/i386-linux-gnu -L$GTA2_SYSROOT/lib/i386-linux-gnu"
+    SRL="-L$GTA2_SYSROOT/usr/lib/$MULTIARCH -L$GTA2_SYSROOT/lib/$MULTIARCH"
     gcc --sysroot="$GTA2_SYSROOT" -O2 -fPIC -c "$HERE/glibc_compat.c" -o "$B/glibc_compat.o"
-    cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DCMAKE_TOOLCHAIN_FILE="$HERE/linux32-sysroot.cmake" \
+    cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DCMAKE_TOOLCHAIN_FILE="$HERE/$T-sysroot.cmake" \
           -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
           "-DCMAKE_SHARED_LINKER_FLAGS=$SRL -pthread -static-libstdc++ -Wl,-z,defs $B/glibc_compat.o"
 else
     cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_EAX=OFF -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=i686 -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc-posix \
-          -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres \
+          -DCMAKE_SYSTEM_PROCESSOR="${MINGW%%-*}" -DCMAKE_C_COMPILER=$MINGW-gcc-posix \
+          -DCMAKE_CXX_COMPILER=$MINGW-g++-posix -DCMAKE_RC_COMPILER=$MINGW-windres \
           "-DCMAKE_SHARED_LINKER_FLAGS=-s -static -static-libgcc -static-libstdc++"
 fi
 ninja -C "$B/b_openal" -j"$J" install
@@ -95,7 +103,7 @@ cp "$B/unshield-1.6.2/LICENSE" "$P/licenses/unshield.txt"
 cp "$B/libarchive-3.8.11/COPYING" "$P/licenses/libarchive.txt"
 cp "$B/zlib-1.3.2/LICENSE" "$P/licenses/zlib.txt"
 cat "$B/xz-5.8.4/COPYING" "$B/xz-5.8.4/COPYING.0BSD" > "$P/licenses/xz.txt"
-if [ "$T" = linux32 ]; then
+if [ "${MULTIARCH:-}" ]; then
     cp "$B/SDL3-3.4.18/LICENSE.txt" "$P/licenses/SDL3.txt"
 else
     cp "$P/sdl3/LICENSE.txt" "$P/licenses/SDL3.txt"

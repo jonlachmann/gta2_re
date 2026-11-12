@@ -1,42 +1,46 @@
 #!/bin/sh
-# smoke_test.sh <gta2_re-*-linux-i686.tar.gz> [<GTA2 folder>]: installs the package and
-# the 32-bit libraries it needs (the lists of linux/README.md) as root in a clean
-# Debian, Ubuntu or Arch Linux container, then starts the game without its data: with SDL's dummy video
-# driver the setup finds no data and quits; under Xvfb its window is captured, drawn with OpenGL and with
-# OpenGL ES. With a GTA2 folder (read-only is fine), the setup installs the game from it, then the game
+# smoke_test.sh <package> [<GTA2 folder>]: installs a Linux package (reG2-*-linux-i686.tar.gz or
+# reG2-*-linux-x86_64.tar.gz) and the libraries it needs (the lists of linux/README.md)
+# as root in a clean Debian, Ubuntu or Arch Linux container, then starts the game without its data: with SDL's
+# dummy video driver the setup finds no data and quits; under Xvfb its window is captured, drawn with OpenGL and
+# with OpenGL ES. With a GTA2 folder (read-only is fine), the setup installs the game from it, then the game
 # plays 30 seconds under Xvfb, with the sound written to a file.
 set -eu
 PKG=$(readlink -f "$1")
 GAME=${2:+$(readlink -f "$2")}
 T=$(mktemp -d)
 export DEBIAN_FRONTEND=noninteractive
+case $PKG in *i686*) I386=1 ;; *) I386= ;; esac
 
 if command -v apt-get > /dev/null; then
-    dpkg --add-architecture i386
+    [ -z "$I386" ] || dpkg --add-architecture i386
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends xvfb xauth > /dev/null
 else
-    printf '[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+    [ -z "$I386" ] || printf '[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
     pacman -Syu --noconfirm --needed xorg-server-xvfb > /dev/null
 fi
 
 tar -xzf "$PKG" -C "$T"
-GTA2=$(echo "$T"/gta2_re-*/gta2)
-rc=0
-"$GTA2" 2> "$T/no32.log" || rc=$?
-cat "$T/no32.log"
-[ $rc = 1 ] && grep -q "no 32-bit libraries" "$T/no32.log"
+GTA2=$(echo "$T"/reG2-*/gta2)
+if [ -n "$I386" ]; then
+    rc=0
+    "$GTA2" 2> "$T/no32.log" || rc=$?
+    cat "$T/no32.log"
+    [ $rc = 1 ] && grep -q "no 32-bit libraries" "$T/no32.log"
+fi
 if command -v apt-get > /dev/null; then
     LIBS="libc6 libgcc-s1 libgl1 libegl1 libgles2 libgl1-mesa-dri libx11-6 libxext6 libxi6 libxcursor1
           libxrandr2 libxss1 libxkbcommon0 libwayland-client0 libwayland-cursor0 libwayland-egl1 libpulse0
           libdbus-1-3 libudev1"
     # Debian 11 has no libdecor.
-    apt-cache show libdecor-0-0:i386 > /dev/null 2>&1 && LIBS="$LIBS libdecor-0-0"
-    apt-get install -y -qq $(printf '%s:i386 ' $LIBS) > /dev/null
+    apt-cache show libdecor-0-0 > /dev/null 2>&1 && LIBS="$LIBS libdecor-0-0"
+    apt-get install -y -qq $(printf "%s${I386:+:i386} " $LIBS) > /dev/null
 else
-    pacman -S --noconfirm --needed lib32-glibc lib32-gcc-libs lib32-mesa lib32-libglvnd lib32-libx11 \
-        lib32-libxext lib32-libxi lib32-libxcursor lib32-libxrandr lib32-libxss lib32-libxkbcommon lib32-wayland \
-        lib32-libdecor lib32-libpulse lib32-dbus lib32-systemd > /dev/null
+    LIBS="glibc gcc-libs mesa libglvnd libx11 libxext libxi libxcursor libxrandr libxss libxkbcommon wayland libdecor
+          libpulse dbus systemd-libs"
+    [ -z "$I386" ] || LIBS=$(printf 'lib32-%s ' $LIBS | sed 's/lib32-systemd-libs/lib32-systemd/')
+    pacman -S --noconfirm --needed $LIBS > /dev/null
 fi
 
 export HOME=$T/home XDG_DATA_HOME=$T/data

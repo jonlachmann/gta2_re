@@ -1,0 +1,21 @@
+# The portable Linux builds, against the Debian 11 system root of sysroot.sh (glibc 2.31), whose path is
+# GTA2_SYSROOT. Included by linux32-sysroot.cmake and linux64-sysroot.cmake, which set the processor and
+# CMAKE_LIBRARY_ARCHITECTURE. Libraries are searched there and in CMAKE_PREFIX_PATH only, never on the build machine.
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSROOT $ENV{GTA2_SYSROOT})
+if(NOT CMAKE_C_COMPILER)
+    set(CMAKE_C_COMPILER clang)
+    set(CMAKE_CXX_COMPILER clang++)
+endif()
+set(CMAKE_C_COMPILER_TARGET ${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+set(CMAKE_CXX_COMPILER_TARGET ${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+if(CMAKE_C_COMPILER MATCHES clang)
+    set(CMAKE_LINKER_TYPE LLD)
+endif()
+set(CMAKE_FIND_ROOT_PATH ${CMAKE_PREFIX_PATH})
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+set(ENV{PKG_CONFIG_SYSROOT_DIR} ${CMAKE_SYSROOT})
+set(ENV{PKG_CONFIG_LIBDIR} ${CMAKE_SYSROOT}/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/pkgconfig:${CMAKE_SYSROOT}/usr/share/pkgconfig)

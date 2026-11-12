@@ -1,8 +1,8 @@
 #!/bin/sh
-# linux_packages.sh <build dir> <deps prefix> <out dir>: the Linux packages, from the same binaries: the game
-# with the libraries distributions may lack (SDL3, OpenAL Soft), which it finds next to itself. glibc, OpenGL,
-# X11, Wayland and sound come from the system's 32-bit libraries.
-# - gta2_re-<version>-linux-i686.tar.gz, the portable build: the launcher gta2, bin/ and linux/README.md.
+# linux_packages.sh <build dir> <deps prefix> <out dir>: the portable Linux package, reG2-<version>-linux-<arch>.tar.gz
+# (i686 or x86_64, after the build's binary): the launcher gta2, bin/ (the game with the libraries distributions
+# may lack, SDL3 and OpenAL Soft, which it finds next to itself) and its README. glibc, OpenGL, X11, Wayland and
+# sound come from the system's libraries.
 set -eu
 B=$1; P=$2; OUT=$3
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -10,6 +10,13 @@ VERSION=${GTA2_VERSION:-dev}
 T=$(mktemp -d)
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
+if llvm-objdump -f "$B/gta2" | grep -q 'file format elf64'; then
+    ARCH=x86_64
+    README=$HERE/linux/README-x86_64.md
+else
+    ARCH=i686
+    README=$HERE/linux/README.md
+fi
 
 S=$T/bin
 mkdir -p "$S"
@@ -21,13 +28,13 @@ chmod 644 "$S"/*.so.*
 # The newest glibc symbol version they need: the oldest glibc they start with.
 llvm-objdump -T "$S"/* | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1
 
-NAME=gta2_re-$VERSION-linux-i686
+NAME=reG2-$VERSION-linux-$ARCH
 D=$T/$NAME
 mkdir -p "$D/licenses"
 cp -a "$S" "$D/bin"
 cp "$HERE/linux/gta2" "$D/gta2"
 chmod 755 "$D/gta2"
-cp "$HERE/linux/README.md" "$D/README.md"
+cp "$README" "$D/README.md"
 cp "$HERE/../README.md" "$D/README-port.md"
 cp "$P"/licenses/* "$D/licenses/"
 tar -C "$T" --owner=0 --group=0 --numeric-owner -czf "$OUT/$NAME.tar.gz" "$NAME"

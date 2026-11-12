@@ -1,10 +1,12 @@
 #!/bin/sh
-# windows_zip.sh <build dir> <deps prefix> <out dir>: gta2_re-<version>-windows-i686.zip, the exe with the
-# SDL3 and OpenAL Soft DLLs, the port's README and the libraries' licences.
+# windows_zip.sh <build dir> <deps prefix> <out dir>: reG2-<version>-windows-<i686|x86_64>.zip, the exe with
+# the SDL3 and OpenAL Soft DLLs, the port's README and the libraries' licences.
 set -eu
 B=$1; P=$2; OUT=$3
 HERE=$(cd "$(dirname "$0")" && pwd)
-NAME=gta2_re-${GTA2_VERSION:-dev}-windows-i686
+ARCH=i686
+llvm-objdump -f "$B/gta2.exe" | grep -q 'file format coff-x86-64' && ARCH=x86_64
+NAME=reG2-${GTA2_VERSION:-dev}-windows-$ARCH
 Z=$(mktemp -d)/$NAME
 mkdir -p "$Z" "$OUT"
 llvm-strip --strip-debug -o "$Z/gta2.exe" "$B/gta2.exe"
