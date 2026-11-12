@@ -102,6 +102,8 @@ else()
             COMPILE_DEFINITIONS "BUILD_MSS;GTA2_HAVE_OPENAL" INCLUDE_DIRECTORIES ${GTA2_OPENAL_DIR}/include)
         if(WIN32)
             set(openal_runtime ${GTA2_OPENAL_DIR}/bin/OpenAL32.dll)
+        elseif(APPLE)
+            set(openal_runtime ${GTA2_OPENAL_DIR}/lib/libopenal.1.dylib)
         else()
             set(openal_runtime ${GTA2_OPENAL_DIR}/lib/libopenal.so.1)
         endif()
@@ -122,7 +124,7 @@ else()
         src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp src/ptr_slot.cpp src/layout_checks.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
     target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3)
-    if(openal_runtime)
+    if(openal_runtime AND NOT APPLE)
         add_custom_command(TARGET gta2 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${openal_runtime} $<TARGET_FILE_DIR:gta2>)
     endif()
@@ -147,6 +149,22 @@ else()
             -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
         target_include_directories(gta2 PRIVATE
             ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
-        target_link_options(gta2 PRIVATE ${arch_flags} -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+        if(APPLE)
+            # reG2.app, with SDL3 and OpenAL Soft in Contents/Frameworks.
+            set_target_properties(gta2 PROPERTIES OUTPUT_NAME reG2 MACOSX_BUNDLE ON
+                MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/packaging/macos/Info.plist.in
+                MACOSX_BUNDLE_GUI_IDENTIFIER io.github.parigi_n.reG2 MACOSX_BUNDLE_BUNDLE_NAME reG2
+                MACOSX_BUNDLE_ICON_FILE reG2.icns
+                BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH @executable_path/../Frameworks)
+            add_custom_command(TARGET gta2 POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3> ${openal_runtime}
+                    $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks)
+            # The Khronos header the renderer declares its OpenGL entry points with; macOS has none.
+            target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
+            target_include_directories(gta2gl PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
+        else()
+            target_link_options(gta2 PRIVATE ${arch_flags} -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+        endif()
     endif()
 endif()

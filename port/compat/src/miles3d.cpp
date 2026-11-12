@@ -134,7 +134,8 @@ SDL_SharedObject* OpenLibrary()
 #if defined(_WIN32)
     const char* const kNames[] = {"OpenAL32.dll", "soft_oal.dll"};
 #elif defined(__APPLE__)
-    const char* const kNames[] = {"libopenal.1.dylib", "libopenal.dylib"};
+    // In reG2.app the base path is Contents/Resources, the libraries are in Contents/Frameworks.
+    const char* const kNames[] = {"../Frameworks/libopenal.1.dylib", "libopenal.1.dylib", "libopenal.dylib"};
 #else
     const char* const kNames[] = {"libopenal.so.1", "libopenal.so"};
 #endif
