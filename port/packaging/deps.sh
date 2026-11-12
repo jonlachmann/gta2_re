@@ -107,7 +107,9 @@ else
 fi
 
 unpack unshield-1.6.2.tar.gz
-cmake -S "$B/unshield-1.6.2" -B "$B/b_unshield" $C -DBUILD_STATIC=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+# MD5 renamed: advapi32 exports MD5Init, MD5Update and MD5Final with another context, linked before unshield's on MinGW.
+cmake -S "$B/unshield-1.6.2" -B "$B/b_unshield" $C -DBUILD_STATIC=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON \
+      "-DCMAKE_C_FLAGS=-DMD5Init=unshield_MD5Init -DMD5Update=unshield_MD5Update -DMD5Final=unshield_MD5Final"
 ninja -C "$B/b_unshield" -j"$J" install
 # unshield's static library leaves out its own MD5 objects.
 MD5=$(echo "$B"/b_unshield/lib/md5/CMakeFiles/md5.dir/md5c.c.o*)
