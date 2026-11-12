@@ -757,6 +757,10 @@ bool cSampleManager::Open3DProvider(s32 provider_idx)
         m3dProvider = mH3dProvider[provider_idx];
         // The attribute is read into the same local: a second local doesn't match
         AIL_3D_provider_attribute(m3dProvider, "EAX environment selection", &result);
+#if defined(GTA2_PORT_64BIT)
+        // Miles writes 32 bits; M3DRESULT is a long.
+        result = static_cast<s32>(result);
+#endif
         if (result != -1)
         {
             mbEaxSupported = 1;

@@ -443,7 +443,7 @@ DXDEC void AILCALL AIL_close_3D_provider(HPROVIDER)
 DXDEC void AILCALL AIL_3D_provider_attribute(HPROVIDER, C8 FAR* name, void FAR* val)
 {
     LOCK;
-    S32 value = -1;
+    s32 value = -1;
     if (strcmp(name, "Maximum supported samples") == 0)
     {
         value = kMaxSamples;
@@ -460,7 +460,7 @@ DXDEC void AILCALL AIL_set_3D_provider_preference(HPROVIDER, C8 FAR* name, void 
     LOCK;
     if (strcmp(name, "EAX environment selection") == 0)
     {
-        S32 env;
+        s32 env;
         memcpy(&env, val, sizeof(env));
         if (env >= 0 && env < 26)
         {
@@ -647,7 +647,7 @@ DXDEC void AILCALL AIL_close_3D_provider(HPROVIDER)
 
 DXDEC void AILCALL AIL_3D_provider_attribute(HPROVIDER, C8 FAR*, void FAR* val)
 {
-    const S32 value = -1;
+    const s32 value = -1;
     memcpy(val, &value, sizeof(value));
 }
 
