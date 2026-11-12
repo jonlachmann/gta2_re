@@ -1,8 +1,8 @@
 #!/bin/sh
 # deps.sh <linux32|linux64|mingw32|mingw64|macos> <downloads> <prefix> <build dir>: SDL3, OpenAL Soft, unshield,
 # libarchive, zlib and xz from the sources of versions.sh, installed into <prefix>. linux32 and linux64 build them
-# against the Debian 11 system root of sysroot.sh, made in <prefix>/sysroot; macos for the machine's architecture
-# and MACOSX_DEPLOYMENT_TARGET.
+# against the Debian 11 system root of sysroot.sh, made in <prefix>/sysroot; macos as universal libraries (arm64
+# and x86_64) for MACOSX_DEPLOYMENT_TARGET.
 set -eu
 T=$1; DL=$2; P=$3; B=$4
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -18,7 +18,7 @@ case $T in
     linux64) MULTIARCH=x86_64-linux-gnu; LOADER=lib64/ld-linux-x86-64.so.2 ;;
     mingw32) MINGW=i686-w64-mingw32 ;;
     mingw64) MINGW=x86_64-w64-mingw32 ;;
-    macos) AR=ar ;;
+    macos) ARCHS="-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" ;;
     *) echo "deps.sh: unknown target $T" >&2; exit 1 ;;
 esac
 
@@ -38,7 +38,8 @@ if [ "${MULTIARCH:-}" ]; then
           -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,now
     ninja -C "$B/b_sdl3" -j"$J" install
 elif [ "$T" = macos ]; then
-    C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$P"
+    C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$P
+       $ARCHS"
     unpack SDL3-3.4.18.tar.gz
     cmake -S "$B/SDL3-3.4.18" -B "$B/b_sdl3" $C -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
           -DSDL_INSTALL_DOCS=OFF
@@ -75,7 +76,7 @@ AL="-DALSOFT_UTILS=OFF -DALSOFT_EXAMPLES=OFF -DALSOFT_TESTS=OFF -DALSOFT_NO_CONF
 unpack openal-soft-1.25.2.tar.gz
 # GCC: OpenAL Soft 1.25.2 builds neither with Debian 13's clang 19 nor with libc++ (llvm-mingw). The library
 # links its C++ runtime statically and exchanges no CRT object with the game.
-AL_C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib"
+AL_C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib ${ARCHS:-}"
 if [ "${MULTIARCH:-}" ]; then
     # GCC's own library folders, which hold the build machine's glibc, come after -L.
     SRL="-L$GTA2_SYSROOT/usr/lib/$MULTIARCH -L$GTA2_SYSROOT/lib/$MULTIARCH"
@@ -99,7 +100,14 @@ unpack unshield-1.6.2.tar.gz
 cmake -S "$B/unshield-1.6.2" -B "$B/b_unshield" $C -DBUILD_STATIC=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
 ninja -C "$B/b_unshield" -j"$J" install
 # unshield's static library leaves out its own MD5 objects.
-$AR rs "$P/lib/libunshield.a" "$B"/b_unshield/lib/md5/CMakeFiles/md5.dir/md5c.c.o*
+MD5=$(echo "$B"/b_unshield/lib/md5/CMakeFiles/md5.dir/md5c.c.o*)
+if [ "$T" = macos ]; then
+    # libtool, not ar: the objects are universal.
+    libtool -static -o "$B/libunshield.a" "$P/lib/libunshield.a" "$MD5"
+    mv "$B/libunshield.a" "$P/lib/libunshield.a"
+else
+    $AR rs "$P/lib/libunshield.a" "$MD5"
+fi
 
 unpack libarchive-3.8.11.tar.xz
 cmake -S "$B/libarchive-3.8.11" -B "$B/b_libarchive" $C -DBUILD_SHARED_LIBS=OFF -DENABLE_OPENSSL=OFF -DENABLE_MBEDTLS=OFF \
@@ -120,5 +128,12 @@ if [ "${MINGW:-}" = "" ]; then
     cp "$B/SDL3-3.4.18/LICENSE.txt" "$P/licenses/SDL3.txt"
 else
     cp "$P/sdl3/LICENSE.txt" "$P/licenses/SDL3.txt"
+fi
+if [ "$T" = macos ]; then
+    for f in "$P"/lib/*.a "$P"/lib/*.dylib; do
+        [ -L "$f" ] && continue
+        lipo -info "$f"
+        lipo "$f" -verify_arch arm64 x86_64
+    done
 fi
 touch "$P/.complete"
