@@ -104,6 +104,11 @@ else()
     endif()
     list(TRANSFORM compat_src PREPEND ${compat}/src/)
     list(TRANSFORM compat_src APPEND .cpp)
+    if(APPLE)
+        # Mach-O ignores constructor priorities and runs initializers in link order: main.cpp's must come first.
+        list(REMOVE_ITEM compat_src ${compat}/src/main.cpp)
+        list(PREPEND lib_src ${compat}/src/main.cpp)
+    endif()
     # Our Miles and Bink are defined here, not imported from their DLLs.
     set_source_files_properties(${compat}/src/miles.cpp ${compat}/src/miles3d.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_MSS)
     # 3D sound: OpenAL Soft, loaded at run time from next to the exe. Without it the game has 2D sound only.
@@ -183,7 +188,7 @@ else()
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3> ${openal_runtime}
                     $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks)
             # The Khronos header the renderer declares its OpenGL entry points with; macOS has none.
-            target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
+            target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos ${compat}/macos)
             target_include_directories(gta2gl PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
         else()
             target_link_options(gta2 PRIVATE ${arch_flags} -Wl,--no-dependent-libraries -Wl,--error-limit=0)

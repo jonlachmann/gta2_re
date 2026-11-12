@@ -177,9 +177,11 @@ jobs:
       - name: Start without game data
         run: |
           T=$(mktemp -d)
+          rc=0
           GTA2_NO_SOUND=1 GTA2_NO_MESSAGEBOX=1 SDL_VIDEODRIVER=dummy GTA2_LOG_FILE=$T/dummy.log \
-              "$WORK/build/reg2.app/Contents/MacOS/reg2"
+              "$WORK/build/reg2.app/Contents/MacOS/reg2" || rc=$?
           cat "$T/dummy.log"
+          [ $rc = 0 ]
           grep -q "game files were not found" "$T/dummy.log"
 
       - uses: actions/upload-artifact@v4

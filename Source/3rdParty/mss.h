@@ -763,7 +763,8 @@ typedef struct _AILSOUNDINFO {
 
 #ifdef IS_WIN32
 
-#ifdef BUILD_MSS
+// x86 only: the port builds Miles for any CPU and does not use these.
+#if defined(BUILD_MSS) && !defined(GTA2_PORT)
 
   #define MSSLockedIncrement(var) _asm { lock inc [var] }
   #define MSSLockedDecrement(var) _asm { lock dec [var] }
