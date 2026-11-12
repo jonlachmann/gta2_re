@@ -5,7 +5,7 @@ name: Port
 # and AppImage), Flatpak and macOS. The i686 jobs still build and test, as a regression check.
 on:
   push:
-    branches: ['port/**']
+    branches: ['main', 'port/**']
     tags: ['v*']
   workflow_dispatch:
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches-ignore: ['port/**']
+    branches-ignore: ['main', 'port/**']
   pull_request:
 
 jobs:
