@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include "port_platform.hpp"
+#include "../../setup/setup.hpp"
 
 namespace
 {
@@ -132,12 +133,6 @@ void port_SetFullscreen(HWND h, bool fullscreen)
 
 extern "C" {
 
-#if !defined(__APPLE__)
-static const unsigned char kIconPng[] = {
-#embed "../../resources/gta2.png"
-};
-#endif
-
 ATOM WINAPI RegisterClassA(const WNDCLASSA* pClass)
 {
     Classes()[pClass->lpszClassName] = pClass->lpfnWndProc;
@@ -163,14 +158,7 @@ HWND WINAPI CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD
     if (!sMainWindow)
     {
         sMainWindow = pWin;
-#if !defined(__APPLE__)
-        // On macOS the window icon would replace the bundle's in the Dock.
-        if (SDL_Surface* pIcon = SDL_LoadPNG_IO(SDL_IOFromConstMem(kIconPng, sizeof(kIconPng)), true))
-        {
-            SDL_SetWindowIcon(pSdl, pIcon);
-            SDL_DestroySurface(pIcon);
-        }
-#endif
+        port_SetWindowIcon(pSdl);
         port_UpdateGameResolution();
     }
     return reinterpret_cast<HWND>(pWin);

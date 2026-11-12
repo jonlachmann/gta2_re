@@ -29,6 +29,18 @@ const SDL_DialogFileFilter kFileFilters[] = {
     {"All files", "*"},
 };
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+const unsigned char kLogoPng[] = {
+#embed "../resources/reg2_256.png"
+};
+
+// The reG2 logo, 256 px.
+SDL_Surface* LoadLogo()
+{
+    return SDL_LoadPNG_IO(SDL_IOFromConstMem(kLogoPng, sizeof(kLogoPng)), true);
+}
+#endif
+
 bool EnvSet(const char* name)
 {
     const char* v = SDL_getenv(name);
@@ -89,6 +101,7 @@ public:
             SDL_Log("Setup window: %s", SDL_GetError());
             return false;
         }
+        port_SetWindowIcon(mWindow);
         SDL_SetRenderScale(mRenderer, mScale, mScale);
         SDL_SetRenderVSync(mRenderer, 1);
         return true;
@@ -427,6 +440,17 @@ fs::path GameFolder(bool* pPerUser)
     return dir;
 }
 } // namespace
+
+void port_SetWindowIcon(SDL_Window* pWindow)
+{
+#if !defined(_WIN32) && !defined(__APPLE__)
+    if (SDL_Surface* pLogo = LoadLogo())
+    {
+        SDL_SetWindowIcon(pWindow, pLogo);
+        SDL_DestroySurface(pLogo);
+    }
+#endif
+}
 
 bool port_PrepareGameFolder(bool forceSetup)
 {
