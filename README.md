@@ -22,7 +22,7 @@ You need your own copy of GTA2 for PC. The free 2004 release works.
 
 ![Downtown at night](docs/images/pc_night_street.png)
 
-## Same game by default
+## Classic by default
 
 Out of the box it looks and plays like the original: same lighting, same controls, 30 fps. All the
 extras below are off until you turn them on in OPTIONS (start menu, or Escape in game).
