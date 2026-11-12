@@ -38,6 +38,7 @@ enum Id
     kControls,
     kAimCamera,
     kBlood,
+    kUpdateCheck,
     kCount,
 };
 
@@ -89,6 +90,9 @@ f32 HudScale();
 bool TwinStick();
 // AIM CAMERA: with TWIN STICK, the view looks ahead toward the aim.
 bool AimCamera();
+
+// CHECK FOR UPDATES: the start menu shows a newer release (options_menu.hpp).
+bool UpdateCheck();
 
 // SAFE AREA: the part of the screen's width or height kept clear at each edge, 0 to 0.1.
 f32 SafeArea();

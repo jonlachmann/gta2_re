@@ -134,6 +134,11 @@ else()
         ${ROOT}/Source/3rdParty/bink.cpp
         src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp src/ptr_slot.cpp src/layout_checks.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
+    # Off in the Flatpak, which has no network access and updates itself.
+    option(GTA2_UPDATE_CHECK "Look for a newer release on GitHub at start, through curl or wget" ON)
+    if(GTA2_UPDATE_CHECK)
+        target_compile_definitions(gta2 PRIVATE GTA2_UPDATE_CHECK)
+    endif()
     # reg2, not gta2: unpacked into a GTA2 folder, it must not replace the original's gta2.exe.
     set_target_properties(gta2 PROPERTIES OUTPUT_NAME reg2)
     target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3)

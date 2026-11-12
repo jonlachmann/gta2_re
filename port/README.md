@@ -281,6 +281,11 @@ To release:
    generated from the pull requests since the last release.
 3. Edit the notes if needed, then Publish release.
 
+The start menu looks for a newer release at most once a day (`curl`, else `wget`, on
+`api.github.com/repos/reG2-project/reG2/releases/latest`), and shows it beside the version: a click opens the
+release's page. OPTIONS, CHECK FOR UPDATES turns it off; `-DGTA2_UPDATE_CHECK=OFF` leaves it out, as in the
+Flatpak. `GTA2_UPDATE_URL` replaces the API's URL, for tests.
+
 The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`. The app id of
 the desktop file, metainfo, Flatpak and macOS bundle is set once, in `packaging/app.sh`; changing it also
 renames `packaging/flatpak/<id>.yml` and its `id:` line.

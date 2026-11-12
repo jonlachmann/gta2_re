@@ -8,6 +8,10 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#if defined(GTA2_UPDATE_CHECK)
+#include "registry.hpp"
+#include <SDL3/SDL.h>
+#endif
 
 // No std::wstring: with -fshort-wchar its traits would call the C library's 4-byte wide functions.
 
@@ -28,6 +32,77 @@ s32 Wrap(s32 i, s32 n)
 {
     return (i % n + n) % n;
 }
+
+#if defined(GTA2_UPDATE_CHECK)
+// x.y.z as one number, 0 if the text does not start with one.
+s32 VersionNumber(const char* pText)
+{
+    s32 x, y, z;
+    return sscanf(pText, "%d.%d.%d", &x, &y, &z) == 3 ? x * 1000000 + y * 1000 + z : 0;
+}
+
+// The latest release's version number, -1 while it is fetched, and the day it is fetched on.
+SDL_AtomicInt sLatest;
+s32 sFetchDay = -1;
+
+// With curl, else wget. GTA2_UPDATE_URL replaces GitHub's API in tests.
+int SDLCALL FetchLatest(void*)
+{
+    const char* url = SDL_getenv("GTA2_UPDATE_URL") ? SDL_getenv("GTA2_UPDATE_URL") : "https://api.github.com/repos/reG2-project/reG2/releases/latest";
+    const char* commands[][6] = {{"curl", "-fsSL", "--max-time", "10", url, NULL}, {"wget", "-qO-", "--timeout=10", url, NULL}};
+    char* pOut = NULL;
+    for (s32 i = 0; i < 2 && !pOut; i++)
+    {
+        const SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetPointerProperty(props, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, commands[i]);
+        SDL_SetNumberProperty(props, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER, SDL_PROCESS_STDIO_APP);
+#if defined(SDL_PLATFORM_WINDOWS)
+        // Else Windows opens a console window for curl.
+        SDL_SetBooleanProperty(props, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, true);
+#endif
+        SDL_Process* pProcess = SDL_CreateProcessWithProperties(props);
+        SDL_DestroyProperties(props);
+        pOut = pProcess ? static_cast<char*>(SDL_ReadProcess(pProcess, NULL, NULL)) : NULL;
+        SDL_DestroyProcess(pProcess);
+    }
+    const char* pTag = pOut ? SDL_strstr(pOut, "\"tag_name\"") : NULL;
+    pTag = pTag ? SDL_strstr(pTag + 10, "\"v") : NULL;
+    SDL_SetAtomicInt(&sLatest, pTag ? VersionNumber(pTag + 2) : 0);
+    SDL_free(pOut);
+    return 0;
+}
+
+// At most once a day: the last check's day and result are kept in the registry.
+void StartUpdateCheck()
+{
+    SDL_Time now = 0;
+    SDL_GetCurrentTime(&now);
+    const s32 today = static_cast<s32>(now / (86400 * SDL_NS_PER_SECOND));
+    if (PortSettings::UpdateCheck() && gRegistry.Get_Screen_Setting("update_day", 0) == today)
+    {
+        SDL_SetAtomicInt(&sLatest, gRegistry.Get_Screen_Setting("update_latest", 0));
+    }
+    else if (PortSettings::UpdateCheck())
+    {
+        SDL_SetAtomicInt(&sLatest, -1);
+        sFetchDay = today;
+        SDL_DetachThread(SDL_CreateThread(FetchLatest, "update check", NULL));
+    }
+}
+
+// A newer release's version number, else 0.
+s32 NewerRelease()
+{
+    const s32 latest = SDL_GetAtomicInt(&sLatest);
+    if (sFetchDay >= 0 && latest >= 0)
+    {
+        gRegistry.Set_Screen_Setting("update_day", sFetchDay);
+        gRegistry.Set_Screen_Setting("update_latest", latest);
+        sFetchDay = -1;
+    }
+    return latest > VersionNumber(GTA2_VERSION) ? latest : 0;
+}
+#endif
 
 PortMenu::Result HandleInput(Frontend* pFrontend)
 {
@@ -74,6 +149,13 @@ void OriginalPageMouse(Frontend* pFrontend)
         pFrontend->mEscapePressed = true;
         return;
     }
+#if defined(GTA2_UPDATE_CHECK)
+    if (left && pFrontend->mCurrentPageIdx == MENUPAGE_START_MENU && NewerRelease() && Inside(x, y, 300.0f, 450.0f, 640.0f, 480.0f))
+    {
+        SDL_OpenURL("https://github.com/reG2-project/reG2/releases/latest");
+        return;
+    }
+#endif
     MenuPage* pPage = &pFrontend->mMenuPagesArray[pFrontend->mCurrentPageIdx];
     for (s32 i = 0; i < pPage->mNumberOfElements && left; i++)
     {
@@ -147,6 +229,9 @@ void Setup(Frontend* pFrontend)
     title.mFontPalette = 5;
 
     PortSettings::ApplyRenderOptions();
+#if defined(GTA2_UPDATE_CHECK)
+    StartUpdateCheck();
+#endif
 
     // The start menu's "Options" opened GTA2 Manager.
     pFrontend->mMenuPagesArray[MENUPAGE_START_MENU].mOptionsArray[1].mMenuPageTarget = kMenuPage;
@@ -197,7 +282,13 @@ void Draw(Frontend* pFrontend)
 void VersionText(wchar_t* pOut)
 {
     char text[48];
-    snprintf(text, sizeof(text), "REG2 %s", GTA2_VERSION);
+    const s32 n = snprintf(text, sizeof(text), "REG2 %s", GTA2_VERSION);
+#if defined(GTA2_UPDATE_CHECK)
+    if (const s32 newer = NewerRelease())
+    {
+        snprintf(text + n, sizeof(text) - n, "  %d.%d.%d AVAILABLE", newer / 1000000, newer / 1000 % 1000, newer % 1000);
+    }
+#endif
     // The font has no hyphen and no lower case.
     s32 i = 0;
     for (; text[i]; i++)
