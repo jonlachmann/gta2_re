@@ -30,10 +30,9 @@ extras below are off until you turn them on in OPTIONS (start menu, or Escape in
 A few things differ anyway:
 
 - it runs at your screen's resolution, and a wide screen shows a bit more on the sides
-- extra keys on top of the original ones: WASD to move, F to get in and out of cars, left click to shoot,
-  mouse wheel to change weapon; gamepads work too
-- a full OPTIONS menu in the start menu replaces the old GTA2 Manager, and Escape opens it in game; it
-  works with the mouse, the keyboard or a gamepad
+- the settings are in the game: OPTIONS in the start menu replaces GTA2 Manager, the original's separate
+  settings program, and pressing Escape during a game pauses it and opens the same menu
+- every menu works with the mouse, the keyboard or a gamepad
 - no intro movie for now
 
 ![The options menu](docs/images/pc_options_menu.png)
@@ -41,17 +40,9 @@ A few things differ anyway:
 ## Extras
 
 **Graphics.** GRAPHICS > PRESET switches between CLASSIC and ENHANCED: true colour, per-pixel lighting,
-car headlights, light from explosions and fires, soft shadows, bloom, anti-aliasing.
+car headlights, light from gunfire, explosions and fires, soft shadows, bloom, anti-aliasing.
 
 ![Classic and enhanced graphics](docs/images/pc_compare_graphics.png)
-
-TRUE COLOUR keeps the textures' full colours. The original drops them to 16 bits, hence the banding on
-the left.
-
-<p>
-  <img src="docs/images/pc_truecolor_off.png" width="300" alt="TRUE COLOUR off">
-  <img src="docs/images/pc_truecolor_on.png" width="300" alt="TRUE COLOUR on">
-</p>
 
 **Day and night.** SCREEN > LIGHTING > DAY-NIGHT CYCLE instead of the fixed dusk.
 
@@ -60,13 +51,18 @@ the left.
 **Frame rate.** Up to 240 fps. The game still runs at its 30 steps per second and the frames in between
 are interpolated, so it plays exactly the same, just smoother.
 
-**Twin stick.** CONTROLS > TWIN STICK, Hotline Miami style: move with one stick (or WASD), aim with the
-other (or the mouse). Shots go where you aim, the camera leans toward the aim, and holding Shift (LT on a
-pad) looks further.
+**Controls.** CONTROLS lets you change every key, in three columns: the original keys, a second set of
+keys and the gamepad. The second set comes ready for keyboard and mouse: WASD to move, F to get in and
+out of cars, left click to shoot, the wheel to change weapon. A gamepad works as soon as it's plugged in,
+and in a car the triggers accelerate and brake progressively and the stick steers smoothly.
+
+CONTROLS > TWIN STICK is a Hotline Miami style mode: move with one stick (or WASD), aim with the other
+(or the mouse). Shots go where you aim, the camera leans toward the aim, and holding Shift (LT on a pad)
+looks further. Roof guns on the fire truck, tank and gun jeep aim the same way.
 
 ![Twin stick](docs/images/pc_twin_stick.gif)
 
-**And also** 3D sound, camera zoom, HUD scale. The new menus follow the game's language, as far as your
+**And also** 3D sound, camera zoom, HUD scale, a frame rate counter. The new menus follow the game's language, as far as your
 copy of the game has it.
 
 ## Download
