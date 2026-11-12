@@ -2,7 +2,7 @@ name: Port
 
 # The native port (port/). Each job runs a script of port/packaging, in a container on Linux, the same
 # command as a local run (port/README.md, Packages). Releases are 64-bit: Windows x64, Linux x86_64 (tarball
-# and AppImage), Flatpak and macOS. The i686 jobs still build and test, as a regression check.
+# and AppImage), Flatpak and macOS.
 # A tag v<x.y.z> (pushed, or run on by release.yml) builds that version and drafts its release.
 on:
   push:
@@ -36,16 +36,6 @@ jobs:
             setarch: ''
             artifact: reG2-linux-x86_64
             smoke: debian:bullseye debian:bookworm ubuntu:24.04 archlinux:latest
-          - target: mingw32
-            image: debian:trixie
-            setarch: ''
-            artifact: i686-windows
-          # i386 userland: GCC and the system root's wayland-scanner run natively.
-          - target: linux32
-            image: i386/debian:trixie
-            setarch: linux32
-            artifact: i686-linux
-            smoke: debian:bookworm ubuntu:24.04 archlinux:latest
     name: ${{ matrix.target }}
     runs-on: ubuntu-24.04
     steps:
