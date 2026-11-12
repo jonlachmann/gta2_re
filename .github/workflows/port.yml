@@ -1,7 +1,8 @@
 name: Port
 
-# The native port (port/), 32-bit: a Windows zip and a portable Linux tarball. Each job runs
-# a script of port/packaging in a container, the same command as a local run (port/README.md, Packages).
+# The native port (port/). Each job runs a script of port/packaging, in a container on Linux, the same
+# command as a local run (port/README.md, Packages). Releases are 64-bit: Windows x64, Linux x86_64 (tarball
+# and AppImage), Flatpak and macOS. The i686 jobs still build and test, as a regression check.
 on:
   push:
     branches: ['port/**']
@@ -21,15 +22,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - target: mingw64
+            image: debian:trixie
+            setarch: ''
+            artifact: reG2-windows-x86_64
+          - target: linux64
+            image: debian:trixie
+            setarch: ''
+            artifact: reG2-linux-x86_64
+            smoke: debian:bullseye debian:bookworm ubuntu:24.04 archlinux:latest
           - target: mingw32
             image: debian:trixie
             setarch: ''
-            artifact: gta2_re-windows-i686
+            artifact: i686-windows
           # i386 userland: GCC and the system root's wayland-scanner run natively.
           - target: linux32
             image: i386/debian:trixie
             setarch: linux32
-            artifact: gta2_re-linux-i686
+            artifact: i686-linux
+            smoke: debian:bookworm ubuntu:24.04 archlinux:latest
     name: ${{ matrix.target }}
     runs-on: ubuntu-24.04
     steps:
@@ -47,7 +58,7 @@ jobs:
           path: |
             ${{ runner.temp }}/work/dl
             ${{ runner.temp }}/work/deps-${{ matrix.target }}
-          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh', 'port/packaging/sysroot.sh', 'port/packaging/linux32-sysroot.cmake', 'port/packaging/glibc_compat.c') }}
+          key: port-deps-${{ matrix.target }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh', 'port/packaging/ci.sh', 'port/packaging/sysroot.sh', 'port/packaging/*.cmake', 'port/packaging/glibc_compat.c') }}
 
       - name: Build and package
         run: |
@@ -56,15 +67,16 @@ jobs:
               ${{ matrix.setarch }} sh port/packaging/ci.sh ${{ matrix.target }} /work
           docker run --rm -v "$WORK:/work" ${{ matrix.image }} chown -R "$(id -u):$(id -g)" /work
 
+      # Each package in each image: the tarball, and for linux64 the AppImage.
       - name: Smoke tests in clean containers
-        if: matrix.target == 'linux32'
+        if: matrix.smoke
         run: |
-          set -f
-          for pkg in "debian:bookworm *.tar.gz" "ubuntu:24.04 *.tar.gz" "archlinux:latest *.tar.gz"; do
-              set -- $pkg
-              echo "::group::$1 $2"
-              docker run --rm -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" "$1" sh -c "sh /p/smoke_test.sh /out/$2"
-              echo "::endgroup::"
+          for image in ${{ matrix.smoke }}; do
+              for pkg in $(cd "$WORK/out" && ls *.tar.gz *.AppImage 2> /dev/null); do
+                  echo "::group::$image $pkg"
+                  docker run --rm -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" "$image" sh /p/smoke_test.sh "/out/$pkg"
+                  echo "::endgroup::"
+              done
           done
 
       - uses: actions/upload-artifact@v4
@@ -74,16 +86,125 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  flatpak:
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
+      # What bwrap needs in a container, short of --privileged.
+      BWRAP: --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version and work folder
+        run: |
+          echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=$(git rev-parse --short HEAD); fi
+          echo "GTA2_VERSION=$v" >> "$GITHUB_ENV"
+
+      # Ubuntu 24.04 keeps unprivileged processes from creating the user namespaces bwrap needs.
+      - name: Allow user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      # flatpak-builder's downloads and the libraries' build stages; the game's module always builds.
+      - name: Restore flatpak-builder's cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/work/state
+          key: port-flatpak-${{ hashFiles('port/packaging/flatpak/*', 'port/packaging/versions.sh') }}
+
+      - name: Build
+        run: |
+          mkdir -p "$WORK"
+          docker run --rm $BWRAP -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -w /src $IMAGE \
+              sh port/packaging/flatpak.sh /work
+          docker run --rm -v "$WORK:/work" debian:trixie chown -R "$(id -u):$(id -g)" /work
+
+      - name: Smoke test on Debian 13 with Flatpak
+        run: |
+          docker run --rm $BWRAP -v "$WORK/out:/out:ro" -v "$PWD/port/packaging:/p:ro" debian:trixie \
+              sh -c 'sh /p/flatpak_smoke_test.sh /out/*.flatpak'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reG2-flatpak
+          path: ${{ runner.temp }}/work/out/*.flatpak
+          if-no-files-found: error
+          retention-days: 14
+
+  # Untested by the maintainers: built and started without game data only. The app is signed ad hoc.
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    name: macos-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version and work folder
+        run: |
+          echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=$(git rev-parse --short HEAD); fi
+          echo "GTA2_VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Restore libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/work/dl
+            ${{ runner.temp }}/work/deps-macos
+          key: port-deps-macos-${{ matrix.arch }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh') }}
+
+      - name: Build and package
+        run: |
+          brew install ninja
+          P=port/packaging
+          sh $P/fetch.sh "$WORK/dl" SDL3-3.4.18.tar.gz openal-soft-1.25.2.tar.gz unshield-1.6.2.tar.gz \
+              libarchive-3.8.11.tar.xz zlib-1.3.2.tar.gz xz-5.8.4.tar.gz
+          if [ ! -f "$WORK/deps-macos/.complete" ]; then
+              rm -rf "$WORK/deps-macos"
+              sh $P/deps.sh macos "$WORK/dl" "$WORK/deps-macos" "$WORK/b_deps"
+          fi
+          sh $P/build.sh macos "$WORK/deps-macos" "$WORK/build"
+          sh $P/macos_app.sh "$WORK/build" "$WORK/deps-macos" "$WORK/out"
+
+      - name: Start without game data
+        run: |
+          T=$(mktemp -d)
+          GTA2_NO_SOUND=1 GTA2_NO_MESSAGEBOX=1 SDL_VIDEODRIVER=dummy GTA2_LOG_FILE=$T/dummy.log \
+              "$WORK/build/reG2.app/Contents/MacOS/reG2"
+          cat "$T/dummy.log"
+          grep -q "game files were not found" "$T/dummy.log"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reG2-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/work/out/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [package]
+    needs: [package, flatpak, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      # The 64-bit packages only (the reG2-* artifacts).
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: reG2-*
           merge-multiple: true
       - name: Draft release
         env:
