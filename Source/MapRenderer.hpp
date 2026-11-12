@@ -69,10 +69,10 @@ class MapRenderer
     EXPORT void ambient_light_tick();
     EXPORT void TransformTriangleUVsThreeSided(u16& rotation_and_flip);
     EXPORT void DrawLeftSide(u16& left_word);
-    EXPORT void ProjectVertTop(const Fix16& xpos, const Fix16& ypos, Vert* pVert);
-    EXPORT void ProjectVertBottom(const Fix16& xCoord, const Fix16& yCoord, Vert* pVert);
+    EXPORT void ProjectVertTop(PORT_CONST Fix16& xpos, PORT_CONST Fix16& ypos, Vert* pVert);
+    EXPORT void ProjectVertBottom(PORT_CONST Fix16& xCoord, PORT_CONST Fix16& yCoord, Vert* pVert);
     EXPORT void DrawRightSide(u16& right_word);
-    EXPORT void ProjectVert(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert);
+    EXPORT void ProjectVert(PORT_CONST Fix16& xpos, PORT_CONST Fix16& ypos, PORT_CONST Fix16& zpos, Vert* pVert);
     EXPORT void DrawTopSide(u16& top_word);
     EXPORT void DrawDiagonalUpLeftFace(u16& left_word);
     EXPORT void DrawDiagonalUpRightFace(u16& right_word);

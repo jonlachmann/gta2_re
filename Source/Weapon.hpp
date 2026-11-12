@@ -58,7 +58,7 @@ class Weapon
     EXPORT bool is_max_capacity() const;
     EXPORT bool CountsAsArmedAttack() const;
     EXPORT void ApplyFastReload();
-    EXPORT Object* spawn_bullet(s32 bullet_type, Fix16 x, Fix16 y, Fix16 z, Ang16 rot, const Fix16_Point& speed);
+    EXPORT Object* spawn_bullet(s32 bullet_type, Fix16 x, Fix16 y, Fix16 z, Ang16 rot, PORT_CONST Fix16_Point& speed);
     EXPORT void flamethrower();
     EXPORT void shotgun();
     EXPORT void pistol();

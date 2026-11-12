@@ -282,6 +282,14 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
     #define GTA2_PORT_64BIT
 #endif
 
+// const on reference parameters that receive temporaries, which only MSVC binds to non-const references.
+// Empty for VC6: the const adds to an inline's size and moves VC6's inlining cut-offs.
+#if defined(GTA2_PORT)
+    #define PORT_CONST const
+#else
+    #define PORT_CONST
+#endif
+
 #if defined(GTA2_PORT_64BIT)
     // The asserted sizes are the 32-bit ones; port/src/layout_checks.cpp checks the files' structures on every target.
     #define GTA2_ASSERT_SIZEOF_ALWAYS(structureName, expectedSize)

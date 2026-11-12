@@ -126,7 +126,7 @@ Fix16 __stdcall Fix16::SquareRoot_436A70(const Fix16& input) throw()
 // 10.5 https://decomp.me/scratch/7a41K
 // 9.6f https://decomp.me/scratch/ZkUbq
 MATCH_FUNC(0x405320)
-Ang16 __stdcall Fix16::atan2_fixed(const Fix16& y, const Fix16& x)
+Ang16 __stdcall Fix16::atan2_fixed(PORT_CONST Fix16& y, PORT_CONST Fix16& x)
 {
     Ang16 table_angle;
     if (x == kFPZero)

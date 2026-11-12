@@ -1696,7 +1696,7 @@ void Ped::HandlePedCrossingTrigger(const Object* pObj)
     }
 }
 
-Fix16 __stdcall MaxAbsDistance_4614E0(Fix16& x1, Fix16& y1, const Fix16& x2, const Fix16& y2);
+Fix16 __stdcall MaxAbsDistance_4614E0(Fix16& x1, Fix16& y1, PORT_CONST Fix16& x2, PORT_CONST Fix16& y2);
 
 // 10.5 inlines this into HandlePedHitByObject (the first call there; the second one
 // calls 0x465D00) and into IsThreatToSearchingPed (search mode 1), so it has to be defined
@@ -5895,7 +5895,7 @@ bool Ped::IsInvisibleOnFoot_466B70() const
 // Returns Fix16 by value (hidden out pointer, ret $0x14). Max of the two Abs written out with
 // the y abs first: Fix16::Max takes references and spills both to the stack.
 MATCH_FUNC(0x4614e0)
-Fix16 __stdcall MaxAbsDistance_4614E0(Fix16& x1, Fix16& y1, const Fix16& x2, const Fix16& y2)
+Fix16 __stdcall MaxAbsDistance_4614E0(Fix16& x1, Fix16& y1, PORT_CONST Fix16& x2, PORT_CONST Fix16& y2)
 {
     Fix16 diff_x = x2 - x1;
     Fix16 diff_y = y2 - y1;

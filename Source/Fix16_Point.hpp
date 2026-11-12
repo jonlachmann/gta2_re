@@ -46,14 +46,14 @@ struct Fix16_Point_POD
     }
 
     // 9.6f 0x432860
-    void SetXY(const Fix16& new_x, const Fix16& new_y)
+    void SetXY(PORT_CONST Fix16& new_x, PORT_CONST Fix16& new_y)
     {
         this->x = new_x;
         this->y = new_y;
     }
 
     // 9.6f 0x41E210
-    inline void SetFromPolar(const Fix16& radius, Ang16& angle)
+    inline void SetFromPolar(PORT_CONST Fix16& radius, Ang16& angle)
     {
         x = Ang16::sine(angle) * radius;
         y = Ang16::cosine(angle) * radius;
@@ -87,7 +87,7 @@ struct Fix16_Point_POD
 class Fix16_Point
 {
   public:
-    void SetXY(const Fix16& new_x, const Fix16& new_y)
+    void SetXY(PORT_CONST Fix16& new_x, PORT_CONST Fix16& new_y)
     {
         this->x = new_x;
         this->y = new_y;
@@ -124,7 +124,7 @@ class Fix16_Point
 
     // But also 0x40ACD0 non inlined in 10.5
     // 9.6f 0x40F790
-    Ang16 GetAngle() const
+    Ang16 GetAngle() PORT_CONST
     {
         return Fix16::atan2_fixed(y, x);
     }
@@ -173,7 +173,7 @@ class Fix16_Point
     }
 
     // 9.6f 0x41E210
-    inline void SetFromPolar(const Fix16& radius, Ang16& angle)
+    inline void SetFromPolar(PORT_CONST Fix16& radius, Ang16& angle)
     {
         x = Ang16::sine(angle) * radius;
         y = Ang16::cosine(angle) * radius;
@@ -225,7 +225,7 @@ class Fix16_Point
     }
 
 
-    Fix16_Point& operator+=(const Fix16_Point& other)
+    Fix16_Point& operator+=(PORT_CONST Fix16_Point& other)
     {
         x += other.x;
         y += other.y;
@@ -251,8 +251,8 @@ class Fix16_Point
     // Out-of-line copy of RotateByAngle, emitted in CarPhysics.cpp
     EXPORT void RotateVelocity(const Ang16& angle);
 
-    EXPORT Fix16_Point Multiply(const Fix16& in) const;
-    EXPORT Fix16_Point Divide(const Fix16& in) const;
+    EXPORT Fix16_Point Multiply(PORT_CONST Fix16& in) const;
+    EXPORT Fix16_Point Divide(PORT_CONST Fix16& in) const;
 
     // Divide as a nothrow inline (see DivideInl_55F9E0; CarPhysics::HandleObjectCollision,
     // Car::ApplyExplosionImpulse)
@@ -485,7 +485,7 @@ class Fix16_Point
         }
     }
 
-    Fix16_Point operator*(const Fix16& in) const
+    Fix16_Point operator*(PORT_CONST Fix16& in) const
     {
         return Fix16_Point(x * in, y * in);
     }
@@ -498,7 +498,7 @@ class Fix16_Point
     EXPORT Fix16_Point MultBy(const s32& factor) const;
 
     // 10.0 0x442CB0
-    EXPORT Fix16_Point operator/(const Fix16& in) const;
+    EXPORT Fix16_Point operator/(PORT_CONST Fix16& in) const;
 
     // GetLength_41E260 as inlined into NormalizeSafe (out of line helpers where the inline budget ran out)
     inline Fix16 GetLength_inline_442AD0()

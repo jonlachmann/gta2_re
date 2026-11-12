@@ -5423,7 +5423,7 @@ EXTERN_GLOBAL(Fix16, kFPZero);
 DEFINE_GLOBAL_INIT(Fix16, kAngFix16FullCircle_66A8E4, Fix16(0x18F60, 0), 0x66A8E4);
 DEFINE_GLOBAL_INIT(Fix16, kAngFix16HalfCircle_6691EC, Fix16(0xC7B0, 0), 0x6691EC);
 // 9.6f 0x40E790
-inline Fix16 __stdcall WrapAngle(const Fix16& angle) // 9.6f inlined func
+inline Fix16 __stdcall WrapAngle(PORT_CONST Fix16& angle) // 9.6f inlined func
 {
     Fix16 result = angle;
     for (; result < kFPZero; result += kAngFix16FullCircle_66A8E4)
@@ -5440,7 +5440,7 @@ inline Fix16 __stdcall WrapAngle(const Fix16& angle) // 9.6f inlined func
 // 9.6f 0x40ECB0
 // https://decomp.me/scratch/GnD4O
 MATCH_FUNC(0x405CE0)
-EXPORT void __stdcall SmoothApproachAngle(const Fix16& target_angle, Fix16& angle_speed, Fix16& angle, Fix16& accel, Fix16& max_speed)
+EXPORT void __stdcall SmoothApproachAngle(PORT_CONST Fix16& target_angle, Fix16& angle_speed, Fix16& angle, Fix16& accel, Fix16& max_speed)
 {
     if (target_angle - angle > kAngFix16HalfCircle_6691EC)
     {

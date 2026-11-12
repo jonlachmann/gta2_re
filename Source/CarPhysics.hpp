@@ -29,10 +29,10 @@ EXTERN_GLOBAL(Fix16_Point, CollisionIntersectionPoint);
 
 EXPORT Fix16_Point __stdcall ComputeCollisionImpulse(Fix16 OwnerMass,
                                                                 Fix16 TargetMass,
-                                                                const Fix16_Point& RelativeVelocity,
+                                                                PORT_CONST Fix16_Point& RelativeVelocity,
                                                                 Fix16_Point& DistToCollision_ByRef,
                                                                 Fix16_Point& CollisionIntersectPoint,
-                                                                const Fix16_Point& CoM_related,
+                                                                PORT_CONST Fix16_Point& CoM_related,
                                                                 Fix16_Point& TargetCoM,
                                                                 Fix16 OwnerMomOfInertia,
                                                                 Fix16 TargetMomOfInertia,
@@ -224,10 +224,10 @@ class CarPhysics
     EXPORT void ApplyForceAtPoint(Fix16_Point* pPoint, Fix16_Point* pForce, s32 bRotate);
     EXPORT void AccumulateImpulse(Fix16_Point* pPoint);
     EXPORT void ApplyAngularImpulse(Fix16 impulse);
-    EXPORT void ApplyForceScaledByMass(const Fix16_Point& force);
+    EXPORT void ApplyForceScaledByMass(PORT_CONST Fix16_Point& force);
     EXPORT void ApplyImpulseWithTrailerRedirect(Fix16_Point* pPoint);
-    EXPORT Fix16 ApplyImpactForcesAndDamage(Fix16_Point& PointOfForce, const Fix16_Point& Impulse, s32 base_dmg);
-    EXPORT void ApplyImpulseAndDamage(const Fix16_Point& point, s32 base_dmg);
+    EXPORT Fix16 ApplyImpactForcesAndDamage(Fix16_Point& PointOfForce, PORT_CONST Fix16_Point& Impulse, s32 base_dmg);
+    EXPORT void ApplyImpulseAndDamage(PORT_CONST Fix16_Point& point, s32 base_dmg);
     EXPORT void HandleWorldCollision(Fix16_Point& relative_velocity);
     EXPORT void HandleCarCollision(Car* pOtherCar);
     EXPORT void HandleObjectCollision(Object* pObject, char_type damage_area);

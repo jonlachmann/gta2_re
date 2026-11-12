@@ -22,7 +22,7 @@ class Fix16
   public:
     // 9.6f func
     // 9.6f 0x410BF0
-    static inline s32 __stdcall Round_To_Int(const Fix16& input)
+    static inline s32 __stdcall Round_To_Int(PORT_CONST Fix16& input)
     {
         s32 v = input.mValue;
         return (v + 0x2000) >> 14;
@@ -335,14 +335,14 @@ class Fix16
     // inline budget charges the front-end size, 48 here (41 without the local, 46 with a non-const one).
     // Car::ApplyExplosionImpulse needs >= 48 and CarPhysics::EnforceGearSensitiveMaxSpeed
     // <= 49; with GetLength_41E260 at 162, Crane::ComputeHookPolar needs >= 48 too.
-    inline static Fix16 __stdcall SquareRoot(const Fix16& input)
+    inline static Fix16 __stdcall SquareRoot(PORT_CONST Fix16& input)
     {
         const f64 value = input.AsDouble();
         return Fix16(sqrt(value));
     }
 
     // SquareRoot forced inline, only for Fix16_Point::GetLength_SqrtForced_43A240 (unexplained)
-    __forceinline static Fix16 __stdcall SquareRoot_forced(const Fix16& input)
+    __forceinline static Fix16 __stdcall SquareRoot_forced(PORT_CONST Fix16& input)
     {
         return Fix16(sqrt(input.AsDouble()));
     }
@@ -350,7 +350,7 @@ class Fix16
     EXPORT static Fix16 __stdcall Max_44E540(const Fix16& lhs, const Fix16& rhs);
     // 9.6f 0x41E130, out-of-line copy Max_44E540. Small functions inline it (Ped_List::FindClosestActivePed),
     // and as a site after the two Abs it sets their nested budget in MaxAbsDistance
-    inline static Fix16 __stdcall Max_41E130(const Fix16& a, const Fix16& b)
+    inline static Fix16 __stdcall Max_41E130(PORT_CONST Fix16& a, PORT_CONST Fix16& b)
     {
         if (a > b)
         {
@@ -381,7 +381,7 @@ class Fix16
     EXPORT Fix16 Negated() const throw();
 
     // Needed this for a GetLength variant used by ScriptThread::GetSpeed.
-    inline static Fix16 __stdcall Abs_negate_out_of_line(const Fix16& input)
+    inline static Fix16 __stdcall Abs_negate_out_of_line(PORT_CONST Fix16& input)
     {
         if (input.mValue > 0)
         {
@@ -449,7 +449,7 @@ class Fix16
     EXPORT static Fix16 __stdcall Max3_ool_55EEE0(Fix16& first, Fix16& second, Fix16& third);
 
     // NOTE: 10.5 function - matched but inlined
-    static inline Fix16 __stdcall Max3_55EEE0(const Fix16& first, const Fix16& second, const Fix16& third)
+    static inline Fix16 __stdcall Max3_55EEE0(PORT_CONST Fix16& first, PORT_CONST Fix16& second, PORT_CONST Fix16& third)
     {
         if (first > second)
         {
@@ -503,7 +503,7 @@ class Fix16
         return Fix16(mValue + 0x4000, 0);
     }
 
-    EXPORT static class Ang16 __stdcall atan2_fixed(const Fix16& y, const Fix16& x);
+    EXPORT static class Ang16 __stdcall atan2_fixed(PORT_CONST Fix16& y, PORT_CONST Fix16& x);
 
   public:
     s32 mValue;

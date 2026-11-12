@@ -29,7 +29,7 @@ Ang16 Fix16_Point::GetAngle_40ACD0()
 
 // https://decomp.me/scratch/qQwG3
 MATCH_FUNC(0x438FE0)
-Fix16_Point Fix16_Point::Multiply(const Fix16& in) const
+Fix16_Point Fix16_Point::Multiply(PORT_CONST Fix16& in) const
 {
     return Fix16_Point(x * in, y * in);
 }
@@ -50,7 +50,7 @@ Fix16_Point Fix16_Point::NormalizeSafe()
     }
 }
 
-Fix16_Point Fix16_Point::operator/(const Fix16& in) const
+Fix16_Point Fix16_Point::operator/(PORT_CONST Fix16& in) const
 {
     return Fix16_Point(x / in, y / in);
 }
@@ -63,7 +63,7 @@ Fix16_Point Fix16_Point::MultBy(const s32& factor) const
 
 // https://decomp.me/scratch/nFSYS
 MATCH_FUNC(0x442CB0)
-Fix16_Point Fix16_Point::Divide(const Fix16& in) const
+Fix16_Point Fix16_Point::Divide(PORT_CONST Fix16& in) const
 {
     return Fix16_Point(x / in, y / in);
 }

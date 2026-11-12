@@ -212,7 +212,7 @@ class Char
     }
 
     // strange, the same 9.6f func but Ped::StayCloseToTargetPed only matches if it pass by ref
-    inline void RegulateVelocityByRef_433970(const Fix16& threshold)
+    inline void RegulateVelocityByRef_433970(PORT_CONST Fix16& threshold)
     {
         if (mVelocity < threshold)
         {

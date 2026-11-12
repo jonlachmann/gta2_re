@@ -244,10 +244,10 @@ class Ang16
     }
 
     // 9.6f 0x41FC20: the table value is the left operand (this) of the multiply
-    inline static void __stdcall PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
+    inline static void __stdcall PolarToCartesian_41FC20(PORT_CONST Ang16& angle, PORT_CONST Fix16& radius, Fix16& ret1, Fix16& ret2);
 
     // Non-inlined version of above function
-    EXPORT static void __stdcall PolarToCartesian_451730(Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
+    EXPORT static void __stdcall PolarToCartesian_451730(Ang16& angle, PORT_CONST Fix16& radius, Fix16& ret1, Fix16& ret2);
 
     EXPORT static s32 __stdcall GetAngleFace(const Ang16& angle);
 
@@ -320,7 +320,7 @@ class Ang16
     }
 
     // 9.6f func: 0x401C40
-    Ang16(const Fix16& value, u8 zero)
+    Ang16(PORT_CONST Fix16& value, u8 zero)
     {
         rValue = value.ToInt();
         Normalize();
@@ -372,7 +372,7 @@ class Ang16
 
 #pragma warning(push)
 #pragma warning(disable : 4101)
-inline void __stdcall Ang16::PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
+inline void __stdcall Ang16::PolarToCartesian_41FC20(PORT_CONST Ang16& angle, PORT_CONST Fix16& radius, Fix16& ret1, Fix16& ret2)
 {
     // Never read: its optimizer entry is needed by CarAI::UpdateStateMachine (docs/match_attempts.md)
     s32 unused;
@@ -401,7 +401,7 @@ class Ang8
 // 9.6f 0x42A720
 inline void __stdcall RotateAndTranslatePoint(Fix16& inX,
                                                          Fix16& inY,
-                                                         const Ang16& rotation,
+                                                         PORT_CONST Ang16& rotation,
                                                          Fix16& transX,
                                                          Fix16& transY,
                                                          Fix16& outX,

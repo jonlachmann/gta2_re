@@ -14,7 +14,7 @@
 #include "root_sound.hpp"
 #include "sprite.hpp"
 
-EXPORT void __stdcall SmoothApproachAngle(const Fix16& target_angle, Fix16& angle_speed, Fix16& angle, Fix16& accel, Fix16& max_speed);
+EXPORT void __stdcall SmoothApproachAngle(PORT_CONST Fix16& target_angle, Fix16& angle_speed, Fix16& angle, Fix16& accel, Fix16& max_speed);
 EXPORT void __stdcall SmoothApproach(Fix16& Coord_1, Fix16& Velocity_1, Fix16& Coord_2, Fix16& Velocity_2, Fix16& Velocity_3);
 
 DEFINE_STATIC_MEMBER_INIT(Fix16, Crane, kHomeHookRadius, Fix16(0x2000, 0), 0x679E58);
@@ -509,7 +509,7 @@ void Crane::UpdateCraneTargets()
 
 // 9.6f 0x448900
 MATCH_FUNC(0x47f6c0)
-bool Crane::ComputeHookPolar(const Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng)
+bool Crane::ComputeHookPolar(PORT_CONST Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng)
 {
     Fix16_Point to_hook = (pPoint.Sub(mRotorObj->mSprite->get_x_y()));
     *pOutF16 = to_hook.GetLength_41E260();

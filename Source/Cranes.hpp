@@ -45,7 +45,7 @@ class Crane
     EXPORT bool IsPickupCarTargetValid();
     EXPORT bool IsDropTransporterTargetValid();
     EXPORT void UpdateCraneTargets();
-    EXPORT bool ComputeHookPolar(const Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng);
+    EXPORT bool ComputeHookPolar(PORT_CONST Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng);
     EXPORT void TargetTransporter(Car* pCar);
     EXPORT void PickUpCar(Car* pCar);
     EXPORT void TryNextDropPosition();
