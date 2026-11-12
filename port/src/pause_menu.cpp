@@ -316,12 +316,6 @@ Fix16 Fx(f32 v)
     return Fix16(static_cast<s32>(v * 16384.0f), 0);
 }
 
-// The original's pause screen showed these sections in turn; it also had the target score (0) and all
-// missions (4).
-const u32 kStatSections = (1 << HudPauseSection::gang_1_missions_done_1) | (1 << HudPauseSection::gang_2_missions_done_2) |
-    (1 << HudPauseSection::gang_3_missions_done_3) | (1 << HudPauseSection::kill_frenzies_completed_5) |
-    (1 << HudPauseSection::tokens_collected_6);
-
 static bool sDrawingStats;
 static f32 sStatScale;
 static f32 sStatLeft;
@@ -338,7 +332,7 @@ f32 PlaceUi(f32 pos, bool y)
 }
 
 // One row per section, in UpdatePauseSection's order and with its checks, packed between the HUD's
-// multiplier (long lines reach it above y 43) and the panel at 130; the frenzy icon is the tallest.
+// multiplier (long lines reach it above y 43) and the panel, lowered to 140.
 static void DrawStats(f32 scale, f32 left, f32 top)
 {
     Hud_PauseScreen& pause = gHud_2B00->mPauseScreen;
@@ -350,10 +344,7 @@ static void DrawStats(f32 scale, f32 left, f32 top)
     {
         pause.mTimer = 1;
         pause.UpdatePauseSection();
-        if (kStatSections & (1 << pause.mCurrentPauseSection))
-        {
-            sections[count++] = pause.mCurrentPauseSection;
-        }
+        sections[count++] = pause.mCurrentPauseSection;
     } while (pause.mCurrentPauseSection != HudPauseSection::tokens_collected_6);
 
     const Fix16 hudScale = gViewCamera->mUiScale;
@@ -361,18 +352,19 @@ static void DrawStats(f32 scale, f32 left, f32 top)
     sDrawingStats = true;
     sStatScale = scale;
     sStatLeft = left;
-    const s32 frenzies = HudPauseSection::kill_frenzies_completed_5;
-    s32 rows[7];
-    for (s32 i = count - 1, y = 108; i >= 0; i--)
+    // By section, the distance to the next row: icons are taller than text, the frenzy icon the tallest.
+    const s32 kPitch[7] = {14, 17, 17, 16, 16, 15, 0};
+    s32 y = 118;
+    for (s32 i = 0; i < count - 1; i++)
     {
-        rows[i] = y;
-        y -= 17 + (sections[i] == frenzies ? 3 : 0) + (i > 0 && sections[i - 1] == frenzies ? 2 : 0);
+        y -= kPitch[sections[i]];
     }
     for (s32 i = 0; i < count; i++)
     {
-        sStatTop = top + (rows[i] - 220) * scale;
+        sStatTop = top + (y - 220) * scale;
         pause.mCurrentPauseSection = sections[i];
         pause.DrawPause();
+        y += kPitch[sections[i]];
     }
     sDrawingStats = false;
     gViewCamera->mUiScale = hudScale;
@@ -389,12 +381,13 @@ void Draw()
     PlaySound(PortMenu::UpdateCapture());
 
     // The 640x480 layout centred on the screen, inside the safe area but without the HUD scale, the menu
-    // then above its panel the lines of the original's pause screen.
+    // 10 lower (its panel then ends at the bottom) and above it the lines of the original's pause screen.
     const f32 scale = PortScreenUiScale().ToFloat() * (1 - 2 * PortSettings::SafeArea());
     const f32 left = (gViewCamera->mScreenPxWidth - 640.0f * scale) / 2;
     const f32 top = (gViewCamera->mScreenPxHeight - 480.0f * scale) / 2;
+    const f32 menuTop = top + 10 * scale;
     UseFrontendStyle(false);
-    const PortMenu::Result result = PortMenu::HandleMouse(scale, left, top);
+    const PortMenu::Result result = PortMenu::HandleMouse(scale, left, menuTop);
     if (result == PortMenu::kClosed || result == PortMenu::kQuitGame)
     {
         UseGameStyle();
@@ -402,7 +395,7 @@ void Draw()
         return;
     }
     PlaySound(result);
-    PortMenu::Draw(scale, left, top, true);
+    PortMenu::Draw(scale, left, menuTop, true);
     UseGameStyle();
     DrawStats(scale, left, top);
 }
