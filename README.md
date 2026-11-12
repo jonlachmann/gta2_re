@@ -58,7 +58,7 @@ and in a car the triggers accelerate and brake progressively and the stick steer
 
 CONTROLS > TWIN STICK is a Hotline Miami style mode: move with one stick (or WASD), aim with the other
 (or the mouse). Shots go where you aim, the camera leans toward the aim, and holding Shift (LT on a pad)
-looks further. Roof guns on the fire truck, tank and gun jeep aim the same way.
+looks further. The turrets of the fire truck, tank and gun jeep aim the same way.
 
 ![Twin stick](docs/images/pc_twin_stick.gif)
 
