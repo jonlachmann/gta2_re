@@ -227,11 +227,11 @@ to unshield and libarchive.
 
 ## Packages
 
-`.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
-release of the 64-bit packages) and on demand. On Linux each is `packaging/ci.sh` in a Debian 13 container,
-which installs the tools, downloads the sources pinned in `packaging/versions.sh`, builds the libraries
-(`packaging/deps.sh`), the port (`packaging/build.sh`), then the packages. The same runs locally, from the
-repository's root:
+`.github/workflows/port.yml` builds and tests the packages on pushes to `main` and `port/**` branches, on
+`v*` tags (a draft release of the 64-bit packages) and on demand. On Linux each is `packaging/ci.sh` in a
+Debian 13 container, which installs the tools, downloads the sources pinned in `packaging/versions.sh`, builds
+the libraries (`packaging/deps.sh`), the port (`packaging/build.sh`), then the packages. The same runs
+locally, from the repository's root:
 
 ```bash
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh linux64 /work
@@ -272,6 +272,15 @@ The file names carry no version, so `releases/latest/download/<name>` always giv
 is CMake's `GTA2_VERSION` (by default `0.1.0-dev`; `build.sh` and `flatpak.sh` take `$GTA2_VERSION`, a tag
 such as `v0.2.0` in CI): the start menu's corner, the Windows file version, the macOS bundle's, and the
 AppStream release, dated the day it is packaged.
+
+To release:
+
+1. Actions, Release, Run workflow, on `main`, with the version (`0.2.0`). It tags the commit `v0.2.0` and
+   starts the Port workflow on the tag, which builds that version.
+2. Once the Port run is green, check the draft release it made in Releases: the packages and the notes
+   generated from the pull requests since the last release.
+3. Edit the notes if needed, then Publish release.
+
 The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`. The app id of
 the desktop file, metainfo, Flatpak and macOS bundle is set once, in `packaging/app.sh`; changing it also
 renames `packaging/flatpak/<id>.yml` and its `id:` line.

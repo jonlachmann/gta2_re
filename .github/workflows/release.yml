@@ -1,0 +1,33 @@
+name: Release
+
+# Tags the commit it runs on v<version>, then starts port.yml on the tag, which builds the packages and drafts
+# the release (a tag pushed with GITHUB_TOKEN starts no workflow by itself, a workflow_dispatch does).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, x.y.z (for example 0.2.0)'
+        required: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag and build
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! echo "$VERSION" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; then
+              echo "::error::The version must be x.y.z, not $VERSION"
+              exit 1
+          fi
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh workflow run port.yml --repo "$GITHUB_REPOSITORY" --ref "v$VERSION"
