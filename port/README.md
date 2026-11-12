@@ -1,12 +1,14 @@
 # GTA2 port
 
-Native builds of the decompiled game with clang, 32-bit (and 64-bit on Linux). Plan: `docs/port_plan.md`.
+Native builds of the decompiled game with clang, 64-bit and 32-bit. Plan: `docs/port_plan.md`.
 
 | Build | Platform layer | Toolchain file |
 |---|---|---|
-| Linux (i686) | SDL3, OpenGL ES 3.0, built-in renderer, sound and input | `toolchain-linux32-clang.cmake` |
-| Linux (x86_64) | the same, with the host's 64-bit libraries ([docs/64bit.md](docs/64bit.md)) | `toolchain-linux64-clang.cmake` |
+| Linux (x86_64) | SDL3, OpenGL ES 3.0 (or OpenGL 3.3 core), built-in renderer, sound and input ([docs/64bit.md](docs/64bit.md)) | `toolchain-linux64-clang.cmake` |
+| Linux (i686) | the same, with the host's 32-bit libraries | `toolchain-linux32-clang.cmake` |
+| Windows (MinGW, x86_64) | the same as Linux | `toolchain-mingw64-clang.cmake` |
 | Windows (MinGW, i686) | the same as Linux; `-DGTA2_PORT_DIRECTX=ON` for DMA's DirectX, Miles and Bink DLLs | `toolchain-mingw32-clang.cmake` |
+| macOS (arm64, x86_64) | the same as Linux, OpenGL 3.3 core; makes `reG2.app` (untested) | none (Xcode's clang) |
 
 ## Windows
 
@@ -20,6 +22,15 @@ cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-
       -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build_port
 ```
+
+For x64, `toolchain-mingw64-clang.cmake` and the SDK's `x86_64-w64-mingw32` folder.
+
+## macOS
+
+Not tested yet. `packaging/deps.sh macos` builds the libraries (SDL3, OpenAL Soft, libarchive, unshield)
+for the machine's architecture, `packaging/build.sh macos` the app, `packaging/macos_app.sh` the .dmg (the
+`macos` job of `.github/workflows/port.yml`). The OpenGL declarations come from `renderer/khronos`, the
+Khronos headers, which macOS lacks.
 
 ## Linux
 
@@ -84,7 +95,7 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 
 | Platform | Per-user folder (`SDL_GetPrefPath`) |
 |---|---|
-| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` |
+| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` (Flatpak: `~/.var/app/io.github.parigi_n.reG2/data/gta2_re/`) |
 | Windows | `%APPDATA%\gta2_re\` |
 | macOS | `~/Library/Application Support/gta2_re/` |
 
@@ -217,34 +228,56 @@ to unshield and libarchive.
 ## Packages
 
 `.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
-release) and on demand. Each is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
-downloads the sources pinned in `packaging/versions.sh`, builds the libraries (`packaging/deps.sh`), the
-port, then the packages. The same runs locally, from the repository's root:
+release of the 64-bit packages) and on demand. On Linux each is `packaging/ci.sh` in a Debian 13 container,
+which installs the tools, downloads the sources pinned in `packaging/versions.sh`, builds the libraries
+(`packaging/deps.sh`), the port (`packaging/build.sh`), then the packages. The same runs locally, from the
+repository's root:
 
 ```bash
-docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh linux64 /work
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw64 /work
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
-# The Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
-docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/gta2_re-<version>-linux-i686.tar.gz
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
+# A Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
+docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/reG2-<version>-linux-x86_64.tar.gz
+# The Flatpak bundle, and its test on a clean Debian 13 (bwrap needs these options in a container).
+BWRAP="--security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined"
+docker run --rm $BWRAP -v $PWD:/src:ro -v $PWD/../fpwork:/work -w /src \
+    ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 sh port/packaging/flatpak.sh /work
+docker run --rm $BWRAP -v $PWD/../fpwork/out:/out:ro -v $PWD/port/packaging:/p:ro debian:trixie \
+    sh /p/flatpak_smoke_test.sh /out/reG2-<version>-x86_64.flatpak
 ```
 
-- Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
-  the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later (Windows 7 and 8.1
-  need the Universal C Runtime update).
-- Linux, portable: `gta2_re-<version>-linux-i686.tar.gz`. Extract it anywhere and start `./gta2`. It brings
-  SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system's
-  32-bit libraries, so it uses the system's GPU driver, NVIDIA's included. `packaging/linux/README.md`, its
-  README, lists the packages per distribution; `./gta2` says which libraries are missing.
+The releases are 64-bit:
 
-With NVIDIA's proprietary driver, it needs its 32-bit libraries, of the driver's version (Steam installs
-them too): `lib32-nvidia-utils` on Arch, `nvidia-driver-libs:i386` on Debian, `libnvidia-gl-<version>:i386`
-on Ubuntu. Without them, Mesa draws on the CPU (llvmpipe).
+- Windows: `reG2-<version>-windows-x86_64.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
+  the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later.
+- Linux, portable: `reG2-<version>-linux-x86_64.tar.gz`. Extract it anywhere and start `./gta2`. It brings
+  SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system,
+  so it uses the system's GPU driver. `packaging/linux/README-x86_64.md` is its README; `./gta2` says which
+  libraries are missing.
+- Linux, AppImage: `reG2-<version>-x86_64.AppImage`, the same build and libraries in an AppImage
+  (`packaging/appimage.sh`, the type2 runtime), with its desktop file, icon and AppStream metainfo.
+- Linux, Flatpak: `reG2-<version>-x86_64.flatpak`, a bundle of `packaging/flatpak/io.github.parigi_n.reG2.yml`
+  on the `org.freedesktop.Platform` 26.08 runtime, whose SDL 3, OpenAL Soft and libarchive it uses
+  (`flatpak install --user reG2-<version>-x86_64.flatpak` fetches the runtime from Flathub). It needs no
+  access to the files: the setup's choosers go through the desktop portal, and the game's data goes to
+  `~/.var/app/io.github.parigi_n.reG2/data/gta2_re/`.
+- macOS: `reG2-<version>-macos-arm64.dmg` and `-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
+  `Contents/Frameworks`) for macOS 11 and later, built on GitHub's macOS runners (`packaging/macos_app.sh`).
+  The app is signed ad hoc, not notarized: the first start needs a right click, Open (or
+  `xattr -dr com.apple.quarantine reG2.app`). Not tested on a Mac yet.
 
-The Linux build compiles with Debian 13's clang (OpenAL Soft with its GCC) against an i386 system root of
-Debian 11 (`packaging/sysroot.sh`, glibc 2.31; `packaging/linux32-sysroot.cmake`), so it starts on
-distributions as old as that. The C++ runtime is linked statically; OpenAL Soft's needs a few glibc 2.32+
-functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs the tarball in a
-clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
+The i686 packages (`reG2-<version>-windows-i686.zip`, `reG2-<version>-linux-i686.tar.gz`) still build and
+are tested in CI, but are not released. The i686 Linux build takes everything but SDL 3 and OpenAL Soft from
+the system's 32-bit libraries; `packaging/linux/README.md` lists them per distribution. With NVIDIA's
+proprietary driver it needs its 32-bit libraries too, else Mesa draws on the CPU.
+
+The Linux builds compile with Debian 13's clang (OpenAL Soft with its GCC) against a system root of Debian 11
+(`packaging/sysroot.sh`, glibc 2.31; `packaging/linux32-sysroot.cmake`, `linux64-sysroot.cmake`), so they
+start on distributions as old as that. The C++ runtime is linked statically; OpenAL Soft's needs a few glibc
+2.32+ functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs a tarball or
+the AppImage in a clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
 
 ## Layout
 

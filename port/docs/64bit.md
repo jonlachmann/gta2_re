@@ -10,7 +10,8 @@ ninja -C build_linux64
 ```
 
 It takes the host's 64-bit SDL3, libarchive and unshield (no `GTA2_SETUP_DEPS_DIR`). The packages
-and the CI still build i686 only.
+(Windows x64, Linux x86_64 tarball, AppImage and Flatpak, macOS) are described in the port's README,
+Packages; the Windows x64 build runs under wine as the Linux one does.
 
 ## Why
 
@@ -70,4 +71,4 @@ global that happen on every target (`KeyboardLayout::GetLayout`, the renderer's 
 - Some fatal error messages (`error.cpp`) print arguments through `s32` casts of pointers.
 - A few sound details use pointer bits as noise (`sound_obj.cpp`): on any build they depend on
   where the heap puts objects.
-- Not done: packages, CI, Windows x64 (MinGW's headers), arm64.
+- arm64: macOS builds for it in CI but has not run; Linux and Windows arm64 are not built.
