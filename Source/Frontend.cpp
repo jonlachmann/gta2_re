@@ -992,6 +992,9 @@ void Frontend::DrawMenu()
         swprintf(tmpBuff, L"GTA2 V%d.%d", gGTA2VersionMajor, gGTA2VersionMinor);
 #endif
         DrawStringDefaultPalette(tmpBuff, 300, 460, gFrontendFont7, 1);
+#if defined(GTA2_PORT)
+        PortOptionsMenu::DrawUpdate(tmpBuff, gFrontendFont7);
+#endif
     }
 
     if (mCurrentPageIdx == MENUPAGE_PLAY)

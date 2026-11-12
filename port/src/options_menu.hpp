@@ -6,8 +6,9 @@
 
 namespace PortOptionsMenu
 {
-// The start menu's corner line, our version in place of the game's, and a newer release if there is one.
+// The start menu's corner line, our version in place of the game's, then a newer release in red if there is one.
 void VersionText(wchar_t* pOut);
+void DrawUpdate(wchar_t* pVersion, s16 font);
 
 // After the original pages are set up.
 void Setup(Frontend* pFrontend);

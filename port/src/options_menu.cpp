@@ -1,5 +1,6 @@
 #include "options_menu.hpp"
 #include "Function.hpp"
+#include "Draw.hpp"
 #include "Globals.hpp"
 #include "SoundObject.hpp"
 #include "menu.hpp"
@@ -31,6 +32,16 @@ bool sShown;
 s32 Wrap(s32 i, s32 n)
 {
     return (i % n + n) % n;
+}
+
+// The frontend fonts have no hyphen and no lower case.
+void Widen(const char* pText, wchar_t* pOut)
+{
+    for (; *pText; pText++)
+    {
+        *pOut++ = static_cast<wchar_t>(*pText == '-' ? ' ' : toupper(static_cast<unsigned char>(*pText)));
+    }
+    *pOut = 0;
 }
 
 #if defined(GTA2_UPDATE_CHECK)
@@ -281,21 +292,24 @@ void Draw(Frontend* pFrontend)
 
 void VersionText(wchar_t* pOut)
 {
-    char text[48];
-    const s32 n = snprintf(text, sizeof(text), "REG2 %s", GTA2_VERSION);
+    char text[32];
+    snprintf(text, sizeof(text), "REG2 %s", GTA2_VERSION);
+    Widen(text, pOut);
+}
+
+void DrawUpdate(wchar_t* pVersion, s16 font)
+{
 #if defined(GTA2_UPDATE_CHECK)
     if (const s32 newer = NewerRelease())
     {
-        snprintf(text + n, sizeof(text) - n, "  %d.%d.%d AVAILABLE", newer / 1000000, newer / 1000 % 1000, newer % 1000);
+        char text[32];
+        snprintf(text, sizeof(text), "  %d.%d.%d AVAILABLE!", newer / 1000000, newer / 1000 % 1000, newer % 1000);
+        wchar_t wide[32];
+        Widen(text, wide);
+        // Remap 10 gives this font the red of the selected menu option.
+        DrawString(wide, 300 + Frontend::GetMaxTextWidth(pVersion, font), 460, font, 1, palette_types_enum::font_remaps_8, 10, 0, 0);
     }
 #endif
-    // The font has no hyphen and no lower case.
-    s32 i = 0;
-    for (; text[i]; i++)
-    {
-        pOut[i] = static_cast<wchar_t>(text[i] == '-' ? ' ' : toupper(static_cast<unsigned char>(text[i])));
-    }
-    pOut[i] = 0;
 }
 
 bool UpdateNameEntry(Frontend* pFrontend)
