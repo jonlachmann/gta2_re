@@ -3204,13 +3204,18 @@ void Hud_PauseScreen::DrawPause()
     u32 sprite_type;
     u16 sprite_pal = 0;
 #if defined(GTA2_PORT)
-    if (PortPauseMenu::IsOpen())
+    if (PortPauseMenu::IsOpen() && !PortPauseMenu::IsDrawingStats())
     {
         return;
     }
 #endif
     if (gGame_0x40->IsPaused() && !gGame_0x40->mLocalPlayer->mShowQuitMessage)
     {
+#if defined(GTA2_PORT)
+        // For the pause menu, the section line only, which the menu places.
+        if (!PortPauseMenu::IsDrawingStats())
+        {
+#endif
         DrawFigureScaled(sprite_types_enum::user_6, 134, 227, 180, kAngZero_706610, palette_types_enum::sprites_2, 0, 0, 0);
         DrawFigureScaled(sprite_types_enum::user_6, 136, 320, 180, kAngZero_706610, palette_types_enum::sprites_2, 0, 0, 0);
         DrawFigureScaled(sprite_types_enum::user_6, 135, 413, 180, kAngZero_706610, palette_types_enum::sprites_2, 0, 0, 0);
@@ -3222,6 +3227,9 @@ void Hud_PauseScreen::DrawPause()
         u32 y_offset = !gText_0x14->LangIsJapanese() ? 158 : 164;
 
         DrawStringScaledPalette(pPauseText, (640 - max_width) / 2, y_offset, sPauseFont, palette_types_enum::sprites_2, 0, 0, 0);
+#if defined(GTA2_PORT)
+        }
+#endif
 
         if (!gGameSession.IsBonusStage())
         {

@@ -51,11 +51,19 @@ f32 Offset(f32 pos, f32 layoutSize, s32 screenSize)
 
 Fix16 PortUiX(Fix16 x)
 {
+    if (PortPauseMenu::IsDrawingStats())
+    {
+        return FromF(PortPauseMenu::PlaceUi(ToF(x), false));
+    }
     return FromF(ToF(x) * ToF(gViewCamera->mUiScale) + Offset(ToF(x), 640.0f, gViewCamera->mScreenPxWidth));
 }
 
 Fix16 PortUiY(Fix16 y)
 {
+    if (PortPauseMenu::IsDrawingStats())
+    {
+        return FromF(PortPauseMenu::PlaceUi(ToF(y), true));
+    }
     return FromF(ToF(y) * ToF(gViewCamera->mUiScale) + Offset(ToF(y), 480.0f, gViewCamera->mScreenPxHeight));
 }
 
@@ -63,6 +71,10 @@ Fix16 PortUiY(Fix16 y)
 // decides, so text beside a face or an icon keeps its place.
 Fix16 PortUiStringX(const wchar_t* pStr, Fix16 x, u16 font)
 {
+    if (PortPauseMenu::IsDrawingStats())
+    {
+        return PortUiX(x);
+    }
     const f32 width = static_cast<f32>(Frontend::GetMaxTextWidth(const_cast<wchar_t*>(pStr), font));
     const f32 start = ToF(x);
     const f32 centred = (640.0f - width) / 2;

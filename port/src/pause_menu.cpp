@@ -4,10 +4,8 @@
 #include "Frontend.hpp"
 #include "Function.hpp"
 #include "Game.hpp"
-#include "GameSession.hpp"
 #include "Globals.hpp"
-#include "ObjectDefinitions.hpp"
-#include "ScriptManager.hpp"
+#include "Hud.hpp"
 #include "TextTable.hpp"
 #include "TextureCache.hpp"
 #include "cSampleManager.hpp"
@@ -318,18 +316,67 @@ Fix16 Fx(f32 v)
     return Fix16(static_cast<s32>(v * 16384.0f), 0);
 }
 
-// One line of the original's pause screen (Hud_PauseScreen::DrawPause): the object's icon, then the text.
-void DrawStat(wchar_t* pText, s32 object, s32 y, f32 scale, f32 left, f32 top)
+// The original's pause screen showed these sections in turn; it also had the target score (0) and all
+// missions (4).
+const u32 kStatSections = (1 << HudPauseSection::gang_1_missions_done_1) | (1 << HudPauseSection::gang_2_missions_done_2) |
+    (1 << HudPauseSection::gang_3_missions_done_3) | (1 << HudPauseSection::kill_frenzies_completed_5) |
+    (1 << HudPauseSection::tokens_collected_6);
+
+static bool sDrawingStats;
+static f32 sStatScale;
+static f32 sStatLeft;
+static f32 sStatTop;
+
+bool IsDrawingStats()
 {
-    const s16 font = static_cast<s16>(word_7064D8);
-    const s16 sprite = gObjectDefinitions->GetObjectBaseSpriteIdx(object);
-    const s32 iconWidth =
-        gGtx_0x106C->get_sprite_width(gGtx_0x106C->GetSpriteTrueIndex(sprite_types_enum::code_obj1_4, sprite)) + 10;
-    const s32 x = (640 - iconWidth - Frontend::GetMaxTextWidth(pText, font)) / 2;
-    DrawFigure(sprite_types_enum::code_obj1_4, sprite, Fx(left + (x + iconWidth / 2) * scale), Fx(top + (y + 15) * scale),
-               Ang16(0), Fx(scale), palette_types_enum::sprites_2, 0, 0, 0, false);
-    DrawString(pText, Fx(left + (x + iconWidth) * scale), Fx(top + y * scale), font, Fx(scale),
-               palette_types_enum::font_remaps_8, 6, 0, 0);
+    return sDrawingStats;
+}
+
+f32 PlaceUi(f32 pos, bool y)
+{
+    return (y ? sStatTop : sStatLeft) + pos * sStatScale;
+}
+
+// One row per section, in UpdatePauseSection's order and with its checks, packed between the HUD's
+// multiplier (long lines reach it above y 43) and the panel at 130; the frenzy icon is the tallest.
+static void DrawStats(f32 scale, f32 left, f32 top)
+{
+    Hud_PauseScreen& pause = gHud_2B00->mPauseScreen;
+    const Hud_PauseScreen saved = pause;
+    u8 sections[7];
+    s32 count = 0;
+    pause.mCurrentPauseSection = HudPauseSection::tokens_collected_6;
+    do
+    {
+        pause.mTimer = 1;
+        pause.UpdatePauseSection();
+        if (kStatSections & (1 << pause.mCurrentPauseSection))
+        {
+            sections[count++] = pause.mCurrentPauseSection;
+        }
+    } while (pause.mCurrentPauseSection != HudPauseSection::tokens_collected_6);
+
+    const Fix16 hudScale = gViewCamera->mUiScale;
+    gViewCamera->mUiScale = Fx(scale);
+    sDrawingStats = true;
+    sStatScale = scale;
+    sStatLeft = left;
+    const s32 frenzies = HudPauseSection::kill_frenzies_completed_5;
+    s32 rows[7];
+    for (s32 i = count - 1, y = 108; i >= 0; i--)
+    {
+        rows[i] = y;
+        y -= 17 + (sections[i] == frenzies ? 3 : 0) + (i > 0 && sections[i - 1] == frenzies ? 2 : 0);
+    }
+    for (s32 i = 0; i < count; i++)
+    {
+        sStatTop = top + (rows[i] - 220) * scale;
+        pause.mCurrentPauseSection = sections[i];
+        pause.DrawPause();
+    }
+    sDrawingStats = false;
+    gViewCamera->mUiScale = hudScale;
+    pause = saved;
 }
 
 void Draw()
@@ -342,7 +389,7 @@ void Draw()
     PlaySound(PortMenu::UpdateCapture());
 
     // The 640x480 layout centred on the screen, inside the safe area but without the HUD scale, the menu
-    // then above its panel the kill frenzies and tokens the original's pause screen showed in turn.
+    // then above its panel the lines of the original's pause screen.
     const f32 scale = PortScreenUiScale().ToFloat() * (1 - 2 * PortSettings::SafeArea());
     const f32 left = (gViewCamera->mScreenPxWidth - 640.0f * scale) / 2;
     const f32 top = (gViewCamera->mScreenPxHeight - 480.0f * scale) / 2;
@@ -357,14 +404,6 @@ void Draw()
     PlaySound(result);
     PortMenu::Draw(scale, left, top, true);
     UseGameStyle();
-    if (!gGameSession.IsBonusStage())
-    {
-        wchar_t text[256];
-        const s32 frenzies = gScriptManager->mSecretsPassed ? *gScriptManager->mSecretsPassed : 0;
-        swprintf(text, gText_0x14->Find("psec"), frenzies, gScriptManager->mTotalSecrets);
-        DrawStat(text, objects::kill_frenzy_icon_286, 62, scale, left, top);
-        swprintf(text, gText_0x14->Find("pbon"), gGameSession.get_secret_tokens_collected(), 50);
-        DrawStat(text, objects::secret_token_266, 94, scale, left, top);
-    }
+    DrawStats(scale, left, top);
 }
 } // namespace PortPauseMenu
