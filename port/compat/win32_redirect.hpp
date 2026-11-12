@@ -90,3 +90,14 @@ intptr_t port_findfirst(const char* pattern, struct _finddata_t* pData);
 #undef _findfirst
 #define fopen port_fopen
 #define _findfirst port_findfirst
+
+#if defined(_WIN64) && defined(__cplusplus)
+// The network lobby (never shown: no network play) uses 32-bit Windows' GWL_WNDPROC, which winuser.h
+// removes on 64-bit, and an int dialog procedure.
+enum { GWL_WNDPROC = -4 };
+template <typename H, typename U, typename W, typename LP, typename I, typename T, typename P, typename L>
+inline auto port_DialogBoxParamA(I instance, T name, P parent, int (*proc)(H, U, W, LP), L param)
+{
+    return port_DialogBoxParamA(instance, name, (H)parent, reinterpret_cast<long long (*)(H, U, W, LP)>(proc), (LP)param);
+}
+#endif
