@@ -5,7 +5,6 @@
 set -eu
 B=$1; P=$2; OUT=$3
 HERE=$(cd "$(dirname "$0")" && pwd)
-VERSION=${GTA2_VERSION:-dev}
 ARCH=$(uname -m)
 APP=$B/reg2.app
 T=$(mktemp -d)
@@ -20,12 +19,6 @@ done
 mkdir -p "$APP/Contents/Resources"
 iconutil -c icns -o "$APP/Contents/Resources/reG2.icns" "$I"
 
-case $VERSION in
-    v[0-9]*) SHORT=${VERSION#v} ;;
-    *) SHORT=0.0 ;;
-esac
-plutil -replace CFBundleShortVersionString -string "$SHORT" "$APP/Contents/Info.plist"
-plutil -replace CFBundleVersion -string "$VERSION" "$APP/Contents/Info.plist"
 otool -L "$APP/Contents/MacOS/reg2" "$APP"/Contents/Frameworks/*.dylib
 codesign --force --deep --sign - "$APP"
 

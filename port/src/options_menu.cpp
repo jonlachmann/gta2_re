@@ -3,7 +3,10 @@
 #include "Globals.hpp"
 #include "SoundObject.hpp"
 #include "menu.hpp"
+#include "reg2_version.h"
 #include "settings.hpp"
+#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 // No std::wstring: with -fshort-wchar its traits would call the C library's 4-byte wide functions.
@@ -189,6 +192,19 @@ void Draw(Frontend* pFrontend)
     {
         PortMenu::Draw(1.0f, 0.0f, 0.0f, false);
     }
+}
+
+void VersionText(wchar_t* pOut)
+{
+    char text[48];
+    snprintf(text, sizeof(text), "REG2 %s", GTA2_VERSION);
+    // The font has no hyphen and no lower case.
+    s32 i = 0;
+    for (; text[i]; i++)
+    {
+        pOut[i] = static_cast<wchar_t>(text[i] == '-' ? ' ' : toupper(static_cast<unsigned char>(text[i])));
+    }
+    pOut[i] = 0;
 }
 
 bool UpdateNameEntry(Frontend* pFrontend)

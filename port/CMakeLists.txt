@@ -8,6 +8,17 @@ project(gta2_port C CXX)
 
 set(ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 
+# x.y.z with an optional suffix; the release builds take it from the tag (v0.2.0: 0.2.0).
+set(GTA2_VERSION "0.1.0-dev" CACHE STRING "reG2's version")
+if(NOT GTA2_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+    message(FATAL_ERROR "GTA2_VERSION ${GTA2_VERSION} does not start with x.y.z")
+endif()
+set(version_base ${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3})
+file(CONFIGURE OUTPUT reg2_version.h CONTENT "#define GTA2_VERSION \"${GTA2_VERSION}\"
+#define GTA2_VERSION_RC ${CMAKE_MATCH_1},${CMAKE_MATCH_2},${CMAKE_MATCH_3},0
+")
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
 # The game sources are the VC6 build's gta2_lib_src list, so upstream additions come along on merges.
 file(READ ${ROOT}/CMakeLists.txt top)
 string(REGEX MATCH "set\\(gta2_lib_src\n([^)]*)\\)" _ "${top}")
@@ -160,6 +171,7 @@ else()
                 MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/packaging/macos/Info.plist.in
                 MACOSX_BUNDLE_GUI_IDENTIFIER ${app_id} MACOSX_BUNDLE_BUNDLE_NAME reG2
                 MACOSX_BUNDLE_ICON_FILE reG2.icns
+                MACOSX_BUNDLE_SHORT_VERSION_STRING ${version_base} MACOSX_BUNDLE_BUNDLE_VERSION ${version_base}
                 BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH @executable_path/../Frameworks)
             add_custom_command(TARGET gta2 POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks

@@ -269,8 +269,9 @@ The releases are 64-bit:
   `xattr -dr com.apple.quarantine reG2.app`). Not tested on a Mac yet.
 
 The file names carry no version, so `releases/latest/download/<name>` always gives the newest. The version
-is the release's tag, and inside the packages the start menu's text (`kVersionText`, `src/options_menu.hpp`),
-the Windows file version (`resources.rc`) and the AppStream release (`packaging/linux/reG2.metainfo.xml`).
+is CMake's `GTA2_VERSION` (by default `0.1.0-dev`; `build.sh` and `flatpak.sh` take `$GTA2_VERSION`, a tag
+such as `v0.2.0` in CI): the start menu's corner, the Windows file version, the macOS bundle's, and the
+AppStream release, dated the day it is packaged.
 The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`. The app id of
 the desktop file, metainfo, Flatpak and macOS bundle is set once, in `packaging/app.sh`; changing it also
 renames `packaging/flatpak/<id>.yml` and its `id:` line.

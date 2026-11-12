@@ -65,7 +65,7 @@ modules:
         -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=/app
       - ninja -C build -j${FLATPAK_BUILDER_N_JOBS}
       - install -Dm755 build/reg2 /app/bin/reg2
-      - sh port/packaging/linux/install_desktop.sh /app
+      - sh port/packaging/linux/install_desktop.sh /app build
       - install -Dm644 -t /app/share/doc/reG2 port/README.md
     sources:
       - type: dir

@@ -1,4 +1,5 @@
 #include <windows.h>
+#include "reg2_version.h"
 
 103 DIALOGEX 0, 0, 335, 266
 STYLE DS_MODALFRAME | DS_CENTER | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -22,8 +23,8 @@ FONT 8, "MS Sans Serif"
 
 
 1 VERSIONINFO
-FILEVERSION 0,1,0,0
-PRODUCTVERSION 0,1,0,0
+FILEVERSION GTA2_VERSION_RC
+PRODUCTVERSION GTA2_VERSION_RC
 FILEOS 0x40004
 FILETYPE 0x1
 {
@@ -32,11 +33,11 @@ BLOCK "StringFileInfo"
 	BLOCK "000004b0"
 	{
 		VALUE "FileDescription", "reG2"
-		VALUE "FileVersion", "0.1"
+		VALUE "FileVersion", GTA2_VERSION
 		VALUE "InternalName", "reG2"
 		VALUE "OriginalFilename", "reg2.exe"
 		VALUE "ProductName", "reG2"
-		VALUE "ProductVersion", "0.1"
+		VALUE "ProductVersion", GTA2_VERSION
 	}
 }
 

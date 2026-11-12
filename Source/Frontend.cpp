@@ -987,7 +987,7 @@ void Frontend::DrawMenu()
     if (mCurrentPageIdx == MENUPAGE_START_MENU)
     {
 #if defined(GTA2_PORT)
-        wcscpy(tmpBuff, PortOptionsMenu::kVersionText);
+        PortOptionsMenu::VersionText(tmpBuff);
 #else
         swprintf(tmpBuff, L"GTA2 V%d.%d", gGTA2VersionMajor, gGTA2VersionMinor);
 #endif

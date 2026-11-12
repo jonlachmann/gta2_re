@@ -19,7 +19,7 @@ chmod 644 "$A"/usr/lib/*
 
 printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/usr/bin/reg2" "$@"\n' > "$A/AppRun"
 chmod 755 "$A/AppRun"
-sh "$HERE/linux/install_desktop.sh" "$A/usr"
+sh "$HERE/linux/install_desktop.sh" "$A/usr" "$B"
 ln -s "usr/share/applications/$APP_ID.desktop" "$A/$APP_ID.desktop"
 ln -s "usr/share/icons/hicolor/256x256/apps/$APP_ID.png" "$A/$APP_ID.png"
 ln -s "$APP_ID.png" "$A/.DirIcon"
