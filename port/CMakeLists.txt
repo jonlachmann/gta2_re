@@ -183,7 +183,7 @@ else()
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3> ${openal_runtime}
                     $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks)
             # The Khronos header the renderer declares its OpenGL entry points with; macOS has none.
-            target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
+            target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos ${compat}/macos)
             target_include_directories(gta2gl PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
         else()
             target_link_options(gta2 PRIVATE ${arch_flags} -Wl,--no-dependent-libraries -Wl,--error-limit=0)
