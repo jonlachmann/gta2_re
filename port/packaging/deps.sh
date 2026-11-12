@@ -76,7 +76,7 @@ AL="-DALSOFT_UTILS=OFF -DALSOFT_EXAMPLES=OFF -DALSOFT_TESTS=OFF -DALSOFT_NO_CONF
 unpack openal-soft-1.25.2.tar.gz
 # GCC: OpenAL Soft 1.25.2 builds neither with Debian 13's clang 19 nor with libc++ (llvm-mingw). The library
 # links its C++ runtime statically and exchanges no CRT object with the game.
-AL_C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib ${ARCHS:-}"
+AL_C="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$P -DCMAKE_INSTALL_LIBDIR=lib"
 if [ "${MULTIARCH:-}" ]; then
     # GCC's own library folders, which hold the build machine's glibc, come after -L.
     SRL="-L$GTA2_SYSROOT/usr/lib/$MULTIARCH -L$GTA2_SYSROOT/lib/$MULTIARCH"
@@ -84,17 +84,27 @@ if [ "${MULTIARCH:-}" ]; then
     cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DCMAKE_TOOLCHAIN_FILE="$HERE/$T-sysroot.cmake" \
           -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
           "-DCMAKE_SHARED_LINKER_FLAGS=$SRL -pthread -static-libstdc++ -Wl,-z,defs $B/glibc_compat.o"
+    ninja -C "$B/b_openal" -j"$J" install
 elif [ "$T" = macos ]; then
-    # alconfig.cpp reads the bundle's resources with CoreFoundation, which only the CoreAudio backend links.
-    cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_BACKEND_COREAUDIO=OFF \
-          "-DCMAKE_SHARED_LINKER_FLAGS=-framework CoreFoundation"
+    # One build per architecture, joined by lipo: in a universal build its checks leave out SSE and NEON.
+    for a in arm64 x86_64; do
+        # alconfig.cpp reads the bundle's resources with CoreFoundation, which only the CoreAudio backend links.
+        cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal_$a" $AL_C $AL -DALSOFT_BACKEND_COREAUDIO=OFF \
+              -DCMAKE_OSX_ARCHITECTURES=$a -DCMAKE_INSTALL_PREFIX="$B/openal_$a" \
+              "-DCMAKE_SHARED_LINKER_FLAGS=-framework CoreFoundation"
+        ninja -C "$B/b_openal_$a" -j"$J" install
+    done
+    cp -R "$B/openal_x86_64/." "$P/"
+    for f in $(cd "$B/openal_x86_64/lib" && ls libopenal*.dylib); do
+        [ -L "$P/lib/$f" ] || lipo -create -output "$P/lib/$f" "$B/openal_arm64/lib/$f" "$B/openal_x86_64/lib/$f"
+    done
 else
     cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_EAX=OFF -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR="${MINGW%%-*}" -DCMAKE_C_COMPILER=$MINGW-gcc-posix \
           -DCMAKE_CXX_COMPILER=$MINGW-g++-posix -DCMAKE_RC_COMPILER=$MINGW-windres \
           "-DCMAKE_SHARED_LINKER_FLAGS=-s -static -static-libgcc -static-libstdc++"
+    ninja -C "$B/b_openal" -j"$J" install
 fi
-ninja -C "$B/b_openal" -j"$J" install
 
 unpack unshield-1.6.2.tar.gz
 cmake -S "$B/unshield-1.6.2" -B "$B/b_unshield" $C -DBUILD_STATIC=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
