@@ -71,8 +71,7 @@ copy of the game has it.
 |---|---|
 | <img src="docs/images/icons/windows.svg" width="18" height="18" alt=""> Windows 10 or later | [reG2-windows-x64.zip](https://github.com/reG2-project/reG2/releases/latest/download/reG2-windows-x64.zip) |
 | <img src="https://cdn.simpleicons.org/linux/8b949e" width="18" height="18" alt=""> Linux | [reG2-x86_64.AppImage](https://github.com/reG2-project/reG2/releases/latest/download/reG2-x86_64.AppImage), or [Flatpak](https://github.com/reG2-project/reG2/releases/latest/download/reG2-x86_64.flatpak), or [tar.gz](https://github.com/reG2-project/reG2/releases/latest/download/reG2-linux-x86_64.tar.gz) |
-| <img src="https://cdn.simpleicons.org/apple/8b949e" width="18" height="18" alt=""> macOS (Apple Silicon) | [reG2-macos-arm64.dmg](https://github.com/reG2-project/reG2/releases/latest/download/reG2-macos-arm64.dmg) |
-| <img src="https://cdn.simpleicons.org/apple/8b949e" width="18" height="18" alt=""> macOS (Intel) | [reG2-macos-x86_64.dmg](https://github.com/reG2-project/reG2/releases/latest/download/reG2-macos-x86_64.dmg) |
+| <img src="https://cdn.simpleicons.org/apple/8b949e" width="18" height="18" alt=""> macOS 11 or later (Apple Silicon and Intel) | [reG2-macos.dmg](https://github.com/reG2-project/reG2/releases/latest/download/reG2-macos.dmg) |
 | <img src="docs/images/icons/3ds.svg" width="18" height="18" alt=""> Nintendo 3DS (homebrew) | [reG2 3DS](https://github.com/reG2-project/reG2-3DS), its own repository |
 
 All releases are on the [releases page](https://github.com/reG2-project/reG2/releases).

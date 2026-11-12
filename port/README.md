@@ -8,7 +8,7 @@ Native builds of the decompiled game with clang, 64-bit and 32-bit. Plan: `docs/
 | Linux (i686) | the same, with the host's 32-bit libraries | `toolchain-linux32-clang.cmake` |
 | Windows (MinGW, x86_64) | the same as Linux | `toolchain-mingw64-clang.cmake` |
 | Windows (MinGW, i686) | the same as Linux; `-DGTA2_PORT_DIRECTX=ON` for DMA's DirectX, Miles and Bink DLLs | `toolchain-mingw32-clang.cmake` |
-| macOS (arm64, x86_64) | the same as Linux, OpenGL 3.3 core; makes `reG2.app` (untested) | none (Xcode's clang) |
+| macOS (universal: arm64 and x86_64) | the same as Linux, OpenGL 3.3 core; makes `reG2.app` (untested) | none (Xcode's clang) |
 
 ## Windows
 
@@ -28,8 +28,9 @@ For x64, `toolchain-mingw64-clang.cmake` and the SDK's `x86_64-w64-mingw32` fold
 ## macOS
 
 Not tested yet. `packaging/deps.sh macos` builds the libraries (SDL3, OpenAL Soft, libarchive, unshield)
-for the machine's architecture, `packaging/build.sh macos` the app, `packaging/macos_app.sh` the .dmg (the
-`macos` job of `.github/workflows/port.yml`). The OpenGL declarations come from `renderer/khronos`, the
+for arm64 and x86_64 in one go, `packaging/build.sh macos` the universal app, `packaging/macos_app.sh` the .dmg
+(the `macos` job of `.github/workflows/port.yml`, on an Intel runner). `lipo` checks that every library and the
+executable hold both architectures. The OpenGL declarations come from `renderer/khronos`, the
 Khronos headers, which macOS lacks.
 
 ## Linux
@@ -263,8 +264,8 @@ The releases are 64-bit:
   (`flatpak install --user reG2-x86_64.flatpak` fetches the runtime from Flathub). It needs no
   access to the files: the setup's choosers go through the desktop portal, and the game's data goes to
   `~/.var/app/<app id>/data/reG2/`.
-- macOS: `reG2-macos-arm64.dmg` and `reG2-macos-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
-  `Contents/Frameworks`) for macOS 11 and later, built on GitHub's macOS runners (`packaging/macos_app.sh`).
+- macOS: `reG2-macos.dmg`, with a universal `reG2.app` (arm64 and x86_64; SDL 3 and OpenAL Soft in
+  `Contents/Frameworks`) for macOS 11 and later, built on GitHub's Intel macOS runner (`packaging/macos_app.sh`).
   The app is signed ad hoc, not notarized: the first start needs a right click, Open (or
   `xattr -dr com.apple.quarantine reG2.app`). Not tested on a Mac yet.
 
