@@ -43,6 +43,21 @@ class File
     EXPORT static size_t __stdcall Global_ReadRemainder(void* Buffer, u32* pMaxFileSize);
 
     EXPORT static char_type __stdcall SkipWhitespace(FILE* Stream);
+
+#if defined(GTA2_PORT_64BIT)
+    // The game passes u32 and size_t sizes alike, the same type on 32-bit targets.
+    template <typename T> static void AppendBufferToFile(const char_type* FileName, void* pBuffer, T* pBufferSize)
+    {
+        size_t size = *pBufferSize;
+        AppendBufferToFile(FileName, pBuffer, &size);
+    }
+
+    template <typename T> static void Global_Seek(T* pOffset)
+    {
+        u32 offset = static_cast<u32>(*pOffset);
+        Global_Seek(&offset);
+    }
+#endif
 };
 
 // Copy protection: a file of the game CD with its expected size

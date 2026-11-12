@@ -8,4 +8,5 @@ libarchive-3.8.11.tar.xz https://github.com/libarchive/libarchive/releases/downl
 zlib-1.3.2.tar.gz https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
 xz-5.8.4.tar.gz https://github.com/tukaani-project/xz/releases/download/v5.8.4/xz-5.8.4.tar.gz 0014c7886930454fe8bd4228665b51af55eeae560ea135c9c4cd33f55b2591d9
 llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz https://github.com/mstorsjo/llvm-mingw/releases/download/20261020/llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz 55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335
+appimage-runtime-x86_64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
 "

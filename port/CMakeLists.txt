@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(gta2_port C CXX)
 
-# Fork build: one executable from the game sources, clang, 32-bit.
+# Fork build: one executable from the game sources, clang, 32 or 64-bit.
 #   Windows (MinGW): cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-mingw32-clang.cmake -DSDL3_DIR=...
 #   Linux:           cmake -S port -B build_linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-linux32-clang.cmake
+#   Linux x86_64:    cmake -S port -B build_linux64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=port/toolchain-linux64-clang.cmake
 
 set(ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 
@@ -17,10 +18,13 @@ list(TRANSFORM lib_src PREPEND ${ROOT}/)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(arch_flags -m32)
+endif()
 # The game relies on what VC6 did with undefined behaviour (uninitialised locals returned on unused
 # paths, null checks after use): clang must not optimise on it.
 add_compile_options(
-    -m32 -fms-extensions -fasm-blocks -fshort-wchar -fsigned-char
+    ${arch_flags} -fms-extensions -fasm-blocks -fshort-wchar -fsigned-char
     -fno-strict-aliasing -fwrapv -ftrivial-auto-var-init=zero -fno-delete-null-pointer-checks -fno-autolink -w -Wno-address-of-temporary -Wno-c++11-narrowing)
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS GTA2_PORT)
 
@@ -37,7 +41,7 @@ if(WIN32 AND GTA2_PORT_DIRECTX)
     target_compile_definitions(binkw32 PRIVATE BUILD_BINK)
 
     add_executable(gta2 WIN32 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
-        src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp ${CMAKE_CURRENT_LIST_DIR}/resources.rc)
+        src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp src/ptr_slot.cpp src/layout_checks.cpp ${CMAKE_CURRENT_LIST_DIR}/resources.rc)
     target_link_libraries(gta2 PRIVATE mss32 binkw32
         ddraw dinput dxguid dplayx winmm ole32 oleaut32 user32 gdi32 advapi32 version shell32 comdlg32)
     target_link_options(gta2 PRIVATE -static -static-libgcc -static-libstdc++ -lpthread)
@@ -98,18 +102,31 @@ else()
             COMPILE_DEFINITIONS "BUILD_MSS;GTA2_HAVE_OPENAL" INCLUDE_DIRECTORIES ${GTA2_OPENAL_DIR}/include)
         if(WIN32)
             set(openal_runtime ${GTA2_OPENAL_DIR}/bin/OpenAL32.dll)
+        elseif(APPLE)
+            set(openal_runtime ${GTA2_OPENAL_DIR}/lib/libopenal.1.dylib)
         else()
             set(openal_runtime ${GTA2_OPENAL_DIR}/lib/libopenal.so.1)
+        endif()
+    elseif(NOT WIN32)
+        # Without a prefix, the system's OpenAL Soft headers: the system's library is loaded at run time.
+        find_path(GTA2_OPENAL_INCLUDE_DIR AL/efx-presets.h)
+        if(GTA2_OPENAL_INCLUDE_DIR)
+            set_source_files_properties(${compat}/src/miles3d.cpp PROPERTIES COMPILE_DEFINITIONS "BUILD_MSS;GTA2_HAVE_OPENAL")
+            if(NOT GTA2_OPENAL_INCLUDE_DIR IN_LIST CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
+                set_source_files_properties(${compat}/src/miles3d.cpp PROPERTIES INCLUDE_DIRECTORIES ${GTA2_OPENAL_INCLUDE_DIR})
+            endif()
         endif()
     endif()
     set_source_files_properties(${ROOT}/Source/3rdParty/bink.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_BINK)
 
     add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
         ${ROOT}/Source/3rdParty/bink.cpp
-        src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp ${compat_src})
+        src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp src/ptr_slot.cpp src/layout_checks.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
+    # reg2, not gta2: unpacked into a GTA2 folder, it must not replace the original's gta2.exe.
+    set_target_properties(gta2 PROPERTIES OUTPUT_NAME reg2)
     target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3)
-    if(openal_runtime)
+    if(openal_runtime AND NOT APPLE)
         add_custom_command(TARGET gta2 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${openal_runtime} $<TARGET_FILE_DIR:gta2>)
     endif()
@@ -134,6 +151,25 @@ else()
             -fno-builtin-wcsncmp -fno-builtin-wcschr -fno-builtin-wmemcpy -fno-builtin-wmemset -fno-builtin-wmemcmp)
         target_include_directories(gta2 PRIVATE
             ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
-        target_link_options(gta2 PRIVATE -m32 -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+        if(APPLE)
+            # reg2.app (reG2.app in the .dmg), with SDL3 and OpenAL Soft in Contents/Frameworks.
+            # The app id, shared with the Linux packages.
+            file(STRINGS ${CMAKE_CURRENT_LIST_DIR}/packaging/app.sh app_id REGEX "^APP_ID=")
+            string(REPLACE "APP_ID=" "" app_id "${app_id}")
+            set_target_properties(gta2 PROPERTIES MACOSX_BUNDLE ON
+                MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/packaging/macos/Info.plist.in
+                MACOSX_BUNDLE_GUI_IDENTIFIER ${app_id} MACOSX_BUNDLE_BUNDLE_NAME reG2
+                MACOSX_BUNDLE_ICON_FILE reG2.icns
+                BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH @executable_path/../Frameworks)
+            add_custom_command(TARGET gta2 POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3> ${openal_runtime}
+                    $<TARGET_BUNDLE_CONTENT_DIR:gta2>/Frameworks)
+            # The Khronos header the renderer declares its OpenGL entry points with; macOS has none.
+            target_include_directories(gta2 PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
+            target_include_directories(gta2gl PRIVATE ${CMAKE_CURRENT_LIST_DIR}/renderer/khronos)
+        else()
+            target_link_options(gta2 PRIVATE ${arch_flags} -Wl,--no-dependent-libraries -Wl,--error-limit=0)
+        endif()
     endif()
 endif()

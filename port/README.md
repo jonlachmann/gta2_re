@@ -1,16 +1,19 @@
 # GTA2 port
 
-Native builds of the decompiled game with clang, 32-bit. Plan: `docs/port_plan.md`.
+Native builds of the decompiled game with clang, 64-bit and 32-bit. Plan: `docs/port_plan.md`.
 
 | Build | Platform layer | Toolchain file |
 |---|---|---|
-| Linux (i686) | SDL3, OpenGL ES 3.0, built-in renderer, sound and input | `toolchain-linux32-clang.cmake` |
+| Linux (x86_64) | SDL3, OpenGL ES 3.0 (or OpenGL 3.3 core), built-in renderer, sound and input ([docs/64bit.md](docs/64bit.md)) | `toolchain-linux64-clang.cmake` |
+| Linux (i686) | the same, with the host's 32-bit libraries | `toolchain-linux32-clang.cmake` |
+| Windows (MinGW, x86_64) | the same as Linux | `toolchain-mingw64-clang.cmake` |
 | Windows (MinGW, i686) | the same as Linux; `-DGTA2_PORT_DIRECTX=ON` for DMA's DirectX, Miles and Bink DLLs | `toolchain-mingw32-clang.cmake` |
+| macOS (arm64, x86_64) | the same as Linux, OpenGL 3.3 core; makes `reG2.app` (untested) | none (Xcode's clang) |
 
 ## Windows
 
 Needs SDL3 for MinGW (`SDL3-devel-<version>-mingw` from the SDL releases), and libarchive and
-unshield (see [Setup libraries](#setup-libraries)). `SDL3.dll` is copied next to `gta2.exe`; the exe
+unshield (see [Setup libraries](#setup-libraries)). `SDL3.dll` is copied next to `reg2.exe`; the exe
 needs no DirectX, Miles or Bink DLL.
 
 ```bash
@@ -19,6 +22,15 @@ cmake -S port -B build_port -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-
       -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build_port
 ```
+
+For x64, `toolchain-mingw64-clang.cmake` and the SDK's `x86_64-w64-mingw32` folder.
+
+## macOS
+
+Not tested yet. `packaging/deps.sh macos` builds the libraries (SDL3, OpenAL Soft, libarchive, unshield)
+for the machine's architecture, `packaging/build.sh macos` the app, `packaging/macos_app.sh` the .dmg (the
+`macos` job of `.github/workflows/port.yml`). The OpenGL declarations come from `renderer/khronos`, the
+Khronos headers, which macOS lacks.
 
 ## Linux
 
@@ -34,7 +46,7 @@ On its first start the port asks for the game's files (see [Game data](#game-dat
 A developer can also run it from a copy of the game folder, or point `GTA2_DIR` to one:
 
 ```bash
-GTA2_DIR=~/games/gta2 ./build_linux/gta2
+GTA2_DIR=~/games/gta2 ./build_linux/reg2
 ```
 
 Settings live in `gta2_registry.ini` (the registry keys of the Windows game). Alt+Enter switches
@@ -83,7 +95,7 @@ data (`data/fstyle.sty`), and writes its settings and saves there:
 
 | Platform | Per-user folder (`SDL_GetPrefPath`) |
 |---|---|
-| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` |
+| Linux | `$XDG_DATA_HOME/gta2_re/`, by default `~/.local/share/gta2_re/` (Flatpak: `~/.var/app/<app id>/data/gta2_re/`) |
 | Windows | `%APPDATA%\gta2_re\` |
 | macOS | `~/Library/Application Support/gta2_re/` |
 
@@ -102,7 +114,7 @@ Without the data there, a message box offers three choices:
 The files are copied into a temporary folder, checked (the essential files are listed in
 `setup/install.cpp`), then moved into place. Without the music (the 22 tracks of `GTAudio` on the
 original CD) the game runs, and the setup offers to add it from a folder (the CD, its `GTAudio`), a
-disc image or the installer. `gta2 --setup` shows the setup again, to replace the data or add the music.
+disc image or the installer. `reg2 --setup` shows the setup again, to replace the data or add the music.
 
 | Source | Read with |
 |---|---|
@@ -146,6 +158,10 @@ The game's 3D sound option (`do_3d_sound` under `Sound` in `gta2_registry.ini`) 
 EAX environment the game picks, as EFX reverb. OpenAL renders into the SDL mix through its loopback
 device. Without the library the game keeps its 2D sound. `GTA2_HRTF=1` renders binaurally for
 headphones; `GTA2_NO_OPENAL=1` ignores the library.
+
+On Linux without `GTA2_OPENAL_DIR`, the build uses the system's OpenAL Soft headers when it finds
+them (`AL/efx-presets.h`, for example from the distribution's `openal` package) and the game loads
+the system's `libopenal.so.1`, which must match the build's architecture.
 
 Build it once per target (no audio backend needed), then pass its install prefix to the port:
 
@@ -212,34 +228,63 @@ to unshield and libarchive.
 ## Packages
 
 `.github/workflows/port.yml` builds the packages on pushes to `port/**` branches, on `v*` tags (a draft
-release) and on demand. Each is `packaging/ci.sh` in a Debian 13 container, which installs the tools,
-downloads the sources pinned in `packaging/versions.sh`, builds the libraries (`packaging/deps.sh`), the
-port, then the packages. The same runs locally, from the repository's root:
+release of the 64-bit packages) and on demand. On Linux each is `packaging/ci.sh` in a Debian 13 container,
+which installs the tools, downloads the sources pinned in `packaging/versions.sh`, builds the libraries
+(`packaging/deps.sh`), the port (`packaging/build.sh`), then the packages. The same runs locally, from the
+repository's root:
 
 ```bash
-docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh linux64 /work
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw64 /work
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
-# The Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
-docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/gta2_re-<version>-linux-i686.tar.gz
+docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
+# A Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
+docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/reG2-linux-x86_64.tar.gz
+# The Flatpak bundle, and its test on a clean Debian 13 (bwrap needs these options in a container).
+BWRAP="--security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined"
+docker run --rm $BWRAP -v $PWD:/src:ro -v $PWD/../fpwork:/work -w /src \
+    ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 sh port/packaging/flatpak.sh /work
+docker run --rm $BWRAP -v $PWD/../fpwork/out:/out:ro -v $PWD/port/packaging:/p:ro debian:trixie \
+    sh /p/flatpak_smoke_test.sh /out/reG2-x86_64.flatpak
 ```
 
-- Windows: `gta2_re-<version>-windows-i686.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
-  the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later (Windows 7 and 8.1
-  need the Universal C Runtime update).
-- Linux, portable: `gta2_re-<version>-linux-i686.tar.gz`. Extract it anywhere and start `./gta2`. It brings
-  SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system's
-  32-bit libraries, so it uses the system's GPU driver, NVIDIA's included. `packaging/linux/README.md`, its
-  README, lists the packages per distribution; `./gta2` says which libraries are missing.
+The releases are 64-bit:
 
-With NVIDIA's proprietary driver, it needs its 32-bit libraries, of the driver's version (Steam installs
-them too): `lib32-nvidia-utils` on Arch, `nvidia-driver-libs:i386` on Debian, `libnvidia-gl-<version>:i386`
-on Ubuntu. Without them, Mesa draws on the CPU (llvmpipe).
+- Windows: `reG2-windows-x64.zip`, with `reg2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
+  the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later.
+- Linux, portable: `reG2-linux-x86_64.tar.gz`. Extract it anywhere and start `./reg2`. It brings
+  SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system,
+  so it uses the system's GPU driver. `packaging/linux/README-x86_64.md` is its README; `./reg2` says which
+  libraries are missing.
+- Linux, AppImage: `reG2-x86_64.AppImage`, the same build and libraries in an AppImage
+  (`packaging/appimage.sh`, the type2 runtime), with its desktop file, icon and AppStream metainfo.
+- Linux, Flatpak: `reG2-x86_64.flatpak`, a bundle of `packaging/flatpak/<app id>.yml`
+  on the `org.freedesktop.Platform` 26.08 runtime, whose SDL 3, OpenAL Soft and libarchive it uses
+  (`flatpak install --user reG2-x86_64.flatpak` fetches the runtime from Flathub). It needs no
+  access to the files: the setup's choosers go through the desktop portal, and the game's data goes to
+  `~/.var/app/<app id>/data/gta2_re/`.
+- macOS: `reG2-macos-arm64.dmg` and `reG2-macos-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
+  `Contents/Frameworks`) for macOS 11 and later, built on GitHub's macOS runners (`packaging/macos_app.sh`).
+  The app is signed ad hoc, not notarized: the first start needs a right click, Open (or
+  `xattr -dr com.apple.quarantine reG2.app`). Not tested on a Mac yet.
 
-The Linux build compiles with Debian 13's clang (OpenAL Soft with its GCC) against an i386 system root of
-Debian 11 (`packaging/sysroot.sh`, glibc 2.31; `packaging/linux32-sysroot.cmake`), so it starts on
-distributions as old as that. The C++ runtime is linked statically; OpenAL Soft's needs a few glibc 2.32+
-functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs the tarball in a
-clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
+The file names carry no version, so `releases/latest/download/<name>` always gives the newest. The version
+is the release's tag, and inside the packages the start menu's text (`kVersionText`, `src/options_menu.hpp`),
+the Windows file version (`resources.rc`) and the AppStream release (`packaging/linux/reG2.metainfo.xml`).
+The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`. The app id of
+the desktop file, metainfo, Flatpak and macOS bundle is set once, in `packaging/app.sh`; changing it also
+renames `packaging/flatpak/<id>.yml` and its `id:` line.
+
+The i686 packages (`reG2-windows-i686.zip`, `reG2-linux-i686.tar.gz`) still build and
+are tested in CI, but are not released. The i686 Linux build takes everything but SDL 3 and OpenAL Soft from
+the system's 32-bit libraries; `packaging/linux/README.md` lists them per distribution. With NVIDIA's
+proprietary driver it needs its 32-bit libraries too, else Mesa draws on the CPU.
+
+The Linux builds compile with Debian 13's clang (OpenAL Soft with its GCC) against a system root of Debian 11
+(`packaging/sysroot.sh`, glibc 2.31; `packaging/linux32-sysroot.cmake`, `linux64-sysroot.cmake`), so they
+start on distributions as old as that. The C++ runtime is linked statically; OpenAL Soft's needs a few glibc
+2.32+ functions, which `packaging/glibc_compat.c` provides. `packaging/smoke_test.sh` installs a tarball or
+the AppImage in a clean Debian, Ubuntu or Arch Linux container with the libraries it needs.
 
 ## Layout
 
@@ -278,5 +323,5 @@ script does the same at any frame rate. A run nobody sees, with the sound writte
 ```bash
 SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=/tmp/audio.raw \
 GTA2_INPUT=100:Return,160:Return GTA2_EXIT_AT=900 GTA2GL_CAPTURE=cap,600 \
-gamescope --backend headless -W 640 -H 480 -- ./build_linux/gta2
+gamescope --backend headless -W 640 -H 480 -- ./build_linux/reg2
 ```

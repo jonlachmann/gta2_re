@@ -12,7 +12,13 @@ DEFINE_GUID(DPSPGUID_TCPIP, 0x36E95EE0, 0x8577, 0x11CF, 0x96, 0x0C, 0x00, 0x80, 
 DEFINE_GUID(DPSPGUID_SERIAL, 0x0F1D6860, 0x88D9, 0x11CF, 0x9C, 0x4E, 0x00, 0xA0, 0xC9, 0x05, 0x42, 0x5E);
 DEFINE_GUID(DPSPGUID_MODEM, 0x44EAA760, 0xCB68, 0x11CF, 0x9C, 0x4E, 0x00, 0xA0, 0xC9, 0x05, 0x42, 0x5E);
 
-typedef DWORD DPID, *LPDPID;
+// The network code spells these DWORDs unsigned long, 8 bytes on LP64; none of it runs, the types only agree.
+#if defined(__LP64__)
+typedef unsigned long DP_ULONG;
+#else
+typedef DWORD DP_ULONG;
+#endif
+typedef DP_ULONG DPID, *LPDPID;
 
 #define DP_OK S_OK
 #define MAKE_DPHRESULT(code) MAKE_HRESULT(1, 0x877, code)
@@ -159,7 +165,7 @@ typedef struct DPLCONNECTION* LPDPLCONNECTION;
 typedef const struct DPSECURITYDESC* LPCDPSECURITYDESC;
 typedef const struct DPCREDENTIALS* LPCDPCREDENTIALS;
 
-typedef BOOL(CALLBACK* LPDPENUMCONNECTIONSCALLBACK)(LPCGUID sp, LPVOID connection, DWORD connectionSize, LPCDPNAME name, DWORD flags, LPVOID context);
+typedef BOOL(CALLBACK* LPDPENUMCONNECTIONSCALLBACK)(LPCGUID sp, LPVOID connection, DP_ULONG connectionSize, LPCDPNAME name, DP_ULONG flags, LPVOID context);
 typedef BOOL(CALLBACK* LPDPENUMPLAYERSCALLBACK2)(DPID id, DWORD playerType, LPCDPNAME name, DWORD flags, LPVOID context);
 typedef BOOL(CALLBACK* LPDPENUMSESSIONSCALLBACK2)(LPCDPSESSIONDESC2 desc, LPDWORD pTimeOut, DWORD flags, LPVOID context);
 
@@ -185,14 +191,14 @@ DECLARE_INTERFACE_(IDirectPlay3, IUnknown)
     STDMETHOD(GetGroupData)(DPID group, LPVOID pData, LPDWORD pSize, DWORD flags) PURE;
     STDMETHOD(GetGroupName)(DPID group, LPVOID pData, LPDWORD pSize) PURE;
     STDMETHOD(GetMessageCount)(DPID player, LPDWORD pCount) PURE;
-    STDMETHOD(GetPlayerAddress)(DPID player, LPVOID pData, LPDWORD pSize) PURE;
+    STDMETHOD(GetPlayerAddress)(DPID player, LPVOID pData, DP_ULONG* pSize) PURE;
     STDMETHOD(GetPlayerCaps)(DPID player, LPDPCAPS caps, DWORD flags) PURE;
     STDMETHOD(GetPlayerData)(DPID player, LPVOID pData, LPDWORD pSize, DWORD flags) PURE;
     STDMETHOD(GetPlayerName)(DPID player, LPVOID pData, LPDWORD pSize) PURE;
     STDMETHOD(GetSessionDesc)(LPVOID pData, LPDWORD pSize) PURE;
     STDMETHOD(Initialize)(LPGUID guid) PURE;
     STDMETHOD(Open)(LPDPSESSIONDESC2 desc, DWORD flags) PURE;
-    STDMETHOD(Receive)(LPDPID pFrom, LPDPID pTo, DWORD flags, LPVOID pData, LPDWORD pSize) PURE;
+    STDMETHOD(Receive)(LPDPID pFrom, LPDPID pTo, DWORD flags, LPVOID pData, DP_ULONG* pSize) PURE;
     STDMETHOD(Send)(DPID from, DPID to, DWORD flags, LPVOID pData, DWORD size) PURE;
     STDMETHOD(SetGroupData)(DPID group, LPVOID pData, DWORD size, DWORD flags) PURE;
     STDMETHOD(SetGroupName)(DPID group, LPDPNAME name, DWORD flags) PURE;

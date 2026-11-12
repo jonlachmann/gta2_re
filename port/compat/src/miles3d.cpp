@@ -134,7 +134,8 @@ SDL_SharedObject* OpenLibrary()
 #if defined(_WIN32)
     const char* const kNames[] = {"OpenAL32.dll", "soft_oal.dll"};
 #elif defined(__APPLE__)
-    const char* const kNames[] = {"libopenal.1.dylib", "libopenal.dylib"};
+    // In reG2.app the base path is Contents/Resources, the libraries are in Contents/Frameworks.
+    const char* const kNames[] = {"../Frameworks/libopenal.1.dylib", "libopenal.1.dylib", "libopenal.dylib"};
 #else
     const char* const kNames[] = {"libopenal.so.1", "libopenal.so"};
 #endif
@@ -443,7 +444,7 @@ DXDEC void AILCALL AIL_close_3D_provider(HPROVIDER)
 DXDEC void AILCALL AIL_3D_provider_attribute(HPROVIDER, C8 FAR* name, void FAR* val)
 {
     LOCK;
-    S32 value = -1;
+    s32 value = -1;
     if (strcmp(name, "Maximum supported samples") == 0)
     {
         value = kMaxSamples;
@@ -460,7 +461,7 @@ DXDEC void AILCALL AIL_set_3D_provider_preference(HPROVIDER, C8 FAR* name, void 
     LOCK;
     if (strcmp(name, "EAX environment selection") == 0)
     {
-        S32 env;
+        s32 env;
         memcpy(&env, val, sizeof(env));
         if (env >= 0 && env < 26)
         {
@@ -647,7 +648,7 @@ DXDEC void AILCALL AIL_close_3D_provider(HPROVIDER)
 
 DXDEC void AILCALL AIL_3D_provider_attribute(HPROVIDER, C8 FAR*, void FAR* val)
 {
-    const S32 value = -1;
+    const s32 value = -1;
     memcpy(val, &value, sizeof(value));
 }
 

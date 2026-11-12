@@ -278,7 +278,14 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
 #define LOCAL_STATIC_ARRAY(type, name, size, addr) static type name[size]
 #define LOCAL_STATIC_ARRAY_INIT(type, name, size, addr, va_args) static type name[size] = {va_args}
 
-#if defined(_MSC_VER)
+#if defined(GTA2_PORT) && __SIZEOF_POINTER__ == 8
+    #define GTA2_PORT_64BIT
+#endif
+
+#if defined(GTA2_PORT_64BIT)
+    // The asserted sizes are the 32-bit ones; port/src/layout_checks.cpp checks the files' structures on every target.
+    #define GTA2_ASSERT_SIZEOF_ALWAYS(structureName, expectedSize)
+#elif defined(_MSC_VER)
     #if defined(__clang__) || (_MSC_VER <= 1200)
         #define GTA2_ASSERT_SIZEOF_ALWAYS(structureName, expectedSize) \
             typedef int static_assert_##structureName[sizeof(structureName) == expectedSize ? 1 : -1];

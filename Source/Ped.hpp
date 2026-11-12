@@ -27,6 +27,12 @@ class Object;
 class Car;
 class TrainStation;
 
+#if defined(GTA2_PORT_64BIT)
+typedef intptr_t collided_char_id;
+#else
+typedef s32 collided_char_id;
+#endif
+
 class Ped
 {
   public:
@@ -898,7 +904,7 @@ class Ped
     Ang16 mFollowCarOffsetAngle; // 0x132
     Ang16 mRotation; // 0x134
     s16 mUnused136; // 0x136
-    s32 mCollidedCharB4; // 0x138
+    collided_char_id mCollidedCharB4; // 0x138
     TrainStation* mpTrainStation; // 0x13C
     Car* mStolenCar; // 0x140
     Ped* mAttacker; // 0x144

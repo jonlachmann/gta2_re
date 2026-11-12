@@ -72,6 +72,7 @@ MATCH_FUNC(0x5BEE90)
 EXPORT s32 get_rdtsc()
 {
     // NOTE: Actually is inline assembly, surprisingly
+#if defined(_M_IX86) || defined(__i386__)
     unsigned __int64 t;
     __asm
     {
@@ -86,6 +87,9 @@ EXPORT s32 get_rdtsc()
         popad
     }
     return static_cast<s32>(t);
+#else
+    return 0;
+#endif
 }
 
 // Converts a cycle count from get_rdtsc to milliseconds for the profiler display

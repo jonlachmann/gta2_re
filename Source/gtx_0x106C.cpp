@@ -399,6 +399,11 @@ void gtx_0x106C::BuildCarInfoContainer(s32 chunk_size)
     mCari->mCount = idx;
 }
 
+#if defined(GTA2_PORT_64BIT)
+// A sprite's entry in the delta buffer, whose size the original computes for 4-byte pointers.
+#define SPRITE_DELTAS_SIZE(count) (offsetof(sprite_deltas, mDeltas) + sizeof(sprite_delta) * (count))
+#endif
+
 MATCH_FUNC(0x5AAB30)
 void gtx_0x106C::load_delx(u32 delx_chunk_size)
 {
@@ -409,7 +414,11 @@ void gtx_0x106C::load_delx(u32 delx_chunk_size)
     for (; off < delx_chunk_size;)
     {
         u32 size = 2 * pIter->mDeltaCount + 4;
+#if defined(GTA2_PORT_64BIT)
+        mDeltaLen += SPRITE_DELTAS_SIZE(pIter->mDeltaCount);
+#else
         mDeltaLen += 8 * pIter->mDeltaCount + 4;
+#endif
         pIter = reinterpret_cast<delta_entry*>(reinterpret_cast<u8*>(pIter) + size);
         off += size;
     }
@@ -433,7 +442,11 @@ void gtx_0x106C::load_delx(u32 delx_chunk_size)
         }
 
         u32 size = 2 * pSrc->mDeltaCount + 4;
+#if defined(GTA2_PORT_64BIT)
+        pDst = reinterpret_cast<sprite_deltas*>(reinterpret_cast<u8*>(pDst) + SPRITE_DELTAS_SIZE(pDst->mCount));
+#else
         pDst = reinterpret_cast<sprite_deltas*>(reinterpret_cast<u8*>(pDst) + 8 * pDst->mCount + 4);
+#endif
         off2 += size;
         pSrc = reinterpret_cast<delta_entry*>(reinterpret_cast<u8*>(pSrc) + size);
     }
@@ -450,10 +463,19 @@ void gtx_0x106C::SetDeltaDataPtrs()
         for (u32 delta_idx = 0; delta_idx < pEntry->mCount; delta_idx++)
         {
             // load_delx left the delta's offset into the store in mpData
+#if defined(GTA2_PORT_64BIT)
+            pEntry->mDeltas[delta_idx].mpData = reinterpret_cast<delta_store_entry*>(
+                reinterpret_cast<uintptr_t>(pEntry->mDeltas[delta_idx].mpData) + reinterpret_cast<uintptr_t>(mDeltaStore));
+#else
             pEntry->mDeltas[delta_idx].mpData = reinterpret_cast<delta_store_entry*>(
                 reinterpret_cast<u32>(pEntry->mDeltas[delta_idx].mpData) + reinterpret_cast<u32>(mDeltaStore));
+#endif
         }
+#if defined(GTA2_PORT_64BIT)
+        size = SPRITE_DELTAS_SIZE(pEntry->mCount);
+#else
         size = 8 * pEntry->mCount + 4;
+#endif
         pEntry = reinterpret_cast<sprite_deltas*>(reinterpret_cast<u8*>(pEntry) + size);
     }
 }
@@ -483,12 +505,20 @@ void gtx_0x106C::build_delta_container()
             maxSprite = pIter->mWhichSprite;
         }
 
+#if defined(GTA2_PORT_64BIT)
+        u32 size = SPRITE_DELTAS_SIZE(pIter->mCount);
+#else
         u32 size = 8 * pIter->mCount + 4;
+#endif
         off += size;
         pIter = reinterpret_cast<sprite_deltas*>(reinterpret_cast<u8*>(pIter) + size);
     }
 
+#if defined(GTA2_PORT_64BIT)
+    mDel = static_cast<delta_container*>(Memory::Checked_malloc(offsetof(delta_container, mEntries) + sizeof(sprite_deltas*) * (maxSprite + 1)));
+#else
     mDel = static_cast<delta_container*>(Memory::Checked_malloc(4 * maxSprite + 8));
+#endif
     mDel->mCount = maxSprite + 1;
 
     for (u32 i = 0; i < mDel->mCount; i++)
@@ -512,7 +542,11 @@ void gtx_0x106C::build_delta_container()
             maxSprite = pIter->mWhichSprite;
         }
 
+#if defined(GTA2_PORT_64BIT)
+        u32 size = SPRITE_DELTAS_SIZE(pIter->mCount);
+#else
         u32 size = 8 * pIter->mCount + 4;
+#endif
         pIter = reinterpret_cast<sprite_deltas*>(reinterpret_cast<u8*>(pIter) + size);
         off2 += size;
     }
@@ -619,8 +653,31 @@ void gtx_0x106C::load_map_object_info(u32 obji_chunk_len)
 MATCH_FUNC(0x5AAF80)
 void gtx_0x106C::load_sprite_index(u32 sprx_chunk_size)
 {
+#if defined(GTA2_PORT_64BIT)
+    // The file's entries hold the 4-byte offset that SetSpriteIndexDataPtrs turns into mpData.
+    struct sprx_entry
+    {
+        u32 mOffset;
+        u8 mWidth;
+        u8 mHeight;
+        s16 mPad6;
+    };
+    const u32 count = sprx_chunk_size / sizeof(sprx_entry);
+    mSpriteIndex = static_cast<sprite_index*>(Memory::Checked_malloc(sizeof(sprite_index) * (count + 1)));
+    sprx_entry* pEntries = static_cast<sprx_entry*>(Memory::Checked_malloc(sprx_chunk_size));
+    File::Global_Read(pEntries, sprx_chunk_size);
+    for (u32 i = 0; i < count; i++)
+    {
+        mSpriteIndex[i].mpData = reinterpret_cast<u8*>(static_cast<uintptr_t>(pEntries[i].mOffset));
+        mSpriteIndex[i].mWidth = pEntries[i].mWidth;
+        mSpriteIndex[i].mHeight = pEntries[i].mHeight;
+        mSpriteIndex[i].mPad6 = pEntries[i].mPad6;
+    }
+    crt::free(pEntries);
+#else
     mSpriteIndex = static_cast<sprite_index*>(Memory::Checked_malloc(sprx_chunk_size + 8));
     File::Global_Read(mSpriteIndex, sprx_chunk_size);
+#endif
     if ((sprx_chunk_size & ~7u) > 524280)
     {
         FatalError(Gta2Error::TooManySprites, "C:\\Splitting\\Gta2\\Source\\style.cpp", 1198, sprx_chunk_size >> 3);
@@ -1111,6 +1168,7 @@ void sprite_delta::ApplyToPixels(u8* pArray)
 {
     // Inline asm in the original (lodsw, rep movsb). Each entry is a u16 offset from the end
     // of the previous run, a u8 length and that many bytes.
+#if defined(_M_IX86) || defined(__i386__)
     sprite_delta* pThis = this;
     __asm
     {
@@ -1134,6 +1192,18 @@ void sprite_delta::ApplyToPixels(u8* pArray)
         pop esi
         pop edi
     }
+#else
+    const u8* p = reinterpret_cast<const u8*>(mpData);
+    const u8* pEnd = p + mLen;
+    do
+    {
+        pArray += p[0] | (p[1] << 8);
+        const u8 len = p[2];
+        memcpy(pArray, p + 3, len);
+        pArray += len;
+        p += 3 + len;
+    } while (p != pEnd);
+#endif
 }
 
 // https://decomp.me/scratch/Cc0Dx Not fully working
@@ -1142,6 +1212,7 @@ void sprite_delta::ApplyMirroredToPixels(u8* pArray, u32 width)
 {
     // Inline asm in the original (lodsw / loop)
     // Each entry: u16 offset, u8 len, then len bytes written backwards from the end of the row
+#if defined(_M_IX86) || defined(__i386__)
     __asm
     {
         push edi
@@ -1178,6 +1249,23 @@ void sprite_delta::ApplyMirroredToPixels(u8* pArray, u32 width)
         pop esi
         pop edi
     }
+#else
+    const u8* p = reinterpret_cast<const u8*>(mpData);
+    const u8* pEnd = p + mLen;
+    u8* pDst = pArray - 1 + width;
+    do
+    {
+        const u32 offset = p[0] | (p[1] << 8);
+        const u32 col2 = (offset & 0xFF) << 1;
+        u32 len = p[2];
+        pDst += (s32)(offset - col2) + (col2 >= 0x100 ? 0x200 : 0);
+        p += 3;
+        do
+        {
+            *pDst-- = *p++;
+        } while (--len);
+    } while (p != pEnd);
+#endif
 }
 
 MATCH_FUNC(0x5abaa0)

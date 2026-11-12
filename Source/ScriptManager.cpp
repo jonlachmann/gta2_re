@@ -255,7 +255,11 @@ char_type ScriptManager::AddCranePowerupTrigger(s16 idx)
     SCR_POINTER* pGenerator = static_cast<SCR_POINTER*>(GetBasePointer(pCmd->mGenerator));
     return gCarThreadTriggers_214->AddThreadTrigger(car_thread_trigger_type::any_car_1,
                                        car_thread_trigger_action::set_generator_car_type_3,
+#if defined(GTA2_PORT_64BIT)
+                                       reinterpret_cast<SCR_THREAD*>(static_cast<Generator*>(pGenerator->mGenerator)),
+#else
                                        reinterpret_cast<SCR_THREAD*>(pGenerator->mGenerator),
+#endif
                                        Fix16(pCmd->mPos.mX) + kFpHalf_6F75F0,
                                        Fix16(pCmd->mPos.mY) + kFpHalf_6F75F0,
                                        Fix16(pCmd->mPos.mZ),
@@ -356,7 +360,7 @@ void ScriptManager::SaveGame(const char_type* pFileName)
 
     gGameSave.mObjectData.mSecretTokensCollected = gGameSession.get_secret_tokens_collected();
 
-    u16** pColData;
+    gmp_column_word* pColData;
     u32 colBytes;
     gmp_block_info* pBlockInfo;
     u32 blockInfoBytes;
@@ -405,7 +409,7 @@ void ScriptManager::LoadSave(const char_type* pFileName)
     size_t mapSubLen;
     size_t blockInfoLen;
     size_t colDataLen;
-    u16** pColData;
+    gmp_column_word* pColData;
     gmp_block_info* pBlockInfo;
     DmapInfoList* pMapSub;
 

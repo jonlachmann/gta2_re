@@ -31,5 +31,9 @@ void* __stdcall Memory::Aligned_malloc(s32 requestedSize, void** pUnAlignedPtr)
         FatalError(Gta2Error::OutOfMemory, "C:\\Splitting\\Gta2\\Source\\Memory.cpp", 76, requestedSize + 0x10000);
     }
 
+#if defined(GTA2_PORT_64BIT)
+    return reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(*pUnAlignedPtr) + 0xFFFF) & ~static_cast<uintptr_t>(0xFFFF));
+#else
     return reinterpret_cast<void*>((reinterpret_cast<u32>(*pUnAlignedPtr) + 0xFFFF) & 0xFFFF0000);
+#endif
 }

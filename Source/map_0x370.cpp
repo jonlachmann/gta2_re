@@ -4436,7 +4436,7 @@ void Map_0x370::OnModifiedMapDataLoaded(u32 column_bytes, u32 block_bytes, u32 o
 }
 
 MATCH_FUNC(0x4E8CF0)
-void Map_0x370::GetModifiedMapData(u16*** outColumnPtr,
+void Map_0x370::GetModifiedMapData(gmp_column_word** outColumnPtr,
                            u32* outColumnBytes,
                            gmp_block_info** outBlockPtr,
                            u32* outBlockBytes,
@@ -4543,7 +4543,11 @@ void Map_0x370::build_zone_list(u32 chunk_size)
         in_use_size += zone_data_size;
         pZone = reinterpret_cast<gmp_map_zone*>(reinterpret_cast<u8*>(pZone) + zone_data_size);
     }
+#if defined(GTA2_PORT_64BIT)
+    mpZones = static_cast<gmp_zone_list*>(Memory::Checked_malloc(offsetof(gmp_zone_list, mZoneArray) + sizeof(gmp_map_zone*) * num_zones));
+#else
     mpZones = static_cast<gmp_zone_list*>(Memory::Checked_malloc(4 * num_zones + 4));
+#endif
 
     in_use_size = 0;
     mpZones->mNumZones = num_zones;
@@ -4641,7 +4645,7 @@ void Map_0x370::load_dmap(u32 len)
     u32 m_size = mColumnWordExtra * sizeof(u32);
     u32 column_data_size = mpDmap->mColumnWords * sizeof(u32);
 
-    mpDmap->mpColumn = static_cast<u16**>(Memory::Checked_malloc(m_size));
+    mpDmap->mpColumn = static_cast<gmp_column_word*>(Memory::Checked_malloc(m_size));
 
     File::Global_Read(mpDmap->mpColumn, column_data_size);
 

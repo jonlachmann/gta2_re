@@ -1,71 +1,74 @@
 # A 64-bit build of the port
 
-Status: not started. This note records why it is worth doing, what it involves and what was
-measured, so the work can start from here.
+Status: the Linux x86_64 build compiles, runs and plays as the i686 one does. The same sources
+build both; nothing changes for 32-bit targets (the i686 port's objects and the VC6 matching
+build's functions are unchanged).
+
+```bash
+cmake -S port -B build_linux64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux64-clang.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
+ninja -C build_linux64
+```
+
+It takes the host's 64-bit SDL3, libarchive and unshield (no `GTA2_SETUP_DEPS_DIR`). The packages
+(Windows x64, Linux x86_64 tarball, AppImage and Flatpak, macOS) are described in the port's README,
+Packages; the Windows x64 build runs under wine as the Linux one does.
 
 ## Why
 
-The port is i686 only. That costs:
+The i686 Linux build takes glibc, OpenGL, X11, Wayland and sound from the host's 32-bit libraries,
+which most distributions do not install by default (and NVIDIA's 32-bit driver libraries, else Mesa
+draws on the CPU). macOS runs no 32-bit code, and Android would be plain arm64.
 
-- **32-bit libraries on Linux.** The portable build and the .deb take glibc, OpenGL, X11, Wayland
-  and sound from the host's 32-bit libraries, which most distributions do not install by default
-  (Steam brings them). With NVIDIA's proprietary driver, its 32-bit libraries are needed too, else
-  Mesa draws with llvmpipe (on the CPU). A 64-bit build would use the libraries already there.
-- **macOS.** No 32-bit code since 10.15; Rosetta 2 translates x86_64 only.
-- **Android** would be plain arm64 instead of OpenCE's ILP32 guest (see below).
+## How
 
-## The goal: pointer-size independent, not 64-bit only
+`GTA2_PORT_64BIT` (`Source/Function.hpp`) is defined in port builds with 8-byte pointers. Every change
+in `Source/` is under it, or is a typedef or macro that is the original type on 32-bit targets
+(`gmp_column_word`, `collided_char_id`, `SCR_SLOT`).
 
-The same sources must build as i686 (Windows zip, a future 3DS port, the matching build) and
-as x86_64/arm64. The work removes the places that assume 4-byte pointers; the compiler then
-picks the pointer size per target. i686 stays a first-class target: built and tested at every
-step, the CI keeps its Windows i686 job.
+- Win32 types (`port/compat/include`): `DWORD`, `LONG` and `ULONG` stay 32 bits, as on 64-bit
+  Windows; the `*_PTR` types follow the pointer size.
+- Size asserts: `GTA2_ASSERT_SIZEOF_ALWAYS` gives the 32-bit sizes and is skipped on 64-bit targets.
+  `port/src/layout_checks.cpp` checks, on every target, the structures that the game reads from its
+  files or writes to saves, player data and replays: they hold no pointers and keep their size.
+- Game files whose data holds 4-byte pointers or pointer strides:
+  - `.sty`: the SPRX entries are read into wider entries; the delta buffer and container are sized
+    for the target's pointers.
+  - `.gxt`: the TKEY records are read into wider entries.
+  - `.scr`: the declaration commands keep their object in the 4 bytes at 0x8. On 64-bit targets
+    these slots are `PtrSlot32` (`port/src/ptr_slot.hpp`), a handle into a table of pointers, so
+    the script keeps its layout.
+  - `.gmp`: the column data are 4-byte words (`gmp_column_word`), not pointers.
+- Pointers the game keeps in 32-bit integers are pointer-sized on 64-bit targets: the car thread
+  triggers' script command, NetPlay's buffers, the collided ped, the door's model id (shared with
+  its car pointer), the sprite shapes' collision id. Allocations and clears written for 4-byte
+  pointers use `sizeof`: the 64 KB aligned allocation, the light grid, the zone list, the police
+  crews.
+- The three inline asm blocks have C versions off x86 (shared with the 3DS build).
 
-Typical changes:
+Saves, `PlyDat`, `gta2_registry.ini` and replays have the same format on both builds.
 
-- A pointer kept in a `u32`/`s32` becomes `uintptr_t`/`intptr_t`.
-- A file structure loaded as is from disk that contains a pointer field is described with
-  fixed-size integers, and converted at load time into an in-memory structure with real
-  pointers.
+## Checked
 
-Every change in `Source/` goes under `#if defined(GTA2_PORT)` and is checked with
-`Scripts/bin_comp/compare_builds.py`, so no matched function changes.
+Headless runs of the same scenarios on the i686 build before these changes, the i686 build after
+and the x86_64 build: every live sprite's position and rotation hashed after each logic step, and
+frames captured along the way.
 
-## What was measured (x86_64 trial compile, asserts disabled, nothing committed)
+- Three attract replays (Downtown, Industrial), 2000 to 3000 steps each.
+- Each city (Downtown, Residential, Industrial): rocket launcher, a tank, driving and firing,
+  1900 steps, then a save.
+- The frontend into a game; a replay recorded by the i686 build; the saves made by the i686 build
+  loaded in both builds and played 650 steps.
 
-- Size asserts: 115 of 199 asserted structs change size; 113 of them hold pointers (319 fields,
-  about 3770 slots counting array elements). Under x86_64 these asserts must be skipped or given
-  64-bit sizes.
-- Casts: 142 pointer to integer and 144 integer to pointer conversions.
-- With the game's asserts neutralised, 126 of 149 TUs fail (875 errors), almost all from the
-  `static_assert`s in `port/` because the Win32 `DWORD` is a `long`, 8 bytes on LP64 Linux. With
-  those disabled too, 5 TUs fail (24 errors: 6 `size_t*`/`u32*` mismatches, 3 inline asm blocks).
-- Warnings: 170 `-Wshorten-64-to-32`, 101 `-Wpointer-to-int-cast`.
+All runs give the same state at every step and pixel identical frames. The saves match but for the
+unused padding of the map change records, uninitialised memory that differs between two i686
+builds too. An AddressSanitizer x86_64 build of the same scenarios reports only two reads past a
+global that happen on every target (`KeyboardLayout::GetLayout`, the renderer's `NearLights`).
 
-## The hard part: pointers inside the game's data files
+## Left
 
-These are loaded straight into memory and hold 4-byte pointers or pointer-sized strides, so
-they would load wrong without any compiler error:
-
-- `.sty`: the SPRX and DELX chunks.
-- `.gxt`: the TKEY chunk.
-- `.scr`: `SCR_POINTER` values in the script bytecode.
-- `.gmp`: the `mpColumn` stride.
-
-Saves, `PlyDat` and replays hold no pointers.
-
-## Estimate
-
-About a day to compile, then a few days to two weeks until it runs correctly (the data formats
-above, then whatever the replay tests show).
-
-## How others handle it
-
-- **OpenCE** (Halo CE decompilation, https://github.com/OpenCommunityEdition/OpenCE) has the same
-  problem, since its data holds 32-bit pointers. Its Windows and Linux builds stay i686: the Linux
-  "portable" build links against glibc 2.31, bundles only SDL3 and needs the host's 32-bit
-  libraries (glibc, Mesa, PipeWire or PulseAudio, X11, Wayland), as on SteamOS. Android runs the
-  game as an ILP32 AArch64 guest (`arm64_32`, 32-bit pointers in 64-bit code) with its own musl;
-  the web build is wasm32. macOS is in progress.
-- **Julius/Augustus** (Caesar III) are rewritten in portable C and parse the game files field by
-  field, so they are 64-bit natively. That route is not open to a matching decompilation.
+- Network play is not implemented in the port: `NetPlay` and `NetUi` compile but keep pointers in
+  `s32` in many places, and would need the same treatment.
+- Some fatal error messages (`error.cpp`) print arguments through `s32` casts of pointers.
+- A few sound details use pointer bits as noise (`sound_obj.cpp`): on any build they depend on
+  where the heap puts objects.
+- arm64: macOS builds for it in CI but has not run; Linux and Windows arm64 are not built.

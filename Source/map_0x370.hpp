@@ -125,6 +125,13 @@ struct gmp_header
 
 struct DmapInfoList;
 
+#if defined(GTA2_PORT_64BIT)
+// One 4-byte word of the .gmp file's column data (the original types it as a pointer).
+typedef u32 gmp_column_word;
+#else
+typedef u16* gmp_column_word;
+#endif
+
 struct gmp_compressed_map_32
 {
     EXPORT void ApplyDmapInfos(DmapInfoList* pMapSub);
@@ -141,7 +148,7 @@ struct gmp_compressed_map_32
     u32 mBase[256][256]; // 0x0
     s32 mColumnWords; // 0x40000
     s32 mNumBlocks; // 0x40004
-    u16** mpColumn; // 0x40008
+    gmp_column_word* mpColumn; // 0x40008
     gmp_block_info* mBlock; // 0x4000C
 
     gmp_block_info* get_block(u32 block)
@@ -556,12 +563,24 @@ class Map_0x370
     EXPORT void LowerColumn(s32 x_pos, s32 y_pos);
     EXPORT void LowerLevel(s32 x_min, s32 x_max, s32 y_min, s32 y_max);
     EXPORT void OnModifiedMapDataLoaded(u32 column_bytes, u32 block_bytes, u32 obj_bytes);
-    EXPORT void GetModifiedMapData(u16*** outColumnPtr,
+    EXPORT void GetModifiedMapData(gmp_column_word** outColumnPtr,
                            u32* outColumnBytes,
                            gmp_block_info** outBlockPtr,
                            u32* outBlockBytes,
                            DmapInfoList** outSubObj,
                            s32* outSubObjBytes);
+#if defined(GTA2_PORT_64BIT)
+    // ScriptManager::LoadSave passes size_t sizes, the same type as u32 on 32-bit targets.
+    void GetModifiedMapData(gmp_column_word** outColumnPtr, size_t* outColumnBytes, gmp_block_info** outBlockPtr,
+                            size_t* outBlockBytes, DmapInfoList** outSubObj, s32* outSubObjBytes)
+    {
+        u32 columnBytes;
+        u32 blockBytes;
+        GetModifiedMapData(outColumnPtr, &columnBytes, outBlockPtr, &blockBytes, outSubObj, outSubObjBytes);
+        *outColumnBytes = columnBytes;
+        *outBlockBytes = blockBytes;
+    }
+#endif
 
     EXPORT void do_process_loaded_zone_data();
 

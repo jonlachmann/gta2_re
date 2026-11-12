@@ -1,0 +1,79 @@
+# reG2 as a Flatpak, built from this repository. SDL3, OpenAL Soft and libarchive come from the runtime;
+# clang (the port needs it) from the llvm22 SDK extension, at build time only.
+# The archives' URLs and SHA-256 must match packaging/versions.sh, and the id packaging/app.sh (flatpak.sh
+# checks both).
+id: io.github.reG2_project.reG2
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.llvm22
+command: reg2
+
+# No --filesystem: the setup's file and folder choosers go through the portal, which grants access
+# to what the player picks. The game's data is copied into the app's own data folder.
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # Gamepads; flatpak before 1.18 reads the condition as --device=all.
+  - --device=input
+  - --device-if=all:!has-input-device
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /lib/cmake
+  - /share/doc
+
+modules:
+  - name: unshield
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      # Its MD5 code declares K&R prototypes, which C23 (GCC 15's default) reads as taking no argument.
+      cflags: -std=gnu17
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+    cleanup:
+      - /bin
+    sources:
+      - type: archive
+        url: https://github.com/twogood/unshield/archive/refs/tags/1.6.2.tar.gz
+        sha256: a937ef596ad94d16e7ed2c8553ad7be305798dcdcfd65ae60210b1e54ab51a2f
+
+  # No flags from the SDK: the port is built as in the other packages (its code relies on what MSVC did
+  # with undefined behaviour, which _FORTIFY_SOURCE would abort on).
+  - name: reG2
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/llvm22/bin
+      prepend-ld-library-path: /usr/lib/sdk/llvm22/lib
+      cflags: ''
+      cflags-override: true
+      cxxflags: ''
+      cxxflags-override: true
+      ldflags: ''
+      ldflags-override: true
+    build-commands:
+      # The 3D sound with the runtime's OpenAL Soft, found without GTA2_OPENAL_DIR.
+      - cmake -S port -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux64-clang.cmake
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=/app
+      - ninja -C build -j${FLATPAK_BUILDER_N_JOBS}
+      - install -Dm755 build/reg2 /app/bin/reg2
+      - sh port/packaging/linux/install_desktop.sh /app
+      - install -Dm644 -t /app/share/doc/reG2 port/README.md
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - 3rdParty
+          - Scripts
+          - docs
+          - reccmp
+          - build_vc6

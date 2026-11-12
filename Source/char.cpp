@@ -1882,11 +1882,11 @@ static inline Ang16& compound_add(Ang16& a, const Ang16& b)
 // 9.6f 0x493040 (a Ped method there)
 static inline void CollideWithElvis(Ped* pPed, Char* pChar)
 {
-    if (reinterpret_cast<s32>(pChar) != pPed->mCollidedCharB4)
+    if (reinterpret_cast<collided_char_id>(pChar) != pPed->mCollidedCharB4)
     {
-        pPed->mCollidedCharB4 = reinterpret_cast<s32>(pChar);
+        pPed->mCollidedCharB4 = reinterpret_cast<collided_char_id>(pChar);
         pPed->mBf224.bCollidedWithPed = false;
-        pChar->mpPed->mCollidedCharB4 = reinterpret_cast<s32>(pPed->mGameObject);
+        pChar->mpPed->mCollidedCharB4 = reinterpret_cast<collided_char_id>(pPed->mGameObject);
         pPed->SetVoiceEventIfNotOnFire(ped_voice_event::elvis_bumped_22);
     }
 }
@@ -1894,11 +1894,11 @@ static inline void CollideWithElvis(Ped* pPed, Char* pChar)
 // 9.6f 0x493000 (a Ped method there)
 static inline void CollideWithPed(Ped* pPed, Char* pOther)
 {
-    if (reinterpret_cast<s32>(pOther) != pPed->mCollidedCharB4)
+    if (reinterpret_cast<collided_char_id>(pOther) != pPed->mCollidedCharB4)
     {
-        pPed->mCollidedCharB4 = reinterpret_cast<s32>(pOther);
+        pPed->mCollidedCharB4 = reinterpret_cast<collided_char_id>(pOther);
         pPed->mBf224.bCollidedWithPed = true;
-        pOther->mpPed->mCollidedCharB4 = reinterpret_cast<s32>(pPed->mGameObject);
+        pOther->mpPed->mCollidedCharB4 = reinterpret_cast<collided_char_id>(pPed->mGameObject);
     }
 }
 

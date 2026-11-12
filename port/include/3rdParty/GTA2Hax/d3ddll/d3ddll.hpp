@@ -23,7 +23,7 @@ struct STexture
     WORD* field_18_pPaltData;
     IDirect3DTexture9* field_1C_ptr; // +32 == IUnknown, DDSurface ptr ?
 };
-static_assert(sizeof(STexture) == 0x20, "Wrong sized STexture");
+static_assert(sizeof(void*) != 4 || sizeof(STexture) == 0x20, "Wrong sized STexture");
 
 struct Vert
 {

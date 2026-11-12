@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>@APP_ID@</id>
+  <name>reG2</name>
+  <summary>GTA2 built from source, played with your own game files</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer id="@DEVELOPER_ID@">
+    <name>reG2 and gta2_re contributors</name>
+  </developer>
+  <description>
+    <p>
+      reG2 runs Grand Theft Auto 2 (1999) natively, from gta2_re, a decompilation that rebuilds the
+      original game's code, with SDL 3, OpenGL and OpenAL Soft.
+    </p>
+    <p>
+      The game's files are not included. You need your own copy of GTA2 for Windows: the original CD,
+      or the version Rockstar Games gave away in 2004 in its "Rockstar Classics" series. On the first
+      start, choose your GTA2 folder, its installer or a disc image: the game's data is copied into
+      the application's own folder.
+    </p>
+    <p>
+      This project is not affiliated with or endorsed by Rockstar Games or Take-Two Interactive.
+    </p>
+  </description>
+  <launchable type="desktop-id">@APP_ID@.desktop</launchable>
+  <provides>
+    <binary>reg2</binary>
+  </provides>
+  <url type="homepage">@HOMEPAGE@</url>
+  <categories>
+    <category>Game</category>
+    <category>ActionGame</category>
+  </categories>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>gamepad</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">640</display_length>
+  </requires>
+  <releases>
+    <release version="0.1" date="2026-11-12" type="development"/>
+  </releases>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-realistic">moderate</content_attribute>
+    <content_attribute id="violence-bloodshed">moderate</content_attribute>
+    <content_attribute id="drugs-alcohol">mild</content_attribute>
+    <content_attribute id="drugs-narcotics">mild</content_attribute>
+    <content_attribute id="language-profanity">moderate</content_attribute>
+    <content_attribute id="language-humor">moderate</content_attribute>
+  </content_rating>
+</component>

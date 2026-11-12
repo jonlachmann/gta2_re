@@ -263,7 +263,11 @@ char_type CarThreadTriggers::AddThreadTrigger(const s32& type, const s32& param,
         {
             pIter->mType = type;
             pIter->mAction = param;
+#if defined(GTA2_PORT_64BIT)
+            pIter->mpScriptCmd = reinterpret_cast<intptr_t>(pScriptThread);
+#else
             pIter->mpScriptCmd = reinterpret_cast<s32>(pScriptThread);
+#endif
             pIter->mEnableState = car_thread_trigger_state::armed_1;
             pIter->mO2C = gObject_5C->NewTouchPoint(objects::savepoint_161,
                                                     xpos,
@@ -304,7 +308,7 @@ struct CarThreadTriggerCmd : SCR_CMD_HEADER
     union
     {
         u16 mIdx; // 0x8
-        ScriptThread* mThread; // 0x8
+        SCR_SLOT(ScriptThread) mThread; // 0x8
     };
     u16 mThreadId; // 0xC
     s16 mThreadStartCmd; // 0xE

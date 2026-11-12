@@ -87,6 +87,18 @@ void TextTable::RemapExtendedChars(wchar_t* pStr)
 MATCH_FUNC(0x5B5960)
 void TextTable::TKEY_Load(u32 chunk_size)
 {
+#if defined(GTA2_PORT_64BIT)
+    mTKey.mTKeyCount = chunk_size / sizeof(TextKeyRecord);
+    mTKey.mTKey = new TextKeyEntry[mTKey.mTKeyCount];
+    TextKeyRecord* pRecords = new TextKeyRecord[mTKey.mTKeyCount];
+    File::Global_Read(pRecords, chunk_size);
+    for (s32 i = 0; i < mTKey.mTKeyCount; i++)
+    {
+        mTKey.mTKey[i].mPwstr = reinterpret_cast<wchar_t*>(static_cast<uintptr_t>(pRecords[i].mOffset));
+        memcpy(mTKey.mTKey[i].mKey, pRecords[i].mKey, sizeof(pRecords[i].mKey));
+    }
+    delete[] pRecords;
+#else
     mTKey.mTKeyCount = chunk_size / sizeof(TextKeyEntry);
     mTKey.mTKey = new TextKeyEntry[mTKey.mTKeyCount];
     if (!mTKey.mTKey)
@@ -95,6 +107,7 @@ void TextTable::TKEY_Load(u32 chunk_size)
     }
 
     File::Global_Read(mTKey.mTKey, chunk_size);
+#endif
 }
 
 MATCH_FUNC(0x5B59B0)
