@@ -13,6 +13,11 @@ export DEBIAN_FRONTEND=noninteractive
 case $PKG in *i686*) I386=1 ;; *) I386= ;; esac
 
 if command -v apt-get > /dev/null; then
+    # Debian 11 has moved to the archive, as in sysroot.sh.
+    if grep -q '^11' /etc/debian_version 2> /dev/null; then
+        rm -f /etc/apt/sources.list.d/*
+        echo "deb http://archive.debian.org/debian bullseye main" > /etc/apt/sources.list
+    fi
     [ -z "$I386" ] || dpkg --add-architecture i386
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends xvfb xauth > /dev/null

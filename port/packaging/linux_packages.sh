@@ -1,8 +1,8 @@
 #!/bin/sh
 # linux_packages.sh <build dir> <deps prefix> <out dir>: the portable Linux package, reG2-<version>-linux-<arch>.tar.gz
 # (i686 or x86_64, after the build's binary): the launcher gta2, bin/ (the game with the libraries distributions
-# may lack, SDL3 and OpenAL Soft, which it finds next to itself) and its README. glibc, OpenGL, X11, Wayland and
-# sound come from the system's libraries.
+# may lack, SDL3 and OpenAL Soft, which it finds next to itself), its README and the reG2 icon. glibc, OpenGL,
+# X11, Wayland and sound come from the system's libraries.
 set -eu
 B=$1; P=$2; OUT=$3
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -36,6 +36,7 @@ cp "$HERE/linux/gta2" "$D/gta2"
 chmod 755 "$D/gta2"
 cp "$README" "$D/README.md"
 cp "$HERE/../README.md" "$D/README-port.md"
+cp "$HERE/../resources/reg2_512.png" "$D/reG2.png"
 cp "$P"/licenses/* "$D/licenses/"
 tar -C "$T" --owner=0 --group=0 --numeric-owner -czf "$OUT/$NAME.tar.gz" "$NAME"
 echo "$OUT/$NAME.tar.gz"
