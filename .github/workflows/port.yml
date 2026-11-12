@@ -104,10 +104,11 @@ jobs:
           path: ${{ runner.temp }}/work/state
           key: port-flatpak-${{ hashFiles('port/packaging/flatpak/*', 'port/packaging/versions.sh') }}
 
+      # The runtimes in a volume: flatpak cannot update them inside the image's overlay (EXDEV).
       - name: Build
         run: |
           mkdir -p "$WORK"
-          docker run --rm $BWRAP -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -w /src $IMAGE \
+          docker run --rm $BWRAP -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -v flatpak-var:/var/lib/flatpak -w /src $IMAGE \
               sh port/packaging/flatpak.sh /work
           docker run --rm -v "$WORK:/work" debian:trixie chown -R "$(id -u):$(id -g)" /work
 
