@@ -125,17 +125,9 @@ jobs:
           retention-days: 3
 
   # Untested by the maintainers: built and started without game data only. The app is signed ad hoc.
+  # One universal app (arm64 and x86_64) from the Intel runner; the start test runs its x86_64 code.
   macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-26
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x86_64
-    name: macos-${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15-intel
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
@@ -150,7 +142,7 @@ jobs:
           path: |
             ${{ runner.temp }}/work/dl
             ${{ runner.temp }}/work/deps-macos
-          key: port-deps-macos-${{ matrix.arch }}-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh') }}
+          key: port-deps-macos-universal-${{ hashFiles('port/packaging/versions.sh', 'port/packaging/deps.sh') }}
 
       - name: Build and package
         run: |
@@ -177,7 +169,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: reG2-macos-${{ matrix.arch }}
+          name: reG2-macos
           path: ${{ runner.temp }}/work/out/*.dmg
           if-no-files-found: error
           retention-days: 3
