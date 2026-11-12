@@ -15,6 +15,6 @@ DEV=$(echo "${APP_ID%.*}" | tr '[:upper:]' '[:lower:]')
 sed -e "s|@APP_ID@|$APP_ID|g" -e "s|@DEVELOPER_ID@|$DEV|g" -e "s|@HOMEPAGE@|$HOMEPAGE|g" \
     -e "s|@VERSION@|$VERSION|g" -e "s|@DATE@|$(date -u +%Y-%m-%d)|g" \
     "$HERE/reG2.metainfo.xml" > "$P/share/metainfo/$APP_ID.metainfo.xml"
-cp "$R/gta2_256.png" "$P/share/icons/hicolor/256x256/apps/$APP_ID.png"
+cp "$R/reg2_256.png" "$P/share/icons/hicolor/256x256/apps/$APP_ID.png"
 cp "$R/reg2_512.png" "$P/share/icons/hicolor/512x512/apps/$APP_ID.png"
 chmod 644 "$P/share/applications/$APP_ID.desktop" "$P/share/metainfo/$APP_ID.metainfo.xml" "$P"/share/icons/hicolor/*/apps/*
