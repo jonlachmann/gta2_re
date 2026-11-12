@@ -14,8 +14,13 @@ if(NOT GTA2_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
     message(FATAL_ERROR "GTA2_VERSION ${GTA2_VERSION} does not start with x.y.z")
 endif()
 set(version_base ${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3})
+set(version_rc ${CMAKE_MATCH_1},${CMAKE_MATCH_2},${CMAKE_MATCH_3},0)
+# The app id, shared with the packages: the Wayland app id and X11 class, which find the desktop file.
+file(STRINGS ${CMAKE_CURRENT_LIST_DIR}/packaging/app.sh app_id REGEX "^APP_ID=")
+string(REPLACE "APP_ID=" "" app_id "${app_id}")
 file(CONFIGURE OUTPUT reg2_version.h CONTENT "#define GTA2_VERSION \"${GTA2_VERSION}\"
-#define GTA2_VERSION_RC ${CMAKE_MATCH_1},${CMAKE_MATCH_2},${CMAKE_MATCH_3},0
+#define GTA2_VERSION_RC ${version_rc}
+#define GTA2_APP_ID \"${app_id}\"
 ")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
@@ -174,9 +179,6 @@ else()
             ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
         if(APPLE)
             # reg2.app (reG2.app in the .dmg), with SDL3 and OpenAL Soft in Contents/Frameworks.
-            # The app id, shared with the Linux packages.
-            file(STRINGS ${CMAKE_CURRENT_LIST_DIR}/packaging/app.sh app_id REGEX "^APP_ID=")
-            string(REPLACE "APP_ID=" "" app_id "${app_id}")
             set_target_properties(gta2 PROPERTIES MACOSX_BUNDLE ON
                 MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/packaging/macos/Info.plist.in
                 MACOSX_BUNDLE_GUI_IDENTIFIER ${app_id} MACOSX_BUNDLE_BUNDLE_NAME reG2

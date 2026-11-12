@@ -2,6 +2,7 @@
 // start-up, then the game's WinMain.
 #include "port_platform.hpp"
 #include "../../setup/setup.hpp"
+#include "reg2_version.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,8 @@ static bool IsSetupArg(const char* arg)
 // registry and data files.
 static void EnterGameFolder(int argc, char** argv)
 {
+    // Before the setup's windows and the game's: on Linux the id matches the packages' desktop file.
+    SDL_SetAppMetadata("reG2", GTA2_VERSION, GTA2_APP_ID);
     if (const char* logPath = getenv("GTA2_LOG_FILE"))
     {
         sLogFile = fopen(logPath, "w");
