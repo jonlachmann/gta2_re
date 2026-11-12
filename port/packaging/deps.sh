@@ -84,7 +84,9 @@ if [ "${MULTIARCH:-}" ]; then
           -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
           "-DCMAKE_SHARED_LINKER_FLAGS=$SRL -pthread -static-libstdc++ -Wl,-z,defs $B/glibc_compat.o"
 elif [ "$T" = macos ]; then
-    cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_BACKEND_COREAUDIO=OFF
+    # alconfig.cpp reads the bundle's resources with CoreFoundation, which only the CoreAudio backend links.
+    cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_BACKEND_COREAUDIO=OFF \
+          "-DCMAKE_SHARED_LINKER_FLAGS=-framework CoreFoundation"
 else
     cmake -S "$B/openal-soft-1.25.2" -B "$B/b_openal" $AL_C $AL -DALSOFT_EAX=OFF -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR="${MINGW%%-*}" -DCMAKE_C_COMPILER=$MINGW-gcc-posix \
