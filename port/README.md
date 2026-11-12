@@ -13,7 +13,7 @@ Native builds of the decompiled game with clang, 64-bit and 32-bit. Plan: `docs/
 ## Windows
 
 Needs SDL3 for MinGW (`SDL3-devel-<version>-mingw` from the SDL releases), and libarchive and
-unshield (see [Setup libraries](#setup-libraries)). `SDL3.dll` is copied next to `gta2.exe`; the exe
+unshield (see [Setup libraries](#setup-libraries)). `SDL3.dll` is copied next to `reg2.exe`; the exe
 needs no DirectX, Miles or Bink DLL.
 
 ```bash
@@ -46,7 +46,7 @@ On its first start the port asks for the game's files (see [Game data](#game-dat
 A developer can also run it from a copy of the game folder, or point `GTA2_DIR` to one:
 
 ```bash
-GTA2_DIR=~/games/gta2 ./build_linux/gta2
+GTA2_DIR=~/games/gta2 ./build_linux/reg2
 ```
 
 Settings live in `gta2_registry.ini` (the registry keys of the Windows game). Alt+Enter switches
@@ -114,7 +114,7 @@ Without the data there, a message box offers three choices:
 The files are copied into a temporary folder, checked (the essential files are listed in
 `setup/install.cpp`), then moved into place. Without the music (the 22 tracks of `GTAudio` on the
 original CD) the game runs, and the setup offers to add it from a folder (the CD, its `GTAudio`), a
-disc image or the installer. `gta2 --setup` shows the setup again, to replace the data or add the music.
+disc image or the installer. `reg2 --setup` shows the setup again, to replace the data or add the music.
 
 | Source | Read with |
 |---|---|
@@ -239,36 +239,41 @@ docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh p
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src i386/debian:trixie linux32 sh port/packaging/ci.sh linux32 /work
 docker run --rm -v $PWD:/src:ro -v $PWD/../work:/work -w /src debian:trixie sh port/packaging/ci.sh mingw32 /work
 # A Linux package in a clean container; a GTA2 folder as a second argument also installs and plays the game.
-docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/reG2-<version>-linux-x86_64.tar.gz
+docker run --rm -v $PWD/../work/out:/out:ro -v $PWD/port/packaging:/p:ro ubuntu:24.04 sh /p/smoke_test.sh /out/reG2-linux-x86_64.tar.gz
 # The Flatpak bundle, and its test on a clean Debian 13 (bwrap needs these options in a container).
 BWRAP="--security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined"
 docker run --rm $BWRAP -v $PWD:/src:ro -v $PWD/../fpwork:/work -w /src \
     ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 sh port/packaging/flatpak.sh /work
 docker run --rm $BWRAP -v $PWD/../fpwork/out:/out:ro -v $PWD/port/packaging:/p:ro debian:trixie \
-    sh /p/flatpak_smoke_test.sh /out/reG2-<version>-x86_64.flatpak
+    sh /p/flatpak_smoke_test.sh /out/reG2-x86_64.flatpak
 ```
 
 The releases are 64-bit:
 
-- Windows: `reG2-<version>-windows-x86_64.zip`, with `gta2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
+- Windows: `reG2-windows-x64.zip`, with `reg2.exe`, `SDL3.dll`, `OpenAL32.dll`, this README and
   the libraries' licences. Built with llvm-mingw on UCRT, part of Windows 10 and later.
-- Linux, portable: `reG2-<version>-linux-x86_64.tar.gz`. Extract it anywhere and start `./gta2`. It brings
+- Linux, portable: `reG2-linux-x86_64.tar.gz`. Extract it anywhere and start `./reg2`. It brings
   SDL 3 and OpenAL Soft, and takes glibc (2.29 or later), OpenGL, X11, Wayland and sound from the system,
-  so it uses the system's GPU driver. `packaging/linux/README-x86_64.md` is its README; `./gta2` says which
+  so it uses the system's GPU driver. `packaging/linux/README-x86_64.md` is its README; `./reg2` says which
   libraries are missing.
-- Linux, AppImage: `reG2-<version>-x86_64.AppImage`, the same build and libraries in an AppImage
+- Linux, AppImage: `reG2-x86_64.AppImage`, the same build and libraries in an AppImage
   (`packaging/appimage.sh`, the type2 runtime), with its desktop file, icon and AppStream metainfo.
-- Linux, Flatpak: `reG2-<version>-x86_64.flatpak`, a bundle of `packaging/flatpak/io.github.parigi_n.reG2.yml`
+- Linux, Flatpak: `reG2-x86_64.flatpak`, a bundle of `packaging/flatpak/io.github.parigi_n.reG2.yml`
   on the `org.freedesktop.Platform` 26.08 runtime, whose SDL 3, OpenAL Soft and libarchive it uses
-  (`flatpak install --user reG2-<version>-x86_64.flatpak` fetches the runtime from Flathub). It needs no
+  (`flatpak install --user reG2-x86_64.flatpak` fetches the runtime from Flathub). It needs no
   access to the files: the setup's choosers go through the desktop portal, and the game's data goes to
   `~/.var/app/io.github.parigi_n.reG2/data/gta2_re/`.
-- macOS: `reG2-<version>-macos-arm64.dmg` and `-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
+- macOS: `reG2-macos-arm64.dmg` and `reG2-macos-x86_64.dmg`, with `reG2.app` (SDL 3 and OpenAL Soft in
   `Contents/Frameworks`) for macOS 11 and later, built on GitHub's macOS runners (`packaging/macos_app.sh`).
   The app is signed ad hoc, not notarized: the first start needs a right click, Open (or
   `xattr -dr com.apple.quarantine reG2.app`). Not tested on a Mac yet.
 
-The i686 packages (`reG2-<version>-windows-i686.zip`, `reG2-<version>-linux-i686.tar.gz`) still build and
+The file names carry no version, so `releases/latest/download/<name>` always gives the newest. The version
+is the release's tag, and inside the packages the start menu's text (`kVersionText`, `src/options_menu.hpp`),
+the Windows file version (`resources.rc`) and the AppStream release (`packaging/linux/reG2.metainfo.xml`).
+The executable is `reg2` (`reg2.exe`), so that it never replaces a GTA2 folder's `gta2.exe`.
+
+The i686 packages (`reG2-windows-i686.zip`, `reG2-linux-i686.tar.gz`) still build and
 are tested in CI, but are not released. The i686 Linux build takes everything but SDL 3 and OpenAL Soft from
 the system's 32-bit libraries; `packaging/linux/README.md` lists them per distribution. With NVIDIA's
 proprietary driver it needs its 32-bit libraries too, else Mesa draws on the CPU.
@@ -316,5 +321,5 @@ script does the same at any frame rate. A run nobody sees, with the sound writte
 ```bash
 SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=/tmp/audio.raw \
 GTA2_INPUT=100:Return,160:Return GTA2_EXIT_AT=900 GTA2GL_CAPTURE=cap,600 \
-gamescope --backend headless -W 640 -H 480 -- ./build_linux/gta2
+gamescope --backend headless -W 640 -H 480 -- ./build_linux/reg2
 ```

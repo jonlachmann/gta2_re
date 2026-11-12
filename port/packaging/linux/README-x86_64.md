@@ -1,13 +1,13 @@
 # reG2, portable Linux build (x86_64)
 
-Start the game with `./gta2`. GTA2's files are not included: on the first start, choose your GTA2
+Start the game with `./reg2`. GTA2's files are not included: on the first start, choose your GTA2
 folder, its installer or a disc image, and the game's data is copied to `~/.local/share/gta2_re/`
-(`$XDG_DATA_HOME/gta2_re/`), with the settings and saves. `./gta2 --setup` shows the setup again.
+(`$XDG_DATA_HOME/gta2_re/`), with the settings and saves. `./reg2 --setup` shows the setup again.
 `README-port.md` describes the port.
 
 The game brings SDL 3 and OpenAL Soft (`bin/`) and takes the rest from the system: glibc 2.29 or
 later, OpenGL (Mesa, or NVIDIA's driver), X11 or Wayland, and PulseAudio (which PipeWire also serves)
-or ALSA. Desktop distributions have them installed; `./gta2` says which are missing. Tested on
+or ALSA. Desktop distributions have them installed; `./reg2` says which are missing. Tested on
 Debian 11 and 12, Ubuntu 24.04 and Arch Linux.
 
 On a minimal system, the libraries to install:
@@ -25,8 +25,8 @@ The setup's file chooser is the desktop's (xdg-desktop-portal), or zenity.
 
 ## Contents
 
-- `gta2`: checks the libraries, then starts `bin/gta2`.
-- `bin/gta2`: the game, which finds `libSDL3.so.0` and `libopenal.so.1` (3D sound) next to itself.
+- `reg2`: checks the libraries, then starts `bin/reg2`.
+- `bin/reg2`: the game, which finds `libSDL3.so.0` and `libopenal.so.1` (3D sound) next to itself.
 - `reG2.png`: the icon, for a desktop launcher.
 - `licenses/`: the licences of SDL 3, OpenAL Soft (LGPL), and libarchive, unshield, zlib and xz, which
   the game links for its setup.

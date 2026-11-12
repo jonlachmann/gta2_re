@@ -123,6 +123,8 @@ else()
         ${ROOT}/Source/3rdParty/bink.cpp
         src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp src/ptr_slot.cpp src/layout_checks.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
+    # reg2, not gta2: unpacked into a GTA2 folder, it must not replace the original's gta2.exe.
+    set_target_properties(gta2 PROPERTIES OUTPUT_NAME reg2)
     target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3)
     if(openal_runtime AND NOT APPLE)
         add_custom_command(TARGET gta2 POST_BUILD
@@ -150,8 +152,8 @@ else()
         target_include_directories(gta2 PRIVATE
             ${compat}/include ${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
         if(APPLE)
-            # reG2.app, with SDL3 and OpenAL Soft in Contents/Frameworks.
-            set_target_properties(gta2 PROPERTIES OUTPUT_NAME reG2 MACOSX_BUNDLE ON
+            # reg2.app (reG2.app in the .dmg), with SDL3 and OpenAL Soft in Contents/Frameworks.
+            set_target_properties(gta2 PROPERTIES MACOSX_BUNDLE ON
                 MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/packaging/macos/Info.plist.in
                 MACOSX_BUNDLE_GUI_IDENTIFIER io.github.parigi_n.reG2 MACOSX_BUNDLE_BUNDLE_NAME reG2
                 MACOSX_BUNDLE_ICON_FILE reG2.icns

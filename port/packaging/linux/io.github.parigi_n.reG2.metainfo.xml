@@ -25,7 +25,7 @@
   </description>
   <launchable type="desktop-id">io.github.parigi_n.reG2.desktop</launchable>
   <provides>
-    <binary>gta2</binary>
+    <binary>reg2</binary>
   </provides>
   <url type="homepage">https://github.com/parigi-n/reG2</url>
   <categories>

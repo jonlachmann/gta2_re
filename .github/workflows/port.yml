@@ -46,11 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Version and work folder
-        run: |
-          echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=$(git rev-parse --short HEAD); fi
-          echo "GTA2_VERSION=$v" >> "$GITHUB_ENV"
+      - name: Work folder
+        run: echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
 
       - name: Restore libraries
         uses: actions/cache@v4
@@ -63,7 +60,7 @@ jobs:
       - name: Build and package
         run: |
           mkdir -p "$WORK"
-          docker run --rm -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -w /src ${{ matrix.image }} \
+          docker run --rm -v "$PWD:/src:ro" -v "$WORK:/work" -w /src ${{ matrix.image }} \
               ${{ matrix.setarch }} sh port/packaging/ci.sh ${{ matrix.target }} /work
           docker run --rm -v "$WORK:/work" ${{ matrix.image }} chown -R "$(id -u):$(id -g)" /work
 
@@ -95,11 +92,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Version and work folder
-        run: |
-          echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=$(git rev-parse --short HEAD); fi
-          echo "GTA2_VERSION=$v" >> "$GITHUB_ENV"
+      - name: Work folder
+        run: echo "WORK=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
 
       # Ubuntu 24.04 keeps unprivileged processes from creating the user namespaces bwrap needs.
       - name: Allow user namespaces
@@ -118,7 +112,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p "$WORK"
-          docker run --rm $BWRAP -e GTA2_VERSION -v "$PWD:/src:ro" -v "$WORK:/work" -w /src $IMAGE \
+          docker run --rm $BWRAP -v "$PWD:/src:ro" -v "$WORK:/work" -w /src $IMAGE \
               sh port/packaging/flatpak.sh /work
           docker run --rm -v "$WORK:/work" debian:trixie chown -R "$(id -u):$(id -g)" /work
 
@@ -182,7 +176,7 @@ jobs:
         run: |
           T=$(mktemp -d)
           GTA2_NO_SOUND=1 GTA2_NO_MESSAGEBOX=1 SDL_VIDEODRIVER=dummy GTA2_LOG_FILE=$T/dummy.log \
-              "$WORK/build/reG2.app/Contents/MacOS/reG2"
+              "$WORK/build/reg2.app/Contents/MacOS/reg2"
           cat "$T/dummy.log"
           grep -q "game files were not found" "$T/dummy.log"
 

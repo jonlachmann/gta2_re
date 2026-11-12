@@ -7,7 +7,7 @@ runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.llvm22
-command: gta2
+command: reg2
 
 # No --filesystem: the setup's file and folder choosers go through the portal, which grants access
 # to what the player picks. The game's data is copied into the app's own data folder.
@@ -63,7 +63,7 @@ modules:
       - cmake -S port -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/port/toolchain-linux64-clang.cmake
         -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=/app
       - ninja -C build -j${FLATPAK_BUILDER_N_JOBS}
-      - install -Dm755 build/gta2 /app/bin/gta2
+      - install -Dm755 build/reg2 /app/bin/reg2
       - install -Dm644 -t /app/share/applications port/packaging/linux/io.github.parigi_n.reG2.desktop
       - install -Dm644 -t /app/share/metainfo port/packaging/linux/io.github.parigi_n.reG2.metainfo.xml
       - install -Dm644 port/resources/gta2_256.png /app/share/icons/hicolor/256x256/apps/io.github.parigi_n.reG2.png

@@ -34,7 +34,7 @@ BLOCK "StringFileInfo"
 		VALUE "FileDescription", "reG2"
 		VALUE "FileVersion", "0.1"
 		VALUE "InternalName", "reG2"
-		VALUE "OriginalFilename", "gta2.exe"
+		VALUE "OriginalFilename", "reg2.exe"
 		VALUE "ProductName", "reG2"
 		VALUE "ProductVersion", "0.1"
 	}
