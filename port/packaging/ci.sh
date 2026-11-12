@@ -12,7 +12,7 @@ COMMON="cmake ninja-build pkg-config curl ca-certificates xz-utils file"
 case $T in
     # The headers and libraries come from the system root that deps.sh makes with mmdebstrap.
     linux32) PKGS="clang lld llvm g++ mmdebstrap gpg debian-archive-keyring" ;;
-    linux64) PKGS="clang lld llvm g++ mmdebstrap gpg debian-archive-keyring" ;;
+    linux64) PKGS="clang lld llvm g++ mmdebstrap gpg debian-archive-keyring squashfs-tools" ;;
     # GCC for OpenAL Soft (deps.sh); the rest builds with llvm-mingw.
     mingw32) PKGS="zip g++-mingw-w64-i686-posix" ;;
     mingw64) PKGS="zip g++-mingw-w64-x86-64-posix" ;;
@@ -23,7 +23,7 @@ apt-get install -y -qq --no-install-recommends $COMMON $PKGS > /dev/null
 SRC="openal-soft-1.25.2.tar.gz unshield-1.6.2.tar.gz libarchive-3.8.11.tar.xz zlib-1.3.2.tar.gz xz-5.8.4.tar.gz"
 case $T in
     linux32) sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-3.4.18.tar.gz ;;
-    linux64) sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-3.4.18.tar.gz ;;
+    linux64) sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-3.4.18.tar.gz appimage-runtime-x86_64 ;;
     mingw*)
         sh "$HERE/fetch.sh" "$W/dl" $SRC SDL3-devel-3.4.18-mingw.tar.gz llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz
         # llvm-mingw: clang with MinGW-w64 on UCRT, as the toolchain file expects it in PATH.
@@ -41,6 +41,10 @@ fi
 sh "$HERE/build.sh" "$T" "$W/deps-$T" "$W/build-$T"
 mkdir -p "$W/out"
 case $T in
-    linux*) sh "$HERE/linux_packages.sh" "$W/build-$T" "$W/deps-$T" "$W/out" ;;
+    linux32) sh "$HERE/linux_packages.sh" "$W/build-$T" "$W/deps-$T" "$W/out" ;;
+    linux64)
+        sh "$HERE/linux_packages.sh" "$W/build-$T" "$W/deps-$T" "$W/out"
+        sh "$HERE/appimage.sh" "$W/build-$T" "$W/deps-$T" "$W/dl/appimage-runtime-x86_64" "$W/out"
+        ;;
     mingw*) sh "$HERE/windows_zip.sh" "$W/build-$T" "$W/deps-$T" "$W/out" ;;
 esac

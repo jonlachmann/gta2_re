@@ -1,6 +1,6 @@
 #!/bin/sh
-# smoke_test.sh <package> [<GTA2 folder>]: installs a Linux package (reG2-*-linux-i686.tar.gz or
-# reG2-*-linux-x86_64.tar.gz) and the libraries it needs (the lists of linux/README.md)
+# smoke_test.sh <package> [<GTA2 folder>]: installs a Linux package (reG2-*-linux-i686.tar.gz,
+# reG2-*-linux-x86_64.tar.gz or reG2-*-x86_64.AppImage) and the libraries it needs (the lists of linux/README.md)
 # as root in a clean Debian, Ubuntu or Arch Linux container, then starts the game without its data: with SDL's
 # dummy video driver the setup finds no data and quits; under Xvfb its window is captured, drawn with OpenGL and
 # with OpenGL ES. With a GTA2 folder (read-only is fine), the setup installs the game from it, then the game
@@ -21,8 +21,17 @@ else
     pacman -Syu --noconfirm --needed xorg-server-xvfb > /dev/null
 fi
 
-tar -xzf "$PKG" -C "$T"
-GTA2=$(echo "$T"/reG2-*/gta2)
+case $PKG in
+    *.AppImage)
+        # No FUSE in a container: the runtime extracts the AppImage, AppRun starts the game.
+        (cd "$T" && "$PKG" --appimage-extract > /dev/null)
+        GTA2=$T/squashfs-root/AppRun
+        ;;
+    *)
+        tar -xzf "$PKG" -C "$T"
+        GTA2=$(echo "$T"/reG2-*/gta2)
+        ;;
+esac
 if [ -n "$I386" ]; then
     rc=0
     "$GTA2" 2> "$T/no32.log" || rc=$?
