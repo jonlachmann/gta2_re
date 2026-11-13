@@ -37,6 +37,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(arch_flags -m32)
 endif()
+
+include(net/net.cmake)
+
 # The game relies on what VC6 did with undefined behaviour (uninitialised locals returned on unused
 # paths, null checks after use): clang must not optimise on it.
 add_compile_options(
