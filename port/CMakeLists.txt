@@ -38,6 +38,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(arch_flags -m32)
 endif()
 
+enable_testing()
 include(net/net.cmake)
 
 # The game relies on what VC6 did with undefined behaviour (uninitialised locals returned on unused

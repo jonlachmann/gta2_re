@@ -13,3 +13,21 @@ else()
     target_compile_definitions(enet PRIVATE HAS_SOCKLEN_T=1 HAS_POLL=1 HAS_FCNTL=1 HAS_MSGHDR_FLAGS=1 HAS_GETADDRINFO=1
         HAS_GETNAMEINFO=1 HAS_INET_PTON=1 HAS_INET_NTOP=1)
 endif()
+
+file(GLOB net_core_src ${NET}/core/*.cpp)
+file(GLOB net_transport_src ${NET}/transport/*.cpp)
+
+# The netcode's tests: no game, no SDL3
+add_executable(test_core ${NET}/tests/test_core.cpp ${net_core_src})
+add_executable(test_transport ${NET}/tests/test_transport.cpp ${net_transport_src} ${net_core_src})
+target_link_libraries(test_transport PRIVATE enet)
+set(net_tests test_core test_transport)
+foreach(t ${net_tests})
+    target_compile_options(${t} PRIVATE ${arch_flags})
+    target_link_options(${t} PRIVATE ${arch_flags})
+    add_test(NAME ${t} COMMAND ${t})
+    set_tests_properties(${t} PROPERTIES LABELS net)
+    if(WIN32)
+        target_link_options(${t} PRIVATE -static)
+    endif()
+endforeach()
