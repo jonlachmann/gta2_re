@@ -1,4 +1,4 @@
-// Port: VC6's rand()/srand(), see rand.hpp.
+// VC6's rand()/srand(), see rand.hpp.
 #include "rand.hpp"
 #include "sound.hpp"
 #include "state.hpp"

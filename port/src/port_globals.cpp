@@ -1,4 +1,4 @@
-// Port (port/docs/netcode.md): the registry of port_globals.hpp.
+// The registry of port_globals.hpp (port/docs/netcode.md).
 #include "port_globals.hpp"
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,4 +1,4 @@
-// Port (port/docs/netcode.md, "Random draws"): who a random draw belongs to. In a network game an entity's update (a ped's,
+// Who a random draw belongs to (port/docs/netcode.md, "Random draws"). In a network game an entity's update (a ped's,
 // with its char, or a car's) and each service only the server runs (traffic, ambient peds, scripts, police...) draw
 // their own numbers: a hash of the game's seed, the owner, the tick and how many it drew this update
 // (port/src/rand/rand.cpp), not the game's one stream. A client simulates only its own area: with the one stream, every

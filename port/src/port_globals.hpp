@@ -1,6 +1,6 @@
-// Port (port/docs/netcode.md, "The rollback set"): every global and static of a GTA2_PORT build registers here with its name, 10.5.exe
-// address and size, and for a pointer to a complete type the size of what it points to. The network game
-// saves and restores the world through them (net/engine/world.cpp).
+// Every global and static of a GTA2_PORT build registers here with its name, 10.5.exe address and size, and for a
+// pointer to a complete type the size of what it points to. The network game saves and restores the world through them
+// (port/docs/netcode.md, "The rollback set"; port/net/engine/world.cpp).
 #pragma once
 
 #include <stddef.h>

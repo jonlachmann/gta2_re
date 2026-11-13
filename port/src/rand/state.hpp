@@ -1,4 +1,4 @@
-// Port: the game's rand() stream (rand.cpp) for code that must not see rand.hpp's renames
+// The game's rand() stream (rand.cpp) for code that must not see rand.hpp's renames
 // of rand and srand: its state, which the netcode sends to clients (port/net/engine/world_entity.cpp), the count of draws
 // (port/net/eval/sim_bench.cpp), and VC6's generator step, which the separate sound and particle streams share.
 #pragma once

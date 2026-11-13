@@ -1,4 +1,4 @@
-// Port (port/docs/netcode.md): the particles' random numbers (ParticleManager.cpp, Particle_4C.cpp). By default they come from
+// The particles' random numbers (ParticleManager.cpp, Particle_4C.cpp; port/docs/netcode.md). By default they come from
 // the game's one stream, as in 10.5.exe. With PortRand::SetParticleSeparate(true) (the netcode) particles draw from a
 // stream of their own, part of the rollback set: a resimulation makes the same flames and smoke as the frame before,
 // whatever the sim drew, and the sim's own draws don't depend on the particles.

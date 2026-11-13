@@ -1,4 +1,4 @@
-// Port: the game's rand()/srand() are VC6's, so replays and network games play the same everywhere (glibc's and
+// The game's rand()/srand() are VC6's, so replays and network games play the same everywhere (glibc's and
 // macOS's rand are other generators; Windows' UCRT keeps its state per thread). Included under GTA2_PORT by the
 // files that call them.
 #pragma once

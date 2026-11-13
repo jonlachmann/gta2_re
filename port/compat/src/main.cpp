@@ -8,10 +8,8 @@
 #include <string.h>
 #include <string>
 #include <vector>
-#if defined(GTA2_PORT_SDL)
 #include "../../net/net_main.hpp"
 #include "../../src/net_hooks.hpp" // gPortCrashHook
-#endif
 #if !defined(_WIN32)
     #include <execinfo.h>
     #include <signal.h>
@@ -83,7 +81,8 @@ __attribute__((constructor(101))) static void EnterGameFolderAtStart(int argc, c
 static void OnCrash(int sig, siginfo_t* info, void*)
 {
     char line[160];
-    const int n0 = snprintf(line, sizeof(line), "\nreg2: crashed (signal %d) at address %p; backtrace:\n", sig, info ? info->si_addr : NULL);
+    const int n0 =
+        snprintf(line, sizeof(line), "\nreg2: crashed (signal %d) at address %p; backtrace:\n", sig, info ? info->si_addr : NULL);
     write(2, line, n0 > 0 ? (size_t)n0 : 0);
     void* frames[64];
     backtrace_symbols_fd(frames, backtrace(frames, 64), 2);
@@ -126,7 +125,6 @@ int main(int argc, char** argv)
             args.push_back(argv[i]);
         }
     }
-#if defined(GTA2_PORT_SDL)
     const int net = NetMain_Init(args); // --server, --connect (port/docs/netcode.md)
     if (net < 0)
     {
@@ -136,7 +134,6 @@ int main(int argc, char** argv)
     {
         args.push_back("-N"); // the game's switch for a network game
     }
-#endif
     std::string cmdLine;
     for (const std::string& arg : args)
     {

@@ -1,14 +1,13 @@
-// Port (port/docs/netcode.md, "The game's code"): what the game's code (Source/, under GTA2_PORT) calls or reads for the
-// network game, in one place. The Source/ files include this under #if defined(GTA2_PORT), so VC6 never sees it;
-// port/net/ sets them. Each is NULL, or the original's value, until a network game starts.
+// The network game's hooks (port/docs/netcode.md, "The game's code"): what the game's code (Source/, under GTA2_PORT),
+// compat/ and port/src/ call or read for it, in one place; port/net/ sets them. Each is NULL, or the original's value,
+// until a network game starts.
 #pragma once
 #include "types.hpp"
 
 class Sprite;
 struct Frontend;
 
-// Called last by the crash report: the netcode's view of the game, when set (a hook, so the platform layer doesn't
-// call into the netcode)
+// Called last by the crash report (compat/src/main.cpp): the network game's view of the game, when set
 extern void (*gPortCrashHook)();
 // After a sprite moved (Sprite::InvalidateZColAndBBoxes, every setter of its place calls it); NULL but for a check
 // (GTA2_NET_CHECKGRID: one moved off the map)

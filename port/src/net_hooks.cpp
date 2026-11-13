@@ -1,4 +1,4 @@
-// Port (port/docs/netcode.md, "The game's code"): every hook's definition and default, in net_hooks.hpp's order. port/net/
+// Every hook's definition and default, in net_hooks.hpp's order (port/docs/netcode.md, "The game's code"). port/net/
 // sets them; the game's code only reads or calls them.
 #include "net_hooks.hpp"
 
