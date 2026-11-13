@@ -97,9 +97,11 @@ static void OnCrash(int sig, siginfo_t* info, void*)
 }
 #endif
 
-int main(int argc, char** argv)
+void port_InstallCrashReport()
 {
 #if !defined(_WIN32)
+    void* frame;
+    backtrace(&frame, 1); // loads what backtrace needs now, not in the handler
     struct sigaction sa = {};
     sa.sa_sigaction = OnCrash;
     sa.sa_flags = SA_SIGINFO;
@@ -108,6 +110,10 @@ int main(int argc, char** argv)
         sigaction(sig, &sa, NULL);
     }
 #endif
+}
+
+int main(int argc, char** argv)
+{
     // Wine drops SDL_* variables before a Windows program sees them.
     if (const char* driver = getenv("GTA2_AUDIO_DRIVER"))
     {

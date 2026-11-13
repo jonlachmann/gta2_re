@@ -58,6 +58,9 @@ void OnStopSignal(int)
 // Before any network game's start: what each end draws its random numbers from, and the log
 void NetworkSetup(bool server)
 {
+    // A crash's report, with the netcode's view of the game last: network games only (the report isn't signal-safe)
+    port_InstallCrashReport();
+    gPortCrashHook = net::engine::DebugOnCrash;
     PortRand::SetSoundSeparate(true); // sound draws its own random numbers: a resimulation without sound draws the same
     PortRand::SetParticleSeparate(true); // and particles: a resimulation makes the flames it made before
     net::engine::SetRandOwners(!server); // and each entity and server service its own: the same wherever it runs
@@ -161,7 +164,6 @@ const std::string& NetMenu_DefaultName()
 int NetMain_Init(std::vector<std::string>& args)
 {
     gPortLeaveNetworkGame = LeaveNetworkGame;
-    gPortCrashHook = net::engine::DebugOnCrash; // the crash report's last: the netcode's view of the game
     net::NetOptions o;
     if (!net::ParseOptions(args, o))
     {

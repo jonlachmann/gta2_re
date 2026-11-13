@@ -7,7 +7,9 @@
 class Sprite;
 struct Frontend;
 
-// Called last by the crash report (compat/src/main.cpp): the network game's view of the game, when set
+// The crash report (compat/src/main.cpp): installed for network games only, as it isn't signal-safe; the hook is called
+// last, the network game's view of the game
+void port_InstallCrashReport();
 extern void (*gPortCrashHook)();
 // After a sprite moved (Sprite::InvalidateZColAndBBoxes, every setter of its place calls it); NULL but for a check
 // (GTA2_NET_CHECKGRID: one moved off the map)
