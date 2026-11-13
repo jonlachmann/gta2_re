@@ -31,7 +31,8 @@ bool OnFootOnly(s32 objective)
            objective == objectives_enum::kill_char_on_foot_20;
 }
 
-bool IsPassenger(Car* car, Ped* ped)
+// In the car's list of passengers (the game's own bookkeeping; car_entry.cpp's IsPassengerOf goes by the ped's states)
+bool InPassengerList(Car* car, Ped* ped)
 {
     for (PedListNode* n = car->mPassengersList.mpFirstPed; n; n = n->mpNext)
     {
@@ -60,7 +61,7 @@ void net::engine::GuardPeds()
     {
         Ped* ped = InGamePed(i);
         Car* car = ped ? ped->mCar : NULL;
-        if (car && ped->mPedState1 == ped_state_1::in_car_10 && car->mDriver != ped && !IsPassenger(car, ped))
+        if (car && ped->mPedState1 == ped_state_1::in_car_10 && car->mDriver != ped && !InPassengerList(car, ped))
         {
             ForceOutBesideCar(ped, car);
         }

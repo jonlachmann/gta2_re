@@ -2,6 +2,7 @@
 #pragma once
 #include "session/client.hpp"
 #include "session/server.hpp"
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -23,4 +24,7 @@ struct NetOptions
 
 // Takes the netcode's options out of <args>, the rest stays for the game; false: an error, printed
 bool ParseOptions(std::vector<std::string>& args, NetOptions& o);
+// "host[:port]" into <host>, and <port> when it has one
+void ParseAddress(const std::string& address, std::string* host, uint16_t* port);
+std::vector<std::string> SplitCommas(const std::string& list); // "a,b,c"
 } // namespace net

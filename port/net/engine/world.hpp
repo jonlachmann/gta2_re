@@ -16,8 +16,9 @@ struct Block
     const char* name;
 };
 
-// Every registered global and what it points to (port/src/port_globals.hpp), the players, the light grid and the sound
-// pool. Pointees can change (a new map), so ask again after loading.
+// Every registered global and what it points to (port/src/port_globals.hpp), the players, the light grid, the deaths
+// carried out, the particles' random stream and the sound entries' pool; the globals that registered after the first
+// call last. Pointees can change (a new map), so ask again after loading.
 std::vector<Block> WorldBlocks();
 size_t RegisteredGlobals(); // so far: the set is taken again when one more registered (WorldBlocks)
 extern const Block* gCopyingBlock; // the one SaveWorld or RestoreWorld is copying, for the crash report

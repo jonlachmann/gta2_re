@@ -58,19 +58,6 @@ using net::Snapshot;
 
 uint32_t gDebugFrame;
 
-// This game's live cars and peds (a mapped one may have been removed by the game since)
-void Live(std::set<Car*>& cars, std::set<Ped*>& peds)
-{
-    for (Car* c = gCar_BC_Pool->mPool.mpPrev; c; c = c->mpNext)
-    {
-        cars.insert(c);
-    }
-    for (Ped* p = gPedPool->mPool.mpPrev; p; p = p->mpNext)
-    {
-        peds.insert(p);
-    }
-}
-
 uint32_t MappedId(const Car* car) // its net id, 0 if no snapshot car is mapped to it
 {
     for (auto& c : ReplicaCars())
@@ -185,7 +172,7 @@ bool GridsSound(const char* where)
     static int sReported;
     std::set<Car*> cars;
     std::set<Ped*> peds;
-    Live(cars, peds);
+    LiveEntities(cars, peds);
     std::set<Char*> chars;
     std::unordered_map<const Char*, Ped*> charPed;
     for (Ped* p : peds)
@@ -254,7 +241,7 @@ bool net::engine::DebugCheckPlayerCars(const char* where)
     }
     std::set<Car*> liveCars;
     std::set<Ped*> livePeds;
-    Live(liveCars, livePeds);
+    LiveEntities(liveCars, livePeds);
     for (int i = 0; i < PlayerCount(); i++)
     {
         Ped* ped = InGamePed(i);
@@ -327,7 +314,7 @@ void net::engine::DebugOnCrash()
     std::set<Ped*> livePeds;
     if (gPedPool && gCar_BC_Pool)
     {
-        Live(liveCars, livePeds);
+        LiveEntities(liveCars, livePeds);
     }
     fprintf(stderr, "net: crash state: frame %u, tick %u\n", gDebugFrame, gpRng ? (uint32_t)gpRng->get_cur_rng() : 0u);
     if (gCopyingBlock)

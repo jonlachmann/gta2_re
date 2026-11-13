@@ -12,19 +12,6 @@ namespace
 using namespace net::engine;
 using net::EntityState;
 using net::Snapshot;
-
-// This game's live cars and peds (a mapped one may have been removed by the game since)
-void Live(std::set<Car*>& cars, std::set<Ped*>& peds)
-{
-    for (Car* c = gCar_BC_Pool->mPool.mpPrev; c; c = c->mpNext)
-    {
-        cars.insert(c);
-    }
-    for (Ped* p = gPedPool->mPool.mpPrev; p; p = p->mpNext)
-    {
-        peds.insert(p);
-    }
-}
 } // namespace
 
 void net::engine::PoolUse(int* pCars, int* pPeds, int* pChars)
@@ -49,7 +36,7 @@ void net::engine::ReplicaStats(const Snapshot& snap, int* pCars, int* pPeds, flo
 {
     std::set<Car*> liveCars;
     std::set<Ped*> livePeds;
-    Live(liveCars, livePeds);
+    LiveEntities(liveCars, livePeds);
     *pCars = (int)ReplicaCars().size();
     *pPeds = (int)ReplicaPeds().size();
     float drift = 0;
@@ -81,7 +68,7 @@ void net::engine::DriverStats(const Snapshot& snap, int* pSent, int* pDriven, in
     *pSent = *pDriven = *pSame = 0;
     std::set<Car*> liveCars;
     std::set<Ped*> livePeds;
-    Live(liveCars, livePeds);
+    LiveEntities(liveCars, livePeds);
     for (const EntityState& e : snap.entities)
     {
         if (e.type != kEntityPed || !e.f[kPedCar])
@@ -109,5 +96,17 @@ void net::engine::TrafficDriverStats(const Snapshot& snap, int* pSent, int* pSam
             Car* car = ReplicaCar(e.id);
             *pSame += car && IsSpareDriver(car->mDriver);
         }
+    }
+}
+
+void net::engine::LiveEntities(std::set<Car*>& cars, std::set<Ped*>& peds)
+{
+    for (Car* c = gCar_BC_Pool->mPool.mpPrev; c; c = c->mpNext)
+    {
+        cars.insert(c);
+    }
+    for (Ped* p = gPedPool->mPool.mpPrev; p; p = p->mpNext)
+    {
+        peds.insert(p);
     }
 }

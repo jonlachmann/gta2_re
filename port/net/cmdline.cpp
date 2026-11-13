@@ -119,12 +119,7 @@ bool net::ParseOptions(std::vector<std::string>& args, NetOptions& o)
         }
         else if (a == "--arena" && more)
         {
-            for (size_t at = 0, end = 0; end != std::string::npos; at = end + 1)
-            {
-                end = args[i + 1].find(',', at);
-                sc.arena.push_back(args[i + 1].substr(at, end == std::string::npos ? end : end - at));
-            }
-            i++;
+            sc.arena = SplitCommas(args[++i]);
         }
         else if (a == "--seed" && more)
         {
@@ -170,4 +165,25 @@ bool net::ParseOptions(std::vector<std::string>& args, NetOptions& o)
     }
     args = rest;
     return true;
+}
+
+void net::ParseAddress(const std::string& address, std::string* host, uint16_t* port)
+{
+    const size_t colon = address.rfind(':');
+    *host = address.substr(0, colon);
+    if (colon != std::string::npos)
+    {
+        *port = (uint16_t)atoi(address.c_str() + colon + 1);
+    }
+}
+
+std::vector<std::string> net::SplitCommas(const std::string& list)
+{
+    std::vector<std::string> out;
+    for (size_t at = 0, end = 0; end != std::string::npos; at = end + 1)
+    {
+        end = list.find(',', at);
+        out.push_back(list.substr(at, end == std::string::npos ? end : end - at));
+    }
+    return out;
 }

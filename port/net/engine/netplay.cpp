@@ -155,7 +155,6 @@ bool NextNetworkGame()
 }
 } // namespace
 
-
 void net::engine::SetNextMap(const std::string& gmp, const std::string& sty, const std::string& scr)
 {
     gNetGame.gmp = gmp;

@@ -3,6 +3,8 @@
 #include "engine.hpp"
 #include "Source/ang16.hpp"
 #include "Source/fix16.hpp"
+#include "Source/network_data.hpp"
+#include <set>
 #include <stddef.h>
 #include <unordered_map>
 
@@ -254,5 +256,30 @@ void ApplyPickups(const Snapshot& snap);
 std::unordered_map<uint32_t, Object*>& PickupMap(); // for the rollback (ReplicaState)
 void ClearPickups(); // a new game: none mapped
 extern int gPickupsMade, gPickupsRemoved; // for the log
+
+// This game's live cars and peds (a mapped one may have been removed by the game since; stats.cpp)
+void LiveEntities(std::set<Car*>& cars, std::set<Ped*>& peds);
+
+// Other files' statics, by their 10.5.exe address (port/src/port_globals.hpp)
+inline u32& NetworkPlayerIdx() // winmain.cpp: this machine's player
+{
+    static u32& s = PortStatic<u32>(0x6F56C8);
+    return s;
+}
+inline Network_PlayerInputs& CurrentNetInputs() // winmain.cpp: the inputs of the tick, every player's
+{
+    static Network_PlayerInputs& s = PortStatic<Network_PlayerInputs>(0x6F57D8);
+    return s;
+}
+inline Network_PlayerInputs& PrevNetInputs() // winmain.cpp: the inputs the last tick ran with
+{
+    static Network_PlayerInputs& s = PortStatic<Network_PlayerInputs>(0x6F5B28);
+    return s;
+}
+inline s16& ZoneTurn() // map_0x370.cpp: the restart zones' turn, so a client respawns where the server does
+{
+    static s16& s = PortStatic<s16>(0x6F626C);
+    return s;
+}
 } // namespace engine
 } // namespace net

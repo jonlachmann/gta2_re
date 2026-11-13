@@ -25,7 +25,6 @@
 #include <string.h>
 #include <string>
 
-#define sPrevNetInputs PortStatic<Network_PlayerInputs>(0x6F5B28) // winmain.cpp's file static
 
 namespace
 {
@@ -322,7 +321,7 @@ void net::engine::CapturePlayer(int i, Snapshot& out)
     e.f[kPlayerInCar] = ped->mCar != NULL;
     // The controls the tick ran with (winmain.cpp's Net_Set_Local_Player_Inputs takes them from here; the
     // player's own copy, Player::mInputs, is zeroed once used): what clients predict this player with
-    e.f[kPlayerButtons] = (int32_t)(sPrevNetInputs.mInputs[i].mInputs & 0x3FFFFF);
+    e.f[kPlayerButtons] = (int32_t)(PrevNetInputs().mInputs[i].mInputs & 0x3FFFFF);
     e.f[kPlayerHealth] = ped->mHealth;
     CountDeath(i, p, ped);
     e.f[kPlayerDeaths] = i < MAX_PLAYERS ? gDeaths[i] : 0;

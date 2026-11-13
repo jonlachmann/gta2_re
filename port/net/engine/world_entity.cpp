@@ -21,13 +21,11 @@
 #include <string.h>
 #include <unordered_map>
 
-#define sZoneTurn PortStatic<s16>(0x6F626C) // map_0x370.cpp's restart zones' turn: a client respawns where the server does
-
 void net::engine::CaptureWorld(Snapshot& out)
 {
     EntityState w = Entity(kWorldId, kEntityWorld);
     w.f[kWorldCycle] = gpRng->get_cur_rng();
-    w.f[kWorldZoneTurn] = sZoneTurn;
+    w.f[kWorldZoneTurn] = ZoneTurn();
     w.f[kWorldRound] = CurrentRound().number;
     w.f[kWorldWinner] = CurrentRound().winner;
     w.f[kWorldSecondsLeft] = CurrentRound().secondsLeft;
@@ -66,7 +64,7 @@ void net::engine::ApplyWorld(const EntityState& w)
     // The game's tick counter: timers are stamps of it (a car's damage, CarPhysics::mDamagedUntilCycle), so a
     // client's own count would put them elsewhere
     gpRng->mRng = w.f[kWorldCycle];
-    sZoneTurn = (short)w.f[kWorldZoneTurn];
+    ZoneTurn() = (short)w.f[kWorldZoneTurn];
     Round& r = CurrentRound();
     r.number = w.f[kWorldRound];
     r.winner = w.f[kWorldWinner];

@@ -1,10 +1,14 @@
+// port/net (port/docs/netcode.md, "Running"): see maps.hpp.
 #include "maps.hpp"
+#include "cmdline.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// data/<name>.mmp: [MapFiles] GMPFile, STYFile, SCRFile
-bool net::ReadMmp(const std::string& name, engine::NetworkGame& g)
+namespace
+{
+// data/<name>.mmp's files into <g> ([MapFiles] GMPFile, STYFile, SCRFile); false: no such map
+bool ReadMmp(const std::string& name, net::engine::NetworkGame& g)
 {
     FILE* f = fopen(("data/" + name + ".mmp").c_str(), "r");
     if (!f)
@@ -34,16 +38,14 @@ bool net::ReadMmp(const std::string& name, engine::NetworkGame& g)
     fclose(f);
     return !g.gmp.empty() && !g.sty.empty() && !g.scr.empty();
 }
-
+} // namespace
 
 bool net::SetUpMaps(const std::string& firstMap, const std::string& maps, ServerConfig& sc)
 {
     std::string map = firstMap;
     // The rotation: each a map's files, the first played first
-    for (size_t at = 0, end = 0; !maps.empty() && end != std::string::npos; at = end + 1)
+    for (const std::string& name : maps.empty() ? std::vector<std::string>() : SplitCommas(maps))
     {
-        end = maps.find(',', at);
-        const std::string name = maps.substr(at, end == std::string::npos ? end : end - at);
         engine::NetworkGame files;
         if (!ReadMmp(name, files))
         {
@@ -66,7 +68,7 @@ bool net::SetUpMaps(const std::string& firstMap, const std::string& maps, Server
     if (sc.maps.size() < 2)
     {
         sc.voteMaps.clear();
-        // The six maps the game ships, by name; a map folder's own list when there are custom maps
+        // The six maps the game ships, by name
         for (const char* name : {"mp1-6p", "mp2-6p", "mp5-6p", "downtown-6p", "industrial-6p", "res-6p"})
         {
             engine::NetworkGame files;
@@ -87,14 +89,4 @@ bool net::SetUpMaps(const std::string& firstMap, const std::string& maps, Server
         sc.currentMap = 0;
     }
     return true;
-}
-
-void net::ParseAddress(const std::string& address, std::string* host, uint16_t* port)
-{
-    const size_t colon = address.rfind(':');
-    *host = address.substr(0, colon);
-    if (colon != std::string::npos)
-    {
-        *port = (uint16_t)atoi(address.c_str() + colon + 1);
-    }
 }

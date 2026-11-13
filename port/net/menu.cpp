@@ -18,7 +18,6 @@
 EXTERN_GLOBAL(HINSTANCE, gHInstance);
 EXTERN_GLOBAL(SoundObject, snd1); // the frontend's sound: 1 up, 2 down, 5 enter, 6 back, 7 a key, 8 a deletion
 
-
 namespace
 {
 const u16 kPage = MENUPAGE_13; // 12 is the options's (port/src/options_menu.cpp)

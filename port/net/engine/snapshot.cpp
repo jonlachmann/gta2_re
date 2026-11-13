@@ -22,9 +22,6 @@
 #include <string.h>
 #include <unordered_map>
 
-// winmain.cpp's file statics: this machine's player, and the inputs of the tick, every player's
-#define sNetworkPlayerIdx PortStatic<u32>(0x6F56C8)
-#define sCurrentNetInputs PortStatic<Network_PlayerInputs>(0x6F57D8)
 
 // --- Shared helpers ---
 
@@ -168,19 +165,19 @@ int net::engine::PlayerCount()
 
 int net::engine::LocalPlayer()
 {
-    return (int)sNetworkPlayerIdx;
+    return (int)NetworkPlayerIdx();
 }
 
 uint32_t net::engine::LocalInput()
 {
-    return sCurrentNetInputs.mInputs[sNetworkPlayerIdx].mInputs;
+    return CurrentNetInputs().mInputs[NetworkPlayerIdx()].mInputs;
 }
 
 void net::engine::SetPlayerInput(int player, uint32_t buttons)
 {
     if (player >= 0 && player < MAX_PLAYERS)
     {
-        sCurrentNetInputs.mInputs[player].mInputs = buttons;
+        CurrentNetInputs().mInputs[player].mInputs = buttons;
     }
 }
 

@@ -2,25 +2,12 @@
 // wanted level, a power-up or a car at a given tick (GTA2_NET_TEST*, run by the server's test hooks, port/net/dev).
 #include "../internal.hpp"
 #include "dev.hpp"
-#include "port/src/rand/owner.hpp"
-#include "port/src/net_hooks.hpp"
-#include "port/src/rand/state.hpp"
-#include "Source/Camera.hpp"
 #include "Source/Car.hpp"
-#include "Source/Char_Pool.hpp"
 #include "Source/Game.hpp"
-#include "Source/GameSession.hpp"
 #include "Source/Ped.hpp"
 #include "Source/Player.hpp"
-#include "Source/TrafficLights.hpp"
 #include "Source/Weapon.hpp"
-#include "Source/char.hpp"
-#include "Source/network_data.hpp"
-#include "Source/rng.hpp"
-#include "Source/sprite.hpp"
-#include <math.h>
 #include <stdlib.h>
-#include <string.h>
 #include <string>
 
 void net::engine::DebugKill(int victim, int killer)
