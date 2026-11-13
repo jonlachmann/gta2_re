@@ -154,12 +154,13 @@ After a stall the game catches up at most 4 steps before the next frame, then dr
 ## Network game
 
 Client/server multiplayer for up to 6 players on the game's multiplayer maps, in place of the original's DirectPlay
-game ([docs/netcode.md](docs/netcode.md)): NETWORK GAME in the start menu joins a server, and
+game ([docs/netcode.md](docs/netcode.md)): NETWORK GAME in the start menu joins a server, and from a game folder
+(macOS: `reg2.app/Contents/MacOS/reg2`)
 
 ```bash
-./build_mac/reg2.app/Contents/MacOS/reg2 --server --map downtown-6p --players 4   # a dedicated server, headless
-./reg2 --connect 127.0.0.1 --name me                                               # play
-./reg2 --connect 127.0.0.1 --name bot1 --bot hunter                                # a bot
+./reg2 --server --map downtown-6p --players 4         # a dedicated server, headless
+./reg2 --connect 127.0.0.1 --name me                   # play
+./reg2 --connect 127.0.0.1 --name bot1 --bot hunter    # a bot
 ```
 
 `ctest --test-dir build_mac -L net` runs the netcode's unit tests, `net/scripts/net_check.sh` servers and bot clients
