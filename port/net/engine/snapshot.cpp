@@ -184,6 +184,11 @@ void net::engine::SetPlayerInput(int player, uint32_t buttons)
     }
 }
 
+void net::engine::ShowLeavePrompt(bool shown)
+{
+    gPortLeavePromptShown = shown;
+}
+
 void net::engine::IdleWait()
 {
     // The game spins on its message loop and RunGameFrame until winmain.cpp's sMatchStartTime, as the original does,

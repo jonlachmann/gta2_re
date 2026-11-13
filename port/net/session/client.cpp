@@ -210,7 +210,7 @@ void net::Client::OnSnapshotPart(BitReader& r)
 }
 
 // GTA2_NET_SNAPCHECK on the server: the entities this client read wrong, each with how it came and its fields against
-// the baseline's, each entity's first; the server prints what it sent (ReportSent): Scripts/port/net/snapdiff.py pairs them
+// the baseline's, each entity's first; the server prints what it sent (ReportSent): port/net/scripts/snapdiff.py pairs them
 void net::Client::ReportBadEntities(const SnapshotHeader& h, const Snapshot& base, const Snapshot& snap, const DeltaCheck& check)
 {
     // Each entity's first: it stays wrong after (an unchanged field carries the wrong value on), and the first is how
@@ -528,12 +528,13 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
     // Escape, and Y or N while its prompt shows, are this client's: the prompt to leave, drawn over the frame (ShowStatus).
     // Neither the game here nor the server gets them: the game's own quit prompt is on its player, which the snapshots
     // and resimulations set again (it showed for a moment), and the server's yes ended everyone's game
-    const uint32_t kKeyBits = 0x1FF000, kEscape = 0x01, kYes = 0x15, kNo = 0x31; // DIK_ESCAPE, DIK_Y, DIK_N
-    if (!mReplay && (local & kKeyDown) && (key == kEscape || (mLeavePrompt && (key == kYes || key == kNo))))
+    // Enter says yes too: a gamepad's A while the prompt shows (port_QuitMessageShown)
+    const uint32_t kKeyBits = 0x1FF000, kEscape = 0x01, kYes = 0x15, kNo = 0x31, kEnter = 0x1C; // DIK_ESCAPE, _Y, _N, _RETURN
+    if (!mReplay && (local & kKeyDown) && (key == kEscape || (mLeavePrompt && (key == kYes || key == kNo || key == kEnter))))
     {
         if (mFrame != mPromptKeyFrame + 1) // held: once
         {
-            if (key == kYes)
+            if (key == kYes || key == kEnter)
             {
                 printf("net: frame %u, left the game\n", mFrame);
                 mLeavePrompt = false;
@@ -545,6 +546,7 @@ uint32_t net::Client::ChooseInput(uint32_t recordedInput)
             }
         }
         mPromptKeyFrame = mFrame;
+        net::engine::ShowLeavePrompt(mLeavePrompt);
         local &= ~(kKeyDown | kKeyBits);
     }
     if (!mReplay && !mLeavePrompt && (local & kKeyDown))

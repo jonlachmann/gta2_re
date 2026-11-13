@@ -36,6 +36,7 @@ uint32_t LocalInput(); // what this machine's controls give for the next tick
 void SetPlayerInput(int player, uint32_t buttons); // for the next tick
 // The length of a network tick (the game's own setting offers 50, 40 or 33 ms)
 void SetTickMs(int ms);
+void ShowLeavePrompt(bool shown); // the client's "Leave the game?": the gamepad's A and B answer it (net_hooks.hpp)
 void IdleWait(); // while the game waits for its next step: a millisecond's sleep when that is more than 1 ms away
 void SeedRandom(uint32_t seed); // the game's rand() state (a server's: clients take it from snapshots)
 // A network game's random draws: each entity's update and each server service its own (port/src/rand/owner.hpp)

@@ -5,6 +5,7 @@
 #include "Camera.hpp"
 #include "pause_menu.hpp"
 #include "settings.hpp"
+#include "net_hooks.hpp"
 
 bool port_GameRunning()
 {
@@ -24,7 +25,7 @@ bool port_MenuUsesMouse()
 bool port_QuitMessageShown()
 {
     return port_GameRunning() && gGame_0x40->mLocalPlayer &&
-           (gGame_0x40->mLocalPlayer->mShowQuitMessage || PortPauseMenu::IsOpen());
+           (gGame_0x40->mLocalPlayer->mShowQuitMessage || PortPauseMenu::IsOpen() || gPortLeavePromptShown);
 }
 
 namespace
