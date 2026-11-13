@@ -17,7 +17,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-FLAGS = ("-fshort-wchar -std=c++20 -fms-extensions -Iport/compat/include -include port/compat/prelude.hpp -ISource -I. "
+FLAGS = ("-fshort-wchar -std=c++20 -fms-extensions -Iport/compat/include -Iport/include -include port/compat/prelude.hpp -ISource -I. "
          "-I/opt/homebrew/include -D_CRT_SECURE_NO_WARNINGS -D__NT__ -DGTA2_PORT -DNDEBUG -DBUILD_MSS").split()
 
 

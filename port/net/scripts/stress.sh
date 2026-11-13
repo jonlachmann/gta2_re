@@ -9,6 +9,10 @@
 #   -c  churn: every <seconds> a random bot is killed (SIGKILL, as a crash leaves) and joins again; its log and
 #       recording are the last run's
 # Logs and recordings: $BUILD/net_stress/<n>/. Exit 1 on a crash or a CHECK line.
+for v in BUILD GAME BIN; do # given as relative paths: from here (the games run in $GAME)
+  eval "p=\${$v:-}"
+  case $p in "" | /*) ;; *) eval "$v=\$PWD/\$p" ;; esac
+done
 cd "$(dirname "$0")/../../.."
 ROOT=$PWD
 BUILD=${BUILD:-$ROOT/build_mac} # BUILD=<cmake build folder>: another build
@@ -31,8 +35,13 @@ while getopts "m:n:s:p:gc:" o; do
 done
 [ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game (see net_check.sh)"; exit 1; }
 rm -rf "$OUT" && mkdir -p "$OUT"
-cp "$BIN" "$OUT/reg2" # a copy: building meanwhile doesn't touch it
-BIN=$OUT/reg2
+# A copy, so building meanwhile doesn't touch it: on macOS the whole app, its libraries are in it
+APP=${BIN%/Contents/MacOS/reg2}
+if [ "$APP" != "$BIN" ]; then
+  cp -R "$APP" "$OUT/reg2.app" && BIN=$OUT/reg2.app/Contents/MacOS/reg2
+else
+  cp "$BIN" "$OUT/reg2" && BIN=$OUT/reg2
+fi
 trap 'kill $(jobs -p) 2>/dev/null' EXIT
 BASE=$((34000 + RANDOM % 1000))
 BOTS=(carhop rammer soldier simple)
@@ -84,7 +93,7 @@ for n in $(seq 1 "$SERVERS"); do
     if grep -q "crashed" "$f"; then
       BAD=1
       echo "  $name CRASHED: $(grep -m1 crashed "$f" | cut -c1-100)"
-      grep -A12 "crashed" "$f" | grep -E "^ *[0-9]+ +gta2_port" | sed -n '2,5p' | sed -E 's/ +/ /g; s/^/      /' | cut -c1-120
+      grep -A12 "crashed" "$f" | grep -E "^ *[0-9]+ +reg2 |/reg2\(" | sed -n '2,5p' | sed -E 's/ +/ /g; s/^/      /' | cut -c1-120
       grep "net: crash state: the last updated" "$f" | sed 's/^/      /' | cut -c1-240
     fi
     if [ "$checks" != 0 ]; then

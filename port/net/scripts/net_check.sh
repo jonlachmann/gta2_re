@@ -13,6 +13,10 @@
 # usage: port/net/scripts/net_check.sh [--quick] [--record] [--save] [arena|live|churn|maps|rounds|soak|replay ...]
 #   --record  new fixtures (recorded sessions) and their logs; --save: the current build's replay logs as the baseline
 # Fixtures and logs: $BUILD/net_check/. Exit 1 if anything failed.
+for v in BUILD GAME BIN; do # given as relative paths: from here (the games run in $GAME)
+  eval "p=\${$v:-}"
+  case $p in "" | /*) ;; *) eval "$v=\$PWD/\$p" ;; esac
+done
 cd "$(dirname "$0")/../../.."
 ROOT=$PWD
 BUILD=${BUILD:-$ROOT/build_mac} # BUILD=<cmake build folder>: another build
@@ -33,7 +37,7 @@ done
 [ ${#STEPS[@]} -eq 0 ] && STEPS=(arena live churn maps rounds soak replay)
 [ -x "$BIN" ] && [ -d "$GAME/data" ] || { echo "no build or game: the port built in $BUILD (cmake -S port -B build_mac -G Ninja), and a game folder with data/ in $GAME"; exit 1; }
 mkdir -p "$OUT"
-trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (each job execs its game: killing it kills the game)
+trap 'kill $(jobs -p) 2>/dev/null' EXIT # our games end with us (most jobs exec their game; an arena match's subshell waits for it)
 FAILED=0
 pass() { echo "PASS $*"; }
 fail() { echo "FAIL $*"; FAILED=1; }

@@ -32,8 +32,8 @@ import torch
 import torch.nn as nn
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-BUILD = os.environ.get("BUILD", os.path.join(ROOT, "build_mac"))  # the cmake build folder
-GAME = os.environ.get("GAME", os.path.join(BUILD, "game"))  # a game folder with data/
+BUILD = os.path.abspath(os.environ.get("BUILD", os.path.join(ROOT, "build_mac")))  # the cmake build folder
+GAME = os.path.abspath(os.environ.get("GAME", os.path.join(BUILD, "game")))  # a game folder with data/
 BIN = os.path.join(BUILD, "reg2.app", "Contents", "MacOS", "reg2")
 if not os.path.exists(BIN):
     BIN = os.path.join(BUILD, "reg2")
@@ -338,7 +338,7 @@ def watch_match(nn_path, wait=True, ticks=0, scripted="simple"):
     """The policy against scripted bots (six in all), in a window at normal speed, following player 0 (the policy)"""
     others = scripted.split(",") if scripted else []
     brains = ",".join(["nn:" + os.path.abspath(nn_path)] * (6 - len(others)) + others)
-    cmd = [BIN, "--server", "--port", "7699", "--map", MAP, "--players", "6", "--arena", brains, "--seed", str(random.randrange(1, 1 << 31))]
+    cmd = [BIN, "--server", "--window", "--port", "7699", "--map", MAP, "--players", "6", "--arena", brains, "--seed", str(random.randrange(1, 1 << 31))]
     if ticks:
         cmd += ["--ticks", str(ticks)]
     p = subprocess.Popen(cmd, cwd=GAME, stdout=None if wait else subprocess.DEVNULL, stderr=None if wait else subprocess.DEVNULL)
