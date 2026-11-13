@@ -107,6 +107,11 @@ bool net::engine::LeftForMenu()
     return gLeftForMenu;
 }
 
+bool net::engine::GameClosed()
+{
+    return gGame_0x40 && gGame_0x40->GetExitType() == GameExitType::CloseGameImmediately_1;
+}
+
 // What a client's network game set that a single-player game would keep: the network game itself (the NetPlay
 // answers), the client mode's switches (no traffic, peds, scripts, police: set every frame in ClientModeFrame), the
 // replicas, the status over the frame

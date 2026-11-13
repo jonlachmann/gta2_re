@@ -90,9 +90,13 @@ net::engine::NetworkGame gMenuGame;
 // winmain.cpp, a network game over: a client that left goes back to the network page, the netcode as before the join
 int LeaveNetworkGame()
 {
+    if (!gClient || (!net::engine::LeftForMenu() && net::engine::GameClosed()))
+    {
+        return -1; // a server's or a replay's, or the window closed: the game's own end
+    }
     if (!net::engine::LeftForMenu())
     {
-        return -1;
+        gClient->Leave(); // its game ended another way: off the server too, and back to the network page
     }
     NetMenu_SetStatus(gClient ? gClient->LeftWhy() : "");
     delete gClient; // it left the server already

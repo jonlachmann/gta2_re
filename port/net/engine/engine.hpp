@@ -153,6 +153,7 @@ void ChangeMap(const std::string& gmp, const std::string& sty, const std::string
 // StopNetworkGame puts back what a single-player game expects
 void LeaveForMenu();
 bool LeftForMenu();
+bool GameClosed(); // the game ended by closing (its window): the program ends
 void StopNetworkGame();
 void KeepMapChange();
 int GameGeneration();
