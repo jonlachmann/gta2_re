@@ -2,6 +2,7 @@
 #include "Camera.hpp"
 #include "Game.hpp"
 #include "Player.hpp"
+#include "winmain.hpp"
 
 namespace PortView
 {
@@ -21,7 +22,7 @@ f32 ToF(Fix16 v)
 
 void BeginDraw()
 {
-    Player* pPlayer = gGame_0x40 && gGame_0x40->mNumPlayers == 1 ? gGame_0x40->mDrawPlayer : NULL;
+    Player* pPlayer = gGame_0x40 && gGame_0x40->mNumPlayers == 1 && !bStartNetworkGame ? gGame_0x40->mDrawPlayer : NULL;
     if (pPlayer)
     {
         const Camera& c = pPlayer->mViewCamera;

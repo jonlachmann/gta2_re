@@ -15,6 +15,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include "winmain.hpp"
 
 #if defined(GTA2_PORT_SDL)
 bool port_TwinStickInput(float* pMoveX, float* pMoveY, float* pAimX, float* pAimY);
@@ -114,7 +115,9 @@ s32 Diff(s32 a, s32 b)
 
 Ped* ControlledPed()
 {
-    Player* pPlayer = gGame_0x40 && !gFrontend && gGame_0x40->mNumPlayers == 1 ? gGame_0x40->mLocalPlayer : NULL;
+    // Single player only: a network game's server gets the input bits alone, so it would neither see nor predict these
+    // controls (also with --players 1)
+    Player* pPlayer = gGame_0x40 && !gFrontend && gGame_0x40->mNumPlayers == 1 && !bStartNetworkGame ? gGame_0x40->mLocalPlayer : NULL;
     return pPlayer && !pPlayer->mDisableAllControls && pPlayer->mCameraMode == 0 ? pPlayer->mPlayerPed : NULL;
 }
 
