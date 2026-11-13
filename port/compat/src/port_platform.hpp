@@ -62,6 +62,9 @@ int port_DefaultAltBinding(int control);
 bool port_AltKeyInGame(DWORD dik);
 // The layout's letter on the key at that DIK code's position (dinput.cpp), 0 if not a letter.
 int port_KeyLetter(int dik);
+// The character a key's last press typed, in the system's keyboard layout with shift (Latin-1, 0 none), for the
+// chat line (Hud.cpp): the game's tables (data/keyboard) are per key without shift, so a '/' behind shift never came
+unsigned short port_TypedChar(int dik);
 void port_CaptureStart(); // then the next key (DIK or mouse code) or pad code pressed, -1 until then
 int port_CapturedKey();
 int port_CapturedPad();

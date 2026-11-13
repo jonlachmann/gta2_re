@@ -36,6 +36,10 @@
 #include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
 #endif
 
+#if defined(GTA2_PORT_SDL)
+u16 port_TypedChar(s32 dik); // the character a key's last press typed, with shift (compat/src/dinput.cpp)
+#endif
+
 DEFINE_GLOBAL(Hud*, gHud_2B00, 0x706620);
 DEFINE_GLOBAL(s16, gDebugFont, 0x706600);
 DEFINE_STATIC_GLOBAL(s16, sPickupTextFont, 0x7064B8);
@@ -1470,9 +1474,9 @@ bool Hud_ChatInput::HandleChatInputKey(s32 action, Player* pPlayer)
         }
         else
         {
-#if defined(GTA2_PORT)
+#if defined(GTA2_PORT_SDL)
             // the game's table where no keyboard typed it: a network server's copy of a client's line (the key events)
-            const u16 typed = Port_TypedChar(action);
+            const u16 typed = port_TypedChar(action);
             const u16 char_value = gText_0x14->RemapExtendedChar(typed ? typed : gKeybrd_0x204->GetKey(action));
 #else
             const u16 char_value = gText_0x14->RemapExtendedChar(gKeybrd_0x204->GetKey(action));

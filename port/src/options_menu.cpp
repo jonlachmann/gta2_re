@@ -12,8 +12,8 @@
 #if defined(GTA2_UPDATE_CHECK)
 #include "registry.hpp"
 #include <SDL3/SDL.h>
-#include "net_hooks.hpp"
 #endif
+#include "net_hooks.hpp"
 
 // No std::wstring: with -fshort-wchar its traits would call the C library's 4-byte wide functions.
 

@@ -7,10 +7,6 @@
 class Sprite;
 struct Frontend;
 
-// The character a key's last press typed, in the system's keyboard layout with shift (Latin-1, 0 none), for the chat
-// line (Hud.cpp): the game's tables (data/keyboard) are per key without shift, so a '/' behind shift never came
-u16 Port_TypedChar(s32 dik);
-
 // Called last by the crash report: the netcode's view of the game, when set (a hook, so the platform layer doesn't
 // call into the netcode)
 extern void (*gPortCrashHook)();

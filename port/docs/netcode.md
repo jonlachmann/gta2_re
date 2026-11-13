@@ -56,7 +56,7 @@ After 30 s, or back as another player or on another map, it goes back to the net
 **Chat** is the game's own: F10 starts a line, each key types into it, Enter ends it, and every machine shows
 "name: line_" while it is typed. The key events reach the server in the commands, so the server's player types the
 same line, and the player entity carries it to the other clients. A key types the character the system's keyboard
-layout gives with shift (`Port_TypedChar`): the game's own tables (`data/keyboard`) have one character per key and no
+layout gives with shift (`port_TypedChar`): the game's own tables (`data/keyboard`) have one character per key and no
 shift. The server's copy of a line, which has no keyboard, types with the game's table (US, no shift).
 
 **Commands** are chat lines starting with `/`, sent to the server when typed to their end: `/ready`, `/start`,
@@ -339,7 +339,7 @@ The netcode's hooks in `Source/`, all under `GTA2_PORT` and declared in `port/sr
 | `winmain.cpp` | `gPortNextNetworkGame`, `gPortLeaveNetworkGame` | a map change goes to the next game; a client that left goes to the network page |
 | `map_0x370.cpp` | `gPortZoneRoundRobin` | the restart zones' turn, a function's static in the original: rolled back and sent |
 | `Ped.cpp` | `gPortKeepWantedPoints` | a client keeps the server's wanted points with its police off |
-| `Hud.cpp` | `Port_TypedChar` (`port/compat/src/dinput.cpp`) | the chat types the keyboard layout's characters |
+| `Hud.cpp` | `port_TypedChar` (`port/compat/src/dinput.cpp`) | the chat types the keyboard layout's characters |
 | `Hud.cpp` | `gPortServerKillNotices` | a client's kill notices are the server's deaths only |
 | `Pool.hpp`, `Car.cpp`, `Char_Pool.cpp`, `Game.cpp` | `PortRandScope` (`port/src/rand/owner.hpp`) | who a random draw belongs to |
 | `sound_obj.*`, `ParticleManager.cpp`, `Particle_4C.cpp` | `port/src/rand/sound.hpp`, `particle.hpp` | their own random streams; `SoundPosEntry` from the pool; `sound_obj`'s state public for the rollback |
