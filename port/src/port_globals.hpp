@@ -1,6 +1,7 @@
 // Every global and static of a GTA2_PORT build registers here with its name, 10.5.exe address and size, and for a
 // pointer to a complete type the size of what it points to. The network game saves and restores the world through them
-// (port/docs/netcode.md, "The rollback set"; port/net/engine/world.cpp).
+// (port/docs/netcode.md, "The rollback set"; port/net/engine/world.cpp). Not Source/Globals.hpp's GlobalRef: that one
+// is the hook DLL build's (MSVC, exported globals), and this one also keeps each name and what a pointer points to.
 #pragma once
 
 #include <stddef.h>

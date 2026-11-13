@@ -468,6 +468,13 @@ own (`single`) and rollback in scenes with explosions (`explode`).
 
 ## Open
 
+- **A server's spawn area is its own screen's**: the bounds where it spawns and removes traffic and peds come from its
+  cameras' screen size and ZOOM, widened by each client's lead, not from each client's screen. A widescreen or
+  zoomed-out client can see cars and peds appear at its sides. Next: the client's screen size and zoom in its hello,
+  applied to that player's cameras on the server.
+- **reG2's frame loop in a network game**: steps and frames go the original's way (a step, then a frame), so no frame
+  limit above 30, no interpolation and no SHOW FPS. Interpolating would need the netcode's frame hook on reG2's steps.
+- **Typing on the network page with a gamepad**: the address and name take the keyboard only.
 - **Other players at car doors**: most of the remaining large corrections of other players are with the server at a
   door. Next: a remote player the server has at a door put there at once instead of walked there by its predicted
   inputs, measured on recorded sessions (`GTA2_NET_COMPARE`, `GTA2_NET_JERKLOG`).
