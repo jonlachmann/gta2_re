@@ -396,7 +396,7 @@ tick and its fields against the baseline's; the client tells the server, which p
 snapshots it keeps. `port/net/scripts/snapdiff.py build_mac/net_stress/<n>` pairs the two: the fields that differ.
 A field the server sent unchanged that the client has otherwise was written in the client's memory since it came.
 
-**The crash report** (`port/compat/src/main.cpp`, then the netcode's `DebugOnCrash`): the backtrace, then the frame and tick, the
+**The crash report** (`port/compat/src/main.cpp`, installed for network games only, then the netcode's `DebugOnCrash`): the backtrace, then the frame and tick, the
 rollback block being saved or restored if that is where it was (`gCopyingBlock`), the ped and the car whose update
 started last (`PortRand::gLastPed`, `PortRand::gLastCar`: a crash in a ped's or a car's update names
 it), and on a client its player, cameras and their cars.
