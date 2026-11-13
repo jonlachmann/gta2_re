@@ -17,6 +17,7 @@
 #include "settings.hpp"
 #include <stdio.h>
 #include <vector>
+#include "winmain.hpp"
 
 EXTERN_GLOBAL(s16, word_7064D8);
 
@@ -269,6 +270,10 @@ void Release()
 
 bool HandleKey(s32 action, Player* pPlayer)
 {
+    if (bStartNetworkGame)
+    {
+        return false; // the server goes on without a pause: Escape is the network game's leave prompt
+    }
     if (!sOpen)
     {
         if (action != DIK_ESCAPE || pPlayer->mShowQuitMessage || bSkip_quit_confirm || !pPlayer->IsUser())
