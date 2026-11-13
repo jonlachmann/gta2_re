@@ -29,6 +29,9 @@
 #include "voice_line.hpp"
 #include "car_shop_event.hpp"
 #include <math.h>
+#if defined(GTA2_PORT)
+#include "../port/src/rand/sound.hpp" // VC6's rand, on a stream of its own in a network game (docs/netcode.md)
+#endif
 
 // Forward declarations: the functions below are in address order
 EXTERN_GLOBAL(u16, gObjSoundDelayKind17);

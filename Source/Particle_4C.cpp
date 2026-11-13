@@ -18,6 +18,9 @@ EXTERN_GLOBAL(Fix16, kFP16Zero_6FD49C);
 #include "ScriptManager.hpp"
 #include "Object_3C.hpp"
 #include "CarPhysics.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/rand/particle.hpp" // particles on a stream of their own in a network game (docs/netcode.md)
+#endif
 
 EXTERN_GLOBAL(Fix16, kFpPoint2_6FD2F0);
 EXTERN_GLOBAL(Fix16, kFpOne64th_6FD448);
