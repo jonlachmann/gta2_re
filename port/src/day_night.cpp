@@ -82,7 +82,8 @@ void SetDay(f32 day)
 void SetAmbient(f32 ambient)
 {
 #if defined(GTA2_PORT_SDL)
-    if (!PortSettings::DayNightCycle() || !gpRng)
+    // A network game: the original's lighting, not each player's own cycle (some at night, some by day)
+    if (!PortSettings::DayNightCycle() || !gpRng || bStartNetworkGame)
     {
         SetDay(0.0f);
         port_SetAmbient(ambient, ambient, ambient, 1.0f);
