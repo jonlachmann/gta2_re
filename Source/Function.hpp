@@ -250,33 +250,79 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
     #define NOT_IMPLEMENTED
     #define WIP_IMPLEMENTED
 
-    #define DEFINE_GLOBAL(type, name, addr) type name
-    #define DEFINE_STATIC_GLOBAL(type, name, addr) static type name
-    #define DEFINE_STATIC_GLOBAL_INIT(type, name, value, addr) static type name = value
-    #define DEFINE_STATIC_GLOBAL_ARRAY(type, name, size, addr) static type name[size]
-    #define DEFINE_STATIC_GLOBAL_ARRAY_INIT(type, name, size, addr, va_args) static type name[size] = {va_args}
-    #define DEFINE_GLOBAL_INIT(type, name, value, addr) type name = value
+    #if defined(GTA2_PORT)
+        // The port registers every global and static, for the network game's rollback (port/src/port_globals.hpp)
+        #include "../port/src/port_globals.hpp"
+    #else
+        #define PORT_GLOBAL_AS(id, var, addr) static const int portGlobal_##id = 0
+        #define PORT_GLOBAL(name, addr) PORT_GLOBAL_AS(name, name, addr)
+    #endif
+    #define DEFINE_GLOBAL(type, name, addr) \
+        type name;                          \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_STATIC_GLOBAL(type, name, addr) \
+        static type name;                          \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_STATIC_GLOBAL_INIT(type, name, value, addr) \
+        static type name = value;                              \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_STATIC_GLOBAL_ARRAY(type, name, size, addr) \
+        static type name[size];                                \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_STATIC_GLOBAL_ARRAY_INIT(type, name, size, addr, va_args) \
+        static type name[size] = {va_args};                                  \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_GLOBAL_INIT(type, name, value, addr) \
+        type name = value;                              \
+        PORT_GLOBAL(name, addr)
 
-    #define DEFINE_GLOBAL_ARRAY(type, name, size, addr) type name[size]
-    #define DEFINE_GLOBAL_ARRAY_INIT(type, name, size, addr, va_args) type name[size] = {va_args}
+    #define DEFINE_GLOBAL_ARRAY(type, name, size, addr) \
+        type name[size];                                \
+        PORT_GLOBAL(name, addr)
+    #define DEFINE_GLOBAL_ARRAY_INIT(type, name, size, addr, va_args) \
+        type name[size] = {va_args};                                  \
+        PORT_GLOBAL(name, addr)
 
     #define EXTERN_GLOBAL(type, name) extern type name
     #define EXTERN_GLOBAL_ARRAY(type, name, size) extern type name[size]
 
     #define STATIC_MEMBER(type, name) static type name
     #define STATIC_MEMBER_ARRAY(type, name, size) static type name[size]
-    #define DEFINE_STATIC_MEMBER(type, cls, name, addr) type cls::name
-    #define DEFINE_STATIC_MEMBER_INIT(type, cls, name, value, addr) type cls::name = value
-    #define DEFINE_STATIC_MEMBER_ARRAY(type, cls, name, size, addr) type cls::name[size]
-    #define DEFINE_STATIC_MEMBER_ARRAY_INIT(type, cls, name, size, addr, va_args) type cls::name[size] = {va_args}
+    #define DEFINE_STATIC_MEMBER(type, cls, name, addr) \
+        type cls::name;                                 \
+        PORT_GLOBAL_AS(cls##_##name, cls::name, addr)
+    #define DEFINE_STATIC_MEMBER_INIT(type, cls, name, value, addr) \
+        type cls::name = value;                                     \
+        PORT_GLOBAL_AS(cls##_##name, cls::name, addr)
+    #define DEFINE_STATIC_MEMBER_ARRAY(type, cls, name, size, addr) \
+        type cls::name[size];                                       \
+        PORT_GLOBAL_AS(cls##_##name, cls::name, addr)
+    #define DEFINE_STATIC_MEMBER_ARRAY_INIT(type, cls, name, size, addr, va_args) \
+        type cls::name[size] = {va_args};                                         \
+        PORT_GLOBAL_AS(cls##_##name, cls::name, addr)
 #endif
 
 // A static inside the one function that uses it. Only for constant initializers: a constructor would add an init
 // guard the original doesn't have.
-#define LOCAL_STATIC(type, name, addr) static type name
-#define LOCAL_STATIC_INIT(type, name, value, addr) static type name = value
-#define LOCAL_STATIC_ARRAY(type, name, size, addr) static type name[size]
-#define LOCAL_STATIC_ARRAY_INIT(type, name, size, addr, va_args) static type name[size] = {va_args}
+#if defined(GTA2_PORT)
+    #define LOCAL_STATIC(type, name, addr) \
+        static type name;                  \
+        PORT_GLOBAL(name, addr)
+    #define LOCAL_STATIC_INIT(type, name, value, addr) \
+        static type name = value;                      \
+        PORT_GLOBAL(name, addr)
+    #define LOCAL_STATIC_ARRAY(type, name, size, addr) \
+        static type name[size];                        \
+        PORT_GLOBAL(name, addr)
+    #define LOCAL_STATIC_ARRAY_INIT(type, name, size, addr, va_args) \
+        static type name[size] = {va_args};                          \
+        PORT_GLOBAL(name, addr)
+#else
+    #define LOCAL_STATIC(type, name, addr) static type name
+    #define LOCAL_STATIC_INIT(type, name, value, addr) static type name = value
+    #define LOCAL_STATIC_ARRAY(type, name, size, addr) static type name[size]
+    #define LOCAL_STATIC_ARRAY_INIT(type, name, size, addr, va_args) static type name[size] = {va_args}
+#endif
 
 #if defined(GTA2_PORT) && __SIZEOF_POINTER__ == 8
     #define GTA2_PORT_64BIT
