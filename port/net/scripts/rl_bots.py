@@ -373,7 +373,7 @@ def main():
     ap.add_argument("--watch", nargs="?", const=os.path.join(OUT, "latest.nn"), metavar="NN", help="watch a match in a window instead")
     args = ap.parse_args()
     if not os.path.exists(os.path.join(GAME, "data")):
-        sys.exit("no game in %s: run Scripts/port/run/run_mac.sh once" % GAME)
+        sys.exit("no game in %s: GAME=<a game folder with data/>, see port/README.md" % GAME)
     if args.watch:
         watch_match(args.watch, scripted=args.scripted)
         return

@@ -60,7 +60,7 @@ void OnStopSignal(int)
 // Before any network game's start: what each end draws its random numbers from, and the log
 void NetworkSetup(bool server)
 {
-    PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same (milestone S)
+    PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same
     PortRandParticle_Separate(true); // and particles: a resimulation makes the flames it made before
     net::engine::SetRandOwners(!server); // and each entity and server service its own: the same wherever it runs
     if (!server)
@@ -183,7 +183,7 @@ int NetMain_Init(std::vector<std::string>& args)
         {
             SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "GTA2_HEADLESS", "1", true); // what port_Headless reads
         }
-        // Up to the game's 6 players until the player cap is a port setting (N6)
+        // Up to the game's 6 players until the player cap is a port setting
         if (sc.game.players < 1 || sc.game.players > 6)
         {
             fprintf(stderr, "net: --players 1-6\n");

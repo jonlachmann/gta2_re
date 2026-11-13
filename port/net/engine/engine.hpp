@@ -11,7 +11,7 @@ namespace net
 {
 namespace engine
 {
-// --- The game (snapshot.cpp, netplay.cpp, client_mode.cpp, guards.cpp) ---
+// --- The game (snapshot.cpp, netplay.cpp, client_mode.cpp, guards.cpp, replica.cpp) ---
 
 // A network game for the game to boot (netplay.cpp answers the game's network layer with it)
 struct NetworkGame
@@ -49,7 +49,7 @@ void AnchorAttachments();
 // After every tick, on the server too: what the game's own logic can leave behind that crashes it later (guards.cpp)
 void GuardPeds();
 
-// --- Snapshots (schema.cpp, snapshot.cpp) ---
+// --- Snapshots (schema.cpp, snapshot.cpp, players.cpp) ---
 
 // The net schema: entities as plain numbers
 const Schema& NetSchema();
@@ -93,7 +93,7 @@ void SetSnapshotReach(Snapshot& snap, float blocks);
 int AgeField(uint8_t type);
 int EntityAge(const EntityState& e);
 
-// --- Players (players.cpp) ---
+// --- Players (players.cpp, spawn.cpp) ---
 
 // A player entity's player index and input bits; false for other entities
 bool PlayerOf(const EntityState& e, int* pPlayer, uint32_t* pButtons);
@@ -114,7 +114,7 @@ bool PlayerInCar(int player); // in this game
 // How far a player's camera shows (blocks, centre to corner): it zooms out with speed
 float PlayerViewRadius(int player);
 // The spawning (a server's): the players the limits are for, and how many ticks ahead of this game each one's client
-// shows its player (0: here, a bot); its cameras' bounds move that far along their motion for each tick (players.cpp)
+// shows its player (0: here, a bot); its cameras' bounds move that far along their motion for each tick (spawn.cpp)
 void SetSpawnPlayers(int players);
 void SetSpawnLead(int player, int ticks);
 int SpawnLead(int player);
@@ -133,7 +133,7 @@ struct LocalChat
 LocalChat TakeLocalChat();
 void PutLocalChat(const LocalChat& chat);
 
-// --- Rounds (rounds.cpp, N6): the frag and time limits are the netcode's (the game gets none it would end on), a
+// --- Rounds (rounds.cpp, netplay.cpp, slots.cpp, world_entity.cpp): the frag and time limits are the netcode's (the game gets none it would end on), a
 // round that reaches one starts the next on the same map. The server keeps the round; snapshots carry it ---
 
 typedef RoundState Round; // the round's phase, votes and limits (session/round_flow.cpp keeps a server's)
@@ -227,7 +227,7 @@ struct NavMap
 void BuildNavMap(NavMap& out);
 void DumpNavMap(const NavMap& map, const char* path); // as a picture (PGM): grey by height, black blocked
 
-// --- Statistics for the logs (stats.cpp) ---
+// --- Statistics for the logs (stats.cpp, replica.cpp) ---
 
 // A client's replicas: how many cars and peds are mapped, and how far (in blocks, the largest) the mapped ones are
 // from <snap> right now, before it is applied: the drift of one tick of the client's own sim

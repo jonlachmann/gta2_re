@@ -57,7 +57,7 @@ const int kDoor = net::engine::MemberIndex(kValues, kValueCount, offsetof(Ped, m
 // removal, in the pathfinder's list, on fire with a flame object of this game's)
 const u32 kFlagsSent = ~((1u << 0) | (1u << 10) | (1u << 14) | (1u << 24));
 
-// Its states (Ped::field_278 ..): set only when both sides have it on foot and alive; in, into and out of cars and
+// Its states (Ped::mPedState1 ..): set only when both sides have it on foot and alive; in, into and out of cars and
 // deaths go their own ways (replica.cpp, below)
 enum
 {
@@ -104,7 +104,7 @@ const Member kCharValues[] = {CM(mCharState, 4, true),      CM(mTargetRotation, 
                               CM(mAnimationState, 4, true), CM(mAnimationFrame, 1, false), CM(mFrameTimer, 1, true),
                               CM(mFrameDelay, 1, true),
                               // its wander: the next idle behaviour's timer and the turn it takes (Char::SelectRandomIdleBehavior,
-                              // ApplyRandomRotationJitter), its jumps, and the push off another ped (Char::state_1_5504F0)
+                              // ApplyRandomRotationJitter), its jumps, and the push off another ped (Char::UpdateFleeOrRunning)
                               CM(mTimer, 2, false), CM(mRotationJitter, 2, true), CM(mJumpScaleCounter, 1, true),
                               CM(mRepulsionTimer, 1, false), CM(mRepulsionRotation, 2, true)};
 #undef CM
@@ -288,7 +288,7 @@ bool CharPlain(int32_t charState, int32_t anim)
 }
 
 // States that stand on their own: walking, running (or fleeing), standing. The others go with something only the side
-// that played them has (a ped pulled out of a car, 8/17, uses its char's car: Char::state_8_5520A0), so they stay here
+// that played them has (a ped pulled out of a car, 8/17, uses its char's car: Char::UpdateImmobilized), so they stay here
 bool Plain(int32_t state1, int32_t state2)
 {
     return (state1 == ped_state_1::walking_0 || state1 == ped_state_1::flee_or_running_1 || state1 == ped_state_1::standing_still_7) &&
@@ -492,7 +492,7 @@ bool net::engine::ApplyPedState(Ped* p, const EntityState& e)
     {
         // In a car, or on its way into or out of one, on either side: that is replica.cpp's (ForceIntoCar, ForceOutOfCar
         // when both have settled). The AI's objectives and targets then belong to the entering and leaving: set from the
-        // server's, the char's walk to a door read a car the client had no part in (Char::state_8_5520A0)
+        // server's, the char's walk to a door read a car the client had no part in (Char::UpdateImmobilized)
         return true;
     }
     // The references first: one this game doesn't have (out of its area) keeps the ped as it is here for this snapshot,

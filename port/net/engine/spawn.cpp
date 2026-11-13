@@ -61,8 +61,7 @@ void LeadCameras()
 } // namespace
 
 // Up to 3 players' worth. A server's traffic cars have drivers of their own, and with 6 players' worth (96
-// of them, 120 ambient peds and the police) the ped pool (200) ran out: a crash in the game's AI. More wants a server
-// built with bigger pools (GTA2_POOL_SCALE)
+// of them, 120 ambient peds and the police) the ped pool (200) ran out: a crash in the game's AI. More wants bigger pools
 void net::engine::SetSpawnPlayers(int players)
 {
     gPortSpawnPlayers = players < 1 ? 1 : players > 3 ? 3 : players;

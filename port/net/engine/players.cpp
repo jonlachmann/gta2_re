@@ -394,7 +394,7 @@ void net::engine::ApplyPlayer(const EntityState& e)
     ped->mWantedPoints = (s16)e.f[kPlayerWanted];
     if (i != LocalPlayer())
     {
-        UnpackChat(p, e); // the others' typing; ours is this game's (KeepLocalChat)
+        UnpackChat(p, e); // the others' typing; ours is this game's (TakeLocalChat, PutLocalChat)
     }
     if (CarryOutDeath(i, p, ped, e))
     {

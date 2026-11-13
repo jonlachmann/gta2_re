@@ -126,7 +126,7 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
     // it finds them)
     if (gLightGrid)
     {
-        Block b = {(unsigned char*)gLightGrid, 0x1000 * sizeof(Light*), "gLightGrid_6F5400[]"};
+        Block b = {(unsigned char*)gLightGrid, 0x1000 * sizeof(Light*), "gLightGrid[]"};
         blocks.push_back(b);
     }
     Block deaths = {0, 0, "net deaths"};

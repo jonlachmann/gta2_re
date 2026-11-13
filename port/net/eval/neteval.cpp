@@ -269,7 +269,7 @@ void RandUse(int ticks)
     fprintf(stderr, "neteval rand: per tick %.1f draws in the sim, %.2f in the sound service\n", (double)sim / ticks, (double)sound / ticks);
 }
 
-// Milestone S (port/docs/netcode.md): the same 30 ticks twice from one state, both with the sound service, with sound's
+// Sound in a rollback (port/docs/netcode.md): the same 30 ticks twice from one state, both with the sound service, with sound's
 // random numbers on their own stream: the world outside the sound layer must come out the same, and the heap intact
 void SoundRollback(const std::vector<Block>& blocks)
 {

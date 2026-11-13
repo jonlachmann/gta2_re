@@ -66,7 +66,7 @@ void net::engine::GuardPeds()
         }
     }
     // A ped knocked flying (its body an object, Ped::mpObj2C) whose object is gone (the snapshot's removal, or
-    // the server's pickups taking its place): Char::state_8_5520A0 read the object's sprite, freed (a crash at the end
+    // the server's pickups taking its place): Char::UpdateImmobilized read the object's sprite, freed (a crash at the end
     // of a long game). Without it, the game's own way: the ped is killed where it lies
     for (Ped* p = gPedPool->mPool.mpPrev; p; p = p->mpNext)
     {

@@ -1,5 +1,5 @@
 // port/net: the network bots' features and actions (bot.hpp), and the "nn:<file>" brain: a multilayer perceptron
-// from Scripts/port/bots/rl_bots.py (PPO, with torch). The file:
+// from port/net/scripts/rl_bots.py (PPO, with torch). The file:
 //   mlp <argmax|sample> <layers> <inputs> <size>... <kBotLogits>
 // then per layer, per output, its weights for each input and a bias. Hidden layers are tanh.
 #include "bot.hpp"

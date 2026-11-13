@@ -2,7 +2,7 @@
 // matches between bots without the network, headless and fast (net_check.sh's arena step); a windowed server shows
 // one of them.
 //
-// "remote:<port>[:<teacher>]" slots are played by a trainer (Scripts/port/bots/rl_bots.py) over a local TCP connection, one round trip
+// "remote:<port>[:<teacher>]" slots are played by a trainer (port/net/scripts/rl_bots.py) over a local TCP connection, one round trip
 // every kBotDecisionTicks for all of them. The game sends (native byte order, all 32-bit):
 //   count, done, kBotFeatures, then per remote slot: slot, alive, reward since the last message, the buttons its
 //   teacher would press (a scripted brain, "hunter" by default: for kickstarting), its features

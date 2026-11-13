@@ -93,7 +93,7 @@ enum CarField
     kCarDamage, // Car::mDamage (32000 and up: exploded), the server's
     kCarAreas, // its dented areas (Car::mDamagedAreas)
     kCarWrecked, // exploded or burning out (the wreck countdown running, or a wreck)
-    kCarLights, // Car::mLightFlags (brake, head, emergency lights...), field_A5 flash phase, field_A7 horn, field_A8 horn cooldown
+    kCarLights, // Car::mLightFlags (brake, head, emergency lights...), mFlashPhaseCounter, mHorn, mHornCooldown
     kCarFlash,
     kCarHorn,
     kCarHornCooldown,

@@ -147,11 +147,11 @@ void Prune(Pass& a)
 // ped would point at a removed car (the sound listener's camera follows a player's corpse and reads its car,
 // sound_obj::InterrogateAudioEntities)
 // A ped here going for it (to get in, after it, at its door) keeps it too: freed, the ped read it on (its sprite,
-// Char::state_3_551A00, a crash). It goes on a later snapshot, once the server's ped is about something else
+// Char::UpdateEnteringCar, a crash). It goes on a later snapshot, once the server's ped is about something else
 // The shared traffic driver doesn't keep it: the game leaves that one pointing at a freed car itself
 // (KillContainedPeds spares a dummy driver). Kept, a car the server dropped drove on here, into the server's cars
-// Its char's target car keeps it only while the char goes by it (getting in or out, Char::state_3_551A00 to state_5,
-// state_8_5520A0, sitting in it): the game never clears it, and a ped long out of the car (a player too) kept it here for good
+// Its char's target car keeps it only while the char goes by it (getting in or out, Char::UpdateEnteringCar to UpdateEnteringTrain,
+// UpdateImmobilized, sitting in it): the game never clears it, and a ped long out of the car (a player too) kept it here for good
 bool CharUsesTarget(const Ped* p)
 {
     const s32 s = p->mPedState1;
