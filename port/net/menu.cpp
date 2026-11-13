@@ -3,7 +3,7 @@
 // background (NetMenu_Join, NetMenu_Poll: the menu runs on meanwhile). Once the server welcomes us the network game is
 // set up as the command line's --connect does, and the frontend boots it as it boots a level (Booting_Map_2), with
 // the game's own network start filling in the session (Start_NetworkGame). The page is one of the frontend's
-// unused ones (12); the game draws it, this file takes its input (gPortFrontendInput) and writes its labels. The
+// unused ones (13); the game draws it, this file takes its input (gPortFrontendInput) and writes its labels. The
 // address and the name are kept in gta2_registry.ini, beside the game's own network settings.
 #include "net_main.hpp"
 #include "port/src/net_hooks.hpp"
@@ -21,7 +21,7 @@ EXTERN_GLOBAL(SoundObject, snd1); // the frontend's sound: 1 up, 2 down, 5 enter
 
 namespace
 {
-const u16 kPage = MENUPAGE_12;
+const u16 kPage = MENUPAGE_13; // 12 is the options's (port/src/options_menu.cpp)
 const u16 kNoTarget = 268; // an ENTERABLE option's target the game does nothing for (UpdatePageFromUserInput)
 enum
 {

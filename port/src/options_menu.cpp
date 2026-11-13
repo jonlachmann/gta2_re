@@ -12,6 +12,7 @@
 #if defined(GTA2_UPDATE_CHECK)
 #include "registry.hpp"
 #include <SDL3/SDL.h>
+#include "net_hooks.hpp"
 #endif
 
 // No std::wstring: with -fshort-wchar its traits would call the C library's 4-byte wide functions.
@@ -246,10 +247,18 @@ void Setup(Frontend* pFrontend)
 
     // The start menu's "Options" opened GTA2 Manager.
     pFrontend->mMenuPagesArray[MENUPAGE_START_MENU].mOptionsArray[1].mMenuPageTarget = kMenuPage;
+    if (gPortFrontendSetup)
+    {
+        gPortFrontendSetup(pFrontend); // the network game's page (port/net/menu.cpp)
+    }
 }
 
 bool Update(Frontend* pFrontend)
 {
+    if (gPortFrontendInput && gPortFrontendInput(pFrontend))
+    {
+        return true; // the network game's page took it (port/net/menu.cpp)
+    }
     if (pFrontend->mCurrentPageIdx != kMenuPage)
     {
         if (sShown)
