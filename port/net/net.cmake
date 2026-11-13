@@ -17,7 +17,7 @@ endif()
 file(GLOB net_core_src ${NET}/core/*.cpp)
 file(GLOB net_transport_src ${NET}/transport/*.cpp)
 
-# The netcode's tests: no game, no SDL3
+# The netcode's tests: no game, no SDL3 (GTA2_GAME=OFF configures only these)
 add_executable(test_core ${NET}/tests/test_core.cpp ${net_core_src})
 add_executable(test_transport ${NET}/tests/test_transport.cpp ${net_transport_src} ${net_core_src})
 target_link_libraries(test_transport PRIVATE enet)

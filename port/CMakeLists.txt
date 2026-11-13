@@ -38,8 +38,18 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(arch_flags -m32)
 endif()
 
-enable_testing()
-include(net/net.cmake)
+# Windows can also build with DMA's DLLs (DirectX renderer and video, Miles, Bink) next to the exe.
+option(GTA2_PORT_DIRECTX "Windows: use the original DirectX, Miles and Bink DLLs instead of SDL3" OFF)
+
+# The network game's ENet and the netcode's tests (ctest -L net); GTA2_GAME=OFF builds only those, without SDL3
+option(GTA2_GAME "the game; OFF: only the netcode's tests" ON)
+if(NOT (WIN32 AND GTA2_PORT_DIRECTX))
+    enable_testing()
+    include(net/net.cmake)
+endif()
+if(NOT GTA2_GAME)
+    return()
+endif()
 
 # The game relies on what VC6 did with undefined behaviour (uninitialised locals returned on unused
 # paths, null checks after use): clang must not optimise on it.
@@ -47,9 +57,6 @@ add_compile_options(
     ${arch_flags} -fms-extensions -fasm-blocks -fshort-wchar -fsigned-char
     -fno-strict-aliasing -fwrapv -ftrivial-auto-var-init=zero -fno-delete-null-pointer-checks -fno-autolink -w -Wno-address-of-temporary -Wno-c++11-narrowing)
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS GTA2_PORT)
-
-# Windows can also build with DMA's DLLs (DirectX renderer and video, Miles, Bink) next to the exe.
-option(GTA2_PORT_DIRECTX "Windows: use the original DirectX, Miles and Bink DLLs instead of SDL3" OFF)
 
 if(WIN32 AND GTA2_PORT_DIRECTX)
     include_directories(${CMAKE_CURRENT_LIST_DIR}/include ${ROOT}/Source ${ROOT})
@@ -156,7 +163,8 @@ else()
     endif()
     # reg2, not gta2: unpacked into a GTA2 folder, it must not replace the original's gta2.exe.
     set_target_properties(gta2 PROPERTIES OUTPUT_NAME reg2)
-    target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3 enet)
+    # dladdr: the network game's random draw log (net/engine/dev/compare.cpp); in libdl before glibc 2.34
+    target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3 enet ${CMAKE_DL_LIBS})
     if(openal_runtime AND NOT APPLE)
         add_custom_command(TARGET gta2 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${openal_runtime} $<TARGET_FILE_DIR:gta2>)
