@@ -26,9 +26,12 @@ struct Handle
 // bots' training)
 double port_ClockSpeed()
 {
-    const char* speed = SDL_getenv("GTA2_SPEED");
-    static const double sSpeed = speed ? atof(speed) : 1.0;
-    return sSpeed > 0 ? sSpeed : 1.0;
+    static const double sSpeed = [] {
+        const char* speed = SDL_getenv("GTA2_SPEED");
+        const double k = speed ? atof(speed) : 1.0;
+        return k > 0 ? k : 1.0;
+    }();
+    return sSpeed;
 }
 
 // GTA2_HEADLESS: no window content, no sound, no gamepads (a dedicated server, the tests). Both read once, after main.cpp
