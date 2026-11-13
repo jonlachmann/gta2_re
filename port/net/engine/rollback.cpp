@@ -121,7 +121,15 @@ void net::engine::RestoreGame(const SavedWorld& in)
     const size_t radio = offsetof(sound_obj, mRadioStationChangeMode);
     static unsigned char sRadio[sizeof(sound_obj) - offsetof(sound_obj, mRadioStationChangeMode)];
     memcpy(sRadio, (unsigned char*)&gSound_obj + radio, sizeof(sRadio));
+    // The window's size is this machine's, not the world's: a resize since the save (its cameras' screen size, set only
+    // on a change) would otherwise go back to the old one for good
+    const Camera* view = gGame_0x40 && gGame_0x40->mLocalPlayer ? &gGame_0x40->mLocalPlayer->mViewCamera : NULL;
+    const s32 screenW = view ? view->mScreenPxWidth : 0, screenH = view ? view->mScreenPxHeight : 0;
     RestoreWorld(RollbackSet(), in.mImpl->bytes);
+    if (view && (view->mScreenPxWidth != screenW || view->mScreenPxHeight != screenH))
+    {
+        gGame_0x40->SetScreenSize(screenW, screenH);
+    }
     memcpy(channels, sLive, to - from);
     memcpy((unsigned char*)&gSound_obj + radio, sRadio, sizeof(sRadio));
     gSound_obj.mnActiveSamples = active;
