@@ -58,7 +58,7 @@
 #include "winmain.hpp"
 #include "ped_graphic_type.hpp"
 #if defined(GTA2_PORT)
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
 #endif
 
 // Modes of ChangePedStatesByMode: the ped_state_1/ped_state_2 pair each one sets

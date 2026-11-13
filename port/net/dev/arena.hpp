@@ -1,4 +1,4 @@
-// port/net dev (docs/netcode.md, "Bots"): an arena, bot players on the server itself (--arena): matches for tests and
+// port/net dev (port/docs/netcode.md, "Bots"): an arena, bot players on the server itself (--arena): matches for tests and
 // the bots' training (a trainer's socket: Scripts/port/bots/rl_bots.py).
 #pragma once
 #include "../core/snapshot.hpp"

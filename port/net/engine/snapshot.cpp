@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Entities"): a snapshot captured from and applied to the game; the world entity
+// port/net (port/docs/netcode.md, "Entities"): a snapshot captured from and applied to the game; the world entity
 // (world_entity.cpp), the players (players.cpp), cars (cars.cpp), a client's replicas (replica.cpp) and pickups
 // (pickups.cpp) do the parts. Also the helpers the engine's files share, the game's controls the session uses
 // (running, the player count, the inputs, the tick) and a client's view of what is shown.
@@ -181,6 +181,17 @@ void net::engine::SetPlayerInput(int player, uint32_t buttons)
     if (player >= 0 && player < MAX_PLAYERS)
     {
         sCurrentNetInputs.mInputs[player].mInputs = buttons;
+    }
+}
+
+void net::engine::IdleWait()
+{
+    // The game spins on its message loop and RunGameFrame until winmain.cpp's sMatchStartTime, as the original does,
+    // and would keep a core busy. Never when a step is due (lockstep runs, replays), so nothing runs slower
+    static const u32& sNextStep = PortStatic<u32>(0x6F5A28);
+    if ((s32)(sNextStep - timeGetTime()) > 1)
+    {
+        Sleep(1);
     }
 }
 

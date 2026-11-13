@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "The server"): a server's ambient traffic and peds for every player, not the first: the game's
+// port/net (port/docs/netcode.md, "The server"): a server's ambient traffic and peds for every player, not the first: the game's
 // limits times the players (up to 3 players' worth), and each player's camera bounds out to where its client shows it.
 #include "internal.hpp"
 #include "dev/dev.hpp"

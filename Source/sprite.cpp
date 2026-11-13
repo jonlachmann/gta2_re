@@ -32,7 +32,7 @@
 #include "../port/src/shadows.hpp"
 #include "../port/src/day_night.hpp"
 #include "../port/src/twin_stick.hpp"
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
 #endif
 
 // Forward declarations: the functions below are in address order

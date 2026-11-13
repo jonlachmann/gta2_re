@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Running"): the netcode's command line.
+// port/net (port/docs/netcode.md, "Running"): the netcode's command line.
 //   --server [--port N] [--map <mmp>] [--players N] [--gametype 1-3] [--fraglimit N] [--timelimit min] [--tickms N]
 //            (the limits end a round: the round flow, session/round_flow.cpp)
 //            [--minplayers N] [--warmup s] [--results s] [--votes start,map,kick] [--rounds on|off]  (the round flow)

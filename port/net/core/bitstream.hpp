@@ -1,4 +1,4 @@
-// port/net core (docs/netcode.md, "Wire format"): a little-endian bit stream. The reader never reads past its end:
+// port/net core (port/docs/netcode.md, "Wire format"): a little-endian bit stream. The reader never reads past its end:
 // it returns zeros and remembers the overflow, so a malformed packet from a client is rejected, not trusted.
 #pragma once
 #include <stddef.h>

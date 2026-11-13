@@ -1,4 +1,4 @@
-// port/net transport (docs/netcode.md, "Code layout"): hosts, peers and channels, independent of the library
+// port/net transport (port/docs/netcode.md, "Code layout"): hosts, peers and channels, independent of the library
 // underneath (enet_transport.cpp). A server host has many peers, a client host one, the server.
 #pragma once
 #include <stddef.h>

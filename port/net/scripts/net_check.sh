@@ -1,5 +1,5 @@
 #!/bin/bash
-# The netcode's checks in one go (docs/netcode.md, "Checks"), on the macOS build (port/README.md):
+# The netcode's checks in one go (port/docs/netcode.md, "Checks"), on the macOS build (port/README.md):
 #   arena   bot matches on the server alone, several maps, brains and seeds: none may crash
 #   live    a server and two bot clients over a bad link (100 ms, jitter, loss): no crash, no CHECK line
 #   churn   two bot clients staying while two others join and leave, four times (stopped: SIGTERM, Ctrl-C): no

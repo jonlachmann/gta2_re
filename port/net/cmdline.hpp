@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Running"): the netcode's command line, see cmdline.cpp.
+// port/net (port/docs/netcode.md, "Running"): the netcode's command line, see cmdline.cpp.
 #pragma once
 #include "session/client.hpp"
 #include "session/server.hpp"

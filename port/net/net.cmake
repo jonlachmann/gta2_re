@@ -1,4 +1,4 @@
-# The network game (docs/netcode.md): ENet, vendored, and the netcode's parts without the game, with their tests
+# The network game (port/docs/netcode.md): ENet, vendored, and the netcode's parts without the game, with their tests
 # (ctest -L net). Included before the game's compile options: these are plain C and C++.
 set(NET ${CMAKE_CURRENT_LIST_DIR})
 

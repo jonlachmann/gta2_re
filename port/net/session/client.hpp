@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "How it works"): the client. It predicts its game ahead of the server's snapshots, sends
+// port/net (port/docs/netcode.md, "How it works"): the client. It predicts its game ahead of the server's snapshots, sends
 // its input, reconciles each snapshot (rolls back, applies it, runs the ticks since again) and shows the result.
 #pragma once
 #include "../core/protocol.hpp"

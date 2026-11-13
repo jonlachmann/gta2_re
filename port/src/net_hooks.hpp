@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, "The game's code"): what the game's code (Source/, under GTA2_PORT) calls or reads for the
+// Port (port/docs/netcode.md, "The game's code"): what the game's code (Source/, under GTA2_PORT) calls or reads for the
 // network game, in one place. The Source/ files include this under #if defined(GTA2_PORT), so VC6 never sees it;
 // port/net/ sets them. Each is NULL, or the original's value, until a network game starts.
 #pragma once
@@ -43,9 +43,6 @@ extern bool (*gPortFrontendInput)(Frontend* pFrontend);
 // winmain.cpp, a network game over: the frontend page to go back to (a client that left), or -1 (the game's own)
 extern int (*gPortLeaveNetworkGame)();
 extern void (*gPortDrawOverlay)(); // drawn last in Game::Draw; NULL unless the netcode draws over the frame
-// Map_0x370::GetNextZoneOfTypeRoundRobin's place, rolled back and sent by a network server: as the original's function
-// static it is outside the rollback set, and a client would respawn at another restart zone than the server's
-extern s16 gPortZoneRoundRobin;
 // Asked when a network game has ended (winmain.cpp): true to start the next one at once, without the frontend (a
 // dedicated server's map change)
 extern bool (*gPortNextNetworkGame)();

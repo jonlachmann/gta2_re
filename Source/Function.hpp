@@ -305,6 +305,8 @@ void __stdcall LogFuncAddr(u32 codeAddr, s32 mode);
 // A static inside the one function that uses it. Only for constant initializers: a constructor would add an init
 // guard the original doesn't have.
 #if defined(GTA2_PORT)
+    // Registered when the function first runs (port/src/port_globals.hpp): the network game's rollback set takes such
+    // a static in once it is there (port/net/engine/world.cpp)
     #define LOCAL_STATIC(type, name, addr) \
         static type name;                  \
         PORT_GLOBAL(name, addr)

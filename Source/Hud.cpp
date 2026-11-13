@@ -33,7 +33,7 @@
 #include "TextTable.hpp"
 #include "winmain.hpp"
 #if defined(GTA2_PORT)
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
 #endif
 
 #if defined(GTA2_PORT_SDL)

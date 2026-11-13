@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Code layout"): the session's lifetime: a server, a client, a replay, or a join from the
+// port/net (port/docs/netcode.md, "Code layout"): the session's lifetime: a server, a client, a replay, or a join from the
 // frontend's network page, started from the command line (cmdline.cpp) and ended when the game ends.
 #include "net_main.hpp"
 #include "cmdline.hpp"
@@ -74,7 +74,7 @@ void NetworkSetup(bool server)
 void StartClientGame(const net::engine::NetworkGame& game)
 {
     atexit(LeaveServer);
-    gPortIdleHook = [] { gClient->Idle(); }; // pongs timed as they come
+    gPortIdleHook = [] { gClient->Idle(); net::engine::IdleWait(); }; // pongs timed as they come
     signal(SIGTERM, OnStopSignal);
     signal(SIGINT, OnStopSignal);
 #if !defined(_WIN32)
@@ -168,7 +168,7 @@ int NetMain_Init(std::vector<std::string>& args)
     net::ServerConfig& sc = o.sc;
     net::ClientConfig& cc = o.cc;
     gPortTrafficCap = o.traffic;
-    gPortNoAudio = o.server; // nobody hears a server (port_hooks.hpp)
+    gPortNoAudio = o.server; // nobody hears a server (port/src/net_hooks.hpp)
     if (!o.server && o.connect.empty() && o.replay.empty())
     {
         gMenuConfig = cc; // the frontend's network page may join a server later (port/net/menu.cpp)
@@ -209,7 +209,7 @@ int NetMain_Init(std::vector<std::string>& args)
         }
         net::engine::StartNetworkGame(sc.game);
         gTickMs = sc.game.tickMs;
-        gPortIdleHook = [] { gServer->Idle(); }; // pings answered at once
+        gPortIdleHook = [] { gServer->Idle(); net::engine::IdleWait(); }; // pings answered at once
     }
     else if (!o.replay.empty())
     {

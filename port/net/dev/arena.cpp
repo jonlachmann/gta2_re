@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Bots"): the server's own players, a bot brain each, with no client (--arena). For
+// port/net (port/docs/netcode.md, "Bots"): the server's own players, a bot brain each, with no client (--arena). For
 // matches between bots without the network, headless and fast (net_check.sh's arena step); a windowed server shows
 // one of them.
 //

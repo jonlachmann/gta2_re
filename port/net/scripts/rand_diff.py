@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compares two GTA2_NET_RANDLOG logs (a server's and a client's, docs/netcode.md "Checks"): per function that drew,
+"""Compares two GTA2_NET_RANDLOG logs (a server's and a client's, port/docs/netcode.md "Checks"): per function that drew,
 the rand() draws per tick on each side.
 
 usage: port/net/scripts/rand_diff.py <program> <server log> <client log>

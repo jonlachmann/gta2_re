@@ -1,4 +1,4 @@
-// port/net engine dev (docs/netcode.md, "Checks"): the engine's checks, logs and test cheats, for port/net/dev and the
+// port/net engine dev (port/docs/netcode.md, "Checks"): the engine's checks, logs and test cheats, for port/net/dev and the
 // session's logs. Each is off unless its GTA2_NET_* switch is set (Debug()), or called by a test hook only.
 #pragma once
 #include "../engine.hpp"

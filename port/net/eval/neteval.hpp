@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, "Measurements behind the design"): GTA2_NETEVAL, see neteval.cpp.
+// Port (port/docs/netcode.md, "Measurements behind the design"): GTA2_NETEVAL, see neteval.cpp.
 #pragma once
 #include "../engine/world.hpp"
 #include <vector>

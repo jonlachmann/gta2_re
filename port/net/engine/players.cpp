@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Entities"): the players as snapshot entities,
+// port/net (port/docs/netcode.md, "Entities"): the players as snapshot entities,
 // and the server's put into a client's game: health, deaths, weapons, power-ups, its car, its place.
 #include "internal.hpp"
 #include "world.hpp"

@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "The server"): player slots coming into and going out of a running network game. A slot
+// port/net (port/docs/netcode.md, "The server"): player slots coming into and going out of a running network game. A slot
 // without a client is out of the game the way the game handles a player who left (Player::Disconnect:
 // its ped walks on as a pedestrian). A slot that gets a client gets a new player ped at the next restart zone,
 // as the map script's PLAYER_PED makes one (ScriptThread::Handle_PLAYER_PED) and Player::InitPlayerPed

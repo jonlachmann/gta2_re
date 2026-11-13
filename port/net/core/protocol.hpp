@@ -1,4 +1,4 @@
-// port/net core (docs/netcode.md, "Wire format"): constants and the messages client and server exchange. Every
+// port/net core (port/docs/netcode.md, "Wire format"): constants and the messages client and server exchange. Every
 // message starts with its type (one byte); readers return false on anything malformed.
 #pragma once
 #include <vector>
@@ -10,7 +10,7 @@ namespace net
 {
 const uint32_t kProtocolVersion = 18;
 const uint16_t kDefaultPort = 27920;
-const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (docs/netcode.md, "Wire format")
+const size_t kMaxPayload = 1372; // the largest unreliable ENet packet that isn't fragmented at mtu 1400 (port/docs/netcode.md, "Wire format")
 const uint8_t kChannelUnreliable = 0; // snapshots, commands
 const uint8_t kChannelReliable = 1; // join, events, chat
 const int kChannelCount = 2;

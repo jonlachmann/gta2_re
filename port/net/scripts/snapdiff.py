@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# The snapshot check's findings (GTA2_NET_SNAPCHECK, docs/netcode.md "Checks"), field by field: each entity a client
+# The snapshot check's findings (GTA2_NET_SNAPCHECK, port/docs/netcode.md "Checks"), field by field: each entity a client
 # read wrong ("... entity <id> (<type>) is wrong, <how>: <fields>") against what the server says it sent then
 # ("... read entity <id> of snapshot <tick> wrong; we sent (...): <fields>"). Prints the fields that differ.
 # usage: port/net/scripts/snapdiff.py <dir with the server's and the clients' logs> (build_mac/net_stress/<n>)

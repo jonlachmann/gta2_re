@@ -1,4 +1,4 @@
-// port/net engine dev (docs/netcode.md, "Checks"): a server's test cheats, for the checks that need a death, a weapon, a
+// port/net engine dev (port/docs/netcode.md, "Checks"): a server's test cheats, for the checks that need a death, a weapon, a
 // wanted level, a power-up or a car at a given tick (GTA2_NET_TEST*, run by the server's test hooks, port/net/dev).
 #include "../internal.hpp"
 #include "dev.hpp"

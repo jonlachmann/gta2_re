@@ -4,6 +4,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 #include <SDL3/SDL.h>
+#include "port_platform.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -25,11 +26,13 @@ struct Handle
 // bots' training)
 double port_ClockSpeed()
 {
-    static const double sSpeed = getenv("GTA2_SPEED") ? atof(getenv("GTA2_SPEED")) : 1.0;
+    const char* speed = SDL_getenv("GTA2_SPEED");
+    static const double sSpeed = speed ? atof(speed) : 1.0;
     return sSpeed > 0 ? sSpeed : 1.0;
 }
 
-// GTA2_HEADLESS: no window content, no sound, no gamepads (a dedicated server, the tests)
+// GTA2_HEADLESS: no window content, no sound, no gamepads (a dedicated server, the tests). Both read once, after main.cpp
+// gave the network game's command line its say
 bool port_Headless()
 {
     static const bool sHeadless = SDL_getenv("GTA2_HEADLESS") != NULL; // SDL's: a server sets it (port/net/net_main.cpp)

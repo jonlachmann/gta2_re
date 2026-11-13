@@ -1,4 +1,4 @@
-// port/net engine dev (docs/netcode.md, "Checks"): the engine's checks and logs, each off unless its GTA2_NET_* switch is
+// port/net engine dev (port/docs/netcode.md, "Checks"): the engine's checks and logs, each off unless its GTA2_NET_* switch is
 // set: the collision grid and the players' cars, the crash state, the self, animation, sound and gang logs, the server
 // marker. Nothing here changes the game.
 #include "../internal.hpp"

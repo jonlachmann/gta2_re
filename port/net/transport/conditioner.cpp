@@ -1,4 +1,4 @@
-// port/net transport (docs/netcode.md, "The server"): a link conditioner for tests. It wraps a transport and holds every
+// port/net transport (port/docs/netcode.md, "The server"): a link conditioner for tests. It wraps a transport and holds every
 // send back by a delay with jitter, and drops some unreliable ones. On both ends, a round trip gets twice the delay.
 #include "transport.hpp"
 #include "../core/protocol.hpp"

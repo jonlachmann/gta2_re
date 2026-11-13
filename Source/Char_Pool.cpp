@@ -23,7 +23,8 @@
 #include <dinput.h>
 #include "ped_graphic_type.hpp"
 #if defined(GTA2_PORT)
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
+#include "../port/src/rand/owner.hpp" // PortRandScope: who a random draw belongs to
 #endif
 
 // Defined in Ped.cpp

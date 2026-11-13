@@ -1,4 +1,4 @@
-// port/net engine (docs/netcode.md, "Playing"): what a client shows over the frame: the connection's status (the ping,
+// port/net engine (port/docs/netcode.md, "Playing"): what a client shows over the frame: the connection's status (the ping,
 // an outage), the round's panel (warmup, countdown, results, votes) and announcements.
 #include "internal.hpp"
 #include "dev/dev.hpp"

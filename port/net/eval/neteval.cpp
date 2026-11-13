@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, "Measurements behind the design"): GTA2_NETEVAL=rand,soundrollback,churn,diverge,single,explode, measurements
+// Port (port/docs/netcode.md, "Measurements behind the design"): GTA2_NETEVAL=rand,soundrollback,churn,diverge,single,explode, measurements
 // for the netcode design. The sim bench (sim_bench.cpp) runs them after its fill (if any) and before the tick
 // benchmark. GTA2_NETEVAL_OUT=<file>: the per-offset churn.
 #include "neteval.hpp"
@@ -269,7 +269,7 @@ void RandUse(int ticks)
     fprintf(stderr, "neteval rand: per tick %.1f draws in the sim, %.2f in the sound service\n", (double)sim / ticks, (double)sound / ticks);
 }
 
-// Milestone S (docs/netcode.md): the same 30 ticks twice from one state, both with the sound service, with sound's
+// Milestone S (port/docs/netcode.md): the same 30 ticks twice from one state, both with the sound service, with sound's
 // random numbers on their own stream: the world outside the sound layer must come out the same, and the heap intact
 void SoundRollback(const std::vector<Block>& blocks)
 {

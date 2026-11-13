@@ -1,5 +1,7 @@
-// Port (docs/netcode.md): the registry of port_globals.hpp.
+// Port (port/docs/netcode.md): the registry of port_globals.hpp.
 #include "port_globals.hpp"
+#include <stdio.h>
+#include <stdlib.h>
 #include <vector>
 
 namespace
@@ -27,6 +29,17 @@ void* PortGlobalAt(unsigned int ogAddr)
         }
     }
     return 0;
+}
+
+void* PortGlobalAtOrDie(unsigned int ogAddr)
+{
+    void* p = PortGlobalAt(ogAddr);
+    if (!p)
+    {
+        fprintf(stderr, "no global or static registered at 0x%X\n", ogAddr);
+        abort();
+    }
+    return p;
 }
 
 const PortGlobal* const* PortGlobals(size_t* pCount)

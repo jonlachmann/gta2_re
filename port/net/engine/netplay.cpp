@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Code layout"): the game's network layer (NetPlay, NetUi) for the port, in place of
+// port/net (port/docs/netcode.md, "Code layout"): the game's network layer (NetPlay, NetUi) for the port, in place of
 // DirectPlay (NetPlay.cpp, NetUi.cpp). Without a network game it answers like a single-player machine: no players,
 // no messages. With one (StartNetworkGame, or the GTA2_OFFLINE_MP experiment) the game boots a network game with
 // its settings, and NetPlay::SendToAll, which the game calls once per network frame after the tick, is the
@@ -34,7 +34,7 @@ bool WorldStill()
     return net::WorldStandsStill(net::engine::CurrentRound().phase);
 }
 
-// GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>] (docs/netcode.md, "Measurements behind the design"): a local
+// GTA2_OFFLINE_MP=<players>:<gmp>:<sty>:<scr>[:<game type 1-3>] (port/docs/netcode.md, "Measurements behind the design"): a local
 // network game without the netcode, only player 0 with input
 void CheckEnvironment()
 {

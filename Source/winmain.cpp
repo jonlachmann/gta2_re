@@ -66,7 +66,7 @@
 #include "TextTable.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/frame_loop.hpp"
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
 #endif
 
 DEFINE_STATIC_GLOBAL(u8, sNetDisconnectPlayersBits, 0x6F56B8);

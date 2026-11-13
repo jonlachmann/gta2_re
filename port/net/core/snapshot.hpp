@@ -1,4 +1,4 @@
-// port/net core (docs/netcode.md, "Entities" and "Wire format"): entity states as plain numbers, described by a
+// port/net core (port/docs/netcode.md, "Entities" and "Wire format"): entity states as plain numbers, described by a
 // schema (field names and bit widths), and their delta coding against a baseline the receiver has. Which game
 // values the fields hold is engine/'s business; this only moves numbers.
 #pragma once

@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Playing"): a match as rounds on one map. The game ends a network game at its frag
+// port/net (port/docs/netcode.md, "Playing"): a match as rounds on one map. The game ends a network game at its frag
 // limit (PlayerScoreTracker: frags >= the limit) and its time limit (ManageNetworkTimeAndHudPager), which a
 // dedicated server can't come back from; so the game gets neither (StartNetworkGame) and the server ends a round
 // itself (session/server.cpp), here: scores, weapons and power-ups gone, everyone at a restart zone.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stress the netcode until something breaks (docs/netcode.md, "Checks"): <servers> servers side by side, each with four
+# Stress the netcode until something breaks (port/docs/netcode.md, "Checks"): <servers> servers side by side, each with four
 # bot clients (carhop, rammer, soldier, simple), every round a fresh game on the same map, the clock <speed> times as
 # fast. Everything that helps find a bug is on: the clients check the collision grid (GTA2_NET_CHECKGRID) and the
 # server's snapshots (GTA2_NET_SNAPCHECK), and record their sessions. A crash report names the ped and car last updated.

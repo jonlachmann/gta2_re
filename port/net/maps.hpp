@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Running"): the multiplayer maps (data/<name>.mmp) and a server's map lists.
+// port/net (port/docs/netcode.md, "Running"): the multiplayer maps (data/<name>.mmp) and a server's map lists.
 #pragma once
 #include "engine/engine.hpp"
 #include "session/server.hpp"

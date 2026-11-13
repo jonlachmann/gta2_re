@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Bots"): bots as players that perceive and decide on their own. A bot gets a view of
+// port/net (port/docs/netcode.md, "Bots"): bots as players that perceive and decide on their own. A bot gets a view of
 // what its client knows (its own body as predicted, the snapshot's players, cars and peds, the static map) and
 // returns the input bits a person would press. It uses none of the game's logic (no route finder, no ped AI), so
 // other brains can come in: smarter ones, or one that sends the view to another process and reads its answer.

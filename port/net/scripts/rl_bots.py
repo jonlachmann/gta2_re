@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trains the bots with reinforcement learning (PPO, torch) by self-play (docs/netcode.md, "Bots").
+"""Trains the bots with reinforcement learning (PPO, torch) by self-play (port/docs/netcode.md, "Bots").
 
 Headless arena servers (--arena remote:<port>,...) connect to this script; every 3 ticks each sends what its remote
 bots see and the reward since (port/net/dev/arena.cpp) and gets their buttons back. One policy plays all

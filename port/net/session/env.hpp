@@ -1,11 +1,11 @@
-// port/net (docs/netcode.md, "Environment variables"): the session's GTA2_NET_* switches, read once (env.cpp). Most
+// port/net (port/docs/netcode.md, "Environment variables"): the session's GTA2_NET_* switches, read once (env.cpp). Most
 // are for the checks and test hooks (port/net/dev).
 #pragma once
 #include <stdint.h>
 
 namespace net
 {
-// The session's GTA2_NET_* switches (docs/netcode.md), read once
+// The session's GTA2_NET_* switches (port/docs/netcode.md), read once
 struct SessionEnv
 {
     const char* record; // a file to record the client's session to

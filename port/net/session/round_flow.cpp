@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Playing"): the phases of a match's rounds and the players' votes (round_flow.hpp).
+// port/net (port/docs/netcode.md, "Playing"): the phases of a match's rounds and the players' votes (round_flow.hpp).
 #include "round_flow.hpp"
 #include <ctype.h>
 #include <stdio.h>

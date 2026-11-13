@@ -1,4 +1,4 @@
-// port/net dev (docs/netcode.md, "Checks"): the client's checks and test logs, each off unless its GTA2_NET_* switch is
+// port/net dev (port/docs/netcode.md, "Checks"): the client's checks and test logs, each off unless its GTA2_NET_* switch is
 // set: the comparison check (the prediction against each snapshot), the divergence check (on our own from a tick), the
 // players' car check, the corrections, animation, input, self and sound logs, the jerk statistics, the server marker and
 // test commands. The client calls it at fixed places in its frame and its reconcile.

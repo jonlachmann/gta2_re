@@ -24,9 +24,6 @@
 #include "CollisionSoundQueue.hpp"
 #include "block_face.hpp"
 #include "car_surface_type_more.hpp"
-#if defined(GTA2_PORT)
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
-#endif
 
 DEFINE_GLOBAL(Map_0x370*, gMap_0x370, 0x6F6268);
 DEFINE_STATIC_MEMBER(gmp_block_info*, Map_0x370, sBlockInfo0, 0x6F5EB0);
@@ -255,12 +252,15 @@ s32 Map_0x370::FindZoneIdxByName(const char_type* pZoneName, u8 zone_name_len)
     return -1;
 }
 
+#if defined(GTA2_PORT)
+// A file static in port builds: registered from the start, so the network game rolls it back and sends it to clients
+DEFINE_STATIC_GLOBAL(s16, sLastIdx_6F626C, 0x6F626C);
+#endif
+
 MATCH_FUNC(0x4DF0F0)
 gmp_map_zone* Map_0x370::GetNextZoneOfTypeRoundRobin(u8 zone_type)
 {
-#if defined(GTA2_PORT)
-    s16& sLastIdx_6F626C = gPortZoneRoundRobin; // in the network game's rollback set, and sent to clients
-#else
+#if !defined(GTA2_PORT)
     static s16 sLastIdx_6F626C; // the turn, one for every zone type: a call for one type moves it on for the others too
 #endif
 

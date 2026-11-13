@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "The client"): a snapshot's cars and peds in a client's game. Each server entity gets a
+// port/net (port/docs/netcode.md, "The client"): a snapshot's cars and peds in a client's game. Each server entity gets a
 // local one: adopted if the client's game already has the same one (the map script made it on both sides at the
 // start), else created; moved to the server's state every snapshot; removed when the server no longer sends it.
 // Local cars and peds the server doesn't know (other than the players' own) are removed.

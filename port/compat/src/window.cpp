@@ -10,7 +10,6 @@
 #include "port_platform.hpp"
 #include "../../setup/setup.hpp"
 #include "../../src/net_hooks.hpp" // gPortIdleHook
-#include "../../src/port_globals.hpp" // PortStatic
 
 namespace
 {
@@ -223,14 +222,10 @@ BOOL WINAPI PeekMessageA(MSG* pMsg, HWND, UINT, UINT, UINT flags)
     if (Queue().empty())
     {
         // A network game paces itself as the original does, spinning on this and RunGameFrame: the netcode polls the
-        // network here (a ping answered at once), then a millisecond's sleep while the next step is more than 1 ms away
+        // network here (a ping answered at once) and sleeps while the next step is far enough away
         if (gPortIdleHook)
         {
             gPortIdleHook();
-            if ((int)(PortStatic<DWORD>(0x6F5A28) - timeGetTime()) > 1) // winmain.cpp's sMatchStartTime: the next step
-            {
-                SDL_Delay(1);
-            }
         }
         return FALSE;
     }

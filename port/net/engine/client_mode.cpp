@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "The client"): a client simulates what moves, not what decides. Spawning,
+// port/net (port/docs/netcode.md, "The client"): a client simulates what moves, not what decides. Spawning,
 // despawning, scripts and the emergency services are the server's; the game's own debug switches turn them off,
 // so the decomp needs no hooks for it. Network games clear those switches at the start (ClearDebugFlags),
 // so they are set again every frame.

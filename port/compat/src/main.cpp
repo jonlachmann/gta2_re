@@ -127,7 +127,7 @@ int main(int argc, char** argv)
         }
     }
 #if defined(GTA2_PORT_SDL)
-    const int net = NetMain_Init(args); // --server, --connect (docs/netcode.md)
+    const int net = NetMain_Init(args); // --server, --connect (port/docs/netcode.md)
     if (net < 0)
     {
         return 1;

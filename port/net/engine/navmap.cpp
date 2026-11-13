@@ -1,4 +1,4 @@
-// port/net (docs/netcode.md, "Bots"): the map's walkable cells for bots. A cell is its column's highest block (road,
+// port/net (port/docs/netcode.md, "Bots"): the map's walkable cells for bots. A cell is its column's highest block (road,
 // pavement or field); a walker may step to a neighbour of the same height, or one level up or down where either
 // side is a slope, unless a wall face is in the way on the walking level or the ground block (the faces the
 // game's own collision tests: left/right for x, top/bottom for y).

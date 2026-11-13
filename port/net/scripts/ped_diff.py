@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compares a server's GTA2_NET_DUMPPEDS dump with a client's (the divergence check, docs/netcode.md "Checks").
+"""Compares a server's GTA2_NET_DUMPPEDS dump with a client's (the divergence check, port/docs/netcode.md "Checks").
 
 usage: port/net/scripts/ped_diff.py <server dump> <client dump> [--peds N]
 

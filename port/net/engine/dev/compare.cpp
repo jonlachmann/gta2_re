@@ -1,4 +1,4 @@
-// port/net engine dev (docs/netcode.md, "Checks"): the comparison check (GTA2_NET_COMPARE: the client's prediction against
+// port/net engine dev (port/docs/netcode.md, "Checks"): the comparison check (GTA2_NET_COMPARE: the client's prediction against
 // each snapshot, field by field), the divergence check (GTA2_NET_DIVERGE), and the ped and rand() dumps that go with them.
 #include "../internal.hpp"
 #include "dev.hpp"
@@ -45,7 +45,7 @@ using net::EntityState;
 using net::Snapshot;
 } // namespace
 
-// --- The comparison check (docs/netcode.md, "Checks"): the client's prediction for a tick against the server's state
+// --- The comparison check (port/docs/netcode.md, "Checks"): the client's prediction for a tick against the server's state
 // at it, field by field. Called with the game restored to the snapshot's tick, before the snapshot is applied ---
 
 namespace
@@ -205,7 +205,7 @@ void net::engine::ComparePrediction(const Snapshot& snap)
     });
 }
 
-// --- The divergence check (GTA2_NET_DIVERGE, docs/netcode.md "Checks"): the server's state applied once, then this
+// --- The divergence check (GTA2_NET_DIVERGE, port/docs/netcode.md "Checks"): the server's state applied once, then this
 // game on its own. Per field, after how many ticks each entity first differed from the server's ---
 
 namespace

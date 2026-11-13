@@ -1,4 +1,4 @@
-// Port (docs/netcode.md, "The rollback set"): every global and static of a GTA2_PORT build registers here with its name, 10.5.exe
+// Port (port/docs/netcode.md, "The rollback set"): every global and static of a GTA2_PORT build registers here with its name, 10.5.exe
 // address and size, and for a pointer to a complete type the size of what it points to. The network game
 // saves and restores the world through them (net/engine/world.cpp).
 #pragma once
@@ -20,10 +20,12 @@ struct PortGlobal
 const PortGlobal* const* PortGlobals(size_t* pCount);
 // The global registered with that 10.5.exe address, or NULL: how port code reaches a file or function static
 void* PortGlobalAt(unsigned int ogAddr);
+// The same, as a reference; aborts with the address if none is registered there (a renamed or moved static)
+void* PortGlobalAtOrDie(unsigned int ogAddr);
 template <class T>
-inline T& PortStatic(unsigned int ogAddr) // ponytail: a linear search per use, cache the reference if it gets hot
+inline T& PortStatic(unsigned int ogAddr) // a linear search per use: keep it out of tight loops
 {
-    return *static_cast<T*>(PortGlobalAt(ogAddr));
+    return *static_cast<T*>(PortGlobalAtOrDie(ogAddr));
 }
 
 template <class T, class = void>
@@ -71,5 +73,3 @@ inline unsigned int PortPointeeSizeOf(T* const*) // a pointer: the size of what 
 #define PORT_GLOBAL_AS(id, var, addr) \
     static const PortGlobal portGlobal_##id(&var, addr, sizeof(var), #var, PortPointeeSizeOf(&var))
 #define PORT_GLOBAL(name, addr) PORT_GLOBAL_AS(name, name, addr)
-// A function's static registers when the function first runs (ponytail: one first used after the network game took
-// its rollback set is out of it until the next game; give it a file static if that matters)

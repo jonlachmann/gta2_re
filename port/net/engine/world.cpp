@@ -1,11 +1,10 @@
-// port/net (docs/netcode.md, "Code layout"): the rollback set, see world.hpp.
+// port/net (port/docs/netcode.md, "Code layout"): the rollback set, see world.hpp.
 #include "world.hpp"
 #include "internal.hpp"
 #include "Source/Game.hpp"
 #include "Source/Light.hpp"
 #include "Source/Player.hpp"
 #include "port/src/port_globals.hpp"
-#include "port/src/net_hooks.hpp" // gPortZoneRoundRobin: a function's static in the original (map_0x370.cpp), not a registered global
 #include <string.h>
 
 EXTERN_GLOBAL(Light**, gLightGrid);
@@ -133,10 +132,6 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
     Block deaths = {0, 0, "net deaths"};
     NetDeaths_Memory(&deaths.addr, &deaths.size);
     blocks.push_back(deaths);
-    // The restart zones' turn: out of the set, a respawn in a resimulation took the turn again, and a client respawned at
-    // another zone than the server's
-    Block zones = {(unsigned char*)&gPortZoneRoundRobin, sizeof(gPortZoneRoundRobin), "restart zone round robin"};
-    blocks.push_back(zones);
     Block particles = {0, 0, "particle random stream"};
     unsigned int size = 0;
     PortRandParticle_Memory(&particles.addr, &size);

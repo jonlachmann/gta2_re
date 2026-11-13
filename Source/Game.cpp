@@ -1,18 +1,8 @@
 #include "Game.hpp"
 #include "ped_group_type.hpp"
 #if defined(GTA2_PORT)
-#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
 #include "../port/src/rand/owner.hpp" // PortRandScope
-#endif
-// A service only the server runs draws its own random numbers in a network game (port/src/rand/owner.hpp)
-#if defined(GTA2_PORT)
-    #define PORT_RAND_SERVICE(key, call) \
-        { \
-            PortRandScope portRandScope(key); \
-            call; \
-        }
-#else
-    #define PORT_RAND_SERVICE(key, call) call
 #endif
 #include "ped_class.hpp"
 #include "AmbulanceService.hpp"
@@ -80,6 +70,17 @@
 #include "sprite.hpp"
 #include "TextTable.hpp"
 #include "winmain.hpp"
+
+// A service only the server runs draws its own random numbers in a network game (port/src/rand/owner.hpp)
+#if defined(GTA2_PORT)
+    #define PORT_RAND_SERVICE(key, call) \
+        { \
+            PortRandScope portRandScope(key); \
+            call; \
+        }
+#else
+    #define PORT_RAND_SERVICE(key, call) call
+#endif
 
 DEFINE_GLOBAL_INIT(Fix16, kFpFive_67DECC, Fix16(5), 0x67DECC);
 DEFINE_STATIC_GLOBAL_INIT(Fix16, kFpFive, kFpFive_67DECC, 0x67DFB4);

@@ -1,4 +1,4 @@
-// port/net dev (docs/netcode.md, "Checks"): the server's test hooks and logs, each off unless its GTA2_NET_* switch is
+// port/net dev (port/docs/netcode.md, "Checks"): the server's test hooks and logs, each off unless its GTA2_NET_* switch is
 // set: test kills, power-ups and cars at given ticks, every player kept armed or wanted; the gang, ped and rand() logs
 // and the jerk statistics of the server's own state. The server calls it at two places in its frame.
 #pragma once
