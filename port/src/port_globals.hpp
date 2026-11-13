@@ -18,6 +18,13 @@ struct PortGlobal
 
 // All registered globals (in the order their files initialise)
 const PortGlobal* const* PortGlobals(size_t* pCount);
+// The global registered with that 10.5.exe address, or NULL: how port code reaches a file or function static
+void* PortGlobalAt(unsigned int ogAddr);
+template <class T>
+inline T& PortStatic(unsigned int ogAddr) // ponytail: a linear search per use, cache the reference if it gets hot
+{
+    return *static_cast<T*>(PortGlobalAt(ogAddr));
+}
 
 template <class T, class = void>
 struct PortIsComplete : std::false_type
@@ -44,10 +51,21 @@ inline unsigned int PortPointeeSizeOf(const T*) // not a pointer
 {
     return 0;
 }
+// A Win32 handle (DECLARE_HANDLE: a struct with only "int unused") is no pointer to data: the compat layer's values are
+// its own objects or fakes ((HINSTANCE)1)
+template <class T, class = void>
+struct PortIsHandle : std::false_type
+{
+};
+template <class T>
+struct PortIsHandle<T, decltype(void(&T::unused))> : std::true_type
+{
+};
+
 template <class T>
 inline unsigned int PortPointeeSizeOf(T* const*) // a pointer: the size of what it points to
 {
-    return PortPointeeSizeImpl<T>(PortIsComplete<T>());
+    return PortPointeeSizeImpl<T>(std::integral_constant<bool, PortIsComplete<T>::value && !PortIsHandle<T>::value>());
 }
 
 #define PORT_GLOBAL_AS(id, var, addr) \

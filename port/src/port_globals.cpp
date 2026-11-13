@@ -17,6 +17,18 @@ PortGlobal::PortGlobal(const void* pVar, unsigned int ogAddr, unsigned int size,
     List().push_back(this);
 }
 
+void* PortGlobalAt(unsigned int ogAddr)
+{
+    for (size_t i = 0; i < List().size(); i++)
+    {
+        if (List()[i]->mOgAddr == ogAddr)
+        {
+            return const_cast<void*>(List()[i]->mVar);
+        }
+    }
+    return 0;
+}
+
 const PortGlobal* const* PortGlobals(size_t* pCount)
 {
     *pCount = List().size();
