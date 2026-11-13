@@ -104,8 +104,8 @@ that wasn't ending.
   not Quake 3's) and the server keeps a small input buffer per player.
 - **State is fixed-point.** Positions are `Fix16` (14 fractional bits), angles `Ang16` (0-1439): a position and
   rotation go over the wire losslessly, so predicted and server state agree to the bit when nothing else interferes.
-- **State is pools allocated once**, about 3.5 MB in all, already listed by the port's state log (every global and
-  what it points to). The same registry gives the rollback set.
+- **State is pools allocated once**, about 3.2 MB in all, every byte of it reachable from a global: the port registers
+  every global and static (`port/src/port_globals.hpp`), and that registry gives the rollback set.
 - **A tick is the game's unit.** Speeds, timers and animations count ticks, so the tick stays the game's (33 ms
   by default, `--tickms`).
 
@@ -226,8 +226,10 @@ bring back freed sound entries. Left out: the frame loop's own globals around th
 pacing, the keyboard recorder), the audio driver and DirectInput devices, and `file.cpp`'s open file, which a
 resimulation doesn't run or which are freed while the game goes on. The sound's channel bookkeeping and the radio stay
 as they are over a restore: they mirror the mixer, which isn't rolled back. The set is made again for every game (a new map's pools are elsewhere), and leaves
-out what the game's scratch pointers point to (they point into a freed map after a map change). The whole world is
-about 3.5 MB; saving or restoring it takes 0.06 ms, a busy tick about 30 µs.
+out what the game's scratch pointers point to (they point into a freed map after a map change). A function's static
+registers when the function first runs; one that comes after the set was taken goes at its end and the set is taken
+again, so a world saved before is the start of the new one. The whole world is about 3.2 MB; saving or restoring it
+takes under 0.2 ms, a busy tick about 40 µs.
 
 ### Wire format
 
@@ -251,7 +253,7 @@ snapshots), its throttle off (it dropped snapshots when the round trip rose) and
 Every client session is recorded (`session/recording.cpp`): the welcome, then per frame the packets, the round trip
 and the input, to `recordings/session-<n>.rec` (the newest 10; `GTA2_NET_RECORD=<file>` elsewhere, `off` none). A
 client does nothing but react to what arrives and to its own input, so `--replay <file>` plays the session again
-without a server, tick for tick, as fast as the game runs: 8 minutes in 10-15 s, the same every time. **F12, or the key
+without a server, tick for tick, as fast as the game runs: a minute in about 2 s, the same every time. **F12, or the key
 under Esc, marks a moment** in play: the client and its replay print `net: mark <n> at frame <f>`, so a bug seen in
 play is "the last session, mark 2".
 
@@ -283,10 +285,11 @@ Town, the trained policy makes more frags than the simple bot and fewer than the
 
 ## Code layout
 
-`port/net/`. **Only `engine/` and the frontend page (`menu.cpp`) include the game's headers**; everything else works
-on plain data, so the decomp can move on (renames, struct fixes) while the netcode follows it in one place.
-Dependencies go one way: `session` uses `core`, `transport` and `engine/engine.hpp` (plain types only); `engine` uses
-the game and `core`'s types; `dev` and `eval` use whatever they check.
+`port/net/`. **Only `engine/`, `eval/` and the frontend page (`menu.cpp`) include the game's headers**; everything else
+works on plain data, so the decomp can move on (renames, struct fixes) while the netcode follows it in one place.
+Dependencies go one way: `session` uses `core`, `transport`, `engine/engine.hpp` (plain types only) and the probes in
+`dev/`; `engine` uses the game and `core`'s types; `dev` and `eval` use whatever they check; `net_main.cpp` sets the
+hooks (`port/src/net_hooks.hpp`).
 
 ```
 port/net/
@@ -327,30 +330,41 @@ its switch is set.
 
 ### The game's code
 
-The netcode's hooks in `Source/`, all under `GTA2_PORT` and declared in `port/src/net_hooks.hpp`:
+The netcode's hooks, declared in `port/src/net_hooks.hpp`; those in `Source/` are under `GTA2_PORT`:
 
 | Where | Hook | |
 |---|---|---|
 | `Game.cpp` | `gPortAfterPlayersHook` | after the players' tick, before anything spawns: the server's camera lead |
-| `Game.cpp` | `gPortWorldStill` | the results: nothing runs but the players' tick and the HUD |
+| `Game.cpp`, `sound_obj.cpp` | `gPortWorldStill` | the results: nothing runs but the players' tick and the HUD; the world's sounds stop |
 | `Game.cpp` | `gPortDrawOverlay` | drawn last: the status, the round's panel, chat completion |
 | `Car.cpp`, `Char_Pool.cpp` | `PortTrafficLimit()`, `gPortSpawnPlayers` | the spawn limits times the players |
 | `port/src/options_menu.cpp` | `gPortFrontendSetup`, `gPortFrontendInput` | the network page, beside reG2's options |
 | `winmain.cpp` | `gPortNextNetworkGame`, `gPortLeaveNetworkGame` | a map change goes to the next game; a client that left goes to the network page |
-| `map_0x370.cpp` | `gPortZoneRoundRobin` | the restart zones' turn, a function's static in the original: rolled back and sent |
+| `map_0x370.cpp` | a file static in port builds | the restart zones' turn, a function's static in the original: registered from the start, so rolled back and sent |
+| `sprite.cpp` | `gPortSpriteMovedHook` | a sprite moved: the grid check (`GTA2_NET_CHECKGRID`) |
+| `port/src/game_hooks.cpp` | `gPortLeavePromptShown` | the leave prompt is up: a gamepad's A and B answer it |
+| `port/compat/src` | `gPortIdleHook`, `gPortNoAudio`, `gPortCrashHook` | polling while a frame waits (`window.cpp`), no sound on a server (`miles.cpp`), the crash report (`main.cpp`) |
 | `Ped.cpp` | `gPortKeepWantedPoints` | a client keeps the server's wanted points with its police off |
 | `Hud.cpp` | `port_TypedChar` (`port/compat/src/dinput.cpp`) | the chat types the keyboard layout's characters |
 | `Hud.cpp` | `gPortServerKillNotices` | a client's kill notices are the server's deaths only |
 | `Pool.hpp`, `Car.cpp`, `Char_Pool.cpp`, `Game.cpp` | `PortRand::Scope` (`port/src/rand/owner.hpp`) | who a random draw belongs to |
 | `sound_obj.*`, `ParticleManager.cpp`, `Particle_4C.cpp` | `port/src/rand/sound.hpp`, `particle.hpp` | their own random streams; `SoundPosEntry` from the pool; `sound_obj`'s state public for the rollback |
 
+Other files' statics the netcode reads (winmain.cpp's inputs and its player, the restart zones' turn) it reaches through
+the registry by their 10.5.exe address (`PortStatic`, accessors in `engine/internal.hpp`).
+
+reG2's own extras that would change the game outside the input bits a server gets are off in a network game: twin
+stick, mouse aim, the turret's aim, the pad's analog driving and the aim camera (`port/src/twin_stick.cpp`, `view.cpp`),
+each player's day and night (`day_night.cpp`) and the pause menu (`pause_menu.cpp`). A network game runs the original's
+frame path in `winmain.cpp` (a step, then a frame), without reG2's frame limit and interpolation.
+
 ## Checks
 
 | Check | | |
 |---|---|---|
-| Unit tests | `ctest --test-dir build_mac -L net` | the core's coding, the transport over loopback, the bots' navigation, the round flow |
-| The network check | `port/net/scripts/net_check.sh [--quick] [step...]` (`BUILD=<cmake build folder>`, `GAME=<game folder>`), about 6 minutes | PASS or FAIL per step, below |
-| The stress run | `port/net/scripts/stress.sh [-m minutes] [-n servers] [-s speed] [-p map] [-g]`, 10 minutes by default | crashes and `CHECK` lines per process, below |
+| Unit tests | `ctest --test-dir build_mac -L net`; without the game or SDL3: `cmake -S port -B build_nettests -G Ninja -DGTA2_GAME=OFF` (with UBSan: `-DCMAKE_CXX_FLAGS=-fsanitize=undefined -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=undefined`), then `ninja` and `ctest` there | the core's coding, the transport over loopback, the bots' navigation, the round flow |
+| The network check | `port/net/scripts/net_check.sh [--quick] [step...]` (`BUILD=<cmake build folder>`, `build_mac` by default; `GAME=<game folder>`, `$BUILD/game` by default), about 6 minutes | PASS or FAIL per step, below |
+| The stress run | `port/net/scripts/stress.sh [-m minutes] [-n servers] [-s speed] [-p map] [-c seconds] [-g]`, 10 minutes by default | crashes and `CHECK` lines per process, below |
 
 `net_check.sh`'s steps, on the macOS build; logs and fixtures in `build_mac/net_check/`:
 
@@ -400,7 +414,8 @@ caller (`port/net/scripts/rand_diff.py` counts them per tick and function).
 
 ### Environment variables
 
-The session's (`session/env.cpp`) and the engine's (`engine/dev/checks.cpp`), all off by default:
+The session's (`session/env.cpp`) and the engine's (`engine/dev/checks.cpp`, the dumps in `engine/dev/compare.cpp`), all
+off by default:
 
 | Variable | Where | Effect |
 |---|---|---|
@@ -433,7 +448,8 @@ The session's (`session/env.cpp`) and the engine's (`engine/dev/checks.cpp`), al
 
 ## Measurements behind the design
 
-Native macOS, arm64, `-O2`. `GTA2_SIMBENCH=<flip>[:<ticks>]` (`port/net/eval/sim_bench.cpp`) runs that many ticks back
+Native macOS, arm64. The world's size and save time are this build's (RelWithDebInfo); the rest were measured on
+the gta2_re port's build the netcode came from, with the same game code. `GTA2_SIMBENCH=<flip>[:<ticks>]` (`port/net/eval/sim_bench.cpp`) runs that many ticks back
 to back without drawing, prints the cost of each service, the world's size and its save and restore time, and checks
 the rollback; `GTA2_SIMBENCH_FILL=<cars>` fills the map with traffic first, by the game's own spawner with its caps
 lifted. `GTA2_NETEVAL` (`port/net/eval/neteval.cpp`) measures what changes per tick (`churn`), how fast two runs
@@ -442,9 +458,9 @@ own (`single`) and rollback in scenes with explosions (`explode`).
 
 | | |
 |---|---|
-| The world | 1,763 blocks, 3.5 MB; save 0.06 ms, restore 0.055 ms; the rollback reproduces it exactly |
+| The world | 1,684 blocks, 3.2 MB; save 0.19 ms, restore 0.16 ms; the rollback reproduces it exactly |
 | A busy tick (73 cars, 39 peds, 176 objects) | about 30 µs: cars 52%, peds 28%, objects 13%; a 10-tick resimulation is about 2% of a 60 fps frame |
-| A full map (4 times the pools, 983 cars, 661 peds, no cleanup) | 0.9 ms a tick, slightly worse than linear; the collision grid's link pool is the first to run out |
+| A full map (4 times the pools, built for the measurement; 983 cars, 661 peds, no cleanup) | 0.9 ms a tick, slightly worse than linear; the collision grid's link pool is the first to run out |
 | What changes per tick | about 680 bytes for the whole attract demo's world, half of it in one interest area: about 500 bytes a snapshot |
 | Drift of a client's own simulation | within 330 ms nearly everything stays within a pixel; peds drift first (46% by a pixel after 1 s) |
 | ENet 1.3.18 | the largest unfragmented unreliable packet at `mtu` 1400 is 1372 bytes; a larger one goes as reliable fragments (seconds of delay under loss) |

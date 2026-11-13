@@ -154,8 +154,8 @@ After a stall the game catches up at most 4 steps before the next frame, then dr
 ## Network game
 
 Client/server multiplayer for up to 6 players on the game's multiplayer maps, in place of the original's DirectPlay
-game ([docs/netcode.md](docs/netcode.md)): NETWORK GAME in the start menu joins a server, and from a game folder
-(macOS: `reg2.app/Contents/MacOS/reg2`)
+game ([docs/netcode.md](docs/netcode.md)). NETWORK GAME in the start menu joins a server; from a game folder (macOS:
+`reg2.app/Contents/MacOS/reg2`):
 
 ```bash
 ./reg2 --server --map downtown-6p --players 4         # a dedicated server, headless
@@ -163,8 +163,9 @@ game ([docs/netcode.md](docs/netcode.md)): NETWORK GAME in the start menu joins 
 ./reg2 --connect 127.0.0.1 --name bot1 --bot hunter    # a bot
 ```
 
-`ctest --test-dir build_mac -L net` runs the netcode's unit tests, `net/scripts/net_check.sh` servers and bot clients
-on this machine (about 6 minutes).
+`ctest --test-dir <build folder> -L net` runs the netcode's unit tests (`-DGTA2_GAME=OFF` configures only those, without
+SDL3), and `BUILD=<build folder> GAME=<game folder> net/scripts/net_check.sh` servers and bot clients on this machine
+(about 6 minutes).
 
 ## 3D sound (OpenAL Soft)
 
