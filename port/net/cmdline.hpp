@@ -22,7 +22,9 @@ struct NetOptions
     ClientConfig cc;
 };
 
-// Takes the netcode's options out of <args>, the rest stays for the game; false: an error, printed
+// Takes the netcode's options out of <args>, the rest stays for the game; false: an error, printed (a server's option
+// without --server too). Without --server, --connect or --replay, only --name and the link conditioner's apply: to a
+// join from the frontend's network page
 bool ParseOptions(std::vector<std::string>& args, NetOptions& o);
 // "host[:port]" into <host>, and <port> when it has one
 void ParseAddress(const std::string& address, std::string* host, uint16_t* port);

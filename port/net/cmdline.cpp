@@ -27,10 +27,20 @@ bool net::ParseOptions(std::vector<std::string>& args, NetOptions& o)
     ClientConfig& cc = o.cc;
     sc.game.players = 6;
     std::vector<std::string> rest;
+    // A server's options: an error without --server, so a single-player game never takes one (--traffic) or drops it
+    static const char* const kServerOnly[] = {"--window", "--port", "--map", "--maps", "--minplayers", "--warmup", "--results",
+                                              "--votes", "--rounds", "--players", "--gametype", "--fraglimit", "--timelimit",
+                                              "--tickms", "--interest", "--traffic", "--police", "--packets", "--arena", "--seed",
+                                              "--ticks"};
+    std::string serverOption;
     for (size_t i = 0; i < args.size(); i++)
     {
         const std::string& a = args[i];
         const bool more = i + 1 < args.size();
+        for (const char* s : kServerOnly)
+        {
+            serverOption = serverOption.empty() && a == s ? a : serverOption;
+        }
         if (a == "--server")
         {
             o.server = true;
@@ -162,6 +172,11 @@ bool net::ParseOptions(std::vector<std::string>& args, NetOptions& o)
         {
             rest.push_back(a);
         }
+    }
+    if (!serverOption.empty() && !o.server)
+    {
+        fprintf(stderr, "net: %s is a server's option (--server)\n", serverOption.c_str());
+        return false;
     }
     args = rest;
     return true;

@@ -169,8 +169,6 @@ int NetMain_Init(std::vector<std::string>& args)
     }
     net::ServerConfig& sc = o.sc;
     net::ClientConfig& cc = o.cc;
-    gPortTrafficCap = o.traffic;
-    gPortNoAudio = o.server; // nobody hears a server (port/src/net_hooks.hpp)
     if (!o.server && o.connect.empty() && o.replay.empty())
     {
         gMenuConfig = cc; // the frontend's network page may join a server later (port/net/menu.cpp)
@@ -178,6 +176,8 @@ int NetMain_Init(std::vector<std::string>& args)
         return 0;
     }
     NetworkSetup(o.server);
+    gPortTrafficCap = o.traffic;
+    gPortNoAudio = o.server; // nobody hears a server (port/src/net_hooks.hpp)
     std::string error;
     if (o.server)
     {
