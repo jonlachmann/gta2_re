@@ -151,6 +151,20 @@ machine) is not read. The SCREEN settings page chooses how often frames are draw
 
 After a stall the game catches up at most 4 steps before the next frame, then drops the rest.
 
+## Network game
+
+Client/server multiplayer for up to 6 players on the game's multiplayer maps, in place of the original's DirectPlay
+game ([docs/netcode.md](docs/netcode.md)): NETWORK GAME in the start menu joins a server, and
+
+```bash
+./build_mac/reg2.app/Contents/MacOS/reg2 --server --map downtown-6p --players 4   # a dedicated server, headless
+./reg2 --connect 127.0.0.1 --name me                                               # play
+./reg2 --connect 127.0.0.1 --name bot1 --bot hunter                                # a bot
+```
+
+`ctest --test-dir build_mac -L net` runs the netcode's unit tests, `net/scripts/net_check.sh` servers and bot clients
+on this machine (about 6 minutes).
+
 ## 3D sound (OpenAL Soft)
 
 The game's 3D sound option (`do_3d_sound` under `Sound` in `gta2_registry.ini`) uses
@@ -196,6 +210,7 @@ Then add `-DGTA2_OPENAL_DIR=$PWD/openal_linux32` (or `openal_mingw32`) to the po
 | [OpenAL Soft](https://github.com/kcat/openal-soft) | 1.25.2 | LGPL | 3D sound (loaded at run time, optional) |
 | [libarchive](https://github.com/libarchive/libarchive/releases/tag/v3.8.11) | 3.8.11 | BSD | setup: disc images and archives (linked) |
 | [unshield](https://github.com/twogood/unshield/releases/tag/1.6.2) | 1.6.2 | MIT | setup: InstallShield cabinets (linked) |
+| [ENet](http://enet.bespin.org) | 1.3.18 | MIT | the network game (vendored in `net/enet`) |
 | [zlib](https://github.com/madler/zlib/releases/tag/v1.3.2), [xz](https://github.com/tukaani-project/xz/releases/tag/v5.8.4) | 1.3.2, 5.8.4 | zlib, 0BSD | their compression, where the system has none (MinGW) |
 
 ### Setup libraries
@@ -311,6 +326,8 @@ the AppImage in a clean Debian, Ubuntu or Arch Linux container with the librarie
 - `renderer/`: the OpenGL ES renderer behind the game's `gbh_*` and `Vid_*` tables.
 - `include/`: copies of headers whose originals don't build outside MSVC.
 - `setup/`: the game folder and the first-start setup (copy, message boxes).
+- `net/`: the network game ([docs/netcode.md](docs/netcode.md)); `src/net_hooks.hpp`, `src/rand/` and
+  `src/port_globals.hpp` are what it needs from the game.
 
 ## Unattended runs
 
@@ -324,6 +341,8 @@ the AppImage in a clean Debian, Ubuntu or Arch Linux container with the librarie
 | `GTA2_LOOP_TRACE=<file>` | the player's and the camera's position after each step (`S`) and as drawn (`D`) |
 | `GTA2_PRESENT_LOG=<file>` | every presented frame with the time it reached the screen (Wayland's presentation-time protocol; elsewhere when the swap returned), and every 10 seconds and at exit a summary: frame to frame times, how many refreshes each frame was shown, the shown time against the game time it depicts, on Wayland how many frames the compositor showed on vblank and scanned out directly, and the GPU time of each frame and how long before its presentation the GPU finished it |
 | `GTA2_NO_SOUND=1` | no audio device |
+| `GTA2_HEADLESS=1` | no window content, sound or gamepads (a network server is headless without `--window`) |
+| `GTA2_SPEED=<k>` | the game's clock k times faster |
 | `GTA2_NO_OPENAL=1`, `GTA2_HRTF=1` | no 3D sound; binaural 3D sound |
 | `GTA2_LOG_FILE=<file>` | SDL's log, debug strings and message boxes written to that file |
 | `GTA2_NO_MESSAGEBOX=1` | message boxes only logged, never shown |

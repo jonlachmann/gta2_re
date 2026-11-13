@@ -1,6 +1,7 @@
 // The video DLL's Vid_* API on top of VidSystem, with an OpenGL ES context on the game's SDL window,
 // and the registration of the built-in render and video DLLs.
 #include "port_platform.hpp"
+#include "../../net/eval/sim_bench.hpp"
 #include "../../renderer/gl_context.hpp"
 #include "../../renderer/vid_system.hpp"
 #include <stdlib.h>
@@ -450,6 +451,8 @@ VID_EXPORT void GTA2_CC Vid_FlipBuffers(SVideo* pVideo)
         pSys->Flip(!port_GameRunning());
     }
     port_MouseEndFrame();
+    static unsigned sFlips;
+    SimBench_Frame(++sFlips); // the network game's simulation bench (GTA2_SIMBENCH, port/docs/netcode.md)
 }
 
 VID_EXPORT void GTA2_CC Vid_ReleaseSurface(SVideo*)
