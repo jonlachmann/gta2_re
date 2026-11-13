@@ -22,6 +22,8 @@ class VidSystem
 
     static VidSystem* FromVideo(SVideo* pVideo);
     SVideo* Video() { return &mHeader.mVideo; }
+    // Headless (no GL context ever): gbh_InitDLL then finds no renderer, and gbh_* draws nothing
+    void DrawNothing() { mHeader.mRenderer = 0; }
 
     // iniPath: gta2gl.ini next to the DLLs.
     void Init(void* hInstance, u16 flags, void* pVidFuncs, const char* iniPath);

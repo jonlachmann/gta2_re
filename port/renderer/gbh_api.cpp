@@ -809,7 +809,7 @@ GBH_EXPORT u32 GTA2_CC gbh_InitDLL(SVideo* pVideo)
     const char* pTrace = getenv("GTA2GL_TRACE");
     gTraceScene = pTrace ? (u32)atoi(pTrace) : 0;
     GLVideoHeader* pHeader = (GLVideoHeader*)pVideo;
-    if (!pHeader || pHeader->mMagic != kGLVideoMagic || port_Headless()) // headless: no GL context, nothing drawn
+    if (!pHeader || pHeader->mMagic != kGLVideoMagic)
     {
         gRenderer = 0;
         return 0;

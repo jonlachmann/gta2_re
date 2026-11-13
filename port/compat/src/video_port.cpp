@@ -333,6 +333,10 @@ VID_EXPORT SVideo* GTA2_CC Vid_Init_SYS(void* hInstance, u16 flags)
 {
     VidSystem* pSys = new VidSystem();
     pSys->Init(hInstance, flags, sVidFuncs, "gta2gl.ini");
+    if (port_Headless())
+    {
+        pSys->DrawNothing();
+    }
     sVidSystem = pSys;
     if (sHasGameOptions)
     {
