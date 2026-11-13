@@ -5,6 +5,7 @@
 #include "3rdParty/mss.h"
 #include "miles3d.hpp"
 #include "port_platform.hpp"
+#include "../../src/net_hooks.hpp" // gPortNoAudio
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -672,7 +673,7 @@ static SDL_AudioStream* sDevice;
 DXDEC S32 AILCALL AIL_waveOutOpen(HDIGDRIVER FAR* drvr, LPHWAVEOUT FAR*, S32, LPWAVEFORMAT)
 {
     LOCK;
-    if (getenv("GTA2_NO_SOUND"))
+    if (getenv("GTA2_NO_SOUND") || gPortNoAudio) // the game goes on without sound (a network server's: nobody hears it)
     {
         return -1;
     }
