@@ -144,7 +144,8 @@ else()
     endif()
     set_source_files_properties(${ROOT}/Source/3rdParty/bink.cpp PROPERTIES COMPILE_DEFINITIONS BUILD_BINK)
 
-    add_executable(gta2 ${lib_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
+    list(FILTER lib_src EXCLUDE REGEX "/Source/(NetPlay|NetUi)\\.cpp$")
+    add_executable(gta2 ${lib_src} ${net_game_src} ${ROOT}/test.cpp ${ROOT}/StdAfx.cpp
         ${ROOT}/Source/3rdParty/bink.cpp
         src/debug_stubs.cpp src/menu.cpp src/options_menu.cpp src/pause_menu.cpp src/lights.cpp src/shadows.cpp src/settings.cpp src/game_hooks.cpp src/frame_loop.cpp src/interpolation.cpp src/view.cpp src/day_night.cpp src/twin_stick.cpp src/ptr_slot.cpp src/layout_checks.cpp src/port_globals.cpp src/rand/rand.cpp src/rand/particle.cpp src/net_hooks.cpp ${compat_src})
     target_compile_definitions(gta2 PRIVATE GTA2_PORT_SDL)
@@ -155,7 +156,7 @@ else()
     endif()
     # reg2, not gta2: unpacked into a GTA2 folder, it must not replace the original's gta2.exe.
     set_target_properties(gta2 PROPERTIES OUTPUT_NAME reg2)
-    target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3)
+    target_link_libraries(gta2 PRIVATE gta2gl gta2setup SDL3::SDL3 enet)
     if(openal_runtime AND NOT APPLE)
         add_custom_command(TARGET gta2 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${openal_runtime} $<TARGET_FILE_DIR:gta2>)

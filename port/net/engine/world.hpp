@@ -1,0 +1,33 @@
+// port/net (docs/netcode.md, "Code layout"): the game world as a list of memory blocks: what a client saves every
+// tick and restores to resimulate. Shared with the sim bench (port/net/eval/sim_bench.cpp), whose rollback check
+// proves the list complete.
+#pragma once
+#include <stddef.h>
+#include <vector>
+
+namespace net
+{
+namespace engine
+{
+struct Block
+{
+    unsigned char* addr;
+    size_t size;
+    const char* name;
+};
+
+// Every registered global and what it points to (port/src/port_globals.hpp), the players, the light grid and the sound
+// pool. Pointees can change (a new map), so ask again after loading.
+std::vector<Block> WorldBlocks();
+size_t RegisteredGlobals(); // so far: the set is taken again when one more registered (WorldBlocks)
+extern const Block* gCopyingBlock; // the one SaveWorld or RestoreWorld is copying, for the crash report
+
+size_t SaveWorld(const std::vector<Block>& blocks, std::vector<unsigned char>& out);
+void RestoreWorld(const std::vector<Block>& blocks, const std::vector<unsigned char>& in);
+unsigned long long HashWorld(const std::vector<Block>& blocks);
+
+// The game's state outside its globals that WorldBlocks takes as well: the netcode's own pools and counters
+void NetDeaths_Memory(unsigned char** ppAddr, size_t* pSize); // the deaths a client has carried out (players.cpp): in the set, so a resimulation never carries one out again
+void SoundPool_Memory(unsigned char** ppAddr, size_t* pSize); // the SoundPosEntry pool: entries, free list, head (sound_pool.cpp)
+} // namespace engine
+} // namespace net

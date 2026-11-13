@@ -29,6 +29,12 @@ struct SoundPosEntry
     {
     }
 
+#if defined(GTA2_PORT_SDL)
+    // From a pool in the network game's rollback set (port/net/engine/sound_pool.cpp)
+    static void* operator new(size_t size);
+    static void operator delete(void* p);
+#endif
+
     Fix16 mLastSpeed; // 0x0
     Car* mCar; // 0x4
     s16 mUnused8; // 0x8
