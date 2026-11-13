@@ -181,7 +181,7 @@ int NetMain_Init(std::vector<std::string>& args)
     {
         if (!o.window)
         {
-            SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "GTA2_HEADLESS", "1", true); // what Port_IsHeadless reads
+            SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "GTA2_HEADLESS", "1", true); // what port_Headless reads
         }
         // Up to the game's 6 players until the player cap is a port setting (N6)
         if (sc.game.players < 1 || sc.game.players > 6)

@@ -32,7 +32,7 @@ double port_ClockSpeed()
 // GTA2_HEADLESS: no window content, no sound, no gamepads (a dedicated server, the tests)
 bool port_Headless()
 {
-    static const bool sHeadless = getenv("GTA2_HEADLESS") != NULL;
+    static const bool sHeadless = SDL_getenv("GTA2_HEADLESS") != NULL; // SDL's: a server sets it (port/net/net_main.cpp)
     return sHeadless;
 }
 
