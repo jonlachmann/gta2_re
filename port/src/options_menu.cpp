@@ -255,10 +255,6 @@ void Setup(Frontend* pFrontend)
 
 bool Update(Frontend* pFrontend)
 {
-    if (gPortFrontendInput && gPortFrontendInput(pFrontend))
-    {
-        return true; // the network game's page took it (port/net/menu.cpp)
-    }
     if (pFrontend->mCurrentPageIdx != kMenuPage)
     {
         if (sShown)
@@ -269,7 +265,9 @@ bool Update(Frontend* pFrontend)
 #if defined(GTA2_PORT_SDL)
         OriginalPageMouse(pFrontend);
 #endif
-        return false;
+        // The network game's page, and its line in the start menu, after the mouse: a click is its Enter, the right
+        // button its Escape (port/net/menu.cpp)
+        return gPortFrontendInput && gPortFrontendInput(pFrontend);
     }
     if (!sShown)
     {
