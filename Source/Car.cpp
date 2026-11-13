@@ -49,6 +49,9 @@
 #include "sprite.hpp"
 #include "TextTable.hpp"
 #include "winmain.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#endif
 
 // mLightFlags bits of CarLightFlags8: bEmergencyLights, bLightFlashing and bHeadlightFlash
 enum
@@ -1637,7 +1640,14 @@ void CarManager::CarsService()
 
     gCar_BC_Pool->mPool.UpdatePool();
 
+#if defined(GTA2_PORT)
+    {
+        PortRandScope portRandScope(kPortRandTraffic); // the server's alone (a network game)
+        gTrafficSpawner_14->GenerateTraffic();
+    }
+#else
     gTrafficSpawner_14->GenerateTraffic();
+#endif
 
     if (mSpawnBlock > 0)
     {
@@ -1663,7 +1673,11 @@ bool CarManager::CanAllocateCarOfKindWithSpare(s32 type) const
         case car_kind::parked_car_9:
             return this->mParkedCars < 200;
         case car_kind::recycled_1:
+#if defined(GTA2_PORT)
+            return gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars < PortTrafficLimit() - 1;
+#else
             return gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars < 15;
+#endif
         case car_kind::mission_car_8:
             return this->mMissionCars < 23;
         default:
@@ -1689,7 +1703,11 @@ bool CarManager::CanAllocateCarOfKind(s32 type) const
         case car_kind::parked_car_9:
             return this->mParkedCars < 200;
         case car_kind::recycled_1:
+#if defined(GTA2_PORT)
+            return gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars < PortTrafficLimit();
+#else
             return gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars < 16;
+#endif
         case car_kind::mission_car_8:
             return this->mMissionCars < 24;
         default:
@@ -6912,8 +6930,14 @@ void TrafficSpawner::MakeTrafficForCurrCamera()
     Fix16 w;
 
     Fix16 wanted_traffic_scale;
+#if defined(GTA2_PORT)
+    // The same limit as CarManager::CanAllocateCarOfKind's (16 for the whole game in 10.5.exe)
+    if ((!bLimit_recycling || gCarManager_6C->mRecycledCars < 2) &&
+        gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars < PortTrafficLimit())
+#else
     if ((!bLimit_recycling || gCarManager_6C->mRecycledCars < 2) &&
         gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars != 16)
+#endif
     {
         s32 angleFace = Ang16::GetAngleFace(mCam->ComputeTargetFacingAngle());
 
@@ -7129,8 +7153,13 @@ bool TrafficSpawner::SpawnTrafficCar(s32 spawn_type, s32 arrow_direction, s32 bl
     s32 found_z;
     Fix16 ground_z;
 
+#if defined(GTA2_PORT)
+    if (gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars >= PortTrafficLimit() ||
+        arrow_direction == blocked_direction || gCarManager_6C->mSpawnBlock > 0)
+#else
     if (gCarManager_6C->mRecycledCars + gCarManager_6C->mProtoRecycledCars == 16 || arrow_direction == blocked_direction ||
         gCarManager_6C->mSpawnBlock > 0)
+#endif
     {
         return false;
     }

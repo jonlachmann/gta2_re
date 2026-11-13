@@ -1,5 +1,19 @@
 #include "Game.hpp"
 #include "ped_group_type.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#include "../port/src/rand/owner.hpp" // PortRandScope
+#endif
+// A service only the server runs draws its own random numbers in a network game (port/src/rand/owner.hpp)
+#if defined(GTA2_PORT)
+    #define PORT_RAND_SERVICE(key, call) \
+        { \
+            PortRandScope portRandScope(key); \
+            call; \
+        }
+#else
+    #define PORT_RAND_SERVICE(key, call) call
+#endif
 #include "ped_class.hpp"
 #include "AmbulanceService.hpp"
 #include "InputRecorder_67F8B0.hpp"
@@ -409,6 +423,12 @@ void Game::Draw()
         gMike_A80->DebugDrawProfiling();
     }
 
+#if defined(GTA2_PORT)
+    if (gPortDrawOverlay)
+    {
+        gPortDrawOverlay(); // what the network game draws over the frame
+    }
+#endif
     pgbh_EndScene();
     FreeSurface();
 }
@@ -455,6 +475,9 @@ void Game::UpdatePaused()
 MATCH_FUNC(0x4B9410)
 void Game::UpdateGame()
 {
+#if defined(GTA2_PORT)
+    PortRandTickStart(gpRng->get_cur_rng()); // the owners' draws are numbered per tick
+#endif
     Player** ppPlayerIter = mPlayers;
     u32 i = 0;
     while (i < mNumPlayers)
@@ -466,6 +489,17 @@ void Game::UpdateGame()
         i++;
         ppPlayerIter++;
     }
+#if defined(GTA2_PORT)
+    if (gPortAfterPlayersHook)
+    {
+        gPortAfterPlayersHook();
+    }
+    if (gPortWorldStill && gPortWorldStill())
+    {
+        gHud_2B00->UpdateHUD(); // the players' controls (the chat) and the HUD only
+        return;
+    }
+#endif
 
     gCollisionSoundQueue->Reset();
     gCollisionCounters->ResetCount();
@@ -477,10 +511,10 @@ void Game::UpdateGame()
 
     gCranePool_D9C->CranesService();
     gCrusherPool_94->CrushersService();
-    gGeneratorPool_14AC->GeneratorsService();
+    PORT_RAND_SERVICE(kPortRandGenerators, gGeneratorPool_14AC->GeneratorsService());
     gPedManager->PedsService();
     gPublicTransport_181C->PublicTransportService(); // trains & buses
-    gGarage_48->GaragesService();
+    PORT_RAND_SERVICE(kPortRandGarages, gGarage_48->GaragesService());
     gCarManager_6C->CarsService();
 
     if (bDo_mike)
@@ -497,19 +531,19 @@ void Game::UpdateGame()
 
     if (!bSkip_mission)
     {
-        gScriptManager->ExecuteScriptThreads(); // missions
+        PORT_RAND_SERVICE(kPortRandScripts, gScriptManager->ExecuteScriptThreads()); // missions
     }
 
-    gEmergencyCrewPool->ServiceAll();
+    PORT_RAND_SERVICE(kPortRandEmergency, gEmergencyCrewPool->ServiceAll());
 
     if (!bSkip_ambulance)
     {
-        gAmbulance_110->AmbulancesService(); // ambulance
+        PORT_RAND_SERVICE(kPortRandAmbulance, gAmbulance_110->AmbulancesService()); // ambulance
     }
 
     if (!bSkip_police)
     {
-        gPolice_7B8->Service();
+        PORT_RAND_SERVICE(kPortRandPolice, gPolice_7B8->Service());
     }
 
     if (!bSkip_particles)
@@ -527,7 +561,7 @@ void Game::UpdateGame()
     gHud_2B00->UpdateHUD();
     gpRng->AdvanceCycle(); // rng
     gDoor_4D4->DoorsService();
-    gFirefighterPool_54->FireEnginesService(); // fire engines
+    PORT_RAND_SERVICE(kPortRandFireEngines, gFirefighterPool_54->FireEnginesService()); // fire engines
 
     if (!bExplodingScoresOff)
     {

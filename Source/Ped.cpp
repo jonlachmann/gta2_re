@@ -57,6 +57,9 @@
 #include "CarAI.hpp"
 #include "winmain.hpp"
 #include "ped_graphic_type.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
+#endif
 
 // Modes of ChangePedStatesByMode: the ped_state_1/ped_state_2 pair each one sets
 namespace ped_states_mode
@@ -4410,7 +4413,11 @@ bool Ped::PoolUpdate()
                 Ped::UpdateAI();
                 gLastProcessedPed = this;
                 Ped::ManageWeapon();
+#if defined(GTA2_PORT)
+                if (mWantedPoints && !gPortKeepWantedPoints)
+#else
                 if (mWantedPoints)
+#endif
                 {
                     if (bSkip_police || mOccupation == ped_ocupation_enum::empty)
                     {

@@ -32,6 +32,7 @@
 #include "../port/src/shadows.hpp"
 #include "../port/src/day_night.hpp"
 #include "../port/src/twin_stick.hpp"
+#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
 #endif
 
 // Forward declarations: the functions below are in address order
@@ -749,6 +750,12 @@ void Sprite::InvalidateZColAndBBoxes()
     {
         mpVisualShape->mBboxUpToDate = false;
     }
+#if defined(GTA2_PORT)
+    if (gPortSpriteMovedHook)
+    {
+        gPortSpriteMovedHook(this);
+    }
+#endif
 }
 
 static inline void __stdcall DrawTextScaled_4BA2C0(const wchar_t* pStr, Fix16 x, Fix16 y, u16 font)

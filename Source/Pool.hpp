@@ -1,5 +1,8 @@
 #pragma once
 #include "types.hpp"
+#if defined(GTA2_PORT)
+#include "../port/src/rand/owner.hpp" // PortRandScope: who a random draw belongs to (docs/netcode.md)
+#endif
 
 // A free list only, with O(1) allocate and deallocate: unlike Pool, no list of the used items
 template<typename PoolType, s32 PoolSize>
@@ -166,6 +169,9 @@ class Pool
             ++field_X_count;
 
             PoolType* pNext = pCurrItem->mpNext;
+#if defined(GTA2_PORT)
+            PortRandScope portRandScope(pCurrItem); // a car's draws are its own (a network game)
+#endif
 
             if (pCurrItem->PoolUpdate())
             {
@@ -221,6 +227,9 @@ class Pool
             ++field_X_count;
 
             PoolType* pNext = pCurrItem->mpNext;
+#if defined(GTA2_PORT)
+            PortRandScope portRandScope(pCurrItem); // a car's draws are its own (a network game)
+#endif
 
             if (pCurrItem->PoolUpdate())
             {

@@ -66,6 +66,7 @@
 #include "TextTable.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/frame_loop.hpp"
+#include "../port/src/net_hooks.hpp" // the network game's hooks (docs/netcode.md)
 #endif
 
 DEFINE_STATIC_GLOBAL(u8, sNetDisconnectPlayersBits, 0x6F56B8);
@@ -2471,6 +2472,22 @@ s32 __stdcall GameWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lp
                         {
                             if (bStartNetworkGame)
                             {
+#if defined(GTA2_PORT)
+                                if (gPortNextNetworkGame && gPortNextNetworkGame())
+                                {
+                                    CleanUpInputAndOthers();
+                                    break; // go to the beginning: InitializeGame, with the next map
+                                }
+                                const s32 page = gPortLeaveNetworkGame ? gPortLeaveNetworkGame() : -1;
+                                if (page >= 0)
+                                {
+                                    bStartNetworkGame = 0; // a client that left: back to the frontend, as a single player
+                                    state = page;
+                                    CleanUpInputAndOthers();
+                                    bDoFrontEnd = 1;
+                                    break; // go to the beginning: the frontend
+                                }
+#endif
                                 switch (gGame_0x40->GetExitType())
                                 {
                                     case GameExitType::CloseGameImmediately_1:

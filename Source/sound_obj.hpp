@@ -138,7 +138,11 @@ GTA2_ASSERT_SIZEOF_ALWAYS(Sound_Params, 0x8);
 
 class sound_obj
 {
+#if defined(GTA2_PORT)
+  public: // the network game saves and restores the sound state (port/net/engine/rollback.cpp)
+#else
   private:
+#endif
     bool mbSoundInitialized; // 0x0
     bool mIsPaused; // 0x1
     bool mServiceEnabled; // 0x2
