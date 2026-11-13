@@ -149,7 +149,8 @@ HWND WINAPI CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR title, DWORD
     int windowW;
     int windowH;
     port_GetWindowSize(&windowW, &windowH);
-    SDL_Window* pSdl = SDL_CreateWindow(title, windowW, windowH, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
+    const SDL_WindowFlags flags = port_Headless() ? SDL_WINDOW_HIDDEN : SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE;
+    SDL_Window* pSdl = SDL_CreateWindow(title, windowW, windowH, flags);
     if (!pSdl)
     {
         return NULL;

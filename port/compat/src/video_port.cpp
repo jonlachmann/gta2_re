@@ -87,12 +87,12 @@ void port_SetGameFlip(bool gameFlip)
 
 unsigned long long port_NowNs()
 {
-    return SDL_GetTicksNS();
+    return (unsigned long long)(SDL_GetTicksNS() * port_ClockSpeed());
 }
 
 void port_DelayNs(unsigned long long ns)
 {
-    SDL_DelayPrecise(ns);
+    SDL_DelayPrecise((Uint64)(ns / port_ClockSpeed()));
 }
 
 // The refresh period the swap waits for; 0 without vsync or when the screen does not say.
@@ -415,7 +415,7 @@ VID_EXPORT s32 GTA2_CC Vid_SetMode(SVideo* pVideo, HWND hWnd, s32 modeId)
         return 1;
     }
     pVideo->field_4C0_hwnd = hWnd;
-    if (!pSys->HasContext())
+    if (!pSys->HasContext() && !port_Headless())
     {
         const char* pError = "";
         IGLContext* pCtx = CreateGLContext(pWindow, &pError);

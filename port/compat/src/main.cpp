@@ -88,7 +88,13 @@ int main(int argc, char** argv)
         }
     }
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS))
+    if (port_Headless())
+    {
+        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+    }
+    // Headless: no gamepads, as their every event poll asks the system for new ones
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | (port_Headless() ? 0 : SDL_INIT_GAMEPAD)))
     {
         SDL_Log("SDL_Init: %s", SDL_GetError());
         return 1;

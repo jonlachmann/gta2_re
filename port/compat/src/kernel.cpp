@@ -21,6 +21,21 @@ struct Handle
 };
 } // namespace
 
+// GTA2_SPEED=<k>: the game's clock k times faster; a large k runs a network game's steps back to back (a test, the
+// bots' training)
+double port_ClockSpeed()
+{
+    static const double sSpeed = getenv("GTA2_SPEED") ? atof(getenv("GTA2_SPEED")) : 1.0;
+    return sSpeed > 0 ? sSpeed : 1.0;
+}
+
+// GTA2_HEADLESS: no window content, no sound, no gamepads (a dedicated server, the tests)
+bool port_Headless()
+{
+    static const bool sHeadless = getenv("GTA2_HEADLESS") != NULL;
+    return sHeadless;
+}
+
 extern "C" {
 
 BOOL WINAPI CloseHandle(HANDLE h)
@@ -52,17 +67,18 @@ BOOL WINAPI ReleaseMutex(HANDLE)
 
 void WINAPI Sleep(DWORD ms)
 {
-    SDL_Delay(ms);
+    SDL_Delay((Uint32)(ms / port_ClockSpeed()));
 }
 
 DWORD WINAPI GetTickCount()
 {
-    return (DWORD)SDL_GetTicks();
+    return timeGetTime();
 }
 
+// In ns: at a large GTA2_SPEED a millisecond holds many steps. Wraps after 49 days / k (71 minutes at k = 1000).
 DWORD WINAPI timeGetTime()
 {
-    return (DWORD)SDL_GetTicks();
+    return (DWORD)(Uint64)(SDL_GetTicksNS() / 1e6 * port_ClockSpeed());
 }
 
 void WINAPI OutputDebugStringA(LPCSTR s)
