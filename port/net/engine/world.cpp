@@ -5,10 +5,10 @@
 #include "Source/Light.hpp"
 #include "Source/Player.hpp"
 #include "port/src/port_globals.hpp"
+#include "port/src/rand/state.hpp" // PortRand::ParticleMemory
 #include <string.h>
 
 EXTERN_GLOBAL(Light**, gLightGrid);
-void PortRandParticle_Memory(unsigned char** ppAddr, unsigned int* pSize); // port/src/rand/rand.cpp
 
 namespace
 {
@@ -134,7 +134,7 @@ std::vector<net::engine::Block> net::engine::WorldBlocks()
     blocks.push_back(deaths);
     Block particles = {0, 0, "particle random stream"};
     unsigned int size = 0;
-    PortRandParticle_Memory(&particles.addr, &size);
+    PortRand::ParticleMemory(&particles.addr, &size);
     particles.size = size;
     blocks.push_back(particles);
     Block sound = {0, 0, "SoundPosEntry pool"};

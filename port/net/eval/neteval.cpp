@@ -239,7 +239,7 @@ void Diverge(const std::vector<Block>& blocks)
             RestoreWorld(blocks, s0);
             if (pass == 1)
             {
-                PortRandSetState(PortRandState() ^ 0x5A5A5A5A);
+                PortRand::SetState(PortRand::State() ^ 0x5A5A5A5A);
             }
             for (int t = 0; t < ks[ki]; t++)
             {
@@ -259,12 +259,12 @@ void RandUse(int ticks)
     unsigned sim = 0, sound = 0;
     for (int t = 0; t < ticks; t++)
     {
-        unsigned c = gPortRandCalls;
+        unsigned c = PortRand::gCalls;
         Tick();
-        sim += gPortRandCalls - c;
-        c = gPortRandCalls;
+        sim += PortRand::gCalls - c;
+        c = PortRand::gCalls;
         gRoot_sound.Service();
-        sound += gPortRandCalls - c;
+        sound += PortRand::gCalls - c;
     }
     fprintf(stderr, "neteval rand: per tick %.1f draws in the sim, %.2f in the sound service\n", (double)sim / ticks, (double)sound / ticks);
 }
@@ -273,7 +273,7 @@ void RandUse(int ticks)
 // random numbers on their own stream: the world outside the sound layer must come out the same, and the heap intact
 void SoundRollback(const std::vector<Block>& blocks)
 {
-    PortRandSound_Separate(true);
+    PortRand::SetSoundSeparate(true);
     std::vector<unsigned char> s0, w1, w2;
     SaveWorld(blocks, s0);
     for (int pass = 0; pass < 2; pass++)
@@ -303,7 +303,7 @@ void SoundRollback(const std::vector<Block>& blocks)
         n += blocks[i].size;
     }
     fprintf(stderr, "neteval soundrollback: 2 x 30 ticks with sound, own sound stream: %zu blocks outside sound differ%s\n", differ, names.c_str());
-    PortRandSound_Separate(false);
+    PortRand::SetSoundSeparate(false);
 }
 
 // Can one object be advanced on its own (projectile rewind)? Rockets are fired around the player; then, per moving

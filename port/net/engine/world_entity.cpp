@@ -46,8 +46,8 @@ void net::engine::CaptureWorld(Snapshot& out)
         w.f[kWorldMapChoice + i] = r.mapChoice[i];
     }
     w.f[kWorldGame] = GameGeneration() & 0xFFFF;
-    w.f[kWorldRand] = (int32_t)PortRandState();
-    w.f[kWorldSeed] = (int32_t)PortRandSeed();
+    w.f[kWorldRand] = (int32_t)PortRand::State();
+    w.f[kWorldSeed] = (int32_t)PortRand::Seed();
     if (gTrafficLights_194 && gCarManager_6C)
     {
         w.f[kWorldLights] = gTrafficLights_194->mPhase | gTrafficLights_194->mTimer << 4 |
@@ -94,8 +94,8 @@ void net::engine::ApplyWorld(const EntityState& w)
     {
         gTagGame.mItTimeSecs[i] = w.f[kWorldItTime + i];
     }
-    PortRandSetState((unsigned int)w.f[kWorldRand]);
-    PortRandSetSeed((unsigned int)w.f[kWorldSeed]);
+    PortRand::SetState((unsigned int)w.f[kWorldRand]);
+    PortRand::SetSeed((unsigned int)w.f[kWorldSeed]);
     // The traffic lights as the server's: each game ran its own from its start, so a client's cars waited at a red
     // the server's had as green (and were put back behind it by the next snapshot)
     TrafficLights* lights = gTrafficLights_194;

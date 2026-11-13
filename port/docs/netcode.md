@@ -341,7 +341,7 @@ The netcode's hooks in `Source/`, all under `GTA2_PORT` and declared in `port/sr
 | `Ped.cpp` | `gPortKeepWantedPoints` | a client keeps the server's wanted points with its police off |
 | `Hud.cpp` | `port_TypedChar` (`port/compat/src/dinput.cpp`) | the chat types the keyboard layout's characters |
 | `Hud.cpp` | `gPortServerKillNotices` | a client's kill notices are the server's deaths only |
-| `Pool.hpp`, `Car.cpp`, `Char_Pool.cpp`, `Game.cpp` | `PortRandScope` (`port/src/rand/owner.hpp`) | who a random draw belongs to |
+| `Pool.hpp`, `Car.cpp`, `Char_Pool.cpp`, `Game.cpp` | `PortRand::Scope` (`port/src/rand/owner.hpp`) | who a random draw belongs to |
 | `sound_obj.*`, `ParticleManager.cpp`, `Particle_4C.cpp` | `port/src/rand/sound.hpp`, `particle.hpp` | their own random streams; `SoundPosEntry` from the pool; `sound_obj`'s state public for the rollback |
 
 ## Checks
@@ -384,7 +384,7 @@ A field the server sent unchanged that the client has otherwise was written in t
 
 **The crash report** (`port/compat/src/main.cpp`, then the netcode's `DebugOnCrash`): the backtrace, then the frame and tick, the
 rollback block being saved or restored if that is where it was (`gCopyingBlock`), the ped and the car whose update
-started last (`gPortLastPed`, `gPortLastCar`: a crash in a ped's or a car's update names
+started last (`PortRand::gLastPed`, `PortRand::gLastCar`: a crash in a ped's or a car's update names
 it), and on a client its player, cameras and their cars.
 
 **The comparison check** (`GTA2_NET_COMPARE=1` on a client): on each snapshot, with the game restored to the

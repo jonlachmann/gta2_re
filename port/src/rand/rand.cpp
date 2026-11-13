@@ -14,27 +14,27 @@ void port_srand_5EDED7(unsigned int seed)
     sState = seed;
 }
 
-unsigned int PortRandState()
+unsigned int PortRand::State()
 {
     return sState;
 }
 
-void PortRandSetState(unsigned int state)
+void PortRand::SetState(unsigned int state)
 {
     sState = state;
 }
 
-unsigned int gPortRandCalls;
-void (*gPortRandLog)(void* caller);
+unsigned int PortRand::gCalls;
+void (*PortRand::gLog)(void* caller);
 
 // The owners' draws (owner.hpp)
-unsigned int (*gPortRandPedKey)(const Ped* p);
-unsigned int (*gPortRandCarKey)(const Car* c);
-bool gPortRandOwned;
-void (*gPortRandTickHook)();
+unsigned int (*PortRand::gPedKey)(const Ped* p);
+unsigned int (*PortRand::gCarKey)(const Car* c);
+bool PortRand::gOwned;
+void (*PortRand::gTickHook)();
 static unsigned int sOwner, sOwnerDraws, sSeed, sTick;
 
-void PortRandScope::Enter(unsigned int key)
+void PortRand::Scope::Enter(unsigned int key)
 {
     mActive = key != 0;
     mSavedKey = sOwner, mSavedDraws = sOwnerDraws;
@@ -44,27 +44,27 @@ void PortRandScope::Enter(unsigned int key)
     }
 }
 
-PortRandScope::PortRandScope(unsigned int serviceKey)
+PortRand::Scope::Scope(unsigned int serviceKey)
 {
-    Enter(gPortRandOwned ? serviceKey : 0);
+    Enter(gOwned ? serviceKey : 0);
 }
 
-const Ped* gPortLastPed;
-const Car* gPortLastCar;
+const Ped* PortRand::gLastPed;
+const Car* PortRand::gLastCar;
 
-PortRandScope::PortRandScope(const Ped* p)
+PortRand::Scope::Scope(const Ped* p)
 {
-    gPortLastPed = p;
-    Enter(gPortRandPedKey ? gPortRandPedKey(p) : 0);
+    gLastPed = p;
+    Enter(gPedKey ? gPedKey(p) : 0);
 }
 
-PortRandScope::PortRandScope(const Car* c)
+PortRand::Scope::Scope(const Car* c)
 {
-    gPortLastCar = c;
-    Enter(gPortRandCarKey ? gPortRandCarKey(c) : 0);
+    gLastCar = c;
+    Enter(gCarKey ? gCarKey(c) : 0);
 }
 
-PortRandScope::~PortRandScope()
+PortRand::Scope::~Scope()
 {
     if (mActive)
     {
@@ -72,21 +72,21 @@ PortRandScope::~PortRandScope()
     }
 }
 
-void PortRandTickStart(unsigned int cycle)
+void PortRand::TickStart(unsigned int cycle)
 {
     sTick = cycle;
-    if (gPortRandTickHook)
+    if (gTickHook)
     {
-        gPortRandTickHook();
+        gTickHook();
     }
 }
 
-void PortRandSetSeed(unsigned int seed)
+void PortRand::SetSeed(unsigned int seed)
 {
     sSeed = seed;
 }
 
-unsigned int PortRandSeed()
+unsigned int PortRand::Seed()
 {
     return sSeed;
 }
@@ -104,33 +104,33 @@ static int OwnedDraw()
 
 int port_rand_5EDEE1()
 {
-    gPortRandCalls++;
-    if (gPortRandLog)
+    PortRand::gCalls++;
+    if (PortRand::gLog)
     {
-        gPortRandLog(__builtin_return_address(0)); // the divergence check's log of who draws (port/net/engine/dev/compare.cpp)
+        PortRand::gLog(__builtin_return_address(0)); // the divergence check's log of who draws (port/net/engine/dev/compare.cpp)
     }
     if (sOwner)
     {
         return OwnedDraw();
     }
-    return PortRandStep(sState);
+    return PortRand::Step(sState);
 }
 
 // sound_obj's own stream (sound.hpp), the same generator
 static bool sSoundSeparate;
 static unsigned int sSoundState = 1;
 
-void PortRandSound_Separate(bool separate)
+void PortRand::SetSoundSeparate(bool separate)
 {
     sSoundSeparate = separate;
 }
 
-int port_rand_sound()
+int PortRand::SoundDraw()
 {
     if (!sSoundSeparate)
     {
         return port_rand_5EDEE1();
     }
-    return PortRandStep(sSoundState);
+    return Step(sSoundState);
 }
 

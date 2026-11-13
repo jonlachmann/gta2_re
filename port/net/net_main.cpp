@@ -7,15 +7,13 @@
 #include "engine/dev/dev.hpp"
 #include "session/client.hpp"
 #include "session/server.hpp"
+#include "port/src/rand/state.hpp" // the sound's and particles' own streams
 #include <SDL3/SDL.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// port/src/rand/rand.cpp, port/src/rand/particle.cpp (not their headers: those rename rand and gRng)
-void PortRandSound_Separate(bool separate);
-void PortRandParticle_Separate(bool separate);
 
 namespace
 {
@@ -60,8 +58,8 @@ void OnStopSignal(int)
 // Before any network game's start: what each end draws its random numbers from, and the log
 void NetworkSetup(bool server)
 {
-    PortRandSound_Separate(true); // sound draws its own random numbers: a resimulation without sound draws the same
-    PortRandParticle_Separate(true); // and particles: a resimulation makes the flames it made before
+    PortRand::SetSoundSeparate(true); // sound draws its own random numbers: a resimulation without sound draws the same
+    PortRand::SetParticleSeparate(true); // and particles: a resimulation makes the flames it made before
     net::engine::SetRandOwners(!server); // and each entity and server service its own: the same wherever it runs
     if (!server)
     {
@@ -102,8 +100,8 @@ int LeaveNetworkGame()
     gPortIdleHook = NULL;
     gPortDrawOverlay = NULL;
     gTickSet = false;
-    PortRandSound_Separate(false);
-    PortRandParticle_Separate(false);
+    PortRand::SetSoundSeparate(false);
+    PortRand::SetParticleSeparate(false);
     net::engine::StopNetworkGame();
     printf("net: back to the frontend\n");
     return NetMenu_Page();

@@ -2,7 +2,7 @@
 #include "ped_group_type.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
-#include "../port/src/rand/owner.hpp" // PortRandScope
+#include "../port/src/rand/owner.hpp" // PortRand::Scope
 #endif
 #include "ped_class.hpp"
 #include "AmbulanceService.hpp"
@@ -75,7 +75,7 @@
 #if defined(GTA2_PORT)
     #define PORT_RAND_SERVICE(key, call) \
         { \
-            PortRandScope portRandScope(key); \
+            PortRand::Scope portRandScope(key); \
             call; \
         }
 #else
@@ -477,7 +477,7 @@ MATCH_FUNC(0x4B9410)
 void Game::UpdateGame()
 {
 #if defined(GTA2_PORT)
-    PortRandTickStart(gpRng->get_cur_rng()); // the owners' draws are numbered per tick
+    PortRand::TickStart(gpRng->get_cur_rng()); // the owners' draws are numbered per tick
 #endif
     Player** ppPlayerIter = mPlayers;
     u32 i = 0;
@@ -512,10 +512,10 @@ void Game::UpdateGame()
 
     gCranePool_D9C->CranesService();
     gCrusherPool_94->CrushersService();
-    PORT_RAND_SERVICE(kPortRandGenerators, gGeneratorPool_14AC->GeneratorsService());
+    PORT_RAND_SERVICE(PortRand::kGenerators, gGeneratorPool_14AC->GeneratorsService());
     gPedManager->PedsService();
     gPublicTransport_181C->PublicTransportService(); // trains & buses
-    PORT_RAND_SERVICE(kPortRandGarages, gGarage_48->GaragesService());
+    PORT_RAND_SERVICE(PortRand::kGarages, gGarage_48->GaragesService());
     gCarManager_6C->CarsService();
 
     if (bDo_mike)
@@ -532,19 +532,19 @@ void Game::UpdateGame()
 
     if (!bSkip_mission)
     {
-        PORT_RAND_SERVICE(kPortRandScripts, gScriptManager->ExecuteScriptThreads()); // missions
+        PORT_RAND_SERVICE(PortRand::kScripts, gScriptManager->ExecuteScriptThreads()); // missions
     }
 
-    PORT_RAND_SERVICE(kPortRandEmergency, gEmergencyCrewPool->ServiceAll());
+    PORT_RAND_SERVICE(PortRand::kEmergency, gEmergencyCrewPool->ServiceAll());
 
     if (!bSkip_ambulance)
     {
-        PORT_RAND_SERVICE(kPortRandAmbulance, gAmbulance_110->AmbulancesService()); // ambulance
+        PORT_RAND_SERVICE(PortRand::kAmbulance, gAmbulance_110->AmbulancesService()); // ambulance
     }
 
     if (!bSkip_police)
     {
-        PORT_RAND_SERVICE(kPortRandPolice, gPolice_7B8->Service());
+        PORT_RAND_SERVICE(PortRand::kPolice, gPolice_7B8->Service());
     }
 
     if (!bSkip_particles)
@@ -562,7 +562,7 @@ void Game::UpdateGame()
     gHud_2B00->UpdateHUD();
     gpRng->AdvanceCycle(); // rng
     gDoor_4D4->DoorsService();
-    PORT_RAND_SERVICE(kPortRandFireEngines, gFirefighterPool_54->FireEnginesService()); // fire engines
+    PORT_RAND_SERVICE(PortRand::kFireEngines, gFirefighterPool_54->FireEnginesService()); // fire engines
 
     if (!bExplodingScoresOff)
     {

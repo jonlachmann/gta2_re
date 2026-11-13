@@ -7,20 +7,20 @@
 
 static bool sParticleSeparate;
 static unsigned int sParticleState = 1;
-PortParticleRng gPortParticleRng;
+PortRand::ParticleRng PortRand::gParticleRng;
 
-void PortRandParticle_Separate(bool separate)
+void PortRand::SetParticleSeparate(bool separate)
 {
     sParticleSeparate = separate;
 }
 
-void PortRandParticle_Memory(unsigned char** ppAddr, unsigned int* pSize)
+void PortRand::ParticleMemory(unsigned char** ppAddr, unsigned int* pSize)
 {
     *ppAddr = (unsigned char*)&sParticleState;
     *pSize = sizeof(sParticleState);
 }
 
-s16 PortParticleRng::get_int(const s16& max_rnd)
+s16 PortRand::ParticleRng::get_int(const s16& max_rnd)
 {
     if (!sParticleSeparate)
     {
@@ -30,5 +30,5 @@ s16 PortParticleRng::get_int(const s16& max_rnd)
     {
         return 0;
     }
-    return (s16)(PortRandStep(sParticleState) % max_rnd);
+    return (s16)(Step(sParticleState) % max_rnd);
 }

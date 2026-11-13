@@ -11,39 +11,41 @@
 class Car;
 class Ped;
 
-// The services' owners (each its own stream)
-enum PortRandService
+namespace PortRand
 {
-    kPortRandTraffic = 0x7F000001, // TrafficSpawner::GenerateTraffic_583670
-    kPortRandDummies, // PedManager::Dummies_470330
-    kPortRandGenerators,
-    kPortRandGarages,
-    kPortRandScripts,
-    kPortRandEmergency,
-    kPortRandAmbulance,
-    kPortRandPolice,
-    kPortRandFireEngines,
+// The services' owners (each its own stream)
+enum Service
+{
+    kTraffic = 0x7F000001, // TrafficSpawner::GenerateTraffic
+    kDummies, // PedManager::Dummies
+    kGenerators,
+    kGarages,
+    kScripts,
+    kEmergency,
+    kAmbulance,
+    kPolice,
+    kFireEngines,
 };
 
 // Set by the netcode: the owner key of a ped or a car, the server's net id (0: none, the game's stream)
-extern unsigned int (*gPortRandPedKey)(const Ped* p);
-extern unsigned int (*gPortRandCarKey)(const Car* c);
-extern bool gPortRandOwned; // a network game: services own their draws too
+extern unsigned int (*gPedKey)(const Ped* p);
+extern unsigned int (*gCarKey)(const Car* c);
+extern bool gOwned; // a network game: services own their draws too
 // The last ped and car whose update started (PedPool and CarPool: Pool::UpdatePool), for the crash report
-extern const Ped* gPortLastPed;
-extern const Car* gPortLastCar;
+extern const Ped* gLastPed;
+extern const Car* gLastCar;
 
 // The owner for the scope's lifetime (the one before it after)
-class PortRandScope
+class Scope
 {
   public:
-    explicit PortRandScope(unsigned int serviceKey);
-    explicit PortRandScope(const Ped* p);
-    explicit PortRandScope(const Car* c);
-    template <class T> explicit PortRandScope(const T*) : mActive(false), mSavedKey(0), mSavedDraws(0)
+    explicit Scope(unsigned int serviceKey);
+    explicit Scope(const Ped* p);
+    explicit Scope(const Car* c);
+    template <class T> explicit Scope(const T*) : mActive(false), mSavedKey(0), mSavedDraws(0)
     {
     } // other pools: whoever owns the draws already
-    ~PortRandScope();
+    ~Scope();
 
   private:
     void Enter(unsigned int key);
@@ -52,7 +54,8 @@ class PortRandScope
 };
 
 // The tick that starts (Game::UpdateGame_4B9410, the game's cycle): the owners' draws are numbered per tick
-void PortRandTickStart(unsigned int cycle);
-extern void (*gPortRandTickHook)(); // the netcode's, at each tick's start (a client's id maps for the keys)
-void PortRandSetSeed(unsigned int seed); // the game's seed for the owners' draws (sent to clients with the world)
-unsigned int PortRandSeed();
+void TickStart(unsigned int cycle);
+extern void (*gTickHook)(); // the netcode's, at each tick's start (a client's id maps for the keys)
+void SetSeed(unsigned int seed); // the game's seed for the owners' draws (sent to clients with the world)
+unsigned int Seed();
+} // namespace PortRand

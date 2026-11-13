@@ -51,7 +51,7 @@
 #include "winmain.hpp"
 #if defined(GTA2_PORT)
 #include "../port/src/net_hooks.hpp" // the network game's hooks (port/docs/netcode.md)
-#include "../port/src/rand/owner.hpp" // PortRandScope: who a random draw belongs to
+#include "../port/src/rand/owner.hpp" // PortRand::Scope: who a random draw belongs to
 #endif
 
 // mLightFlags bits of CarLightFlags8: bEmergencyLights, bLightFlashing and bHeadlightFlash
@@ -1643,7 +1643,7 @@ void CarManager::CarsService()
 
 #if defined(GTA2_PORT)
     {
-        PortRandScope portRandScope(kPortRandTraffic); // the server's alone (a network game)
+        PortRand::Scope portRandScope(PortRand::kTraffic); // the server's alone (a network game)
         gTrafficSpawner_14->GenerateTraffic();
     }
 #else

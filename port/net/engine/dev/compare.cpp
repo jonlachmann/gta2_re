@@ -367,7 +367,7 @@ void net::engine::StartRandLog()
         path.resize(colon);
     }
     gRandLog = fopen(path.c_str(), "w");
-    gPortRandLog = gRandLog ? LogRand : NULL;
+    PortRand::gLog = gRandLog ? LogRand : NULL;
 }
 
 void net::engine::PrintDivergence()

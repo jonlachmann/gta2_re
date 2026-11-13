@@ -335,8 +335,8 @@ void net::engine::DebugOnCrash()
         fprintf(stderr, "net: crash state: saving or restoring the block %s at %p, %zu bytes\n", gCopyingBlock->name, (void*)gCopyingBlock->addr,
                 gCopyingBlock->size);
     }
-    CrashPed("the last updated", gPortLastPed, liveCars, livePeds);
-    CrashCar("the last updated", gPortLastCar, liveCars, livePeds);
+    CrashPed("the last updated", PortRand::gLastPed, liveCars, livePeds);
+    CrashCar("the last updated", PortRand::gLastCar, liveCars, livePeds);
     if (!g || !g->mLocalPlayer)
     {
         return;

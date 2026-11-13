@@ -145,7 +145,7 @@ class PedPool
 
             Ped* pNext = pCurrItem->mpNext;
 #if defined(GTA2_PORT)
-            PortRandScope portRandScope(pCurrItem); // a ped's draws (and its char's) are its own (a network game)
+            PortRand::Scope portRandScope(pCurrItem); // a ped's draws (and its char's) are its own (a network game)
 #endif
 
             if (pCurrItem->PoolUpdate())

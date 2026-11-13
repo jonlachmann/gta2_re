@@ -608,18 +608,18 @@ void ClientTickStart()
 
 void net::engine::SetRandOwners(bool client)
 {
-    gPortRandOwned = true;
-    gPortRandPedKey = client ? ClientPedKey : ServerPedKey;
-    gPortRandCarKey = client ? ClientCarKey : ServerCarKey;
-    gPortRandTickHook = client ? ClientTickStart : NULL;
+    PortRand::gOwned = true;
+    PortRand::gPedKey = client ? ClientPedKey : ServerPedKey;
+    PortRand::gCarKey = client ? ClientCarKey : ServerCarKey;
+    PortRand::gTickHook = client ? ClientTickStart : NULL;
 }
 
 void net::engine::ClearRandOwners()
 {
-    gPortRandOwned = false;
-    gPortRandPedKey = NULL;
-    gPortRandCarKey = NULL;
-    gPortRandTickHook = NULL;
+    PortRand::gOwned = false;
+    PortRand::gPedKey = NULL;
+    PortRand::gCarKey = NULL;
+    PortRand::gTickHook = NULL;
 }
 
 const std::unordered_map<uint32_t, Car*>& net::engine::ReplicaCars()
